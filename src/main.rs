@@ -1,12 +1,9 @@
 mod gui;
 mod monitor;
 
-#[cfg(debug_assertions)]
-use std::time::Duration;
-
 fn main() {
     #[cfg(debug_assertions)]
-    let _monitor_handle = monitor::spawn_rss_monitor(Duration::from_secs(1));
+    let _monitor_handle = monitor::spawn_rss_monitor(std::time::Duration::from_secs(2));
 
-    gui::gpui::gpui_test();
+    gui::launch_app();
 }
