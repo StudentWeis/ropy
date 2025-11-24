@@ -62,16 +62,6 @@ impl Render for HelloWorld {
                             .border_dashed()
                             .rounded_md()
                             .border_color(gpui::white()),
-                    )
-                    .child(
-                        div()
-                            .size_8()
-                            .bg(gpui::black())
-                            .border_1()
-                            .border_dashed()
-                            .rounded_md()
-                            .rounded_md()
-                            .border_color(gpui::white()),
                     ),
             )
     }

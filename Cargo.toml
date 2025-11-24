@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 clipboard-rs = "0.3.1"
 gpui = { version = "*" }
+sysinfo = "0.37.2"
