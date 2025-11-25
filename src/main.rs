@@ -1,5 +1,6 @@
 mod gui;
 mod monitor;
+mod clipboard;
 
 fn main() {
     #[cfg(debug_assertions)]
