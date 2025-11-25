@@ -34,7 +34,7 @@ pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
         let shared_text: Arc<Mutex<String>> = Arc::new(Mutex::new("World".to_string()));
         let (tx, rx) = channel::<String>();
-        let _listener_handle = clipboard::spawn_clipboard_listener(tx, Duration::from_millis(300));
+        let _listener_handle = clipboard::start_clipboard_monitor(tx, Duration::from_millis(300));
 
         // Forward clipboard messages to the shared string on a short-lived thread so we don't block the UI
         let ui_text_clone = shared_text.clone();

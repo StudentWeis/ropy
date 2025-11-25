@@ -1,3 +1,3 @@
-mod gpui;
+mod app;
 
-pub use gpui::launch_app;
+pub use app::launch_app;
