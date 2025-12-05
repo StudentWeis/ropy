@@ -1,4 +1,5 @@
 use crate::clipboard;
+use crate::repository::ClipboardRepository;
 use gpui::{
     AnyWindowHandle, App, AppContext, Application, Bounds, Context, Window, WindowBounds,
     WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
@@ -38,6 +39,18 @@ pub fn launch_app() {
         let _listener_handle =
             clipboard::start_clipboard_monitor(clipboard_tx, Duration::from_millis(300));
 
+        // 初始化剪切板历史记录仓库
+        let repository = match ClipboardRepository::new() {
+            Ok(repo) => {
+                println!("[ropy] 剪切板历史记录仓库初始化成功");
+                Some(Arc::new(repo))
+            }
+            Err(e) => {
+                eprintln!("[ropy] 剪切板历史记录仓库初始化失败: {}", e);
+                None
+            }
+        };
+
         // Channel for hotkey toggle events
         let (hotkey_tx, hotkey_rx) = channel();
         let is_visible = Arc::new(AtomicBool::new(true));
@@ -49,8 +62,25 @@ pub fn launch_app() {
 
         // Forward clipboard messages to the shared string on a short-lived thread so we don't block the UI
         let ui_text_clone = shared_text.clone();
+        let repo_clone = repository.clone();
         let _forwarder_handle = std::thread::spawn(move || {
             while let Ok(new) = clipboard_rx.recv() {
+                // 保存到数据库（带去重检查）
+                if let Some(ref repo) = repo_clone {
+                    match repo.save_text_if_not_duplicate(new.clone()) {
+                        Ok(Some(record)) => {
+                            println!("[ropy] 剪切板记录已保存, id: {}", record.id);
+                        }
+                        Ok(None) => {
+                            println!("[ropy] 剪切板内容重复，跳过保存");
+                        }
+                        Err(e) => {
+                            eprintln!("[ropy] 保存剪切板记录失败: {}", e);
+                        }
+                    }
+                }
+
+                // 更新 UI 显示
                 if let Ok(mut guard) = ui_text_clone.lock() {
                     *guard = new;
                 }

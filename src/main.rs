@@ -1,6 +1,7 @@
 mod clipboard;
 mod gui;
 mod monitor;
+mod repository;
 
 fn main() {
     // 监控程序内存使用情况，仅在调试模式下启用
