@@ -1,8 +1,9 @@
 use crate::clipboard;
 use gpui::{
-    App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px,
-    rgb, size,
+    AnyWindowHandle, App, AppContext, Application, Bounds, Context, Window, WindowBounds,
+    WindowKind, WindowOptions, div, prelude::*, px, rgb, size,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc::channel};
 use std::time::Duration;
 
@@ -33,13 +34,23 @@ impl Render for RopyBoard {
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
         let shared_text: Arc<Mutex<String>> = Arc::new(Mutex::new("World".to_string()));
-        let (tx, rx) = channel::<String>();
-        let _listener_handle = clipboard::start_clipboard_monitor(tx, Duration::from_millis(300));
+        let (clipboard_tx, clipboard_rx) = channel::<String>();
+        let _listener_handle =
+            clipboard::start_clipboard_monitor(clipboard_tx, Duration::from_millis(300));
+
+        // Channel for hotkey toggle events
+        let (hotkey_tx, hotkey_rx) = channel();
+        let is_visible = Arc::new(AtomicBool::new(true));
+
+        // Start global hotkey listener (SHIFT + D) to send toggle events
+        let _hotkey_handle = crate::gui::hotkey::start_hotkey_listener(move || {
+            let _ = hotkey_tx.send(());
+        });
 
         // Forward clipboard messages to the shared string on a short-lived thread so we don't block the UI
         let ui_text_clone = shared_text.clone();
         let _forwarder_handle = std::thread::spawn(move || {
-            while let Ok(new) = rx.recv() {
+            while let Ok(new) = clipboard_rx.recv() {
                 if let Ok(mut guard) = ui_text_clone.lock() {
                     *guard = new;
                 }
@@ -47,18 +58,56 @@ pub fn launch_app() {
         });
 
         let bounds = Bounds::centered(None, size(px(500.), px(500.0)), cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                ..Default::default()
-            },
-            |_, cx| {
-                cx.new(|_| RopyBoard {
-                    text: shared_text.clone(),
-                })
-            },
-        )
-        .unwrap();
+        let _window_handle: AnyWindowHandle = cx
+            .open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    // Use PopUp kind to make window float above others
+                    kind: WindowKind::PopUp,
+                    ..Default::default()
+                },
+                |_, cx| {
+                    cx.new(|_| RopyBoard {
+                        text: shared_text.clone(),
+                    })
+                },
+            )
+            .unwrap()
+            .into();
+
+        // Get AsyncApp for updating
+        let async_app = cx.to_async();
+        let fg_executor = cx.foreground_executor().clone();
+        let bg_executor = cx.background_executor().clone();
+
+        // Use a crossbeam channel or async-compatible channel to wake up the app
+        // For now, we'll use the foreground executor with a polling approach
+        fg_executor
+            .spawn(async move {
+                loop {
+                    // Poll for hotkey events
+                    while let Ok(()) = hotkey_rx.try_recv() {
+                        let current_visible = is_visible.load(Ordering::SeqCst);
+                        let new_visible = !current_visible;
+                        is_visible.store(new_visible, Ordering::SeqCst);
+
+                        // Update app visibility
+                        let _ = async_app.update(|app_cx| {
+                            if new_visible {
+                                // Show: activate the app
+                                app_cx.activate(true);
+                            } else {
+                                // Hide: hide the app
+                                app_cx.hide();
+                            }
+                        });
+                    }
+                    // Timer to keep polling
+                    bg_executor.timer(Duration::from_millis(16)).await;
+                }
+            })
+            .detach();
+
         cx.activate(true);
     });
 }
