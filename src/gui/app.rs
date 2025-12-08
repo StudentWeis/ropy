@@ -2,8 +2,8 @@ use crate::clipboard;
 use crate::gui::board::RopyBoard;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
-    App, AppContext, Application, AsyncApp, Bounds, WindowBounds, WindowHandle, WindowKind,
-    WindowOptions, px, size,
+    App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
+    WindowKind, WindowOptions, px, size,
 };
 use std::sync::atomic::AtomicBool;
 use std::sync::{
@@ -105,7 +105,7 @@ fn create_window(
             titlebar: None,
             ..Default::default()
         },
-        |_, cx| cx.new(|_| RopyBoard::new(shared_records, is_visible)),
+        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, is_visible, window, cx)),
     )
     .unwrap()
 }
@@ -137,6 +137,8 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
+        cx.bind_keys([KeyBinding::new("escape", crate::gui::board::Hide, None)]);
+
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();
 

@@ -1,20 +1,31 @@
 use crate::repository::ClipboardRecord;
-use gpui::{Context, Render, Window, div, prelude::*, rgb};
+use gpui::{Context, FocusHandle, Render, Window, div, prelude::*, rgb};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+
+gpui::actions!(board, [Hide]);
 
 /// RopyBoard 主应用结构体
 pub struct RopyBoard {
     /// 剪切板历史记录列表
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
     pub is_visible: Arc<AtomicBool>,
+    pub focus_handle: FocusHandle,
 }
 
 impl RopyBoard {
-    pub fn new(records: Arc<Mutex<Vec<ClipboardRecord>>>, is_visible: Arc<AtomicBool>) -> Self {
+    pub fn new(
+        records: Arc<Mutex<Vec<ClipboardRecord>>>,
+        is_visible: Arc<AtomicBool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let focus_handle = cx.focus_handle();
+        window.focus(&focus_handle);
         Self {
             records,
             is_visible,
+            focus_handle,
         }
     }
 
@@ -48,6 +59,10 @@ impl RopyBoard {
             cx.hide();
         }
     }
+
+    fn hide(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_visibility(cx);
+    }
 }
 
 impl Render for RopyBoard {
@@ -57,6 +72,9 @@ impl Render for RopyBoard {
         drop(records_guard);
 
         div()
+            .id("ropy-board")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(Self::hide))
             .flex()
             .flex_col()
             .bg(rgb(0x2d2d2d))
