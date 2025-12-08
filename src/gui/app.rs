@@ -102,6 +102,7 @@ fn create_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
+            titlebar: None,
             ..Default::default()
         },
         |_, cx| cx.new(|_| RopyBoard::new(shared_records, is_visible)),
