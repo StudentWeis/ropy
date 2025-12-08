@@ -13,6 +13,19 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
+#[cfg(target_os = "macos")]
+use objc2::{class, msg_send, runtime::AnyObject};
+
+#[cfg(target_os = "macos")]
+fn set_activation_policy_accessory() {
+    unsafe {
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        // NSApplicationActivationPolicyAccessory = 1
+        // 将应用设置为 Accessory 模式，这样它就不会出现在 Dock 和 Cmd+Tab 切换器中
+        let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
+    }
+}
+
 fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     match ClipboardRepository::new() {
         Ok(repo) => {
@@ -123,6 +136,9 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
+        #[cfg(target_os = "macos")]
+        set_activation_policy_accessory();
+
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
