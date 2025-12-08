@@ -1,5 +1,5 @@
 use crate::repository::ClipboardRecord;
-use gpui::{Context, FocusHandle, Render, Window, div, prelude::*, rgb};
+use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, rgb};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +11,7 @@ pub struct RopyBoard {
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
     pub is_visible: Arc<AtomicBool>,
     pub focus_handle: FocusHandle,
+    _focus_out_subscription: Subscription,
 }
 
 impl RopyBoard {
@@ -22,10 +23,17 @@ impl RopyBoard {
     ) -> Self {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle);
+        // 监听失焦事件
+        let _focus_out_subscription =
+            cx.on_focus_out(&focus_handle, window, move |this, _event, _window, cx| {
+                // 当窗口失去焦点时，隐藏窗口
+                this.hide_window(cx);
+            });
         Self {
             records,
             is_visible,
             focus_handle,
+            _focus_out_subscription,
         }
     }
 
@@ -60,8 +68,13 @@ impl RopyBoard {
         }
     }
 
-    fn hide(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
-        self.toggle_visibility(cx);
+    pub fn hide_window(&self, cx: &mut gpui::Context<RopyBoard>) {
+        self.is_visible.store(false, Ordering::Release);
+        cx.hide();
+    }
+
+    fn hide_action(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
+        self.hide_window(cx);
     }
 }
 
@@ -74,7 +87,7 @@ impl Render for RopyBoard {
         div()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(Self::hide))
+            .on_action(cx.listener(Self::hide_action))
             .flex()
             .flex_col()
             .bg(rgb(0x2d2d2d))
@@ -100,7 +113,7 @@ impl Render for RopyBoard {
                         let record_content = record.content.clone();
                         let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
                             this.copy_to_clipboard(&record_content);
-                            this.toggle_visibility(cx);
+                            this.hide_window(cx);
                         });
 
                         div()
