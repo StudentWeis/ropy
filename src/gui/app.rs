@@ -124,7 +124,7 @@ fn start_hotkey_handler(
                     let _ = async_app.update(move |cx| {
                         window_handle
                             .update(cx, |board, _window, cx| {
-                                board.toggle_visibility(cx);
+                                board.toggle_window(cx);
                             })
                             .ok();
                     });
@@ -137,7 +137,10 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
-        cx.bind_keys([KeyBinding::new("escape", crate::gui::board::Hide, None)]);
+        cx.bind_keys([
+            KeyBinding::new("escape", crate::gui::board::Hide, None),
+            KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
+        ]);
 
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();

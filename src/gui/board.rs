@@ -3,11 +3,11 @@ use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-gpui::actions!(board, [Hide]);
+gpui::actions!(board, [Hide, Quit]);
 
-/// RopyBoard 主应用结构体
+/// RopyBoard Main Window Component
 pub struct RopyBoard {
-    /// 剪切板历史记录列表
+    /// Clipboard history records
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
     pub is_visible: Arc<AtomicBool>,
     pub focus_handle: FocusHandle,
@@ -23,10 +23,10 @@ impl RopyBoard {
     ) -> Self {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle);
-        // 监听失焦事件
+        // Subscribe to focus out events to hide the window
         let _focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |this, _event, _window, cx| {
-                // 当窗口失去焦点时，隐藏窗口
+                // When the window loses focus, hide the window
                 this.hide_window(cx);
             });
         Self {
@@ -37,27 +37,12 @@ impl RopyBoard {
         }
     }
 
-    /// 复制文本到剪切板
+    /// Copy text to clipboard
     pub fn copy_to_clipboard(&mut self, text: &str) {
-        // Use the decoupled API from the clipboard module
-        match crate::clipboard::copy_text(text) {
-            Ok(_) => {
-                println!(
-                    "[ropy] 已复制到剪切板: {}",
-                    if text.len() > 50 {
-                        format!("{}...", &text[..50])
-                    } else {
-                        text.to_string()
-                    }
-                );
-            }
-            Err(e) => {
-                eprintln!("[ropy] 复制到剪切板失败: {}", e);
-            }
-        }
+        crate::clipboard::copy_text(text).unwrap();
     }
 
-    pub fn toggle_visibility(&self, cx: &mut gpui::Context<RopyBoard>) {
+    pub fn toggle_window(&self, cx: &mut gpui::Context<RopyBoard>) {
         let current_visible = self.is_visible.load(Ordering::Acquire);
         let new_visible = !current_visible;
         self.is_visible.store(new_visible, Ordering::Release);
@@ -73,8 +58,12 @@ impl RopyBoard {
         cx.hide();
     }
 
-    fn hide_action(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
+    fn on_hide_action(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
         self.hide_window(cx);
+    }
+
+    fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
+        cx.quit();
     }
 }
 
@@ -87,7 +76,8 @@ impl Render for RopyBoard {
         div()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(Self::hide_action))
+            .on_action(cx.listener(Self::on_hide_action))
+            .on_action(cx.listener(Self::on_quit_action))
             .flex()
             .flex_col()
             .bg(rgb(0x2d2d2d))
