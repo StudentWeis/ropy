@@ -87,7 +87,6 @@ mod tests {
         // Set clipboard value via a new context from this thread
         let ctx: ClipboardContext = ClipboardContext::new().expect("create ctx");
         ctx.set_text("test-poll-1".into()).expect("set contents");
-
         // Wait up to 1s for the change to be observed
         let received = rx.recv_timeout(Duration::from_secs(1));
         assert_eq!(received.unwrap(), "test-poll-1");
