@@ -1,35 +1,51 @@
 use crate::repository::ClipboardRecord;
-use gpui::{div, rgb, prelude::*, Context, Render, Window};
+use gpui::{Context, Render, Window, div, prelude::*, rgb};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// RopyBoard 主应用结构体
 pub struct RopyBoard {
     /// 剪切板历史记录列表
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    pub is_visible: Arc<AtomicBool>,
 }
 
 impl RopyBoard {
-    /// 创建新的 RopyBoard 实例
-    pub fn new(records: Arc<Mutex<Vec<ClipboardRecord>>>) -> Self {
-        Self { records }
+    pub fn new(records: Arc<Mutex<Vec<ClipboardRecord>>>, is_visible: Arc<AtomicBool>) -> Self {
+        Self {
+            records,
+            is_visible,
+        }
     }
-    
+
     /// 复制文本到剪切板
     pub fn copy_to_clipboard(&mut self, text: &str) {
         // Use the decoupled API from the clipboard module
         match crate::clipboard::copy_text(text) {
             Ok(_) => {
-                println!("[ropy] 已复制到剪切板: {}", 
-                    if text.len() > 50 { 
-                        format!("{}...", &text[..50]) 
-                    } else { 
-                        text.to_string() 
+                println!(
+                    "[ropy] 已复制到剪切板: {}",
+                    if text.len() > 50 {
+                        format!("{}...", &text[..50])
+                    } else {
+                        text.to_string()
                     }
                 );
             }
             Err(e) => {
                 eprintln!("[ropy] 复制到剪切板失败: {}", e);
             }
+        }
+    }
+
+    pub fn toggle_visibility(&self, cx: &mut gpui::Context<RopyBoard>) {
+        let current_visible = self.is_visible.load(Ordering::Acquire);
+        let new_visible = !current_visible;
+        self.is_visible.store(new_visible, Ordering::Release);
+        if new_visible {
+            cx.activate(true);
+        } else {
+            cx.hide();
         }
     }
 }
@@ -62,16 +78,11 @@ impl Render for RopyBoard {
                     .flex_1()
                     .overflow_y_scroll()
                     .children(records_clone.into_iter().enumerate().map(|(index, record)| {
-                        // 截断过长的内容用于显示
-                        let display_content = if record.content.chars().count() > 100 {
-                            format!("{}...", record.content.chars().take(100).collect::<String>())
-                        } else {
-                            record.content.clone()
-                        };
-                        
+                        let display_content = format_clipboard_content(&record);
                         let record_content = record.content.clone();
-                        let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, _cx: &mut gpui::Context<RopyBoard>| {
+                        let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
                             this.copy_to_clipboard(&record_content);
+                            this.toggle_visibility(cx);
                         });
 
                         div()
@@ -102,5 +113,16 @@ impl Render for RopyBoard {
                             )
                     })),
             )
+    }
+}
+
+fn format_clipboard_content(record: &ClipboardRecord) -> String {
+    if record.content.chars().count() > 100 {
+        format!(
+            "{}...",
+            record.content.chars().take(100).collect::<String>()
+        )
+    } else {
+        record.content.clone()
     }
 }

@@ -2,10 +2,10 @@ use crate::clipboard;
 use crate::gui::board::RopyBoard;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
-    AnyWindowHandle, App, AppContext, Application, AsyncApp, BackgroundExecutor, Bounds,
-    ForegroundExecutor, WindowBounds, WindowKind, WindowOptions, px, size,
+    App, AppContext, Application, AsyncApp, Bounds, WindowBounds, WindowHandle, WindowKind,
+    WindowOptions, px, size,
 };
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{
     Arc, Mutex,
     mpsc::{self, channel},
@@ -82,7 +82,8 @@ fn start_clipboard_forwarder(
 fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-) -> AnyWindowHandle {
+    is_visible: Arc<AtomicBool>,
+) -> WindowHandle<RopyBoard> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
         WindowOptions {
@@ -90,33 +91,28 @@ fn create_window(
             kind: WindowKind::PopUp,
             ..Default::default()
         },
-        |_, cx| cx.new(|_| RopyBoard::new(shared_records)),
+        |_, cx| cx.new(|_| RopyBoard::new(shared_records, is_visible)),
     )
     .unwrap()
-    .into()
 }
 
 fn start_hotkey_handler(
     hotkey_rx: mpsc::Receiver<()>,
-    is_visible: Arc<AtomicBool>,
+    window_handle: WindowHandle<RopyBoard>,
     async_app: AsyncApp,
-    fg_executor: ForegroundExecutor,
-    bg_executor: BackgroundExecutor,
 ) {
+    let fg_executor = async_app.foreground_executor().clone();
+    let bg_executor = async_app.background_executor().clone();
     fg_executor
         .spawn(async move {
             loop {
                 while let Ok(()) = hotkey_rx.try_recv() {
-                    let current_visible = is_visible.load(Ordering::SeqCst);
-                    let new_visible = !current_visible;
-                    is_visible.store(new_visible, Ordering::SeqCst);
-
-                    let _ = async_app.update(|app_cx| {
-                        if new_visible {
-                            app_cx.activate(true);
-                        } else {
-                            app_cx.hide();
-                        }
+                    let _ = async_app.update(move |cx| {
+                        window_handle
+                            .update(cx, |board, _window, cx| {
+                                board.toggle_visibility(cx);
+                            })
+                            .ok();
                     });
                 }
                 bg_executor.timer(Duration::from_millis(16)).await;
@@ -130,17 +126,14 @@ pub fn launch_app() {
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
+        let is_visible = Arc::new(AtomicBool::new(true));
         let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
         let _forwarder_handle =
             start_clipboard_forwarder(clipboard_rx, shared_records.clone(), repository.clone());
-        let is_visible = Arc::new(AtomicBool::new(true));
-        let _window_handle = create_window(cx, shared_records);
+        let window_handle = create_window(cx, shared_records, is_visible.clone());
         let async_app = cx.to_async();
-        let fg_executor = cx.foreground_executor().clone();
-        let bg_executor = cx.background_executor().clone();
-        start_hotkey_handler(hotkey_rx, is_visible, async_app, fg_executor, bg_executor);
-
+        start_hotkey_handler(hotkey_rx, window_handle, async_app);
         cx.activate(true);
     });
 }
