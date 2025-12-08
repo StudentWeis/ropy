@@ -33,7 +33,7 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
             Some(Arc::new(repo))
         }
         Err(e) => {
-            eprintln!("[ropy] 剪切板历史记录仓库初始化失败: {}", e);
+            eprintln!("[ropy] 剪切板历史记录仓库初始化失败: {e}");
             None
         }
     }
@@ -84,7 +84,7 @@ fn start_clipboard_forwarder(
                         println!("[ropy] 剪切板内容重复，跳过保存");
                     }
                     Err(e) => {
-                        eprintln!("[ropy] 保存剪切板记录失败: {}", e);
+                        eprintln!("[ropy] 保存剪切板记录失败: {e}");
                     }
                 }
             }
@@ -123,8 +123,8 @@ fn start_hotkey_handler(
                 while let Ok(()) = hotkey_rx.try_recv() {
                     let _ = async_app.update(move |cx| {
                         window_handle
-                            .update(cx, |board, _window, cx| {
-                                board.toggle_window(cx);
+                            .update(cx, |board, window, cx| {
+                                board.toggle_window(window, cx);
                             })
                             .ok();
                     });
@@ -139,7 +139,10 @@ pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
         cx.bind_keys([
             KeyBinding::new("escape", crate::gui::board::Hide, None),
+            #[cfg(target_os = "macos")]
             KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
+            #[cfg(target_os = "windows")]
+            KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
         ]);
 
         #[cfg(target_os = "macos")]

@@ -25,9 +25,9 @@ impl RopyBoard {
         window.focus(&focus_handle);
         // Subscribe to focus out events to hide the window
         let _focus_out_subscription =
-            cx.on_focus_out(&focus_handle, window, move |this, _event, _window, cx| {
+            cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window
-                this.hide_window(cx);
+                this.hide_window(window, cx);
             });
         Self {
             records,
@@ -42,24 +42,24 @@ impl RopyBoard {
         crate::clipboard::copy_text(text).unwrap();
     }
 
-    pub fn toggle_window(&self, cx: &mut gpui::Context<RopyBoard>) {
+    pub fn toggle_window(&self, window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
         let current_visible = self.is_visible.load(Ordering::Acquire);
         let new_visible = !current_visible;
         self.is_visible.store(new_visible, Ordering::Release);
         if new_visible {
-            cx.activate(true);
+            window.activate_window();
         } else {
-            cx.hide();
+            window.minimize_window();
         }
     }
 
-    pub fn hide_window(&self, cx: &mut gpui::Context<RopyBoard>) {
+    pub fn hide_window(&self, window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
         self.is_visible.store(false, Ordering::Release);
-        cx.hide();
+        window.minimize_window();
     }
 
-    fn on_hide_action(&mut self, _: &Hide, _window: &mut Window, cx: &mut Context<Self>) {
-        self.hide_window(cx);
+    fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
+        self.hide_window(window, cx);
     }
 
     fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
@@ -101,9 +101,9 @@ impl Render for RopyBoard {
                     .children(records_clone.into_iter().enumerate().map(|(index, record)| {
                         let display_content = format_clipboard_content(&record);
                         let record_content = record.content.clone();
-                        let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
+                        let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
                             this.copy_to_clipboard(&record_content);
-                            this.hide_window(cx);
+                            this.hide_window(window, cx);
                         });
 
                         div()

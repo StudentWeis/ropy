@@ -20,6 +20,9 @@ tempfile = "3.20"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }
+
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"

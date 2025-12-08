@@ -4561,6 +4561,7 @@ dependencies = [
  "sled",
  "sysinfo 0.37.2",
  "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
