@@ -1,15 +1,13 @@
 use crate::repository::ClipboardRecord;
 use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, rgb};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-gpui::actions!(board, [Hide, Quit]);
+gpui::actions!(board, [Hide, Quit, Active]);
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
     /// Clipboard history records
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    pub is_visible: Arc<AtomicBool>,
     pub focus_handle: FocusHandle,
     _focus_out_subscription: Subscription,
 }
@@ -17,7 +15,6 @@ pub struct RopyBoard {
 impl RopyBoard {
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
-        is_visible: Arc<AtomicBool>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -25,13 +22,12 @@ impl RopyBoard {
         window.focus(&focus_handle);
         // Subscribe to focus out events to hide the window
         let _focus_out_subscription =
-            cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
+            cx.on_focus_out(&focus_handle, window, move |_this, _event, window, cx| {
                 // When the window loses focus, hide the window
-                this.hide_window(window, cx);
+                hide_window(window, cx);
             });
         Self {
             records,
-            is_visible,
             focus_handle,
             _focus_out_subscription,
         }
@@ -42,33 +38,12 @@ impl RopyBoard {
         crate::clipboard::copy_text(text).unwrap();
     }
 
-    pub fn toggle_window(&self, _window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
-        let current_visible = self.is_visible.load(Ordering::Acquire);
-        let new_visible = !current_visible;
-        self.is_visible.store(new_visible, Ordering::Release);
-        if new_visible {
-            #[cfg(target_os = "windows")]
-            _window.activate_window();
-            #[cfg(target_os = "macos")]
-            _cx.activate(true);
-        } else {
-            #[cfg(target_os = "windows")]
-            _window.minimize_window();
-            #[cfg(target_os = "macos")]
-            _cx.hide();
-        }
-    }
-
-    pub fn hide_window(&self, _window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
-        self.is_visible.store(false, Ordering::Release);
-        #[cfg(target_os = "windows")]
-        _window.minimize_window();
-        #[cfg(target_os = "macos")]
-        _cx.hide();
+    fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
+        active_window(window, cx);
     }
 
     fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
-        self.hide_window(window, cx);
+        hide_window(window, cx);
     }
 
     fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
@@ -87,6 +62,7 @@ impl Render for RopyBoard {
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_hide_action))
             .on_action(cx.listener(Self::on_quit_action))
+            .on_action(cx.listener(Self::on_active_action))
             .flex()
             .flex_col()
             .bg(rgb(0x2d2d2d))
@@ -112,7 +88,7 @@ impl Render for RopyBoard {
                         let record_content = record.content.clone();
                         let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
                             this.copy_to_clipboard(&record_content);
-                            this.hide_window(window, cx);
+                            hide_window(window, cx);
                         });
 
                         div()
@@ -155,4 +131,18 @@ fn format_clipboard_content(record: &ClipboardRecord) -> String {
     } else {
         record.content.clone()
     }
+}
+
+pub fn hide_window(_window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+    #[cfg(target_os = "windows")]
+    _window.minimize_window();
+    #[cfg(target_os = "macos")]
+    _cx.hide();
+}
+
+pub fn active_window(_window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+    #[cfg(target_os = "windows")]
+    _window.activate_window();
+    #[cfg(target_os = "macos")]
+    _cx.activate(true);
 }

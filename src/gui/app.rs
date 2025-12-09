@@ -1,11 +1,10 @@
 use crate::clipboard;
-use crate::gui::board::RopyBoard;
+use crate::gui::board::{RopyBoard, active_window};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, px, size,
 };
-use std::sync::atomic::AtomicBool;
 use std::sync::{
     Arc, Mutex,
     mpsc::{self, channel},
@@ -95,7 +94,6 @@ fn start_clipboard_forwarder(
 fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    is_visible: Arc<AtomicBool>,
 ) -> WindowHandle<RopyBoard> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -105,7 +103,7 @@ fn create_window(
             titlebar: None,
             ..Default::default()
         },
-        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, is_visible, window, cx)),
+        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, window, cx)),
     )
     .unwrap()
 }
@@ -123,9 +121,7 @@ fn start_hotkey_handler(
                 while let Ok(()) = hotkey_rx.try_recv() {
                     let _ = async_app.update(move |cx| {
                         window_handle
-                            .update(cx, |board, window, cx| {
-                                board.toggle_window(window, cx);
-                            })
+                            .update(cx, |_, window, cx| active_window(window, cx))
                             .ok();
                     });
                 }
@@ -152,12 +148,11 @@ pub fn launch_app() {
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
-        let is_visible = Arc::new(AtomicBool::new(true));
         let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
         let _forwarder_handle =
             start_clipboard_forwarder(clipboard_rx, shared_records.clone(), repository.clone());
-        let window_handle = create_window(cx, shared_records, is_visible.clone());
+        let window_handle = create_window(cx, shared_records);
         let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app);
         cx.activate(true);
