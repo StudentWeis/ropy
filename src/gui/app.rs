@@ -106,6 +106,7 @@ fn create_window(
             ..Default::default()
         },
         |window, cx| {
+            gpui_component::theme::Theme::change(gpui_component::theme::ThemeMode::Dark, Some(window), cx);
             let view = cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         },

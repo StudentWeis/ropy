@@ -124,7 +124,6 @@ impl Render for RopyBoard {
                 div().flex().flex_col().w_full().mb_4().child(
                     Input::new(&self.search_input)
                         .appearance(false)
-                        .text_color(rgb(0xffffff))
                         .border_1()
                         .border_color(rgb(0x555555))
                         .rounded_md()
