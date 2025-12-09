@@ -1,6 +1,6 @@
 ***Ropy***
 
-跨平台剪切板历史管理工具（当前仅支持 macOS）。
+Cross-platform clipboard native GUI manager in pure Rust (Windows & macOS).
 
 TODO
 
@@ -12,7 +12,6 @@ TODO
 - 支持更多平台（Linux 桌面环境）
 - 提供安装包和发布渠道
 - 支持多语言界面
-- 支持云同步剪切板历史
 - 支持快捷键自定义
 - 支持剪切板内容分类管理
 - 支持剪切板内容预览

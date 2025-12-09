@@ -137,6 +137,10 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
+        // Set activation policy on macOS
+        #[cfg(target_os = "macos")]
+        set_activation_policy_accessory();
+
         cx.bind_keys([
             KeyBinding::new("escape", crate::gui::board::Hide, None),
             #[cfg(target_os = "macos")]
@@ -144,9 +148,6 @@ pub fn launch_app() {
             #[cfg(target_os = "windows")]
             KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
         ]);
-
-        #[cfg(target_os = "macos")]
-        set_activation_policy_accessory();
 
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
