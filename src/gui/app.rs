@@ -94,6 +94,7 @@ fn start_clipboard_forwarder(
 fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    repository: Option<Arc<ClipboardRepository>>,
 ) -> WindowHandle<RopyBoard> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -103,7 +104,7 @@ fn create_window(
             titlebar: None,
             ..Default::default()
         },
-        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, window, cx)),
+        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx)),
     )
     .unwrap()
 }
@@ -152,7 +153,7 @@ pub fn launch_app() {
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
         let _forwarder_handle =
             start_clipboard_forwarder(clipboard_rx, shared_records.clone(), repository.clone());
-        let window_handle = create_window(cx, shared_records);
+        let window_handle = create_window(cx, shared_records, repository.clone());
         let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app);
         cx.activate(true);

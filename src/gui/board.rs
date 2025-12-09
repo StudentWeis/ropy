@@ -1,4 +1,5 @@
 use crate::repository::ClipboardRecord;
+use crate::repository::ClipboardRepository;
 use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, rgb};
 use std::sync::{Arc, Mutex};
 
@@ -8,6 +9,7 @@ gpui::actions!(board, [Hide, Quit, Active]);
 pub struct RopyBoard {
     /// Clipboard history records
     pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    pub repository: Option<Arc<ClipboardRepository>>,
     pub focus_handle: FocusHandle,
     _focus_out_subscription: Subscription,
 }
@@ -15,6 +17,7 @@ pub struct RopyBoard {
 impl RopyBoard {
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
+        repository: Option<Arc<ClipboardRepository>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -28,6 +31,7 @@ impl RopyBoard {
             });
         Self {
             records,
+            repository,
             focus_handle,
             _focus_out_subscription,
         }
@@ -36,6 +40,18 @@ impl RopyBoard {
     /// Copy text to clipboard
     pub fn copy_to_clipboard(&mut self, text: &str) {
         crate::clipboard::copy_text(text).unwrap();
+    }
+
+    /// Clear clipboard history
+    pub fn clear_history(&mut self) {
+        if let Some(ref repo) = self.repository {
+            if let Err(e) = repo.clear() {
+                eprintln!("[ropy] Failed to clear clipboard history: {e}");
+            } else {
+                let mut guard = self.records.lock().unwrap();
+                guard.clear();
+            }
+        }
     }
 
     fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
@@ -56,7 +72,6 @@ impl Render for RopyBoard {
         let records_guard = self.records.lock().unwrap();
         let records_clone: Vec<ClipboardRecord> = records_guard.clone();
         drop(records_guard);
-
         div()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
@@ -70,11 +85,21 @@ impl Render for RopyBoard {
             .p_4()
             .child(
                 div()
-                    .text_lg()
-                    .text_color(rgb(0xffffff))
-                    .font_weight(gpui::FontWeight::BOLD)
+                    .flex()
+                    .flex_row()
+                    .justify_between()
+                    .items_center()
                     .mb_4()
-                    .child("RopyBoard"),
+                    .child(
+                        div()
+                            .text_lg()
+                            .text_color(rgb(0xffffff))
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .child("Ropy"),
+                    )
+                    .child(
+                        create_clear_button(cx),
+                    ),
             )
             .child(
                 div()
@@ -90,7 +115,6 @@ impl Render for RopyBoard {
                             this.copy_to_clipboard(&record_content);
                             hide_window(window, cx);
                         });
-
                         div()
                             .flex()
                             .flex_col()
@@ -120,6 +144,24 @@ impl Render for RopyBoard {
                     })),
             )
     }
+}
+
+/// Create the "Clear" button element
+fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+    div()
+        .px_3()
+        .py_1()
+        .bg(rgb(0x4d4d4d))
+        .rounded_md()
+        .text_sm()
+        .text_color(rgb(0xffffff))
+        .cursor_pointer()
+        .hover(|style| style.bg(rgb(0x6d6d6d)))
+        .id("clear-button")
+        .on_click(cx.listener(|this, _, _, _| {
+            this.clear_history();
+        }))
+        .child("清空")
 }
 
 fn format_clipboard_content(record: &ClipboardRecord) -> String {
