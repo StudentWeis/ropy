@@ -1,5 +1,5 @@
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
-use windows_sys::Win32::System::Threading::{CreateMutexW, ReleaseMutex};
+use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     FindWindowW, MB_OK, MessageBoxW, SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
@@ -22,16 +22,14 @@ pub fn ensure_single_instance() -> bool {
 
         if GetLastError() == ERROR_ALREADY_EXISTS {
             // 尝试激活现有窗口
-            let class_name = OsStr::new("gpui::window")
+            let class_name = OsStr::new("Zed::Window")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect::<Vec<_>>();
-            let hwnd = unsafe { FindWindowW(class_name.as_ptr(), std::ptr::null()) };
+            let hwnd = FindWindowW(class_name.as_ptr(), std::ptr::null());
             if !hwnd.is_null() {
-                unsafe {
-                    ShowWindow(hwnd, SW_RESTORE);
-                    SetForegroundWindow(hwnd);
-                }
+                ShowWindow(hwnd, SW_RESTORE);
+                SetForegroundWindow(hwnd);
             } else {
                 // 回退到消息框
                 let title = OsStr::new("Ropy")
@@ -42,20 +40,18 @@ pub fn ensure_single_instance() -> bool {
                     .encode_wide()
                     .chain(std::iter::once(0))
                     .collect::<Vec<_>>();
-                unsafe {
-                    MessageBoxW(
-                        std::ptr::null_mut(),
-                        message.as_ptr(),
-                        title.as_ptr(),
-                        MB_OK,
-                    );
-                }
+                MessageBoxW(
+                    std::ptr::null_mut(),
+                    message.as_ptr(),
+                    title.as_ptr(),
+                    MB_OK,
+                );
             }
             return false;
         }
 
         // 保持互斥锁，直到程序退出
-        std::mem::forget(mutex);
+        let _ = mutex;
         true
     }
 }
