@@ -1,6 +1,8 @@
 use crate::repository::ClipboardRecord;
 use crate::repository::ClipboardRepository;
+use gpui::Entity;
 use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, rgb};
+use gpui_component::input::{Input, InputState};
 use std::sync::{Arc, Mutex};
 
 gpui::actions!(board, [Hide, Quit, Active]);
@@ -8,10 +10,11 @@ gpui::actions!(board, [Hide, Quit, Active]);
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
     /// Clipboard history records
-    pub records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    pub repository: Option<Arc<ClipboardRepository>>,
-    pub focus_handle: FocusHandle,
+    records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    repository: Option<Arc<ClipboardRepository>>,
+    focus_handle: FocusHandle,
     _focus_out_subscription: Subscription,
+    search_input: Entity<InputState>,
 }
 
 impl RopyBoard {
@@ -23,17 +26,22 @@ impl RopyBoard {
     ) -> Self {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle);
+
         // Subscribe to focus out events to hide the window
         let _focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |_this, _event, window, cx| {
                 // When the window loses focus, hide the window
                 hide_window(window, cx);
             });
+
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
+
         Self {
             records,
             repository,
             focus_handle,
             _focus_out_subscription,
+            search_input,
         }
     }
 
@@ -54,6 +62,18 @@ impl RopyBoard {
         }
     }
 
+    /// Get filtered records based on search query
+    fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
+        if query.is_empty() {
+            let guard = self.records.lock().unwrap();
+            guard.clone()
+        } else if let Some(ref repo) = self.repository {
+            repo.search(query).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    }
+
     fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
         active_window(window, cx);
     }
@@ -69,9 +89,8 @@ impl RopyBoard {
 
 impl Render for RopyBoard {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let records_guard = self.records.lock().unwrap();
-        let records_clone: Vec<ClipboardRecord> = records_guard.clone();
-        drop(records_guard);
+        let query = self.search_input.read(cx).value().to_string();
+        let records_clone = self.get_filtered_records(&query);
         div()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
@@ -100,6 +119,18 @@ impl Render for RopyBoard {
                     .child(
                         create_clear_button(cx),
                     ),
+            )
+            .child(
+                div().flex().flex_col().w_full().mb_4().child(
+                    Input::new(&self.search_input)
+                        .appearance(false)
+                        .text_color(rgb(0xffffff))
+                        .border_1()
+                        .border_color(rgb(0x555555))
+                        .rounded_md()
+                        .px_3()
+                        .py_2()
+                )
             )
             .child(
                 div()
@@ -161,7 +192,7 @@ fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
         }))
-        .child("清空")
+        .child("Clear All")
 }
 
 fn format_clipboard_content(record: &ClipboardRecord) -> String {
@@ -175,14 +206,14 @@ fn format_clipboard_content(record: &ClipboardRecord) -> String {
     }
 }
 
-pub fn hide_window(_window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+pub fn hide_window<T>(_window: &mut Window, _cx: &mut gpui::Context<T>) {
     #[cfg(target_os = "windows")]
     _window.minimize_window();
     #[cfg(target_os = "macos")]
     _cx.hide();
 }
 
-pub fn active_window(_window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+pub fn active_window<T>(_window: &mut Window, _cx: &mut gpui::Context<T>) {
     #[cfg(target_os = "windows")]
     _window.activate_window();
     #[cfg(target_os = "macos")]

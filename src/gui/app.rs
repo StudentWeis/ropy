@@ -5,6 +5,7 @@ use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, px, size,
 };
+use gpui_component::Root;
 use std::sync::{
     Arc, Mutex,
     mpsc::{self, channel},
@@ -19,8 +20,7 @@ use objc2::{class, msg_send, runtime::AnyObject};
 fn set_activation_policy_accessory() {
     unsafe {
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
-        // NSApplicationActivationPolicyAccessory = 1
-        // 将应用设置为 Accessory 模式，这样它就不会出现在 Dock 和 Cmd+Tab 切换器中
+        // Config the app to be accessory (no dock icon & cmd tab)
         let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
     }
 }
@@ -28,11 +28,11 @@ fn set_activation_policy_accessory() {
 fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     match ClipboardRepository::new() {
         Ok(repo) => {
-            println!("[ropy] 剪切板历史记录仓库初始化成功");
+            println!("[ropy] Clipboard history repository initialized");
             Some(Arc::new(repo))
         }
         Err(e) => {
-            eprintln!("[ropy] 剪切板历史记录仓库初始化失败: {e}");
+            eprintln!("[ropy] Clipboard repository initialization failed: {e}");
             None
         }
     }
@@ -77,13 +77,14 @@ fn start_clipboard_forwarder(
                         guard.insert(0, record);
                         if guard.len() > 50 {
                             guard.truncate(50);
+                            repo.cleanup_old_records(50).ok();
                         }
                     }
                     Ok(None) => {
-                        println!("[ropy] 剪切板内容重复，跳过保存");
+                        println!("[ropy] Content is duplicate, not saving.");
                     }
                     Err(e) => {
-                        eprintln!("[ropy] 保存剪切板记录失败: {e}");
+                        eprintln!("[ropy] Failed to save clipboard record: {e}");
                     }
                 }
             }
@@ -95,7 +96,7 @@ fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
-) -> WindowHandle<RopyBoard> {
+) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
         WindowOptions {
@@ -104,14 +105,17 @@ fn create_window(
             titlebar: None,
             ..Default::default()
         },
-        |window, cx| cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx)),
+        |window, cx| {
+            let view = cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx));
+            cx.new(|cx| Root::new(view, window, cx))
+        },
     )
     .unwrap()
 }
 
 fn start_hotkey_handler(
     hotkey_rx: mpsc::Receiver<()>,
-    window_handle: WindowHandle<RopyBoard>,
+    window_handle: WindowHandle<Root>,
     async_app: AsyncApp,
 ) {
     let fg_executor = async_app.foreground_executor().clone();
@@ -134,6 +138,9 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
+        // Initialize gpui-component
+        gpui_component::init(cx);
+
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();

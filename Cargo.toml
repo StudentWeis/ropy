@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 clipboard-rs = "0.3.1"
 gpui = "0.2.2"
+gpui-component = "0.5.0"
 sysinfo = "0.37.2"
 global-hotkey = "0.7.0"
 sled = "0.34"

@@ -320,18 +320,20 @@ mod tests {
     fn test_search() {
         let repo = create_test_repo();
 
-        repo.save_text("Hello World".to_string()).expect("保存失败");
+        repo.save_text("Hello World".to_string())
+            .expect("Failed to save");
         repo.save_text("Goodbye World".to_string())
-            .expect("保存失败");
-        repo.save_text("Hello Rust".to_string()).expect("保存失败");
+            .expect("Failed to save");
+        repo.save_text("Hello Rust".to_string())
+            .expect("Failed to save");
 
-        let results = repo.search("hello").expect("搜索失败");
+        let results = repo.search("hello").expect("Failed to search");
         assert_eq!(results.len(), 2);
 
-        let results = repo.search("world").expect("搜索失败");
+        let results = repo.search("world").expect("Failed to search");
         assert_eq!(results.len(), 2);
 
-        let results = repo.search("rust").expect("搜索失败");
+        let results = repo.search("rust").expect("Failed to search");
         assert_eq!(results.len(), 1);
     }
 
