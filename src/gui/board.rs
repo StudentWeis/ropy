@@ -42,20 +42,29 @@ impl RopyBoard {
         crate::clipboard::copy_text(text).unwrap();
     }
 
-    pub fn toggle_window(&self, window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+    pub fn toggle_window(&self, _window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
         let current_visible = self.is_visible.load(Ordering::Acquire);
         let new_visible = !current_visible;
         self.is_visible.store(new_visible, Ordering::Release);
         if new_visible {
-            window.activate_window();
+            #[cfg(target_os = "windows")]
+            _window.activate_window();
+            #[cfg(target_os = "macos")]
+            _cx.activate(true);
         } else {
-            window.minimize_window();
+            #[cfg(target_os = "windows")]
+            _window.minimize_window();
+            #[cfg(target_os = "macos")]
+            _cx.hide();
         }
     }
 
-    pub fn hide_window(&self, window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
+    pub fn hide_window(&self, _window: &mut Window, _cx: &mut gpui::Context<RopyBoard>) {
         self.is_visible.store(false, Ordering::Release);
-        window.minimize_window();
+        #[cfg(target_os = "windows")]
+        _window.minimize_window();
+        #[cfg(target_os = "macos")]
+        _cx.hide();
     }
 
     fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
