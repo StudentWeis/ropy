@@ -21,21 +21,36 @@ pub fn ensure_single_instance() -> bool {
         }
 
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            // 另一个实例已经在运行，显示消息
-            let title = OsStr::new("Ropy")
+            // 尝试激活现有窗口
+            let class_name = OsStr::new("gpui::window")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect::<Vec<_>>();
-            let message = OsStr::new("Ropy 已经在运行中。请使用热键来显示窗口。")
-                .encode_wide()
-                .chain(std::iter::once(0))
-                .collect::<Vec<_>>();
-            MessageBoxW(
-                std::ptr::null_mut(),
-                message.as_ptr(),
-                title.as_ptr(),
-                MB_OK,
-            );
+            let hwnd = unsafe { FindWindowW(class_name.as_ptr(), std::ptr::null()) };
+            if !hwnd.is_null() {
+                unsafe {
+                    ShowWindow(hwnd, SW_RESTORE);
+                    SetForegroundWindow(hwnd);
+                }
+            } else {
+                // 回退到消息框
+                let title = OsStr::new("Ropy")
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<_>>();
+                let message = OsStr::new("Ropy 已经在运行中。请使用热键来显示窗口。")
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<_>>();
+                unsafe {
+                    MessageBoxW(
+                        std::ptr::null_mut(),
+                        message.as_ptr(),
+                        title.as_ptr(),
+                        MB_OK,
+                    );
+                }
+            }
             return false;
         }
 
