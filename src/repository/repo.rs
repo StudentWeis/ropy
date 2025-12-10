@@ -151,7 +151,6 @@ impl ClipboardRepository {
     }
 
     /// Delete a record
-    #[allow(dead_code)]
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let key = id.to_be_bytes();
         let removed = self

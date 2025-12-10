@@ -62,6 +62,18 @@ impl RopyBoard {
         }
     }
 
+    /// Delete a single record by ID
+    pub fn delete_record(&mut self, id: u64) {
+        if let Some(ref repo) = self.repository {
+            if let Err(e) = repo.delete(id) {
+                eprintln!("[ropy] Failed to delete clipboard record: {e}");
+            } else {
+                let mut guard = self.records.lock().unwrap();
+                guard.retain(|record| record.id != id);
+            }
+        }
+    }
+
     /// Get filtered records based on search query
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
         if query.is_empty() {
@@ -84,95 +96,6 @@ impl RopyBoard {
 
     fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
         cx.quit();
-    }
-}
-
-impl Render for RopyBoard {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let query = self.search_input.read(cx).value().to_string();
-        let records_clone = self.get_filtered_records(&query);
-        div()
-            .id("ropy-board")
-            .track_focus(&self.focus_handle)
-            .on_action(cx.listener(Self::on_hide_action))
-            .on_action(cx.listener(Self::on_quit_action))
-            .on_action(cx.listener(Self::on_active_action))
-            .flex()
-            .flex_col()
-            .bg(rgb(0x2d2d2d))
-            .size_full()
-            .p_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_between()
-                    .items_center()
-                    .mb_4()
-                    .child(
-                        div()
-                            .text_lg()
-                            .text_color(rgb(0xffffff))
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .child("Ropy"),
-                    )
-                    .child(
-                        create_clear_button(cx),
-                    ),
-            )
-            .child(
-                div().flex().flex_col().w_full().mb_4().child(
-                    Input::new(&self.search_input)
-                        .appearance(false)
-                        .border_1()
-                        .border_color(rgb(0x555555))
-                        .rounded_md()
-                        .px_3()
-                        .py_2()
-                )
-            )
-            .child(
-                div()
-                    .id("clipboard-list")
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .children(records_clone.into_iter().enumerate().map(|(index, record)| {
-                        let display_content = format_clipboard_content(&record);
-                        let record_content = record.content.clone();
-                        let copy_callback = cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
-                            this.copy_to_clipboard(&record_content);
-                            hide_window(window, cx);
-                        });
-                        div()
-                            .flex()
-                            .flex_col()
-                            .w_full()
-                            .p_3()
-                            .mb_2()
-                            .bg(rgb(0x3d3d3d))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(rgb(0x4d4d4d))
-                            .hover(|style| style.bg(rgb(0x4d4d4d)).border_color(rgb(0x6d6d6d)))
-                            .cursor_pointer()
-                            .id(("record", index))
-                            .on_click(copy_callback)
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0xffffff))
-                                    .overflow_hidden()
-                                    .child(display_content),
-                            )
-                            .child(
-                                div().text_xs().text_color(rgb(0x888888)).mt_1().child(
-                                    record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
-                                ),
-                            )
-                    })),
-            )
     }
 }
 
@@ -202,6 +125,137 @@ fn format_clipboard_content(record: &ClipboardRecord) -> String {
         )
     } else {
         record.content.clone()
+    }
+}
+
+/// Render the header section with title and clear button
+fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_row()
+        .justify_between()
+        .items_center()
+        .mb_4()
+        .child(
+            div()
+                .text_lg()
+                .text_color(rgb(0xffffff))
+                .font_weight(gpui::FontWeight::BOLD)
+                .child("Ropy"),
+        )
+        .child(create_clear_button(cx))
+}
+
+/// Render the search input section
+fn render_search_input(search_input: &Entity<InputState>) -> impl IntoElement {
+    div().flex().flex_col().w_full().mb_4().child(
+        Input::new(search_input)
+            .appearance(false)
+            .border_1()
+            .border_color(rgb(0x555555))
+            .rounded_md()
+            .px_3()
+            .py_2()
+    )
+}
+
+/// Render the scrollable list of clipboard records
+fn render_records_list(
+    records: Vec<ClipboardRecord>,
+    cx: &mut Context<'_, RopyBoard>,
+) -> impl IntoElement {
+    div()
+        .id("clipboard-list")
+        .flex()
+        .flex_col()
+        .flex_1()
+        .overflow_y_scroll()
+        .children(records.into_iter().enumerate().map(|(index, record)| {
+            let display_content = format_clipboard_content(&record);
+            let record_content = record.content.clone();
+            let record_id = record.id;
+            
+            div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .p_3()
+                .mb_2()
+                .bg(rgb(0x3d3d3d))
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0x4d4d4d))
+                .hover(|style| style.bg(rgb(0x4d4d4d)).border_color(rgb(0x6d6d6d)))
+                .id(("record", index))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .justify_between()
+                        .items_start()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .cursor_pointer()
+                                .id(("record-content", index))
+                                .on_click(cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
+                                    this.copy_to_clipboard(&record_content);
+                                    hide_window(window, cx);
+                                }))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(rgb(0xffffff))
+                                        .line_height(gpui::relative(1.5))
+                                        .child(display_content.clone()),
+                                )
+                                .child(
+                                    div().text_xs().text_color(rgb(0x888888)).mt_1().child(
+                                        record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                                    ),
+                                )
+                        )
+                        .child(
+                            div()
+                                .px_2()
+                                .py_1()
+                                .rounded_sm()
+                                .text_sm()
+                                .text_color(rgb(0x888888))
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(0x555555)).text_color(rgb(0xffffff)))
+                                .id(("delete-btn", index))
+                                .child("×")
+                                .on_click(cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
+                                    this.delete_record(record_id);
+                                    cx.notify();
+                                }))
+                        )
+                )
+        }))
+}
+
+impl Render for RopyBoard {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let query = self.search_input.read(cx).value().to_string();
+        let records_clone = self.get_filtered_records(&query);
+        
+        div()
+            .id("ropy-board")
+            .track_focus(&self.focus_handle)
+            .on_action(cx.listener(Self::on_hide_action))
+            .on_action(cx.listener(Self::on_quit_action))
+            .on_action(cx.listener(Self::on_active_action))
+            .flex()
+            .flex_col()
+            .bg(rgb(0x2d2d2d))
+            .size_full()
+            .p_4()
+            .child(render_header(cx))
+            .child(render_search_input(&self.search_input))
+            .child(render_records_list(records_clone, cx))
     }
 }
 
