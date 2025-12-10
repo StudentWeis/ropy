@@ -1,6 +1,6 @@
 //! 剪切板记录的数据模型
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 /// 剪切板记录的数据模型
@@ -11,7 +11,7 @@ pub struct ClipboardRecord {
     /// 剪切板内容
     pub content: String,
     /// 创建时间
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime<Local>,
     /// 内容类型
     pub content_type: ContentType,
 }

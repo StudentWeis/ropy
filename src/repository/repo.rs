@@ -1,6 +1,6 @@
 //! 剪切板历史记录仓库实现
 
-use chrono::Utc;
+use chrono::Local;
 use sled::{Db, Tree};
 use std::path::PathBuf;
 
@@ -48,7 +48,7 @@ impl ClipboardRepository {
         content: String,
         content_type: ContentType,
     ) -> Result<ClipboardRecord, RepositoryError> {
-        let now = Utc::now();
+        let now = Local::now();
         let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
 
         let record = ClipboardRecord {
