@@ -114,6 +114,10 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.confirm_and_hide(window, cx);
+    }
+
+    fn confirm_and_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let query = self.search_input.read(cx).value().to_string();
         let records = self.get_filtered_records(&query);
         if let Some(record) = records.get(self.selected_index) {
@@ -132,6 +136,20 @@ impl RopyBoard {
 
     fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
         cx.quit();
+    }
+
+    fn on_key_down(&mut self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let key = &event.keystroke.key;
+        let index = match key.as_str() {
+            "1" => 0,
+            "2" => 1,
+            "3" => 2,
+            "4" => 3,
+            "5" => 4,
+            _ => return,
+        };
+        self.selected_index = index;
+        self.confirm_and_hide(window, cx);
     }
 }
 
@@ -236,9 +254,25 @@ fn render_records_list(
                                         .child(display_content.clone()),
                                 )
                                 .child(
-                                    div().text_xs().text_color(cx.theme().muted_foreground).mt_1().child(
-                                        record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
-                                    ),
+                                    h_flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .mt_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .bg(cx.theme().muted)
+                                                .px_1()
+                                                .py_0()
+                                                .rounded_sm()
+                                                .child(format!("{}", index + 1)),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(cx.theme().muted_foreground).child(
+                                                record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                                            ),
+                                        )
                                 )
                         )
                         .child(
@@ -275,6 +309,7 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_select_prev))
             .on_action(cx.listener(Self::on_select_next))
             .on_action(cx.listener(Self::on_confirm_selection))
+            .on_key_down(cx.listener(Self::on_key_down))
             .bg(cx.theme().background)
             .size_full()
             .p_4()
