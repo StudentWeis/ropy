@@ -1,5 +1,5 @@
 use crate::repository::{ClipboardRecord, ClipboardRepository};
-use gpui::{Context, Entity, FocusHandle, Render, ScrollHandle, Subscription, Window, div, prelude::*};
+use gpui::{Context, Entity, FocusHandle, Focusable, Render, ScrollHandle, Subscription, Window, div, prelude::*};
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
@@ -139,6 +139,18 @@ impl RopyBoard {
     }
 
     fn on_key_down(&mut self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // If the "/" key is pressed, focus the search input
+        if event.keystroke.key.as_str() == "/" {
+            window.focus(&self.search_input.focus_handle(cx));
+            return;
+        }
+        // If the search input is focused, ignore key presses
+        if let Some(focused_handle) = window.focused(cx)
+            && focused_handle == self.search_input.focus_handle(cx) {
+                return;
+        }
+
+        // Map number keys to record selection
         let key = &event.keystroke.key;
         let index = match key.as_str() {
             "1" => 0,
