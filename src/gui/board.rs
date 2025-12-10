@@ -1,12 +1,11 @@
 use crate::repository::{ClipboardRecord, ClipboardRepository};
-use gpui::Entity;
-use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*};
-use gpui_component::button::*;
+use gpui::{Context, Entity, FocusHandle, Render, ScrollHandle, Subscription, Window, div, prelude::*};
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use std::sync::{Arc, Mutex};
 
-gpui::actions!(board, [Hide, Quit, Active]);
+gpui::actions!(board, [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection]);
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
@@ -15,6 +14,8 @@ pub struct RopyBoard {
     focus_handle: FocusHandle,
     _focus_out_subscription: Subscription,
     search_input: Entity<InputState>,
+    selected_index: usize,
+    scroll_handle: ScrollHandle,
 }
 
 impl RopyBoard {
@@ -35,6 +36,7 @@ impl RopyBoard {
             });
 
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
+        let scroll_handle = ScrollHandle::new();
 
         Self {
             records,
@@ -42,6 +44,8 @@ impl RopyBoard {
             focus_handle,
             _focus_out_subscription,
             search_input,
+            selected_index: 0,
+            scroll_handle,
         }
     }
 
@@ -83,6 +87,38 @@ impl RopyBoard {
             repo.search(query).unwrap_or_default()
         } else {
             Vec::new()
+        }
+    }
+
+    fn on_select_prev(&mut self, _: &SelectPrev, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+            self.scroll_handle.scroll_to_item(self.selected_index);
+            cx.notify();
+        }
+    }
+
+    fn on_select_next(&mut self, _: &SelectNext, _window: &mut Window, cx: &mut Context<Self>) {
+        let query = self.search_input.read(cx).value().to_string();
+        let count = self.get_filtered_records(&query).len();
+        if count > 0 && self.selected_index < count - 1 {
+            self.selected_index += 1;
+            self.scroll_handle.scroll_to_item(self.selected_index);
+            cx.notify();
+        }
+    }
+
+    fn on_confirm_selection(
+        &mut self,
+        _: &ConfirmSelection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let query = self.search_input.read(cx).value().to_string();
+        let records = self.get_filtered_records(&query);
+        if let Some(record) = records.get(self.selected_index) {
+            self.copy_to_clipboard(&record.content);
+            hide_window(window, cx);
         }
     }
 
@@ -152,25 +188,29 @@ fn render_search_input(search_input: &Entity<InputState>, cx: &mut Context<'_, R
 /// Render the scrollable list of clipboard records
 fn render_records_list(
     records: Vec<ClipboardRecord>,
+    selected_index: usize,
+    scroll_handle: ScrollHandle,
     cx: &mut Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     v_flex()
         .id("clipboard-list")
         .flex_1()
         .overflow_y_scroll()
+        .track_scroll(&scroll_handle)
         .children(records.into_iter().enumerate().map(|(index, record)| {
             let display_content = format_clipboard_content(&record);
             let record_content = record.content.clone();
             let record_id = record.id;
+            let is_selected = index == selected_index;
             
             v_flex()
                 .w_full()
                 .p_3()
                 .mb_2()
-                .bg(cx.theme().secondary)
+                .bg(if is_selected { cx.theme().accent } else { cx.theme().secondary })
                 .rounded_md()
                 .border_1()
-                .border_color(cx.theme().border)
+                .border_color(if is_selected { cx.theme().accent } else { cx.theme().border })
                 .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
                 .id(("record", index))
                 .child(
@@ -220,18 +260,27 @@ impl Render for RopyBoard {
         let query = self.search_input.read(cx).value().to_string();
         let records_clone = self.get_filtered_records(&query);
         
+        if self.selected_index >= records_clone.len() && !records_clone.is_empty() {
+            self.selected_index = records_clone.len() - 1;
+        } else if records_clone.is_empty() {
+            self.selected_index = 0;
+        }
+
         v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_hide_action))
             .on_action(cx.listener(Self::on_quit_action))
             .on_action(cx.listener(Self::on_active_action))
+            .on_action(cx.listener(Self::on_select_prev))
+            .on_action(cx.listener(Self::on_select_next))
+            .on_action(cx.listener(Self::on_confirm_selection))
             .bg(cx.theme().background)
             .size_full()
             .p_4()
             .child(render_header(cx))
             .child(render_search_input(&self.search_input, cx))
-            .child(render_records_list(records_clone, cx))
+            .child(render_records_list(records_clone, self.selected_index, self.scroll_handle.clone(), cx))
     }
 }
 

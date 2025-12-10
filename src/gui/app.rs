@@ -166,6 +166,9 @@ pub fn launch_app() {
             KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
             #[cfg(target_os = "windows")]
             KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
+            KeyBinding::new("up", crate::gui::board::SelectPrev, None),
+            KeyBinding::new("down", crate::gui::board::SelectNext, None),
+            KeyBinding::new("enter", crate::gui::board::ConfirmSelection, None),
         ]);
 
         let repository = initialize_repository();
