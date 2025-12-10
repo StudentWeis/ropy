@@ -1,4 +1,4 @@
-//! 剪切板历史记录仓库实现
+//! Clipboard repository for storing and retrieving clipboard records.
 
 use chrono::Local;
 use sled::{Db, Tree};
@@ -13,15 +13,14 @@ pub struct ClipboardRepository {
 }
 
 impl ClipboardRepository {
-    /// 创建新的仓库实例
-    ///
-    /// 数据库文件存储在用户数据目录下的 `ropy/clipboard.db`
+    /// Create a new repository instance
     pub fn new() -> Result<Self, RepositoryError> {
+        // The database file is stored in the user data directory at `ropy/clipboard.db`
         let data_dir = Self::get_data_dir()?;
         Self::with_path(data_dir)
     }
 
-    /// 使用指定路径创建仓库实例（用于测试）
+    /// Create a repository with a specific database file path
     pub fn with_path(path: PathBuf) -> Result<Self, RepositoryError> {
         let db = sled::open(&path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
         let records_tree = db
@@ -31,7 +30,7 @@ impl ClipboardRepository {
         Ok(Self { db, records_tree })
     }
 
-    /// 获取数据目录路径
+    /// Get the data directory path for storing the database file
     fn get_data_dir() -> Result<PathBuf, RepositoryError> {
         let data_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
@@ -40,9 +39,9 @@ impl ClipboardRepository {
         Ok(data_dir)
     }
 
-    /// 保存剪切板记录
+    /// Save a clipboard record
     ///
-    /// 使用时间戳作为 key，保证按时间顺序存储
+    /// Uses a timestamp as the key to ensure chronological storage
     pub fn save(
         &self,
         content: String,
@@ -69,12 +68,12 @@ impl ClipboardRepository {
         Ok(record)
     }
 
-    /// 保存文本内容（便捷方法）
+    /// Save text content (convenience method)
     pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)
     }
 
-    /// 检查内容是否与最后一条记录重复
+    /// Check if the content is duplicate of the latest record
     pub fn is_duplicate(&self, content: &str) -> Result<bool, RepositoryError> {
         if let Some(last_record) = self.get_latest()? {
             return Ok(last_record.content == content);
@@ -82,7 +81,7 @@ impl ClipboardRepository {
         Ok(false)
     }
 
-    /// 保存文本（带去重检查）
+    /// Save text content if it is not a duplicate of the latest record
     pub fn save_text_if_not_duplicate(
         &self,
         content: String,
@@ -93,7 +92,7 @@ impl ClipboardRepository {
         self.save_text(content).map(Some)
     }
 
-    /// 获取最新的一条记录
+    /// Get the latest record
     pub fn get_latest(&self) -> Result<Option<ClipboardRecord>, RepositoryError> {
         if let Some(result) = self
             .records_tree
@@ -108,7 +107,8 @@ impl ClipboardRepository {
         Ok(None)
     }
 
-    /// 根据 ID 获取记录
+    /// Get a record by ID
+    #[allow(dead_code)]
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
         if let Some(value) = self
@@ -123,19 +123,7 @@ impl ClipboardRepository {
         Ok(None)
     }
 
-    /// 获取所有记录（按时间倒序）
-    pub fn get_all(&self) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let mut records = Vec::new();
-        for result in self.records_tree.iter().rev() {
-            let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            records.push(record);
-        }
-        Ok(records)
-    }
-
-    /// 获取最近 N 条记录（按时间倒序）
+    /// Get recent N records (in reverse chronological order)
     pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let mut records = Vec::new();
         for result in self.records_tree.iter().rev().take(limit) {
@@ -147,7 +135,7 @@ impl ClipboardRepository {
         Ok(records)
     }
 
-    /// 根据关键字搜索记录
+    /// Search records by keyword
     pub fn search(&self, keyword: &str) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let keyword_lower = keyword.to_lowercase();
         let mut records = Vec::new();
@@ -162,7 +150,8 @@ impl ClipboardRepository {
         Ok(records)
     }
 
-    /// 删除记录
+    /// Delete a record
+    #[allow(dead_code)]
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let key = id.to_be_bytes();
         let removed = self
@@ -172,7 +161,7 @@ impl ClipboardRepository {
         Ok(removed.is_some())
     }
 
-    /// 清空所有记录
+    /// Clear all records
     pub fn clear(&self) -> Result<(), RepositoryError> {
         self.records_tree
             .clear()
@@ -180,14 +169,12 @@ impl ClipboardRepository {
         Ok(())
     }
 
-    /// 获取记录总数
-    ///
-    /// 返回存储库中剪切板记录的总数。
+    /// Get the total number of records
     pub fn count(&self) -> usize {
         self.records_tree.len()
     }
 
-    /// 刷新数据到磁盘
+    /// Flush data to disk
     pub fn flush(&self) -> Result<(), RepositoryError> {
         self.db
             .flush()
@@ -195,7 +182,7 @@ impl ClipboardRepository {
         Ok(())
     }
 
-    /// 清理旧记录，保留最近 N 条
+    /// Clean up old records, keeping the most recent N records
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
         if total <= keep_count {
@@ -231,9 +218,9 @@ mod tests {
     use tempfile::tempdir;
 
     fn create_test_repo() -> ClipboardRepository {
-        let temp_dir = tempdir().expect("创建临时目录失败");
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
-        ClipboardRepository::with_path(db_path).expect("创建测试仓库失败")
+        ClipboardRepository::with_path(db_path).expect("Failed to create test repository")
     }
 
     #[test]
@@ -242,14 +229,14 @@ mod tests {
 
         let record = repo
             .save_text("Hello, World!".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
         assert_eq!(record.content, "Hello, World!");
         assert_eq!(record.content_type, ContentType::Text);
 
         let retrieved = repo
             .get_by_id(record.id)
-            .expect("查询失败")
-            .expect("记录不存在");
+            .expect("Failed to get by id")
+            .expect("Record not found");
         assert_eq!(retrieved.content, "Hello, World!");
     }
 
@@ -257,13 +244,16 @@ mod tests {
     fn test_get_latest() {
         let repo = create_test_repo();
 
-        repo.save_text("First".to_string()).expect("保存失败");
+        repo.save_text("First".to_string()).expect("Failed to save");
         thread::sleep(Duration::from_millis(10));
-        repo.save_text("Second".to_string()).expect("保存失败");
+        repo.save_text("Second".to_string())
+            .expect("Failed to save");
         thread::sleep(Duration::from_millis(10));
-        repo.save_text("Third".to_string()).expect("保存失败");
-
-        let latest = repo.get_latest().expect("查询失败").expect("记录不存在");
+        repo.save_text("Third".to_string()).expect("Failed to save");
+        let latest = repo
+            .get_latest()
+            .expect("Failed to get latest")
+            .expect("Record not found");
         assert_eq!(latest.content, "Third");
     }
 
@@ -272,10 +262,14 @@ mod tests {
         let repo = create_test_repo();
 
         repo.save_text("Same content".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
 
-        assert!(repo.is_duplicate("Same content").expect("检查失败"));
-        assert!(!repo.is_duplicate("Different content").expect("检查失败"));
+        assert!(repo.is_duplicate("Same content").expect("Failed to check"));
+        assert!(
+            !repo
+                .is_duplicate("Different content")
+                .expect("Failed to check")
+        );
     }
 
     #[test]
@@ -284,17 +278,17 @@ mod tests {
 
         let first = repo
             .save_text_if_not_duplicate("Content".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
         assert!(first.is_some());
 
         let second = repo
             .save_text_if_not_duplicate("Content".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
         assert!(second.is_none());
 
         let third = repo
             .save_text_if_not_duplicate("New Content".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
         assert!(third.is_some());
 
         assert_eq!(repo.count(), 2);
@@ -305,11 +299,12 @@ mod tests {
         let repo = create_test_repo();
 
         for i in 1..=5 {
-            repo.save_text(format!("Record {}", i)).expect("保存失败");
+            repo.save_text(format!("Record {}", i))
+                .expect("Failed to save");
             thread::sleep(Duration::from_millis(10));
         }
 
-        let recent = repo.get_recent(3).expect("查询失败");
+        let recent = repo.get_recent(3).expect("Failed to get recent");
         assert_eq!(recent.len(), 3);
         assert_eq!(recent[0].content, "Record 5");
         assert_eq!(recent[1].content, "Record 4");
@@ -343,14 +338,14 @@ mod tests {
 
         let record = repo
             .save_text("To be deleted".to_string())
-            .expect("保存失败");
+            .expect("Failed to save");
         assert_eq!(repo.count(), 1);
 
-        let deleted = repo.delete(record.id).expect("删除失败");
+        let deleted = repo.delete(record.id).expect("Failed to delete");
         assert!(deleted);
         assert_eq!(repo.count(), 0);
 
-        let deleted_again = repo.delete(record.id).expect("删除失败");
+        let deleted_again = repo.delete(record.id).expect("Failed to delete");
         assert!(!deleted_again);
     }
 
@@ -358,12 +353,12 @@ mod tests {
     fn test_clear() {
         let repo = create_test_repo();
 
-        repo.save_text("One".to_string()).expect("保存失败");
-        repo.save_text("Two".to_string()).expect("保存失败");
-        repo.save_text("Three".to_string()).expect("保存失败");
+        repo.save_text("One".to_string()).expect("Failed to save");
+        repo.save_text("Two".to_string()).expect("Failed to save");
+        repo.save_text("Three".to_string()).expect("Failed to save");
         assert_eq!(repo.count(), 3);
 
-        repo.clear().expect("清空失败");
+        repo.clear().expect("Failed to clear");
         assert_eq!(repo.count(), 0);
     }
 
@@ -372,36 +367,19 @@ mod tests {
         let repo = create_test_repo();
 
         for i in 1..=10 {
-            repo.save_text(format!("Record {}", i)).expect("保存失败");
+            repo.save_text(format!("Record {}", i))
+                .expect("Failed to save");
             thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(repo.count(), 10);
 
-        let removed = repo.cleanup_old_records(5).expect("清理失败");
+        let removed = repo.cleanup_old_records(5).expect("Failed to clean up");
         assert_eq!(removed, 5);
         assert_eq!(repo.count(), 5);
 
-        // 验证保留的是最新的记录
-        let recent = repo.get_recent(5).expect("查询失败");
+        // Verify that the latest records are retained
+        let recent = repo.get_recent(5).expect("Failed to get recent");
         assert_eq!(recent[0].content, "Record 10");
         assert_eq!(recent[4].content, "Record 6");
-    }
-
-    #[test]
-    fn test_get_all() {
-        let repo = create_test_repo();
-
-        repo.save_text("First".to_string()).expect("保存失败");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("Second".to_string()).expect("保存失败");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("Third".to_string()).expect("保存失败");
-
-        let all = repo.get_all().expect("查询失败");
-        assert_eq!(all.len(), 3);
-        // 按时间倒序
-        assert_eq!(all[0].content, "Third");
-        assert_eq!(all[1].content, "Second");
-        assert_eq!(all[2].content, "First");
     }
 }

@@ -21,7 +21,7 @@ pub fn ensure_single_instance() -> bool {
         }
 
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            // 尝试激活现有窗口
+            // Try to activate existing window
             let class_name = OsStr::new("Zed::Window")
                 .encode_wide()
                 .chain(std::iter::once(0))
@@ -30,28 +30,9 @@ pub fn ensure_single_instance() -> bool {
             if !hwnd.is_null() {
                 ShowWindow(hwnd, SW_RESTORE);
                 SetForegroundWindow(hwnd);
-            } else {
-                // 回退到消息框
-                let title = OsStr::new("Ropy")
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect::<Vec<_>>();
-                let message = OsStr::new("Ropy 已经在运行中。请使用热键来显示窗口。")
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect::<Vec<_>>();
-                MessageBoxW(
-                    std::ptr::null_mut(),
-                    message.as_ptr(),
-                    title.as_ptr(),
-                    MB_OK,
-                );
             }
             return false;
         }
-
-        // 保持互斥锁，直到程序退出
-        let _ = mutex;
         true
     }
 }

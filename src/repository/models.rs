@@ -1,28 +1,28 @@
-//! 剪切板记录的数据模型
+//! Data model for clipboard records
 
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
-/// 剪切板记录的数据模型
+/// Data model for clipboard records
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ClipboardRecord {
-    /// 唯一标识符（时间戳纳秒）
+    /// Unique identifier (timestamp in nanoseconds)
     pub id: u64,
-    /// 剪切板内容
+    /// Clipboard content
     pub content: String,
-    /// 创建时间
+    /// Creation time
     pub created_at: DateTime<Local>,
-    /// 内容类型
+    /// Content type
     pub content_type: ContentType,
 }
 
-/// 内容类型枚举
+/// Content type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ContentType {
-    /// 纯文本
+    /// Plain text
     Text,
-    /// 图片（存储为 base64）
+    /// Image (stored as base64)
     Image,
-    /// 文件路径
+    /// File path
     FilePath,
 }

@@ -1,39 +1,39 @@
-//! 仓库错误类型
+//! Repository error types
 
 #[derive(Debug)]
 pub enum RepositoryError {
-    /// 数据目录未找到
+    /// Data directory not found
     DataDirNotFound,
-    /// 数据库打开失败
+    /// Database open failed
     DatabaseOpen(String),
-    /// Tree 打开失败
+    /// Tree open failed
     TreeOpen(String),
-    /// 序列化错误
+    /// Serialization error
     Serialization(String),
-    /// 反序列化错误
+    /// Deserialization error
     Deserialization(String),
-    /// 插入错误
+    /// Insert error
     Insert(String),
-    /// 查询错误
+    /// Query error
     Query(String),
-    /// 删除错误
+    /// Delete error
     Delete(String),
-    /// 刷新错误
+    /// Flush error
     Flush(String),
 }
 
 impl std::fmt::Display for RepositoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RepositoryError::DataDirNotFound => write!(f, "无法找到数据目录"),
-            RepositoryError::DatabaseOpen(e) => write!(f, "数据库打开失败: {}", e),
-            RepositoryError::TreeOpen(e) => write!(f, "Tree 打开失败: {}", e),
-            RepositoryError::Serialization(e) => write!(f, "序列化错误: {}", e),
-            RepositoryError::Deserialization(e) => write!(f, "反序列化错误: {}", e),
-            RepositoryError::Insert(e) => write!(f, "插入错误: {}", e),
-            RepositoryError::Query(e) => write!(f, "查询错误: {}", e),
-            RepositoryError::Delete(e) => write!(f, "删除错误: {}", e),
-            RepositoryError::Flush(e) => write!(f, "刷新错误: {}", e),
+            RepositoryError::DataDirNotFound => write!(f, "Data directory not found"),
+            RepositoryError::DatabaseOpen(e) => write!(f, "Database open failed: {}", e),
+            RepositoryError::TreeOpen(e) => write!(f, "Tree open failed: {}", e),
+            RepositoryError::Serialization(e) => write!(f, "Serialization error: {}", e),
+            RepositoryError::Deserialization(e) => write!(f, "Deserialization error: {}", e),
+            RepositoryError::Insert(e) => write!(f, "Insert error: {}", e),
+            RepositoryError::Query(e) => write!(f, "Query error: {}", e),
+            RepositoryError::Delete(e) => write!(f, "Delete error: {}", e),
+            RepositoryError::Flush(e) => write!(f, "Flush error: {}", e),
         }
     }
 }
