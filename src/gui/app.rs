@@ -47,8 +47,7 @@ fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<Cl
 
 fn start_clipboard_monitor() -> (mpsc::Receiver<String>, thread::JoinHandle<()>) {
     let (clipboard_tx, clipboard_rx) = channel::<String>();
-    let listener_handle =
-        clipboard::start_clipboard_monitor(clipboard_tx, Duration::from_millis(300));
+    let listener_handle = clipboard::start_clipboard_monitor(clipboard_tx);
     (clipboard_rx, listener_handle)
 }
 
