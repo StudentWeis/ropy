@@ -1,11 +1,18 @@
 use crate::repository::{ClipboardRecord, ClipboardRepository};
-use gpui::{Context, Entity, FocusHandle, Focusable, Render, ScrollHandle, Subscription, Window, div, prelude::*};
+use gpui::{
+    AppContext, Context, Entity, FocusHandle, Focusable, Render, ScrollHandle, Subscription,
+    Window, div,
+    prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
+};
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use std::sync::{Arc, Mutex};
 
-gpui::actions!(board, [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection]);
+gpui::actions!(
+    board,
+    [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection]
+);
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
@@ -131,6 +138,13 @@ impl RopyBoard {
     }
 
     fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
+        // If the search input is focused, return focus to the main component before hiding
+        if let Some(focused_handle) = window.focused(cx)
+            && focused_handle == self.search_input.focus_handle(cx)
+        {
+            window.focus(&self.focus_handle);
+            return;
+        }
         hide_window(window, cx);
     }
 
@@ -138,7 +152,12 @@ impl RopyBoard {
         cx.quit();
     }
 
-    fn on_key_down(&mut self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn on_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // If the "/" key is pressed, focus the search input
         if event.keystroke.key.as_str() == "/" {
             window.focus(&self.search_input.focus_handle(cx));
@@ -146,8 +165,9 @@ impl RopyBoard {
         }
         // If the search input is focused, ignore key presses
         if let Some(focused_handle) = window.focused(cx)
-            && focused_handle == self.search_input.focus_handle(cx) {
-                return;
+            && focused_handle == self.search_input.focus_handle(cx)
+        {
+            return;
         }
 
         // Map number keys to record selection
@@ -203,7 +223,10 @@ fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
 }
 
 /// Render the search input section
-fn render_search_input(search_input: &Entity<InputState>, cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+fn render_search_input(
+    search_input: &Entity<InputState>,
+    cx: &mut Context<'_, RopyBoard>,
+) -> impl IntoElement {
     v_flex().w_full().mb_4().child(
         Input::new(search_input)
             .appearance(false)
@@ -211,7 +234,7 @@ fn render_search_input(search_input: &Entity<InputState>, cx: &mut Context<'_, R
             .border_color(cx.theme().border)
             .rounded_md()
             .px_3()
-            .py_2()
+            .py_2(),
     )
 }
 
@@ -232,7 +255,7 @@ fn render_records_list(
             let record_content = record.content.clone();
             let record_id = record.id;
             let is_selected = index == selected_index;
-            
+
             v_flex()
                 .w_full()
                 .p_3()
@@ -305,7 +328,7 @@ impl Render for RopyBoard {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let query = self.search_input.read(cx).value().to_string();
         let records_clone = self.get_filtered_records(&query);
-        
+
         if self.selected_index >= records_clone.len() && !records_clone.is_empty() {
             self.selected_index = records_clone.len() - 1;
         } else if records_clone.is_empty() {
@@ -327,7 +350,12 @@ impl Render for RopyBoard {
             .p_4()
             .child(render_header(cx))
             .child(render_search_input(&self.search_input, cx))
-            .child(render_records_list(records_clone, self.selected_index, self.scroll_handle.clone(), cx))
+            .child(render_records_list(
+                records_clone,
+                self.selected_index,
+                self.scroll_handle.clone(),
+                cx,
+            ))
     }
 }
 
