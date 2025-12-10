@@ -3,7 +3,7 @@ use crate::gui::board::{RopyBoard, active_window};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
-    WindowKind, WindowOptions, px, size,
+    WindowKind, WindowOptions, px, rgb, size,
 };
 use gpui_component::Root;
 use std::sync::{
@@ -105,7 +105,22 @@ fn create_window(
             ..Default::default()
         },
         |window, cx| {
-            gpui_component::theme::Theme::change(gpui_component::theme::ThemeMode::Dark, Some(window), cx);
+            gpui_component::theme::Theme::change(
+                gpui_component::theme::ThemeMode::Dark,
+                Some(window),
+                cx,
+            );
+
+            let theme = gpui_component::theme::Theme::global_mut(cx);
+            theme.background = rgb(0x2d2d2d).into();
+            theme.foreground = rgb(0xffffff).into();
+            theme.secondary = rgb(0x3d3d3d).into();
+            theme.secondary_foreground = rgb(0xffffff).into();
+            theme.border = rgb(0x4d4d4d).into();
+            theme.accent = rgb(0x4d4d4d).into();
+            theme.muted_foreground = rgb(0x888888).into();
+            theme.input = rgb(0x555555).into();
+
             let view = cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         },

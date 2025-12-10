@@ -1,15 +1,15 @@
-use crate::repository::ClipboardRecord;
-use crate::repository::ClipboardRepository;
+use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::Entity;
-use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*, rgb};
+use gpui::{Context, FocusHandle, Render, Subscription, Window, div, prelude::*};
+use gpui_component::button::*;
 use gpui_component::input::{Input, InputState};
+use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use std::sync::{Arc, Mutex};
 
 gpui::actions!(board, [Hide, Quit, Active]);
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
-    /// Clipboard history records
     records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
     focus_handle: FocusHandle,
@@ -101,20 +101,12 @@ impl RopyBoard {
 
 /// Create the "Clear" button element
 fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
-    div()
-        .px_3()
-        .py_1()
-        .bg(rgb(0x4d4d4d))
-        .rounded_md()
-        .text_sm()
-        .text_color(rgb(0xffffff))
-        .cursor_pointer()
-        .hover(|style| style.bg(rgb(0x6d6d6d)))
-        .id("clear-button")
+    Button::new("clear-button")
+        .small()
+        .label("Clear All")
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
         }))
-        .child("Clear All")
 }
 
 fn format_clipboard_content(record: &ClipboardRecord) -> String {
@@ -130,16 +122,14 @@ fn format_clipboard_content(record: &ClipboardRecord) -> String {
 
 /// Render the header section with title and clear button
 fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
-    div()
-        .flex()
-        .flex_row()
+    h_flex()
         .justify_between()
         .items_center()
         .mb_4()
         .child(
             div()
                 .text_lg()
-                .text_color(rgb(0xffffff))
+                .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
                 .child("Ropy"),
         )
@@ -147,12 +137,12 @@ fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
 }
 
 /// Render the search input section
-fn render_search_input(search_input: &Entity<InputState>) -> impl IntoElement {
-    div().flex().flex_col().w_full().mb_4().child(
+fn render_search_input(search_input: &Entity<InputState>, cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+    v_flex().w_full().mb_4().child(
         Input::new(search_input)
             .appearance(false)
             .border_1()
-            .border_color(rgb(0x555555))
+            .border_color(cx.theme().border)
             .rounded_md()
             .px_3()
             .py_2()
@@ -164,10 +154,8 @@ fn render_records_list(
     records: Vec<ClipboardRecord>,
     cx: &mut Context<'_, RopyBoard>,
 ) -> impl IntoElement {
-    div()
+    v_flex()
         .id("clipboard-list")
-        .flex()
-        .flex_col()
         .flex_1()
         .overflow_y_scroll()
         .children(records.into_iter().enumerate().map(|(index, record)| {
@@ -175,22 +163,18 @@ fn render_records_list(
             let record_content = record.content.clone();
             let record_id = record.id;
             
-            div()
-                .flex()
-                .flex_col()
+            v_flex()
                 .w_full()
                 .p_3()
                 .mb_2()
-                .bg(rgb(0x3d3d3d))
+                .bg(cx.theme().secondary)
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(0x4d4d4d))
-                .hover(|style| style.bg(rgb(0x4d4d4d)).border_color(rgb(0x6d6d6d)))
+                .border_color(cx.theme().border)
+                .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
                 .id(("record", index))
                 .child(
-                    div()
-                        .flex()
-                        .flex_row()
+                    h_flex()
                         .justify_between()
                         .items_start()
                         .gap_2()
@@ -207,27 +191,21 @@ fn render_records_list(
                                 .child(
                                     div()
                                         .text_sm()
-                                        .text_color(rgb(0xffffff))
+                                        .text_color(cx.theme().secondary_foreground)
                                         .line_height(gpui::relative(1.5))
                                         .child(display_content.clone()),
                                 )
                                 .child(
-                                    div().text_xs().text_color(rgb(0x888888)).mt_1().child(
+                                    div().text_xs().text_color(cx.theme().muted_foreground).mt_1().child(
                                         record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
                                     ),
                                 )
                         )
                         .child(
-                            div()
-                                .px_2()
-                                .py_1()
-                                .rounded_sm()
-                                .text_sm()
-                                .text_color(rgb(0x888888))
-                                .cursor_pointer()
-                                .hover(|style| style.bg(rgb(0x555555)).text_color(rgb(0xffffff)))
-                                .id(("delete-btn", index))
-                                .child("×")
+                            Button::new(("delete-btn", index))
+                                .xsmall()
+                                .ghost()
+                                .label("×")
                                 .on_click(cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
                                     this.delete_record(record_id);
                                     cx.notify();
@@ -242,19 +220,17 @@ impl Render for RopyBoard {
         let query = self.search_input.read(cx).value().to_string();
         let records_clone = self.get_filtered_records(&query);
         
-        div()
+        v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_hide_action))
             .on_action(cx.listener(Self::on_quit_action))
             .on_action(cx.listener(Self::on_active_action))
-            .flex()
-            .flex_col()
-            .bg(rgb(0x2d2d2d))
+            .bg(cx.theme().background)
             .size_full()
             .p_4()
             .child(render_header(cx))
-            .child(render_search_input(&self.search_input))
+            .child(render_search_input(&self.search_input, cx))
             .child(render_records_list(records_clone, cx))
     }
 }
