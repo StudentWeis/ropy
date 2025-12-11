@@ -15,6 +15,7 @@ serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "6.0"
 thiserror = "2.0.17"
+image = "0.25"
 
 [dev-dependencies]
 tempfile = "3.20"

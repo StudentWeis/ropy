@@ -68,6 +68,29 @@ impl ClipboardRepository {
         Ok(record)
     }
 
+    /// Save image record from existing file path
+    pub fn save_image_from_path(&self, file_path: String) -> Result<ClipboardRecord, RepositoryError> {
+        let now = Local::now();
+        let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
+
+        let record = ClipboardRecord {
+            id,
+            content: file_path,
+            created_at: now,
+            content_type: ContentType::Image,
+        };
+
+        let key = id.to_be_bytes();
+        let value = serde_json::to_vec(&record)
+            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+
+        self.records_tree
+            .insert(key, value)
+            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+
+        Ok(record)
+    }
+
     /// Save text content (convenience method)
     pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)

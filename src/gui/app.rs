@@ -1,4 +1,4 @@
-use crate::clipboard;
+use crate::clipboard::{self, ClipboardEvent};
 use crate::gui::board::{RopyBoard, active_window};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
@@ -45,21 +45,26 @@ fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<Cl
         .unwrap_or_default()
 }
 
-fn start_clipboard_monitor() -> (mpsc::Receiver<String>, thread::JoinHandle<()>) {
-    let (clipboard_tx, clipboard_rx) = channel::<String>();
+fn start_clipboard_monitor() -> (mpsc::Receiver<ClipboardEvent>, thread::JoinHandle<()>) {
+    let (clipboard_tx, clipboard_rx) = channel::<ClipboardEvent>();
     let listener_handle = clipboard::start_clipboard_monitor(clipboard_tx);
     (clipboard_rx, listener_handle)
 }
 
 fn start_clipboard_listener(
-    clipboard_rx: mpsc::Receiver<String>,
+    clipboard_rx: mpsc::Receiver<ClipboardEvent>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        while let Ok(new) = clipboard_rx.recv() {
+        while let Ok(event) = clipboard_rx.recv() {
             if let Some(ref repo) = repository {
-                match repo.save_text(new.clone()) {
+                let result = match event {
+                    ClipboardEvent::Text(text) => repo.save_text(text),
+                    ClipboardEvent::Image(path) => repo.save_image_from_path(path),
+                };
+
+                match result {
                     Ok(record) => {
                         let mut guard = match shared_records.lock() {
                             Ok(g) => g,

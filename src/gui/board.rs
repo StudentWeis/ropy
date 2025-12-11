@@ -1,12 +1,15 @@
+use crate::repository::models::ContentType;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, Focusable, Render, ScrollHandle, Subscription,
-    Window, div,
+    AppContext, Context, Entity, FocusHandle, Focusable, ListAlignment, ListState, Render,
+    Subscription, Window, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
+    px,
 };
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 gpui::actions!(
@@ -22,7 +25,8 @@ pub struct RopyBoard {
     _focus_out_subscription: Subscription,
     search_input: Entity<InputState>,
     selected_index: usize,
-    scroll_handle: ScrollHandle,
+    list_state: ListState,
+    filtered_records: Vec<ClipboardRecord>,
 }
 
 impl RopyBoard {
@@ -43,7 +47,7 @@ impl RopyBoard {
             });
 
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
-        let scroll_handle = ScrollHandle::new();
+        let list_state = ListState::new(0, ListAlignment::Top, px(100.));
 
         Self {
             records,
@@ -52,13 +56,24 @@ impl RopyBoard {
             _focus_out_subscription,
             search_input,
             selected_index: 0,
-            scroll_handle,
+            list_state,
+            filtered_records: Vec::new(),
         }
     }
 
-    /// Copy text to clipboard
-    pub fn copy_to_clipboard(&mut self, text: &str) {
-        crate::clipboard::copy_text(text).unwrap();
+    /// Copy content to clipboard
+    pub fn copy_to_clipboard(&mut self, content: &str, content_type: &ContentType) {
+        let content = content.to_string();
+        let content_type = content_type.clone();
+        std::thread::spawn(move || match content_type {
+            ContentType::Text => {
+                let _ = crate::clipboard::copy_text(&content);
+            }
+            ContentType::Image => {
+                let _ = crate::clipboard::copy_image(&content);
+            }
+            _ => {}
+        });
     }
 
     /// Clear clipboard history
@@ -100,7 +115,7 @@ impl RopyBoard {
     fn on_select_prev(&mut self, _: &SelectPrev, _window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.scroll_handle.scroll_to_item(self.selected_index);
+            self.list_state.scroll_to_reveal_item(self.selected_index);
             cx.notify();
         }
     }
@@ -110,7 +125,7 @@ impl RopyBoard {
         let count = self.get_filtered_records(&query).len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
-            self.scroll_handle.scroll_to_item(self.selected_index);
+            self.list_state.scroll_to_reveal_item(self.selected_index);
             cx.notify();
         }
     }
@@ -128,7 +143,7 @@ impl RopyBoard {
         let query = self.search_input.read(cx).value().to_string();
         let records = self.get_filtered_records(&query);
         if let Some(record) = records.get(self.selected_index) {
-            self.copy_to_clipboard(&record.content);
+            self.copy_to_clipboard(&record.content, &record.content_type);
             hide_window(window, cx);
         }
     }
@@ -242,96 +257,158 @@ fn render_search_input(
 fn render_records_list(
     records: Vec<ClipboardRecord>,
     selected_index: usize,
-    scroll_handle: ScrollHandle,
+    list_state: ListState,
     cx: &mut Context<'_, RopyBoard>,
 ) -> impl IntoElement {
-    v_flex()
-        .id("clipboard-list")
-        .flex_1()
-        .overflow_y_scroll()
-        .track_scroll(&scroll_handle)
-        .children(records.into_iter().enumerate().map(|(index, record)| {
-            let display_content = format_clipboard_content(&record);
-            let record_content = record.content.clone();
-            let record_id = record.id;
-            let is_selected = index == selected_index;
+    let view = cx.weak_entity();
 
-            v_flex()
-                .w_full()
-                .p_3()
-                .mb_2()
-                .bg(if is_selected { cx.theme().accent } else { cx.theme().secondary })
-                .rounded_md()
-                .border_1()
-                .border_color(if is_selected { cx.theme().accent } else { cx.theme().border })
-                .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
-                .id(("record", index))
-                .child(
-                    h_flex()
-                        .justify_between()
-                        .items_start()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .cursor_pointer()
-                                .id(("record-content", index))
-                                .on_click(cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
-                                    this.copy_to_clipboard(&record_content);
-                                    hide_window(window, cx);
-                                }))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().secondary_foreground)
-                                        .line_height(gpui::relative(1.5))
-                                        .child(display_content.clone()),
-                                )
-                                .child(
-                                    h_flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .mt_1()
-                                        .child(
+    list(list_state, move |index, _window, cx| {
+        let record = &records[index];
+        let record_content = record.content.clone();
+        let record_id = record.id;
+        let is_selected = index == selected_index;
+        let content_type = record.content_type.clone();
+        let content_type_clone = content_type.clone();
+        let view_click = view.clone();
+        let view_delete = view.clone();
+
+        div()
+            .pb_2()
+            .child(
+                v_flex()
+                    .w_full()
+                    .p_3()
+                    .bg(if is_selected {
+                        cx.theme().accent
+                    } else {
+                        cx.theme().secondary
+                    })
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if is_selected {
+                        cx.theme().accent
+                    } else {
+                        cx.theme().border
+                    })
+                    .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
+                    .id(("record", index))
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .items_start()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .cursor_pointer()
+                                    .id(("record-content", index))
+                                    .on_click(move |_event, _window, cx| {
+                                        view_click
+                                            .update(cx, |this, cx| {
+                                                this.copy_to_clipboard(
+                                                    &record_content,
+                                                    &content_type_clone,
+                                                );
+                                                #[cfg(target_os = "macos")]
+                                                cx.hide();
+                                            })
+                                            .ok();
+                                    })
+                                    .child(match content_type {
+                                        ContentType::Text => {
+                                            let display_content = format_clipboard_content(record);
                                             div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .bg(cx.theme().muted)
-                                                .px_1()
-                                                .py_0()
-                                                .rounded_sm()
-                                                .child(format!("{}", index + 1)),
-                                        )
-                                        .child(
-                                            div().text_xs().text_color(cx.theme().muted_foreground).child(
-                                                record.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+                                                .text_sm()
+                                                .text_color(cx.theme().secondary_foreground)
+                                                .line_height(gpui::relative(1.5))
+                                                .child(display_content)
+                                                .into_any_element()
+                                        }
+                                        ContentType::Image => {
+                                            let path = PathBuf::from(record.content.clone());
+                                            let file_stem = path
+                                                .file_stem()
+                                                .unwrap_or_default()
+                                                .to_string_lossy();
+                                            let thumb_name = format!("{}_thumb.png", file_stem);
+                                            let thumb_path =
+                                                path.parent().unwrap_or(&path).join(thumb_name);
+
+                                            // Use thumbnail if exists, otherwise fallback to original
+                                            let display_path = if thumb_path.exists() {
+                                                thumb_path
+                                            } else {
+                                                path
+                                            };
+
+                                            img(display_path).h(px(100.0)).into_any_element()
+                                        }
+                                        _ => div().child("Unknown content").into_any_element(),
+                                    })
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .gap_1()
+                                            .mt_1()
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .bg(cx.theme().muted)
+                                                    .px_1()
+                                                    .py_0()
+                                                    .rounded_sm()
+                                                    .child(format!("{}", index + 1)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(
+                                                        record
+                                                            .created_at
+                                                            .format("%Y-%m-%d %H:%M:%S")
+                                                            .to_string(),
+                                                    ),
                                             ),
-                                        )
-                                )
-                        )
-                        .child(
-                            Button::new(("delete-btn", index))
-                                .xsmall()
-                                .ghost()
-                                .label("×")
-                                .on_click(cx.listener(move |this: &mut RopyBoard, _event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::Context<RopyBoard>| {
-                                    this.delete_record(record_id);
-                                    cx.notify();
-                                }))
-                        )
-                )
-        }))
+                                    ),
+                            )
+                            .child(
+                                Button::new(("delete-btn", index))
+                                    .xsmall()
+                                    .ghost()
+                                    .label("×")
+                                    .on_click(move |_event, _window, cx| {
+                                        view_delete
+                                            .update(cx, |this, cx| {
+                                                this.delete_record(record_id);
+                                                cx.notify();
+                                            })
+                                            .ok();
+                                    }),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    })
+    .w_full()
+    .flex_1()
 }
 
 impl Render for RopyBoard {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let query = self.search_input.read(cx).value().to_string();
-        let records_clone = self.get_filtered_records(&query);
+        let new_filtered_records = self.get_filtered_records(&query);
 
-        if self.selected_index >= records_clone.len() && !records_clone.is_empty() {
-            self.selected_index = records_clone.len() - 1;
-        } else if records_clone.is_empty() {
+        if new_filtered_records != self.filtered_records {
+            self.filtered_records = new_filtered_records;
+            self.list_state.reset(self.filtered_records.len());
+        }
+
+        if self.selected_index >= self.filtered_records.len() && !self.filtered_records.is_empty() {
+            self.selected_index = self.filtered_records.len() - 1;
+        } else if self.filtered_records.is_empty() {
             self.selected_index = 0;
         }
 
@@ -351,9 +428,9 @@ impl Render for RopyBoard {
             .child(render_header(cx))
             .child(render_search_input(&self.search_input, cx))
             .child(render_records_list(
-                records_clone,
+                self.filtered_records.clone(),
                 self.selected_index,
-                self.scroll_handle.clone(),
+                self.list_state.clone(),
                 cx,
             ))
     }
