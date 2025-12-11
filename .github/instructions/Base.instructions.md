@@ -6,4 +6,3 @@ applyTo: "**"
 - 遵循良好的 Rust 开发规范。
 - 编写可以运行的单元测试。
 - 使用 context7 查询库文档。
-- 使用 gpui-component 的设计模式和最佳实践。

@@ -73,40 +73,6 @@ impl ClipboardRepository {
         self.save(content, ContentType::Text)
     }
 
-    /// Check if the content is duplicate of the latest record
-    pub fn is_duplicate(&self, content: &str) -> Result<bool, RepositoryError> {
-        if let Some(last_record) = self.get_latest()? {
-            return Ok(last_record.content == content);
-        }
-        Ok(false)
-    }
-
-    /// Save text content if it is not a duplicate of the latest record
-    pub fn save_text_if_not_duplicate(
-        &self,
-        content: String,
-    ) -> Result<Option<ClipboardRecord>, RepositoryError> {
-        if self.is_duplicate(&content)? {
-            return Ok(None);
-        }
-        self.save_text(content).map(Some)
-    }
-
-    /// Get the latest record
-    pub fn get_latest(&self) -> Result<Option<ClipboardRecord>, RepositoryError> {
-        if let Some(result) = self
-            .records_tree
-            .last()
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
-            let (_, value) = result;
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            return Ok(Some(record));
-        }
-        Ok(None)
-    }
-
     /// Get a record by ID
     #[allow(dead_code)]
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
@@ -237,60 +203,6 @@ mod tests {
             .expect("Failed to get by id")
             .expect("Record not found");
         assert_eq!(retrieved.content, "Hello, World!");
-    }
-
-    #[test]
-    fn test_get_latest() {
-        let repo = create_test_repo();
-
-        repo.save_text("First".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("Second".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("Third".to_string()).expect("Failed to save");
-        let latest = repo
-            .get_latest()
-            .expect("Failed to get latest")
-            .expect("Record not found");
-        assert_eq!(latest.content, "Third");
-    }
-
-    #[test]
-    fn test_duplicate_check() {
-        let repo = create_test_repo();
-
-        repo.save_text("Same content".to_string())
-            .expect("Failed to save");
-
-        assert!(repo.is_duplicate("Same content").expect("Failed to check"));
-        assert!(
-            !repo
-                .is_duplicate("Different content")
-                .expect("Failed to check")
-        );
-    }
-
-    #[test]
-    fn test_save_if_not_duplicate() {
-        let repo = create_test_repo();
-
-        let first = repo
-            .save_text_if_not_duplicate("Content".to_string())
-            .expect("Failed to save");
-        assert!(first.is_some());
-
-        let second = repo
-            .save_text_if_not_duplicate("Content".to_string())
-            .expect("Failed to save");
-        assert!(second.is_none());
-
-        let third = repo
-            .save_text_if_not_duplicate("New Content".to_string())
-            .expect("Failed to save");
-        assert!(third.is_some());
-
-        assert_eq!(repo.count(), 2);
     }
 
     #[test]

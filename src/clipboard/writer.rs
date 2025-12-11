@@ -8,7 +8,7 @@ use clipboard_rs::{Clipboard, ClipboardContext};
 ///
 /// Returns `Ok(())` on success or `Err(String)` with a message describing failure.
 pub fn set_text(text: &str) -> Result<(), String> {
-    let ctx = ClipboardContext::new().map_err(|e| format!("init clipboard ctx: {}", e))?;
+    let ctx = ClipboardContext::new().unwrap();
     ctx.set_text(text.to_string())
         .map_err(|e| format!("set clipboard text: {}", e))
 }

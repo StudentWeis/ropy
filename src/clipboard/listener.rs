@@ -12,12 +12,17 @@ use std::thread;
 struct ClipboardMonitor {
     tx: Sender<String>,
     ctx: ClipboardContext,
+    last: Option<String>,
 }
 
 impl ClipboardMonitor {
     fn new(tx: Sender<String>) -> Self {
-        let ctx = ClipboardContext::new().expect("Failed to create clipboard context");
-        Self { tx, ctx }
+        let ctx = ClipboardContext::new().unwrap();
+        Self {
+            tx,
+            ctx,
+            last: None,
+        }
     }
 }
 
@@ -25,10 +30,14 @@ impl ClipboardHandler for ClipboardMonitor {
     fn on_clipboard_change(&mut self) {
         match self.ctx.get_text() {
             Ok(value) => {
-                let _ = self.tx.send(value);
+                // Don't send duplicate clipboard contents
+                if Some(&value) != self.last.as_ref() {
+                    let _ = self.tx.send(value.clone());
+                    self.last = Some(value);
+                }
             }
             Err(err) => {
-                eprintln!("[clipboard-listener] failed to read clipboard: {}", err);
+                eprintln!("[clipboard-listener] failed to read clipboard: {err}");
             }
         }
     }
@@ -54,25 +63,35 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::time::Duration;
 
-    // Smoke test for the listener: set the clipboard, spawn listener, update clipboard
-    // and assert we receive the notification.
-    // This test is best-effort and may be flaky
-    // across CI environments or when pasteboards are restricted.
     #[test]
     fn listener_reports_changes() {
         let (tx, rx) = channel();
-        // Spawn listener
         let _handle = start_clipboard_monitor(tx);
-
-        // Set clipboard value via a new context from this thread
-        let ctx: ClipboardContext = ClipboardContext::new().expect("create ctx");
-        ctx.set_text("test-poll-1".into()).expect("set contents");
-        // Wait up to 1s for the change to be observed
+        let ctx: ClipboardContext = ClipboardContext::new().unwrap();
+        ctx.set_text("test-poll-1".into()).unwrap();
         match rx.recv_timeout(Duration::from_secs(1)) {
             Ok(received) => assert_eq!(received, "test-poll-1"),
             Err(_) => {
-                // Event not triggered, possibly due to platform limitations in test environment
                 println!("Test skipped: clipboard change event not detected");
+            }
+        }
+    }
+
+    #[test]
+    fn listener_deduplicates_changes() {
+        let (tx, rx) = channel();
+        let _handle = start_clipboard_monitor(tx);
+        let ctx: ClipboardContext = ClipboardContext::new().unwrap();
+        ctx.set_text("test-poll-1".into()).unwrap();
+        let received = rx
+            .recv_timeout(Duration::from_secs(3))
+            .expect("should receive clipboard change");
+        assert_eq!(received, "test-poll-1");
+        ctx.set_text("test-poll-1".into()).unwrap();
+        match rx.recv_timeout(Duration::from_secs(1)) {
+            Ok(_) => panic!("should not receive duplicate clipboard change"),
+            Err(_) => {
+                println!("Yes! No duplicate received as expected");
             }
         }
     }

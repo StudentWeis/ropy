@@ -59,7 +59,7 @@ fn start_hotkey_monitor() -> (mpsc::Receiver<()>, thread::JoinHandle<()>) {
     (hotkey_rx, hotkey_handle)
 }
 
-fn start_clipboard_forwarder(
+fn start_clipboard_listener(
     clipboard_rx: mpsc::Receiver<String>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
@@ -67,8 +67,8 @@ fn start_clipboard_forwarder(
     thread::spawn(move || {
         while let Ok(new) = clipboard_rx.recv() {
             if let Some(ref repo) = repository {
-                match repo.save_text_if_not_duplicate(new.clone()) {
-                    Ok(Some(record)) => {
+                match repo.save_text(new.clone()) {
+                    Ok(record) => {
                         let mut guard = match shared_records.lock() {
                             Ok(g) => g,
                             Err(poisoned) => poisoned.into_inner(),
@@ -78,9 +78,6 @@ fn start_clipboard_forwarder(
                             guard.truncate(50);
                             repo.cleanup_old_records(50).ok();
                         }
-                    }
-                    Ok(None) => {
-                        println!("[ropy] Content is duplicate, not saving.");
                     }
                     Err(e) => {
                         eprintln!("[ropy] Failed to save clipboard record: {e}");
@@ -176,8 +173,7 @@ pub fn launch_app() {
         let shared_records = Arc::new(Mutex::new(initial_records));
         let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
-        let _forwarder_handle =
-            start_clipboard_forwarder(clipboard_rx, shared_records.clone(), repository.clone());
+        let _ = start_clipboard_listener(clipboard_rx, shared_records.clone(), repository.clone());
         let window_handle = create_window(cx, shared_records, repository.clone());
         let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app);

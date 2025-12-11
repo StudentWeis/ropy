@@ -1,5 +1,4 @@
 mod listener;
-mod strategy;
 mod writer;
 
 pub use listener::start_clipboard_monitor;

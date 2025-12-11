@@ -4891,6 +4891,7 @@ dependencies = [
  "sled",
  "sysinfo 0.37.2",
  "tempfile",
+ "thiserror 2.0.17",
  "windows-sys 0.61.2",
 ]
 
