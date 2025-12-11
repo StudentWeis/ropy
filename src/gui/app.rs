@@ -19,8 +19,8 @@ use objc2::{class, msg_send, runtime::AnyObject};
 #[cfg(target_os = "macos")]
 fn set_activation_policy_accessory() {
     unsafe {
-        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         // Config the app to be accessory (no dock icon & cmd tab)
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
     }
 }
@@ -51,14 +51,6 @@ fn start_clipboard_monitor() -> (mpsc::Receiver<String>, thread::JoinHandle<()>)
     (clipboard_rx, listener_handle)
 }
 
-fn start_hotkey_monitor() -> (mpsc::Receiver<()>, thread::JoinHandle<()>) {
-    let (hotkey_tx, hotkey_rx) = channel();
-    let hotkey_handle = crate::gui::hotkey::start_hotkey_listener(move || {
-        let _ = hotkey_tx.send(());
-    });
-    (hotkey_rx, hotkey_handle)
-}
-
 fn start_clipboard_listener(
     clipboard_rx: mpsc::Receiver<String>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
@@ -86,6 +78,14 @@ fn start_clipboard_listener(
             }
         }
     })
+}
+
+fn start_hotkey_monitor() -> (mpsc::Receiver<()>, thread::JoinHandle<()>) {
+    let (hotkey_tx, hotkey_rx) = channel();
+    let hotkey_handle = crate::gui::hotkey::start_hotkey_listener(move || {
+        let _ = hotkey_tx.send(());
+    });
+    (hotkey_rx, hotkey_handle)
 }
 
 fn create_window(

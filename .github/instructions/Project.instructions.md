@@ -2,5 +2,5 @@
 applyTo: '**'
 ---
 
-- 使用 gpui-component 的设计模式和最佳实践。
-- 使用 thiserror 宏来定义错误类型。
+- 最好使用 gpui-component 来添加新的组件。
+- 最好使用 thiserror 来定义错误类型。
