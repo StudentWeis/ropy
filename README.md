@@ -9,7 +9,6 @@ Cross-platform clipboard native GUI manager in pure Rust (Windows & macOS).
 
 # TODO
 
-- 支持图片剪切板内容的保存与展示
 - 主题切换
 - 支持多语言界面
 - 日志文件

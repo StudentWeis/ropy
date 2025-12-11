@@ -2,6 +2,7 @@
 
 use chrono::Local;
 use sled::{Db, Tree};
+use std::fs;
 use std::path::PathBuf;
 
 use super::errors::RepositoryError;
@@ -69,7 +70,10 @@ impl ClipboardRepository {
     }
 
     /// Save image record from existing file path
-    pub fn save_image_from_path(&self, file_path: String) -> Result<ClipboardRecord, RepositoryError> {
+    pub fn save_image_from_path(
+        &self,
+        file_path: String,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let now = Local::now();
         let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
 
@@ -97,7 +101,6 @@ impl ClipboardRepository {
     }
 
     /// Get a record by ID
-    #[allow(dead_code)]
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
         if let Some(value) = self
@@ -132,7 +135,10 @@ impl ClipboardRepository {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let record: ClipboardRecord = serde_json::from_slice(&value)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            if record.content.to_lowercase().contains(&keyword_lower) {
+            // Only search in text records
+            if record.content_type == ContentType::Text
+                && record.content.to_lowercase().contains(&keyword_lower)
+            {
                 records.push(record);
             }
         }
@@ -141,6 +147,16 @@ impl ClipboardRepository {
 
     /// Delete a record
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
+        // First, get the record to check if it's an image
+        if let Some(record) = self.get_by_id(id)?
+            && record.content_type == ContentType::Image
+        {
+            // Delete original image file and thumbnail
+            let _ = fs::remove_file(&record.content);
+            let thumb_path = record.content.replace(".png", "_thumb.png");
+            let _ = fs::remove_file(thumb_path);
+        }
+
         let key = id.to_be_bytes();
         let removed = self
             .records_tree
@@ -154,6 +170,14 @@ impl ClipboardRepository {
         self.records_tree
             .clear()
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        // Clear all image files
+        let data_dir = dirs::data_local_dir()
+            .ok_or(RepositoryError::DataDirNotFound)?
+            .join("ropy")
+            .join("images");
+        if data_dir.exists() {
+            fs::remove_dir_all(&data_dir).ok();
+        }
         Ok(())
     }
 
