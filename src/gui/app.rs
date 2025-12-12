@@ -1,5 +1,6 @@
 use crate::clipboard::{self, ClipboardEvent};
 use crate::gui::board::{RopyBoard, active_window};
+use crate::gui::tray::{self, TrayEvent};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
@@ -181,7 +182,49 @@ pub fn launch_app() {
         let _ = start_clipboard_listener(clipboard_rx, shared_records.clone(), repository.clone());
         let window_handle = create_window(cx, shared_records, repository.clone());
         let async_app = cx.to_async();
-        start_hotkey_handler(hotkey_rx, window_handle, async_app);
+        start_hotkey_handler(hotkey_rx, window_handle, async_app.clone());
+        start_tray_handler(window_handle, async_app.clone());
+
         cx.activate(true);
     });
+}
+
+/// Start the system tray handler
+fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
+    let fg_executor = async_app.foreground_executor().clone();
+    let bg_executor = async_app.background_executor().clone();
+    let (tray_tx, tray_rx) = channel::<TrayEvent>();
+    match tray::init_tray(tray_tx) {
+        Ok(tray) => {
+            println!("[ropy] Tray icon initialized successfully");
+            // Keep tray icon alive for the lifetime of the application
+            Box::leak(Box::new(tray));
+            fg_executor
+                .spawn(async move {
+                    loop {
+                        while let Ok(event) = tray_rx.try_recv() {
+                            match event {
+                                TrayEvent::Show => {
+                                    let _ = async_app.update(move |cx| {
+                                        window_handle
+                                            .update(cx, |_, window, cx| active_window(window, cx))
+                                            .ok();
+                                    });
+                                }
+                                TrayEvent::Quit => {
+                                    let _ = async_app.update(move |cx| {
+                                        cx.quit();
+                                    });
+                                }
+                            }
+                        }
+                        bg_executor.timer(Duration::from_millis(16)).await;
+                    }
+                })
+                .detach();
+        }
+        Err(e) => {
+            eprintln!("[ropy] Failed to initialize tray icon: {}", e);
+        }
+    }
 }
