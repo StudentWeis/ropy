@@ -56,8 +56,9 @@ pub fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
                         .large()
                         .ghost()
                         .label("⚙")
-                        .on_click(cx.listener(|this, _, _window, cx| {
+                        .on_click(cx.listener(|this, _, window, cx| {
                             this.show_settings = true;
+                            window.focus(&this.focus_handle);
                             cx.notify();
                         })),
                 )

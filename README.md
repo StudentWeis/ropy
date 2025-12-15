@@ -13,5 +13,5 @@ A cross-platform native clipboard GUI manager in pure Rust.
 
 # Acknowledgements
 
-- Inspired by other clipboard managers like Ditto, Massy & CopyQ.
+- Inspired by other clipboard managers like Ditto, Maccy & CopyQ.
 - Built with Zed's GPUI.
