@@ -342,7 +342,7 @@ fn render_records_list(
                                                 path
                                             };
 
-                                            img(display_path).h(px(100.0)).into_any_element()
+                                            img(display_path).max_h(px(100.0)).into_any_element()
                                         }
                                         _ => div().child("Unknown content").into_any_element(),
                                     })
