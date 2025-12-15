@@ -28,15 +28,10 @@ impl AppTheme {
             AppTheme::System => {
                 #[cfg(target_os = "windows")]
                 {
-                    use windows_sys::Win32::UI::Shell::{
-                        GetImmersiveUserColorSetPreference, IsDarkModeEnabled,
-                    };
-                    unsafe {
-                        if IsDarkModeEnabled() != 0 {
-                            AppTheme::Dark
-                        } else {
-                            AppTheme::Light
-                        }
+                    match dark_light::detect() {
+                        dark_light::Mode::Dark => AppTheme::Dark,
+                        dark_light::Mode::Light => AppTheme::Light,
+                        _ => AppTheme::Light,
                     }
                 }
                 #[cfg(target_os = "macos")]

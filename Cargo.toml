@@ -19,6 +19,7 @@ config = "0.15"
 toml = "0.9.8"
 image = "0.25"
 tray-icon = "0.21"
+dark-light = "1.0"
 
 [dev-dependencies]
 tempfile = "3.20"
