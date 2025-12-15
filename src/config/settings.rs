@@ -23,54 +23,12 @@ pub enum AppTheme {
 impl AppTheme {
     pub fn get_theme(&self) -> Self {
         match self {
-            AppTheme::Light => AppTheme::Light,
-            AppTheme::Dark => AppTheme::Dark,
-            AppTheme::System => {
-                #[cfg(target_os = "windows")]
-                {
-                    match dark_light::detect() {
-                        dark_light::Mode::Dark => AppTheme::Dark,
-                        dark_light::Mode::Light => AppTheme::Light,
-                        _ => AppTheme::Light,
-                    }
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    use objc2::rc::Retained;
-                    use objc2::runtime::NSObject;
-                    use objc2::{class, msg_send};
-
-                    unsafe {
-                        // Get NSUserDefaults standardUserDefaults
-                        let defaults: Retained<NSObject> =
-                            msg_send![class!(NSUserDefaults), standardUserDefaults];
-
-                        // Get AppleInterfaceStyle value
-                        let key: Retained<NSObject> = msg_send![
-                            class!(NSString),
-                            stringWithUTF8String: "AppleInterfaceStyle\0".as_ptr()
-                        ];
-
-                        let value: Option<Retained<NSObject>> = msg_send![
-                            &defaults,
-                            stringForKey: &*key
-                        ];
-
-                        // If AppleInterfaceStyle is "Dark", use dark theme
-                        if let Some(v) = value {
-                            let c_str: *const i8 = msg_send![&*v, UTF8String];
-                            if !c_str.is_null() {
-                                let rust_str =
-                                    std::ffi::CStr::from_ptr(c_str).to_str().unwrap_or("");
-                                if rust_str == "Dark" {
-                                    return AppTheme::Dark;
-                                }
-                            }
-                        }
-                        AppTheme::Light
-                    }
-                }
-            }
+            AppTheme::System => match dark_light::detect().unwrap() {
+                dark_light::Mode::Dark => AppTheme::Dark,
+                dark_light::Mode::Light => AppTheme::Light,
+                _ => AppTheme::Light,
+            },
+            _ => self.clone(),
         }
     }
 }
