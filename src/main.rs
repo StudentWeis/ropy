@@ -1,12 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod clipboard;
+mod config;
 mod gui;
-mod monitor;
 mod repository;
 
 #[cfg(target_os = "windows")]
 mod single_instance;
+
+#[cfg(debug_assertions)]
+mod monitor;
 
 fn main() {
     // Ensure single instance on Windows

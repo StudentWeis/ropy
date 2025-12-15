@@ -4,10 +4,10 @@
 - Support for multiple languages
 - Log files
 - Provide installation packages and distribution channels
-- Support customizable shortcuts
-- Support clipboard content categorization
+- Support customizable configurations via GUI
 - Provide detailed user documentation
 - Support more platforms (Linux)
+- Homepage and user community
 
 Windows Bugs:
 

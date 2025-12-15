@@ -1,5 +1,7 @@
 use crate::clipboard::{self, ClipboardEvent};
-use crate::gui::board::{RopyBoard, active_window};
+use crate::config::Settings;
+use crate::gui::active_window;
+use crate::gui::board::RopyBoard;
 use crate::gui::tray::{self, TrayEvent};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
@@ -8,7 +10,7 @@ use gpui::{
 };
 use gpui_component::Root;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, RwLock,
     mpsc::{self, channel},
 };
 use std::thread;
@@ -56,6 +58,7 @@ fn start_clipboard_listener(
     clipboard_rx: mpsc::Receiver<ClipboardEvent>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
+    settings: Arc<RwLock<Settings>>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         while let Ok(event) = clipboard_rx.recv() {
@@ -72,9 +75,13 @@ fn start_clipboard_listener(
                             Err(poisoned) => poisoned.into_inner(),
                         };
                         guard.insert(0, record);
-                        if guard.len() > 50 {
-                            guard.truncate(50);
-                            repo.cleanup_old_records(50).ok();
+                        let max_history_records = {
+                            let settings_guard = settings.read().unwrap();
+                            settings_guard.storage.max_history_records
+                        };
+                        if guard.len() > max_history_records {
+                            guard.truncate(max_history_records);
+                            repo.cleanup_old_records(max_history_records).ok();
                         }
                     }
                     Err(e) => {
@@ -98,6 +105,7 @@ fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
+    settings: Arc<RwLock<Settings>>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -124,7 +132,15 @@ fn create_window(
             theme.muted_foreground = rgb(0x888888).into();
             theme.input = rgb(0x555555).into();
 
-            let view = cx.new(|cx| RopyBoard::new(shared_records, repository.clone(), window, cx));
+            let view = cx.new(|cx| {
+                RopyBoard::new(
+                    shared_records,
+                    repository.clone(),
+                    settings.clone(),
+                    window,
+                    cx,
+                )
+            });
             cx.new(|cx| Root::new(view, window, cx))
         },
     )
@@ -156,37 +172,65 @@ fn start_hotkey_handler(
 
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
-        // Initialize gpui-component
-        gpui_component::init(cx);
-
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();
 
-        cx.bind_keys([
-            KeyBinding::new("escape", crate::gui::board::Hide, None),
-            #[cfg(target_os = "macos")]
-            KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
-            #[cfg(target_os = "windows")]
-            KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
-            KeyBinding::new("up", crate::gui::board::SelectPrev, None),
-            KeyBinding::new("down", crate::gui::board::SelectNext, None),
-            KeyBinding::new("enter", crate::gui::board::ConfirmSelection, None),
-        ]);
+        // Initialize gpui-component
+        gpui_component::init(cx);
 
+        // Bind global application keys
+        bind_application_keys(cx);
+
+        let settings = load_settings();
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
         let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
-        let _ = start_clipboard_listener(clipboard_rx, shared_records.clone(), repository.clone());
-        let window_handle = create_window(cx, shared_records, repository.clone());
+        let _ = start_clipboard_listener(
+            clipboard_rx,
+            shared_records.clone(),
+            repository.clone(),
+            settings.clone(),
+        );
+        let window_handle = create_window(cx, shared_records, repository.clone(), settings.clone());
         let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app.clone());
         start_tray_handler(window_handle, async_app.clone());
 
         cx.activate(true);
     });
+}
+
+fn bind_application_keys(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("escape", crate::gui::board::Hide, None),
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
+        #[cfg(target_os = "windows")]
+        KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
+        KeyBinding::new("up", crate::gui::board::SelectPrev, None),
+        KeyBinding::new("down", crate::gui::board::SelectNext, None),
+        KeyBinding::new("enter", crate::gui::board::ConfirmSelection, None),
+    ]);
+}
+
+fn load_settings() -> Arc<RwLock<Settings>> {
+    match Settings::load() {
+        Ok(s) => {
+            println!("[ropy] Settings loaded successfully");
+            Arc::new(RwLock::new(s))
+        }
+        Err(e) => {
+            eprintln!("[ropy] Failed to load settings, using defaults: {}", e);
+            let default_settings = Settings::default();
+            default_settings.save().unwrap_or_else(|err| {
+                eprintln!("[ropy] Failed to save default settings: {}", err);
+            });
+            Arc::new(RwLock::new(default_settings))
+        }
+    }
 }
 
 /// Start the system tray handler
