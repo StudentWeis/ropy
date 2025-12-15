@@ -184,7 +184,7 @@ pub(super) fn render_records_list(
                                                 div()
                                                     .text_xs()
                                                     .text_color(cx.theme().muted_foreground)
-                                                    .bg(cx.theme().muted)
+                                                    .bg(cx.theme().background)
                                                     .px_1()
                                                     .py_0()
                                                     .rounded_sm()

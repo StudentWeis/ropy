@@ -39,6 +39,7 @@ pub struct RopyBoard {
     show_settings: bool,
     settings_activation_key_input: Entity<InputState>,
     settings_max_history_input: Entity<InputState>,
+    selected_theme: usize, // 0: Light, 1: Dark, 2: System
 }
 
 impl RopyBoard {
@@ -62,11 +63,17 @@ impl RopyBoard {
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.));
 
-        let (max_history_records, activation_key) = {
+        let (max_history_records, activation_key, theme_index) = {
             let settings_guard = settings.read().unwrap();
+            let theme_idx = match settings_guard.theme {
+                crate::config::AppTheme::Light => 0,
+                crate::config::AppTheme::Dark => 1,
+                crate::config::AppTheme::System => 2,
+            };
             (
                 settings_guard.storage.max_history_records,
                 settings_guard.hotkey.activation_key.clone(),
+                theme_idx,
             )
         };
         let settings_activation_key_input =
@@ -87,6 +94,7 @@ impl RopyBoard {
             show_settings: false,
             settings_activation_key_input,
             settings_max_history_input,
+            selected_theme: theme_index,
         }
     }
 
@@ -210,16 +218,25 @@ impl RopyBoard {
             .parse::<usize>()
             .unwrap_or(100);
 
+        let theme = match self.selected_theme {
+            0 => crate::config::AppTheme::Light,
+            1 => crate::config::AppTheme::Dark,
+            _ => crate::config::AppTheme::System,
+        };
+
         {
             let mut settings = self.settings.write().unwrap();
             settings.hotkey.activation_key = activation_key.clone();
             settings.storage.max_history_records = max_history;
+            settings.theme = theme.clone();
             if let Err(e) = settings.save() {
                 eprintln!("[ropy] Failed to save settings: {}", e);
-            } else {
-                println!("[ropy] Settings saved successfully");
             }
         }
+
+        // Apply the new theme
+        let app_theme = &theme.get_theme();
+        crate::gui::app::set_app_theme(window, cx, app_theme);
 
         self.settings_max_history_input.update(cx, |input, cx| {
             input.set_placeholder(max_history.to_string(), window, cx);
@@ -229,8 +246,6 @@ impl RopyBoard {
             input.set_placeholder(activation_key, window, cx);
             input.set_value("", window, cx);
         });
-        self.show_settings = false;
-        window.focus(&self.focus_handle);
         cx.notify();
     }
 

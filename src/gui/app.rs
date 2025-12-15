@@ -1,5 +1,5 @@
 use crate::clipboard::{self, ClipboardEvent};
-use crate::config::Settings;
+use crate::config::{AppTheme, Settings};
 use crate::gui::active_window;
 use crate::gui::board::RopyBoard;
 use crate::gui::tray::{self, TrayEvent};
@@ -8,7 +8,8 @@ use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
     WindowKind, WindowOptions, px, rgb, size,
 };
-use gpui_component::Root;
+use gpui_component::theme::Theme;
+use gpui_component::{Root, ThemeMode};
 use std::sync::{
     Arc, Mutex, RwLock,
     mpsc::{self, channel},
@@ -116,21 +117,9 @@ fn create_window(
             ..Default::default()
         },
         |window, cx| {
-            gpui_component::theme::Theme::change(
-                gpui_component::theme::ThemeMode::Dark,
-                Some(window),
-                cx,
-            );
-
-            let theme = gpui_component::theme::Theme::global_mut(cx);
-            theme.background = rgb(0x2d2d2d).into();
-            theme.foreground = rgb(0xffffff).into();
-            theme.secondary = rgb(0x3d3d3d).into();
-            theme.secondary_foreground = rgb(0xffffff).into();
-            theme.border = rgb(0x4d4d4d).into();
-            theme.accent = rgb(0x4d4d4d).into();
-            theme.muted_foreground = rgb(0x888888).into();
-            theme.input = rgb(0x555555).into();
+            // Apply the application theme based on settings
+            let app_theme = &settings.read().unwrap().theme.get_theme();
+            set_app_theme(window, cx, app_theme);
 
             let view = cx.new(|cx| {
                 RopyBoard::new(
@@ -145,6 +134,37 @@ fn create_window(
         },
     )
     .unwrap()
+}
+
+/// Set the application theme (light or dark)
+pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppTheme) {
+    match app_theme.get_theme() {
+        AppTheme::Dark => {
+            Theme::change(ThemeMode::Dark, Some(window), cx);
+            let theme = Theme::global_mut(cx);
+            theme.background = rgb(0x2d2d2d).into();
+            theme.foreground = rgb(0xffffff).into();
+            theme.secondary = rgb(0x3d3d3d).into();
+            theme.secondary_foreground = rgb(0xffffff).into();
+            theme.border = rgb(0x4d4d4d).into();
+            theme.accent = rgb(0x4d4d4d).into();
+            theme.muted_foreground = rgb(0x888888).into();
+            theme.input = rgb(0x555555).into();
+        }
+        AppTheme::Light => {
+            Theme::change(ThemeMode::Light, Some(window), cx);
+            let theme = Theme::global_mut(cx);
+            theme.background = rgb(0xffffff).into();
+            theme.foreground = rgb(0x1a1a1a).into();
+            theme.secondary = rgb(0xf5f5f5).into();
+            theme.secondary_foreground = rgb(0x1a1a1a).into();
+            theme.border = rgb(0xe0e0e0).into();
+            theme.accent = rgb(0xadd8e6).into();
+            theme.muted_foreground = rgb(0x6b6b6b).into();
+            theme.input = rgb(0xf0f0f0).into();
+        }
+        _ => {}
+    }
 }
 
 fn start_hotkey_handler(

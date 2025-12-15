@@ -9,6 +9,34 @@ use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 
 use super::RopyBoard;
 
+/// Render theme selection buttons
+fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> impl IntoElement {
+    let themes = [("Light", 0), ("Dark", 1), ("System", 2)];
+
+    h_flex()
+        .gap_2()
+        .items_center()
+        .children(themes.iter().map(|(name, index)| {
+            let is_selected = board.selected_theme == *index;
+            let index_val = *index;
+
+            let mut button = Button::new(("theme-button", index_val))
+                .small()
+                .label(*name);
+
+            button = if is_selected {
+                button.primary()
+            } else {
+                button.ghost()
+            };
+
+            button.on_click(cx.listener(move |board, _, _window, cx| {
+                board.selected_theme = index_val;
+                cx.notify();
+            }))
+        }))
+}
+
 /// Render the settings panel content
 pub(super) fn render_settings_content(
     board: &mut RopyBoard,
@@ -90,6 +118,16 @@ pub(super) fn render_settings_content(
                 .child("Hotkey Configuration"),
         )
         .child(activation_key_label);
+    let theme_section = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child("Theme"),
+        )
+        .child(render_theme_selector(board, cx));
     let storage_section = v_flex()
         .gap_2()
         .child(
@@ -132,6 +170,7 @@ pub(super) fn render_settings_content(
             v_flex()
                 .gap_4()
                 .flex_1()
+                .child(theme_section)
                 // .child(hotkey_section)
                 .child(storage_section),
         )

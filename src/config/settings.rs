@@ -9,6 +9,75 @@ pub struct Settings {
     pub hotkey: HotkeySettings,
     /// Storage configuration
     pub storage: StorageSettings,
+    /// Theme configuration
+    pub theme: AppTheme,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AppTheme {
+    Light,
+    Dark,
+    System,
+}
+
+impl AppTheme {
+    pub fn get_theme(&self) -> Self {
+        match self {
+            AppTheme::Light => AppTheme::Light,
+            AppTheme::Dark => AppTheme::Dark,
+            AppTheme::System => {
+                #[cfg(target_os = "windows")]
+                {
+                    use windows_sys::Win32::UI::Shell::{
+                        GetImmersiveUserColorSetPreference, IsDarkModeEnabled,
+                    };
+                    unsafe {
+                        if IsDarkModeEnabled() != 0 {
+                            AppTheme::Dark
+                        } else {
+                            AppTheme::Light
+                        }
+                    }
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    use objc2::rc::Retained;
+                    use objc2::runtime::NSObject;
+                    use objc2::{class, msg_send};
+
+                    unsafe {
+                        // Get NSUserDefaults standardUserDefaults
+                        let defaults: Retained<NSObject> =
+                            msg_send![class!(NSUserDefaults), standardUserDefaults];
+
+                        // Get AppleInterfaceStyle value
+                        let key: Retained<NSObject> = msg_send![
+                            class!(NSString),
+                            stringWithUTF8String: "AppleInterfaceStyle\0".as_ptr()
+                        ];
+
+                        let value: Option<Retained<NSObject>> = msg_send![
+                            &defaults,
+                            stringForKey: &*key
+                        ];
+
+                        // If AppleInterfaceStyle is "Dark", use dark theme
+                        if let Some(v) = value {
+                            let c_str: *const i8 = msg_send![&*v, UTF8String];
+                            if !c_str.is_null() {
+                                let rust_str =
+                                    std::ffi::CStr::from_ptr(c_str).to_str().unwrap_or("");
+                                if rust_str == "Dark" {
+                                    return AppTheme::Dark;
+                                }
+                            }
+                        }
+                        AppTheme::Light
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +104,7 @@ impl Default for Settings {
             storage: StorageSettings {
                 max_history_records: 100,
             },
+            theme: AppTheme::System,
         }
     }
 }
@@ -98,5 +168,19 @@ mod tests {
         // This should work with default values even if no config file exists
         let result = Settings::load();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_app_theme() {
+        let light = AppTheme::Light;
+        assert!(matches!(light.get_theme(), AppTheme::Light));
+
+        let dark = AppTheme::Dark;
+        assert!(matches!(dark.get_theme(), AppTheme::Dark));
+
+        // System theme should return either Light or Dark
+        let system = AppTheme::System;
+        let resolved = system.get_theme();
+        assert!(matches!(resolved, AppTheme::Light | AppTheme::Dark));
     }
 }
