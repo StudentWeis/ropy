@@ -1,7 +1,7 @@
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, MB_OK, MessageBoxW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
 
 use std::ffi::OsStr;
