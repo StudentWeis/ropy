@@ -65,12 +65,9 @@ impl AutoStartManager {
         }
 
         // For non-bundled or Windows builds, return the executable path
-        exe_path
-            .to_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| {
-                AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
-            })
+        exe_path.to_str().map(|s| s.to_string()).ok_or_else(|| {
+            AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
+        })
     }
 
     /// Enable auto-start at system startup
@@ -134,9 +131,8 @@ mod tests {
         let _ = manager.sync_state(false);
 
         // Verify state if possible
-        match manager.is_enabled() {
-            Ok(enabled) => assert!(!enabled),
-            Err(_) => (), // couldn't check status; accept as non-fatal in test
+        if let Ok(enabled) = manager.is_enabled() {
+            assert!(!enabled)
         }
     }
 }
