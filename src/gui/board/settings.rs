@@ -73,11 +73,12 @@ pub(super) fn render_settings_content(
                     board.save_settings(cx, window);
                 })),
         );
-    let max_history_input_field = v_flex()
-        .gap_1()
+    let max_history_input_field = h_flex()
+        .gap_2()
+        .items_center()
+        .justify_between()
         .child(
             div()
-                .text_xs()
                 .text_color(cx.theme().foreground)
                 .child("Max History Records"),
         )
@@ -87,6 +88,7 @@ pub(super) fn render_settings_content(
                 .border_1()
                 .border_color(cx.theme().border)
                 .rounded_md()
+                .w(px(60.0))
                 .px_3()
                 .py_2(),
         );
@@ -138,6 +140,38 @@ pub(super) fn render_settings_content(
                 .child("Storage Configuration"),
         )
         .child(max_history_input_field);
+    let autostart_section = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child("System"),
+        )
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .child(
+                    div()
+                        .text_color(cx.theme().foreground)
+                        .child("Launch at system startup"),
+                )
+                .child({
+                    let mut button = Button::new("autostart-toggle").small();
+
+                    button = if board.autostart_enabled {
+                        button.primary().label("ON")
+                    } else {
+                        button.ghost().label("OFF")
+                    };
+
+                    button.on_click(cx.listener(|board, _, _, cx| {
+                        board.toggle_autostart(cx);
+                    }))
+                }),
+        );
     v_flex()
         .size_full()
         .child(
@@ -172,7 +206,8 @@ pub(super) fn render_settings_content(
                 .flex_1()
                 .child(theme_section)
                 // .child(hotkey_section)
-                .child(storage_section),
+                .child(storage_section)
+                .child(autostart_section),
         )
         .child(setting_button_group)
 }

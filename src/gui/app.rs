@@ -1,5 +1,5 @@
 use crate::clipboard::{self, ClipboardEvent};
-use crate::config::{AppTheme, Settings};
+use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
 use crate::gui::tray::{self, TrayEvent};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
@@ -46,6 +46,24 @@ fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<Cl
         .as_ref()
         .and_then(|repo| repo.get_recent(50).ok())
         .unwrap_or_default()
+}
+
+/// Synchronize auto-start state with system on application launch
+fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
+    let autostart_enabled = settings.read().unwrap().autostart.enabled;
+    
+    match AutoStartManager::new("Ropy") {
+        Ok(manager) => {
+            if let Err(e) = manager.sync_state(autostart_enabled) {
+                eprintln!("[ropy] Failed to sync auto-start state on launch: {}", e);
+            } else {
+                println!("[ropy] Auto-start state synced: {}", if autostart_enabled { "enabled" } else { "disabled" });
+            }
+        }
+        Err(e) => {
+            eprintln!("[ropy] Failed to initialize auto-start manager: {}", e);
+        }
+    }
 }
 
 fn start_clipboard_monitor() -> (mpsc::Receiver<ClipboardEvent>, thread::JoinHandle<()>) {
@@ -204,6 +222,10 @@ pub fn launch_app() {
         bind_application_keys(cx);
 
         let settings = load_settings();
+        
+        // Sync auto-start state on application launch
+        sync_autostart_on_launch(&settings);
+        
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));

@@ -11,6 +11,8 @@ pub struct Settings {
     pub storage: StorageSettings,
     /// Theme configuration
     pub theme: AppTheme,
+    /// Auto-start configuration
+    pub autostart: AutoStartSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,12 @@ pub struct StorageSettings {
     pub max_history_records: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoStartSettings {
+    /// Whether to enable auto-launch at system startup
+    pub enabled: bool,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -58,6 +66,7 @@ impl Default for Settings {
                 max_history_records: 100,
             },
             theme: AppTheme::System,
+            autostart: AutoStartSettings { enabled: false },
         }
     }
 }

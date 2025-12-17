@@ -1,4 +1,6 @@
+mod autostart;
 mod settings;
 
-pub use settings::Settings;
+pub use autostart::{AutoStartError, AutoStartManager};
 pub use settings::AppTheme;
+pub use settings::Settings;

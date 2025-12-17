@@ -34,6 +34,8 @@ Some extension strategies can be applied:
 
 - Manage user preferences (such as hotkeys, storage limits, etc.).
 - Provide a configuration interface for users to modify settings.
+- Persist configuration data.
+- Autostart on system boot.
 
 # Implementation Approach
 

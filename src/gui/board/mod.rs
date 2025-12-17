@@ -40,6 +40,7 @@ pub struct RopyBoard {
     settings_activation_key_input: Entity<InputState>,
     settings_max_history_input: Entity<InputState>,
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
+    autostart_enabled: bool,
 }
 
 impl RopyBoard {
@@ -76,6 +77,7 @@ impl RopyBoard {
                 theme_idx,
             )
         };
+        let autostart_enabled = settings.read().unwrap().autostart.enabled;
         let settings_activation_key_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.to_string()));
         let settings_max_history_input =
@@ -95,6 +97,7 @@ impl RopyBoard {
             settings_activation_key_input,
             settings_max_history_input,
             selected_theme: theme_index,
+            autostart_enabled,
         }
     }
 
@@ -232,9 +235,15 @@ impl RopyBoard {
             settings.hotkey.activation_key = activation_key.clone();
             settings.storage.max_history_records = max_history;
             settings.theme = theme.clone();
+            settings.autostart.enabled = self.autostart_enabled;
             if let Err(e) = settings.save() {
                 eprintln!("[ropy] Failed to save settings: {}", e);
             }
+        }
+
+        // Sync auto-start state with system
+        if let Err(e) = self.sync_autostart_state() {
+            eprintln!("[ropy] Failed to sync auto-start state: {}", e);
         }
 
         // Apply the new theme
@@ -250,6 +259,17 @@ impl RopyBoard {
             input.set_value("", window, cx);
         });
         cx.notify();
+    }
+
+    fn toggle_autostart(&mut self, cx: &mut Context<Self>) {
+        self.autostart_enabled = !self.autostart_enabled;
+        cx.notify();
+    }
+
+    fn sync_autostart_state(&self) -> Result<(), crate::config::AutoStartError> {
+        let manager = crate::config::AutoStartManager::new("Ropy")?;
+        manager.sync_state(self.autostart_enabled)?;
+        Ok(())
     }
 
     fn on_key_down(
