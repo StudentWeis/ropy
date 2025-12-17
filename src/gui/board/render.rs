@@ -134,13 +134,13 @@ pub(super) fn render_records_list(
                                     .id(("record-content", index))
                                     .on_click(move |_event, _window, cx| {
                                         view_click
-                                            .update(cx, |this, cx| {
+                                            .update(cx, |this, _cx| {
                                                 this.copy_to_clipboard(
                                                     &record_content,
                                                     &content_type_clone,
                                                 );
                                                 #[cfg(target_os = "macos")]
-                                                cx.hide();
+                                                _cx.hide();
                                             })
                                             .ok();
                                     })
