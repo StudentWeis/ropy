@@ -146,7 +146,8 @@ jobs:
         run: |
           cargo install cargo-bundle --locked
 
-      - name: Build macOS bundle (dmg)
+      - id: macos-bundle
+        name: Build macOS bundle (dmg)
         if: ${{ runner.os == 'macOS' }}
         shell: bash
         run: |
@@ -156,21 +157,29 @@ jobs:
           targets='${{ join(matrix.targets, ' ') }}'
           target="${targets%% *}"
 
-          cargo bundle --release --target "$target" --format dmg
-
-          dmg="$(find target -maxdepth 8 -type f -path '*bundle/osx/*.dmg' -print | head -n 1 || true)"
-          if [ -z "$dmg" ]; then
-            dmg="$(find target -maxdepth 10 -type f -name '*.dmg' -path '*bundle*' -print | head -n 1 || true)"
-          fi
-          if [ -z "$dmg" ]; then
-            echo "cargo-bundle did not produce a .dmg under target/**/bundle/**" >&2
-            exit 1
-          fi
+          # cargo-bundle's macOS format is 'osx' (it may output an .app and/or .dmg)
+          cargo bundle --release --target "$target" --format osx
 
           mkdir -p target/distrib
           out="target/distrib/ropy-${target}.dmg"
-          cp "$dmg" "$out"
-          echo "BUNDLE_DMG=$out" >> "$GITHUB_ENV"
+
+          dmg="$(find target -maxdepth 12 -type f -name '*.dmg' -path '*bundle/osx/*' -print | head -n 1 || true)"
+          if [ -n "$dmg" ]; then
+            cp "$dmg" "$out"
+            echo "bundle_dmg=$out" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          app="$(find target -maxdepth 12 -type d -name '*.app' -path '*bundle/osx/*' -print | head -n 1 || true)"
+          if [ -z "$app" ]; then
+            echo "cargo-bundle did not produce a .dmg or .app under target/**/bundle/osx/**" >&2
+            exit 1
+          fi
+
+          stage_dir="$(mktemp -d)"
+          cp -R "$app" "$stage_dir/"
+          hdiutil create -volname "Ropy" -srcfolder "$stage_dir" -ov -format UDZO "$out"
+          echo "bundle_dmg=$out" >> "$GITHUB_OUTPUT"
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
@@ -195,7 +204,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-macos-bundle-${{ join(matrix.targets, '_') }}
-          path: ${{ env.BUNDLE_DMG }}
+          path: ${{ steps.macos-bundle.outputs.bundle_dmg }}
       - name: "Upload artifacts"
         uses: actions/upload-artifact@v4
         with:
