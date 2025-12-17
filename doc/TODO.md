@@ -1,13 +1,12 @@
 # TODO
 
-- Theme Toogle
+- 快捷键唤起后出现在焦点所在的屏幕。
+- Autostart on system boot
 - Support for multiple languages
 - Log files
 - Provide installation packages and distribution channels
-- Support customizable configurations via GUI
-- Provide detailed user documentation
 - Support more platforms (Linux)
-- Homepage and user community
+- Homepage, documentation and user community
 
 Windows Bugs:
 

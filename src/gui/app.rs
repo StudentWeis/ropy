@@ -1,6 +1,5 @@
 use crate::clipboard::{self, ClipboardEvent};
 use crate::config::{AppTheme, Settings};
-use crate::gui::active_window;
 use crate::gui::board::RopyBoard;
 use crate::gui::tray::{self, TrayEvent};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
@@ -180,7 +179,9 @@ fn start_hotkey_handler(
                 while let Ok(()) = hotkey_rx.try_recv() {
                     let _ = async_app.update(move |cx| {
                         window_handle
-                            .update(cx, |_, window, cx| active_window(window, cx))
+                            .update(cx, |_, window, cx| {
+                                window.dispatch_action(Box::new(crate::gui::board::Active), cx)
+                            })
                             .ok();
                     });
                 }
@@ -271,7 +272,12 @@ fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
                                 TrayEvent::Show => {
                                     let _ = async_app.update(move |cx| {
                                         window_handle
-                                            .update(cx, |_, window, cx| active_window(window, cx))
+                                            .update(cx, |_, window, cx| {
+                                                window.dispatch_action(
+                                                    Box::new(crate::gui::board::Active),
+                                                    cx,
+                                                )
+                                            })
                                             .ok();
                                     });
                                 }

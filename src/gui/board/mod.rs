@@ -186,6 +186,9 @@ impl RopyBoard {
     }
 
     fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
+        self.selected_index = 0;
+        self.list_state.scroll_to_reveal_item(self.selected_index);
+        self.show_settings = false;
         active_window(window, cx);
     }
 
