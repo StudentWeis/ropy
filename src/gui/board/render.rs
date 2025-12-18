@@ -1,5 +1,5 @@
-use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
+use crate::{gui::hide_window, repository::ClipboardRecord};
 use gpui::{
     Context, Entity, ListState, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
@@ -155,15 +155,15 @@ pub(super) fn render_records_list(
                                     .min_w_0()
                                     .cursor_pointer()
                                     .id(("record-content", index))
-                                    .on_click(move |_event, _window, cx| {
+                                    .on_click(move |_event, window, cx| {
                                         view_click
-                                            .update(cx, |this, _cx| {
+                                            .update(cx, |this, cx| {
+                                                this.delete_record(record_id);
                                                 this.copy_to_clipboard(
                                                     &record_content,
                                                     &content_type_clone,
                                                 );
-                                                #[cfg(target_os = "macos")]
-                                                _cx.hide();
+                                                hide_window(window, cx);
                                             })
                                             .ok();
                                     })
