@@ -57,6 +57,13 @@ cargo build --release
 ./target/release/ropy
 ```
 
+# Usage
+
+- Launch the application, and it will start monitoring your clipboard.
+- Use the global hotkey(Ctrl/Control + Shift + D) of tray icon to access the clipboard history.
+- Click on any entry or use 1/2/3/4/5 to select an entry using keyboard to copy it back to the clipboard.
+- Use the search bar to filter clipboard entries.
+
 # Acknowledgements
 
 - Inspired by other clipboard managers like Ditto, Maccy & CopyQ.
