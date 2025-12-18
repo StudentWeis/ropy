@@ -8,9 +8,32 @@ use gpui::{
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
+use regex::Regex;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use super::RopyBoard;
+
+fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
+    static HEX_REGEX: OnceLock<Regex> = OnceLock::new();
+    let regex =
+        HEX_REGEX.get_or_init(|| Regex::new(r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$").unwrap());
+
+    if regex.is_match(content) {
+        let hex = content.trim_start_matches('#');
+        let value = if hex.len() == 3 {
+            let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
+            ((r as u32 * 17) << 16) | ((g as u32 * 17) << 8) | (b as u32 * 17)
+        } else {
+            u32::from_str_radix(hex, 16).ok()?
+        };
+        Some(gpui::rgb(value))
+    } else {
+        None
+    }
+}
 
 /// Create the "Clear" button element
 pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
@@ -145,34 +168,8 @@ pub(super) fn render_records_list(
                                             .ok();
                                     })
                                     .child(match content_type {
-                                        ContentType::Text => {
-                                            let display_content = format_clipboard_content(record);
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().secondary_foreground)
-                                                .line_height(gpui::relative(1.5))
-                                                .child(display_content)
-                                                .into_any_element()
-                                        }
-                                        ContentType::Image => {
-                                            let path = PathBuf::from(record.content.clone());
-                                            let file_stem = path
-                                                .file_stem()
-                                                .unwrap_or_default()
-                                                .to_string_lossy();
-                                            let thumb_name = format!("{}_thumb.png", file_stem);
-                                            let thumb_path =
-                                                path.parent().unwrap_or(&path).join(thumb_name);
-
-                                            // Use thumbnail if exists, otherwise fallback to original
-                                            let display_path = if thumb_path.exists() {
-                                                thumb_path
-                                            } else {
-                                                path
-                                            };
-
-                                            img(display_path).max_h(px(100.0)).into_any_element()
-                                        }
+                                        ContentType::Text => render_text_record(cx, record),
+                                        ContentType::Image => render_image_record(record),
                                         _ => div().child("Unknown content").into_any_element(),
                                     })
                                     .child(
@@ -223,4 +220,49 @@ pub(super) fn render_records_list(
     })
     .w_full()
     .flex_1()
+}
+
+fn render_image_record(record: &ClipboardRecord) -> gpui::AnyElement {
+    let path = PathBuf::from(record.content.clone());
+    let file_stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let thumb_name = format!("{}_thumb.png", file_stem);
+    let thumb_path = path.parent().unwrap_or(&path).join(thumb_name);
+
+    // Use thumbnail if exists, otherwise fallback to original
+    let display_path = if thumb_path.exists() {
+        thumb_path
+    } else {
+        path
+    };
+    img(display_path).max_h(px(100.0)).into_any_element()
+}
+
+fn render_text_record(cx: &mut gpui::App, record: &ClipboardRecord) -> gpui::AnyElement {
+    let display_content = format_clipboard_content(record);
+    let hex_color = get_hex_color(&record.content);
+
+    let text_el = div()
+        .text_sm()
+        .text_color(cx.theme().secondary_foreground)
+        .line_height(gpui::relative(1.5))
+        .child(display_content);
+
+    if let Some(color) = hex_color {
+        h_flex()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .w_4()
+                    .h_4()
+                    .rounded_sm()
+                    .bg(color)
+                    .border_1()
+                    .border_color(cx.theme().border),
+            )
+            .child(text_el)
+            .into_any_element()
+    } else {
+        text_el.into_any_element()
+    }
 }
