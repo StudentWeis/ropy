@@ -1,6 +1,6 @@
 [package]
 name = "ropy"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 repository = "https://github.com/StudentWeis/ropy"
@@ -43,7 +43,7 @@ lto = "thin"
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"
-version = "0.1.0"
+version = "0.1.1"
 copyright = "Copyright 2025 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"

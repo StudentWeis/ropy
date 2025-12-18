@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2025-12-18
+
+### 🚀 Features
+- Add support for hex color parsing in clipboard content display by @StudentWeis
+
+### 🐛 Bug Fixes
+- Correct usage of hide_window function in record click handler by @StudentWeis
+
+### 📚 Documentation
+- Add usage instructions to README for clipboard management features by @StudentWeis
+- Update README with enhanced visuals and installation instructions; add new asset images by @StudentWeis
+
 ## [0.1.0] - 2025-12-18
 
 ### 🚀 Features
