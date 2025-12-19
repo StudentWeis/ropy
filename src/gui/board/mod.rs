@@ -12,7 +12,7 @@ use gpui::{
 };
 use gpui_component::input::InputState;
 use gpui_component::{ActiveTheme, v_flex};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 
 // Re-export utilities for external use
 use render::{render_header, render_records_list, render_search_input};
@@ -34,6 +34,7 @@ pub struct RopyBoard {
     selected_index: usize,
     list_state: ListState,
     filtered_records: Vec<ClipboardRecord>,
+    copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
 
     // Settings
     show_settings: bool,
@@ -48,6 +49,7 @@ impl RopyBoard {
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
         settings: Arc<RwLock<Settings>>,
+        copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -93,6 +95,7 @@ impl RopyBoard {
             selected_index: 0,
             list_state,
             filtered_records: Vec::new(),
+            copy_tx,
             show_settings: false,
             settings_activation_key_input,
             settings_max_history_input,
@@ -102,18 +105,16 @@ impl RopyBoard {
     }
 
     /// Copy content to clipboard
-    pub fn copy_to_clipboard(&mut self, content: &str, content_type: &ContentType) {
-        let content = content.to_string();
-        let content_type = content_type.clone();
-        std::thread::spawn(move || match content_type {
-            ContentType::Text => {
-                let _ = crate::clipboard::copy_text(&content);
-            }
-            ContentType::Image => {
-                let _ = crate::clipboard::copy_image(&content);
-            }
-            _ => {}
-        });
+    fn copy_to_clipboard(&mut self, content: &str, content_type: &ContentType) {
+        let request = match content_type {
+            ContentType::Text => Some(crate::clipboard::CopyRequest::Text(content.to_string())),
+            ContentType::Image => Some(crate::clipboard::CopyRequest::Image(content.to_string())),
+            _ => None,
+        };
+
+        if let Some(req) = request {
+            let _ = self.copy_tx.send(req);
+        }
     }
 
     /// Clear clipboard history

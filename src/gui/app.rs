@@ -51,13 +51,20 @@ fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<Cl
 /// Synchronize auto-start state with system on application launch
 fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     let autostart_enabled = settings.read().unwrap().autostart.enabled;
-    
+
     match AutoStartManager::new("Ropy") {
         Ok(manager) => {
             if let Err(e) = manager.sync_state(autostart_enabled) {
                 eprintln!("[ropy] Failed to sync auto-start state on launch: {}", e);
             } else {
-                println!("[ropy] Auto-start state synced: {}", if autostart_enabled { "enabled" } else { "disabled" });
+                println!(
+                    "[ropy] Auto-start state synced: {}",
+                    if autostart_enabled {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                );
             }
         }
         Err(e) => {
@@ -124,6 +131,7 @@ fn create_window(
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
     settings: Arc<RwLock<Settings>>,
+    copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -143,6 +151,7 @@ fn create_window(
                     shared_records,
                     repository.clone(),
                     settings.clone(),
+                    copy_tx,
                     window,
                     cx,
                 )
@@ -222,22 +231,29 @@ pub fn launch_app() {
         bind_application_keys(cx);
 
         let settings = load_settings();
-        
+
         // Sync auto-start state on application launch
         sync_autostart_on_launch(&settings);
-        
+
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
         let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
         let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
+        let copy_tx = crate::clipboard::start_clipboard_writer();
         let _ = start_clipboard_listener(
             clipboard_rx,
             shared_records.clone(),
             repository.clone(),
             settings.clone(),
         );
-        let window_handle = create_window(cx, shared_records, repository.clone(), settings.clone());
+        let window_handle = create_window(
+            cx,
+            shared_records,
+            repository.clone(),
+            settings.clone(),
+            copy_tx,
+        );
         let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app.clone());
         start_tray_handler(window_handle, async_app.clone());

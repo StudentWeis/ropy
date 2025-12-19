@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2025-12-19
+
+### 🚀 Features
+- Enhance clipboard copy with background processing and update TODO list by @StudentWeis
+- Add build script for Windows icon by @ZhBF
+
+### 🐛 Bug Fixes
+- When hiding the window on Windows would leave a minimized artifact on the desktop by @ZhBF
+- Use conditional compilation for Windows target in build script by @ZhBF
+
 ## [0.1.1] - 2025-12-18
 
 ### 🚀 Features

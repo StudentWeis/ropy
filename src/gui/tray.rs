@@ -55,6 +55,7 @@ pub fn init_tray(tx: Sender<TrayEvent>) -> Result<TrayIcon, Box<dyn std::error::
 
 /// Create a simple icon for the tray
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
+    // TODO：Replace with a small icon image
     let img_data = include_bytes!("../../assets/logo.png");
     let img = image::load_from_memory(img_data)?;
     let rgba = img.to_rgba8().into_raw();
