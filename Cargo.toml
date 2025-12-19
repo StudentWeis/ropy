@@ -27,14 +27,18 @@ auto-launch = "0.5"
 regex = "1.12.2"
 raw-window-handle = "0.6"
 
-[dev-dependencies]
-tempfile = "3.20"
-
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[dev-dependencies]
+tempfile = "3.20"
+
+[build-dependencies]
+winres = "0.1"
+image = "0.25"
 
 # The profile that 'dist' will build with
 [profile.dist]
@@ -50,7 +54,3 @@ category = "Productivity"
 short_description = "A clipboard manager"
 long_description = "A clipboard manager built with Rust and GPUI."
 codesign_identity = "adhoc"
-
-[build-dependencies]
-winres = "0.1"
-image = "0.25"

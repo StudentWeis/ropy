@@ -158,12 +158,14 @@ pub(super) fn render_records_list(
                                     .on_click(move |_event, window, cx| {
                                         view_click
                                             .update(cx, |this, cx| {
-                                                this.delete_record(record_id);
+                                                hide_window(window, cx);
                                                 this.copy_to_clipboard(
                                                     &record_content,
                                                     &content_type_clone,
                                                 );
-                                                hide_window(window, cx);
+                                                if index != 0 {
+                                                    this.delete_record(record_id);
+                                                }
                                             })
                                             .ok();
                                     })
