@@ -1,6 +1,6 @@
 use gpui::{
     Context, div,
-    prelude::{IntoElement, ParentElement, Styled},
+    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
 use gpui_component::button::{Button, ButtonVariants};
@@ -8,6 +8,8 @@ use gpui_component::input::Input;
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 
 use super::RopyBoard;
+#[cfg(target_os = "windows")]
+use crate::gui::utils::start_window_drag;
 
 /// Render theme selection buttons
 fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> impl IntoElement {
@@ -172,34 +174,40 @@ pub(super) fn render_settings_content(
                     }))
                 }),
         );
+    let header = h_flex()
+        .justify_between()
+        .items_center()
+        .mb_4()
+        .pt_4()
+        .child(
+            Button::new("back-button")
+                .small()
+                .ghost()
+                .label("←")
+                .on_click(cx.listener(|board, _, window, cx| {
+                    board.show_settings = false;
+                    window.focus(&board.focus_handle);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        )
+        .child(
+            div()
+                .text_lg()
+                .text_color(cx.theme().foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child("Ropy Settings"),
+        )
+        .child(div().w(px(55.)));
+
+    #[cfg(target_os = "windows")]
+    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
+        start_window_drag(window, cx);
+    });
+
     v_flex()
         .size_full()
-        .child(
-            // Header with back button
-            h_flex()
-                .justify_between()
-                .items_center()
-                .mb_4()
-                .child(
-                    Button::new("back-button")
-                        .small()
-                        .ghost()
-                        .label("←")
-                        .on_click(cx.listener(|board, _, window, cx| {
-                            board.show_settings = false;
-                            window.focus(&board.focus_handle);
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    div()
-                        .text_lg()
-                        .text_color(cx.theme().foreground)
-                        .font_weight(gpui::FontWeight::BOLD)
-                        .child("Ropy Settings"),
-                )
-                .child(div().w(px(55.))), // Spacer for centering
-        )
+        .child(header)
         .child(
             v_flex()
                 .gap_4()
