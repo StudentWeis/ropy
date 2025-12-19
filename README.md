@@ -11,20 +11,19 @@
 <a href="https://github.com/studentweis/ropy/issues"><img src="https://img.shields.io/github/issues/studentweis/ropy" alt="Issues"></a>
 </p>
 
-<p align="center">A cross-platform native clipboard GUI manager in pure Rust.</p>
+<p align="center">A cross-platform native clipboard manager in pure Rust.</p>
 
 <p align="center">
-<img src="assets/ropy-dark.png" alt="Ropy Dark" width="45%" style="border:1px solid rgba(0,0,0,0.12); box-shadow:0 8px 24px rgba(0,0,0,0.12); border-radius:8px; padding:4px;">
-<img src="assets/ropy-light.png" alt="Ropy Light" width="45%" style="border:1px solid rgba(0,0,0,0.12); box-shadow:0 8px 24px rgba(0,0,0,0.12); border-radius:8px; padding:4px;">
+<img src="https://s2.loli.net/2025/12/19/iqnFu2pdNogyA7P.png" alt="Ropy Dark" width="45%">
+<img src="https://s2.loli.net/2025/12/19/OaiXxnfGQLRvH5T.png" alt="Ropy Light" width="45%">
 </p>
 
 # Features
 
 - Cross-platform support: Windows and macOS.
 - Native GUI application built with Zed's GPUI.
-- Lightweight and fast.
-- Easy-to-use interface for managing clipboard history.
-- Search functionality to quickly find previous clipboard entries.
+- Easy-to-use, Lightweight and fast.
+- Search to quickly find previous records.
 - Auto start on system boot.
 - Keyboard shortcuts for quick access.
 
@@ -61,8 +60,8 @@ cargo build --release
 
 - Launch the application, and it will start monitoring your clipboard.
 - Use the global hotkey(Ctrl/Control + Shift + D) of tray icon to access the clipboard history.
-- Click on any entry or use 1/2/3/4/5 to select an entry using keyboard to copy it back to the clipboard.
-- Use the search bar to filter clipboard entries.
+- Click on any record or use 1/2/3/4/5 to select a record using keyboard to copy it back to the clipboard.
+- Use the search bar to filter clipboard records.
 
 # Acknowledgements
 
