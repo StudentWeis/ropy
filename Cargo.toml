@@ -25,6 +25,7 @@ tray-icon = "0.21"
 dark-light = "2.0"
 auto-launch = "0.5"
 regex = "1.12.2"
+raw-window-handle = "0.6"
 
 [dev-dependencies]
 tempfile = "3.20"

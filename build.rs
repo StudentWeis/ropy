@@ -2,7 +2,8 @@ use std::env;
 use std::path::Path;
 
 fn main() {
-    if cfg!(target_os = "windows") {
+    #[cfg(target_os = "windows")]
+    {
         let out_dir = env::var("OUT_DIR").unwrap();
         let icon_path = Path::new(&out_dir).join("logo.ico");
         
