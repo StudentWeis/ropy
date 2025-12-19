@@ -5517,6 +5517,7 @@ dependencies = [
  "gpui-component",
  "image",
  "objc2 0.6.3",
+ "raw-window-handle",
  "regex",
  "serde",
  "serde_json",
