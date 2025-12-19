@@ -49,3 +49,7 @@ category = "Productivity"
 short_description = "A clipboard manager"
 long_description = "A clipboard manager built with Rust and GPUI."
 codesign_identity = "adhoc"
+
+[build-dependencies]
+winres = "0.1"
+image = "0.25"
