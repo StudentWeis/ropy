@@ -1,5 +1,5 @@
+use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
-use crate::{gui::hide_window, repository::ClipboardRecord};
 use gpui::{
     Context, Entity, ListState, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
@@ -105,125 +105,6 @@ pub(super) fn render_search_input(
     )
 }
 
-/// Render the scrollable list of clipboard records
-pub(super) fn render_records_list(
-    records: Vec<ClipboardRecord>,
-    selected_index: usize,
-    list_state: ListState,
-    cx: &mut Context<'_, RopyBoard>,
-) -> impl IntoElement {
-    let view = cx.weak_entity();
-
-    list(list_state, move |index, _window, cx| {
-        let record = &records[index];
-        let record_content = record.content.clone();
-        let record_id = record.id;
-        let is_selected = index == selected_index;
-        let content_type = record.content_type.clone();
-        let content_type_clone = content_type.clone();
-        let view_click = view.clone();
-        let view_delete = view.clone();
-
-        div()
-            .pb_2()
-            .child(
-                v_flex()
-                    .w_full()
-                    .p_3()
-                    .bg(if is_selected {
-                        cx.theme().accent
-                    } else {
-                        cx.theme().secondary
-                    })
-                    .rounded_md()
-                    .border_1()
-                    .border_color(if is_selected {
-                        cx.theme().accent
-                    } else {
-                        cx.theme().border
-                    })
-                    .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
-                    .id(("record", index))
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .items_start()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .cursor_pointer()
-                                    .id(("record-content", index))
-                                    .on_click(move |_event, window, cx| {
-                                        view_click
-                                            .update(cx, |this, cx| {
-                                                hide_window(window, cx);
-                                                this.copy_to_clipboard(
-                                                    &record_content,
-                                                    &content_type_clone,
-                                                );
-                                                if index != 0 {
-                                                    this.delete_record(record_id);
-                                                }
-                                            })
-                                            .ok();
-                                    })
-                                    .child(match content_type {
-                                        ContentType::Text => render_text_record(cx, record),
-                                        ContentType::Image => render_image_record(record),
-                                        _ => div().child("Unknown content").into_any_element(),
-                                    })
-                                    .child(
-                                        h_flex()
-                                            .items_center()
-                                            .gap_1()
-                                            .mt_1()
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .bg(cx.theme().background)
-                                                    .px_1()
-                                                    .py_0()
-                                                    .rounded_sm()
-                                                    .child(format!("{}", index + 1)),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(
-                                                        record
-                                                            .created_at
-                                                            .format("%Y-%m-%d %H:%M:%S")
-                                                            .to_string(),
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                Button::new(("delete-btn", index))
-                                    .xsmall()
-                                    .ghost()
-                                    .label("×")
-                                    .on_click(move |_event, _window, cx| {
-                                        view_delete
-                                            .update(cx, |this, cx| {
-                                                this.delete_record(record_id);
-                                                cx.notify();
-                                            })
-                                            .ok();
-                                    }),
-                            ),
-                    ),
-            )
-            .into_any_element()
-    })
-    .w_full()
-    .flex_1()
-}
-
 fn render_image_record(record: &ClipboardRecord) -> gpui::AnyElement {
     let path = PathBuf::from(record.content.clone());
     let file_stem = path.file_stem().unwrap_or_default().to_string_lossy();
@@ -266,5 +147,117 @@ fn render_text_record(cx: &mut gpui::App, record: &ClipboardRecord) -> gpui::Any
             .into_any_element()
     } else {
         text_el.into_any_element()
+    }
+}
+
+impl RopyBoard {
+    /// Render the scrollable list of clipboard records
+    pub fn render_records_list(
+        &self,
+        records: Vec<ClipboardRecord>,
+        selected_index: usize,
+        list_state: ListState,
+        context: &mut Context<'_, RopyBoard>,
+    ) -> impl IntoElement {
+        let view = context.weak_entity();
+        list(list_state, move |index, _window, cx| {
+            let record = &records[index];
+            let record_id = record.id;
+            let is_selected = index == selected_index;
+            let content_type = record.content_type.clone();
+            let view_click = view.clone();
+            let view_delete = view.clone();
+
+            div()
+                .pb_2()
+                .child(
+                    v_flex()
+                        .w_full()
+                        .p_3()
+                        .bg(if is_selected {
+                            cx.theme().accent
+                        } else {
+                            cx.theme().secondary
+                        })
+                        .rounded_md()
+                        .border_1()
+                        .border_color(if is_selected {
+                            cx.theme().accent
+                        } else {
+                            cx.theme().border
+                        })
+                        .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
+                        .id(("record", index))
+                        .child(
+                            h_flex()
+                                .justify_between()
+                                .items_start()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .cursor_pointer()
+                                        .id(("record-content", index))
+                                        .on_click(move |_event, window, cx| {
+                                            view_click
+                                                .update(cx, |this, cx| {
+                                                    this.confirm_record(window, cx, index);
+                                                })
+                                                .ok();
+                                        })
+                                        .child(match content_type {
+                                            ContentType::Text => render_text_record(cx, record),
+                                            ContentType::Image => render_image_record(record),
+                                            _ => div().child("Unknown content").into_any_element(),
+                                        })
+                                        .child(
+                                            h_flex()
+                                                .items_center()
+                                                .gap_1()
+                                                .mt_1()
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .bg(cx.theme().background)
+                                                        .px_1()
+                                                        .py_0()
+                                                        .rounded_sm()
+                                                        .child(format!("{}", index + 1)),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .child(
+                                                            record
+                                                                .created_at
+                                                                .format("%Y-%m-%d %H:%M:%S")
+                                                                .to_string(),
+                                                        ),
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    Button::new(("delete-btn", index))
+                                        .xsmall()
+                                        .ghost()
+                                        .label("×")
+                                        .on_click(move |_event, _window, cx| {
+                                            view_delete
+                                                .update(cx, |this, cx| {
+                                                    this.delete_record(record_id);
+                                                    cx.notify();
+                                                })
+                                                .ok();
+                                        }),
+                                ),
+                        ),
+                )
+                .into_any_element()
+        })
+        .w_full()
+        .flex_1()
     }
 }

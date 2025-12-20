@@ -1,8 +1,12 @@
 use gpui::{Context, Window};
+
+#[cfg(target_os = "windows")]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_RESTORE, SetForegroundWindow};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow,
+};
 
 /// Hide the window based on the platform
 pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>) {

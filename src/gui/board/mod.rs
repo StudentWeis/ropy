@@ -1,13 +1,14 @@
+mod actions;
 mod render;
 mod settings;
 
 use crate::config::Settings;
-use crate::gui::{active_window, hide_window};
+use crate::gui::hide_window;
 use crate::repository::models::ContentType;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, Focusable, ListAlignment, ListState, Render,
-    Subscription, Window,
+    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, Subscription,
+    Window,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
 };
 use gpui_component::input::InputState;
@@ -15,13 +16,9 @@ use gpui_component::{ActiveTheme, v_flex};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 
 // Re-export utilities for external use
-use render::{render_header, render_records_list, render_search_input};
+pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
+use render::{render_header, render_search_input};
 use settings::render_settings_content;
-
-gpui::actions!(
-    board,
-    [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection]
-);
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
@@ -153,62 +150,24 @@ impl RopyBoard {
         }
     }
 
-    fn on_select_prev(&mut self, _: &SelectPrev, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
-            self.list_state.scroll_to_reveal_item(self.selected_index);
-            cx.notify();
-        }
-    }
-
-    fn on_select_next(&mut self, _: &SelectNext, _window: &mut Window, cx: &mut Context<Self>) {
-        let query = self.search_input.read(cx).value().to_string();
-        let count = self.get_filtered_records(&query).len();
-        if count > 0 && self.selected_index < count - 1 {
-            self.selected_index += 1;
-            self.list_state.scroll_to_reveal_item(self.selected_index);
-            cx.notify();
-        }
-    }
-
-    fn on_confirm_selection(
-        &mut self,
-        _: &ConfirmSelection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.confirm_and_hide(window, cx);
-    }
-
-    fn confirm_and_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let query = self.search_input.read(cx).value().to_string();
-        let records = self.get_filtered_records(&query);
-        if let Some(record) = records.get(self.selected_index) {
-            self.copy_to_clipboard(&record.content, &record.content_type);
-            hide_window(window, cx);
-        }
-    }
-
-    fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
-        self.selected_index = 0;
-        self.list_state.scroll_to_reveal_item(self.selected_index);
-        self.show_settings = false;
-        active_window(window, cx);
-    }
-
-    fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
-        // If the search input is focused, return focus to the main component before hiding
-        if let Some(focused_handle) = window.focused(cx)
-            && focused_handle == self.search_input.focus_handle(cx)
-        {
-            window.focus(&self.focus_handle);
-            return;
-        }
+    /// Confirm, hide and delete.
+    fn confirm_record(&mut self, window: &mut Window, cx: &mut Context<Self>, index: usize) {
+        let (id, content, content_type) = {
+            if let Some(record) = self.filtered_records.get(index) {
+                (
+                    record.id,
+                    record.content.clone(),
+                    record.content_type.clone(),
+                )
+            } else {
+                return;
+            }
+        };
+        self.copy_to_clipboard(&content, &content_type);
         hide_window(window, cx);
-    }
-
-    fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.quit();
+        if matches!(content_type, ContentType::Image) || index != 0 {
+            self.delete_record(id);
+        }
     }
 
     fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
@@ -272,38 +231,6 @@ impl RopyBoard {
         manager.sync_state(self.autostart_enabled)?;
         Ok(())
     }
-
-    fn on_key_down(
-        &mut self,
-        event: &gpui::KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // If the "/" key is pressed, focus the search input
-        if event.keystroke.key.as_str() == "/" {
-            window.focus(&self.search_input.focus_handle(cx));
-            return;
-        }
-        // If the search input is focused, ignore key presses
-        if let Some(focused_handle) = window.focused(cx)
-            && focused_handle == self.search_input.focus_handle(cx)
-        {
-            return;
-        }
-
-        // Map number keys to record selection
-        let key = &event.keystroke.key;
-        let index = match key.as_str() {
-            "1" => 0,
-            "2" => 1,
-            "3" => 2,
-            "4" => 3,
-            "5" => 4,
-            _ => return,
-        };
-        self.selected_index = index;
-        self.confirm_and_hide(window, cx);
-    }
 }
 
 impl Render for RopyBoard {
@@ -343,7 +270,7 @@ impl Render for RopyBoard {
             .on_key_down(cx.listener(Self::on_key_down))
             .child(render_header(cx))
             .child(render_search_input(&self.search_input, cx))
-            .child(render_records_list(
+            .child(self.render_records_list(
                 self.filtered_records.clone(),
                 self.selected_index,
                 self.list_state.clone(),
