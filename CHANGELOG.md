@@ -2,31 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2025-12-20
+
+### 🐛 Bug Fixes
+
+- Fix window dragging on Windows by @ZhBF
+
+### 🚜 Refactor
+
+- Simplify the logic of render record list and clean the code by @StudentWeis
+
+### 📚 Documentation
+
+- Update README for clarity and remove outdated images by @StudentWeis
+
 ## [0.1.2] - 2025-12-19
 
 ### 🚀 Features
+
 - Enhance clipboard copy with background processing and update TODO list by @StudentWeis
 - Add build script for Windows icon by @ZhBF
 
 ### 🐛 Bug Fixes
+
 - When hiding the window on Windows would leave a minimized artifact on the desktop by @ZhBF
 - Use conditional compilation for Windows target in build script by @ZhBF
 
 ## [0.1.1] - 2025-12-18
 
 ### 🚀 Features
+
 - Add support for hex color parsing in clipboard content display by @StudentWeis
 
 ### 🐛 Bug Fixes
+
 - Correct usage of hide_window function in record click handler by @StudentWeis
 
 ### 📚 Documentation
+
 - Add usage instructions to README for clipboard management features by @StudentWeis
 - Update README with enhanced visuals and installation instructions; add new asset images by @StudentWeis
 
 ## [0.1.0] - 2025-12-18
 
 ### 🚀 Features
+
 - Add custom GitHub runners for macOS builds in dist configuration by @StudentWeis
 - Add initial configuration for CI/CD with GitHub Actions and dist by @StudentWeis
 - Implement auto-start functionality with configuration options by @StudentWeis
@@ -61,6 +81,7 @@ All notable changes to this project will be documented in this file.
 - Add sysinfo dependency and implement RSS monitoring in debug mode by @StudentWeis
 
 ### 🐛 Bug Fixes
+
 - Enhance macOS bundle build process and output handling by @StudentWeis
 - Resolve unused imports and variable warnings by @ZhBF
 - Use dark-light crate for Windows theme detection by @StudentWeis in [#2](https://github.com/StudentWeis/ropy/pull/2)
@@ -70,6 +91,7 @@ All notable changes to this project will be documented in this file.
 - (macOS) add codesign identity for macOS application packaging by @StudentWeis
 
 ### 🚜 Refactor
+
 - Update TODO list and improve active window handling in RopyBoard by @StudentWeis
 - Update AppTheme::get_theme to simplify system theme detection logic by @StudentWeis
 - Update clipboard listener documentation and improve hotkey monitor initialization by @StudentWeis
@@ -83,9 +105,11 @@ All notable changes to this project will be documented in this file.
 - Clean the code by @StudentWeis
 
 ### ⚙️ Miscellaneous Tasks
+
 - Bump version to 0.1.0 by @StudentWeis
 - Update README and TODO files, enhance image display in GUI by @StudentWeis
 
 ### New Contributors
+
 - @StudentWeis made their first contribution
 - @ZhBF made their first contribution
