@@ -2,10 +2,11 @@ use gpui::{Context, Window};
 
 #[cfg(target_os = "windows")]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    HTCAPTION, PostMessageA, SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow, WM_NCLBUTTONDOWN,
 };
 
 /// Hide the window based on the platform
@@ -37,4 +38,19 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     }
     #[cfg(target_os = "macos")]
     _cx.activate(true);
+}
+
+/// Start dragging the window
+#[cfg(target_os = "windows")]
+pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
+    #[cfg(target_os = "windows")]
+    if let Ok(handle) = window.window_handle() {
+        if let RawWindowHandle::Win32(handle) = handle.as_raw() {
+            let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+            unsafe {
+                ReleaseCapture();
+                PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
+            }
+        }
+    }
 }

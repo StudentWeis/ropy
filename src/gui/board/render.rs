@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use crate::gui::utils::start_window_drag;
 use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
 use gpui::{
@@ -43,6 +45,7 @@ pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoE
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
         }))
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
 /// Format clipboard content for display (truncate if too long)
@@ -59,10 +62,14 @@ pub(super) fn format_clipboard_content(record: &ClipboardRecord) -> String {
 
 /// Render the header section with title and settings/clear buttons
 pub fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
-    h_flex()
-        .justify_between()
-        .items_center()
-        .mb_4()
+    let header = h_flex().justify_between().items_center().mb_4().pt_4();
+
+    #[cfg(target_os = "windows")]
+    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
+        start_window_drag(window, cx);
+    });
+
+    header
         .child(
             div()
                 .text_lg()
@@ -83,7 +90,8 @@ pub fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
                             this.show_settings = true;
                             window.focus(&this.focus_handle);
                             cx.notify();
-                        })),
+                        }))
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
                 )
                 .child(create_clear_button(cx)),
         )

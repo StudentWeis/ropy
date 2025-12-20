@@ -243,7 +243,8 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_active_action))
             .bg(cx.theme().background)
             .size_full()
-            .p_4();
+            .px_4()
+            .pb_4();
 
         if self.show_settings {
             return base.child(render_settings_content(self, cx));
