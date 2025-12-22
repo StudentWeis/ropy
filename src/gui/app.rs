@@ -54,7 +54,7 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     match AutoStartManager::new("Ropy") {
         Ok(manager) => {
             if let Err(e) = manager.sync_state(autostart_enabled) {
-                eprintln!("[ropy] Failed to sync auto-start state on launch: {}", e);
+                eprintln!("[ropy] Failed to sync auto-start state on launch: {e}");
             } else {
                 println!(
                     "[ropy] Auto-start state synced: {}",
@@ -67,7 +67,7 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
             }
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to initialize auto-start manager: {}", e);
+            eprintln!("[ropy] Failed to initialize auto-start manager: {e}");
         }
     }
 }
@@ -223,10 +223,10 @@ fn load_settings() -> Arc<RwLock<Settings>> {
             Arc::new(RwLock::new(s))
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to load settings, using defaults: {}", e);
+            eprintln!("[ropy] Failed to load settings, using defaults: {e}");
             let default_settings = Settings::default();
             default_settings.save().unwrap_or_else(|err| {
-                eprintln!("[ropy] Failed to save default settings: {}", err);
+                eprintln!("[ropy] Failed to save default settings: {err}");
             });
             Arc::new(RwLock::new(default_settings))
         }
@@ -273,7 +273,7 @@ fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
                 .detach();
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to initialize tray icon: {}", e);
+            eprintln!("[ropy] Failed to initialize tray icon: {e}");
         }
     }
 }

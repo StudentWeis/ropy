@@ -62,7 +62,7 @@ fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
     let width = img.width();
     let height = img.height();
     Icon::from_rgba(rgba, width, height)
-        .map_err(|e| format!("Failed to create icon: {:?}", e).into())
+        .map_err(|e| format!("Failed to create icon: {e:?}").into())
 }
 
 #[cfg(test)]

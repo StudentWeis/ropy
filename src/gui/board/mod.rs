@@ -196,13 +196,13 @@ impl RopyBoard {
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;
             if let Err(e) = settings.save() {
-                eprintln!("[ropy] Failed to save settings: {}", e);
+                eprintln!("[ropy] Failed to save settings: {e}");
             }
         }
 
         // Sync auto-start state with system
         if let Err(e) = self.sync_autostart_state() {
-            eprintln!("[ropy] Failed to sync auto-start state: {}", e);
+            eprintln!("[ropy] Failed to sync auto-start state: {e}");
         }
 
         // Apply the new theme

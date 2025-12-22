@@ -38,7 +38,7 @@ impl AutoStartManager {
             .set_app_path(&app_path)
             .build()
             .map_err(|e| {
-                AutoStartError::Initialization(format!("Failed to build AutoLaunch: {}", e))
+                AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
             })?;
 
         Ok(Self { auto_launch })

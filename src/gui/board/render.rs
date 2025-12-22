@@ -116,7 +116,7 @@ pub(super) fn render_search_input(
 fn render_image_record(record: &ClipboardRecord) -> gpui::AnyElement {
     let path = PathBuf::from(record.content.clone());
     let file_stem = path.file_stem().unwrap_or_default().to_string_lossy();
-    let thumb_name = format!("{}_thumb.png", file_stem);
+    let thumb_name = format!("{file_stem}_thumb.png");
     let thumb_path = path.parent().unwrap_or(&path).join(thumb_name);
 
     // Use thumbnail if exists, otherwise fallback to original

@@ -62,9 +62,11 @@ fn set_image(ctx: &ClipboardContext, path: String) {
         // Platforms other than macOS can use RustImageData directly
         #[cfg(not(target_os = "macos"))]
         {
+            use clipboard_rs::common::RustImage;
+
             let rust_image = clipboard_rs::RustImageData::from_dynamic_image(img);
             if let Err(e) = ctx.set_image(rust_image) {
-                eprintln!("Failed to set image to clipboard: {}", e);
+                eprintln!("Failed to set image to clipboard: {e}");
             }
         }
 

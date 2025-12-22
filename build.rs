@@ -18,12 +18,12 @@ fn main() {
             };
 
             if let Err(e) = img.save_with_format(&icon_path, image::ImageFormat::Ico) {
-                println!("cargo:warning=Failed to save logo.ico: {}", e);
+                println!("cargo:warning=Failed to save logo.ico: {e}");
             } else {
                 let mut res = winres::WindowsResource::new();
                 res.set_icon(icon_path.to_str().unwrap());
                 if let Err(e) = res.compile() {
-                    println!("cargo:warning=Failed to compile Windows resource: {}", e);
+                    println!("cargo:warning=Failed to compile Windows resource: {e}");
                 }
             }
         } else {
