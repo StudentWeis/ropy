@@ -1,33 +1,39 @@
 //! A simple clipboard change listener using event-driven watching.
 
 use super::ClipboardEvent;
+use crate::config::Settings;
+use crate::repository::{ClipboardRecord, ClipboardRepository};
+use async_channel::Sender;
 use chrono::Local;
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
 };
+use gpui::AsyncApp;
 use image::DynamicImage;
-use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
     tx: Sender<ClipboardEvent>,
+    image_tx: Sender<DynamicImage>,
     ctx: ClipboardContext,
     last_text: Option<String>,
 }
 
 impl ClipboardMonitor {
-    fn new(tx: Sender<ClipboardEvent>) -> Self {
+    fn new(tx: Sender<ClipboardEvent>, image_tx: Sender<DynamicImage>) -> Self {
         let ctx = ClipboardContext::new().unwrap();
         Self {
             tx,
+            image_tx,
             ctx,
             last_text: None,
         }
     }
 
-    fn save_image(&self, image: DynamicImage) -> Option<String> {
+    fn save_image(image: DynamicImage) -> Option<String> {
         let data_dir = dirs::data_local_dir()?.join("ropy").join("images");
         if !data_dir.exists() {
             std::fs::create_dir_all(&data_dir).ok()?;
@@ -56,62 +62,89 @@ impl ClipboardMonitor {
 
 impl ClipboardHandler for ClipboardMonitor {
     fn on_clipboard_change(&mut self) {
-        // Check for image first
+        // Check for image
         if let Ok(image) = self.ctx.get_image()
             && let Ok(dyn_img) = image.get_dynamic_image()
         {
             // Reset last_text because we have a new image content
             self.last_text = None;
-            if let Some(path) = self.save_image(dyn_img) {
-                let _ = self.tx.send(ClipboardEvent::Image(path));
-            }
+            let _ = self.image_tx.send_blocking(dyn_img);
             return;
         }
 
         // Check for text
-        match self.ctx.get_text() {
-            Ok(value) => {
-                // Don't send duplicate clipboard contents
-                if Some(&value) != self.last_text.as_ref() {
-                    let _ = self.tx.send(ClipboardEvent::Text(value.clone()));
-                    self.last_text = Some(value);
-                }
-            }
-            Err(_err) => {
-                // eprintln!("[clipboard-listener] failed to read clipboard: {err}");
+        if let Ok(value) = self.ctx.get_text() {
+            // Don't send duplicate clipboard contents
+            if Some(&value) != self.last_text.as_ref() {
+                let _ = self.tx.send_blocking(ClipboardEvent::Text(value.clone()));
+                self.last_text = Some(value);
             }
         }
     }
 }
 /// Spawn a clipboard listener thread that watches for clipboard changes.
-pub fn start_clipboard_monitor(tx: Sender<ClipboardEvent>) -> thread::JoinHandle<()> {
+pub fn start_clipboard_monitor(tx: Sender<ClipboardEvent>, async_app: AsyncApp) {
+    let (image_tx, image_rx) = async_channel::unbounded::<DynamicImage>();
+    let monitor = ClipboardMonitor::new(tx.clone(), image_tx);
+    let executor = async_app.background_executor();
+
+    executor
+        .spawn(async move {
+            while let Ok(image) = image_rx.recv().await {
+                if let Some(path) = ClipboardMonitor::save_image(image) {
+                    let _ = tx.send_blocking(ClipboardEvent::Image(path));
+                }
+            }
+        })
+        .detach();
+
     thread::spawn(move || {
-        let monitor = ClipboardMonitor::new(tx);
         let mut watcher = ClipboardWatcherContext::new().unwrap();
         watcher.add_handler(monitor);
         watcher.start_watch();
-    })
+    });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::mpsc::channel;
-    use std::time::Duration;
+pub fn start_clipboard_listener(
+    clipboard_rx: async_channel::Receiver<ClipboardEvent>,
+    shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    repository: Option<Arc<ClipboardRepository>>,
+    settings: Arc<RwLock<Settings>>,
+    async_app: AsyncApp,
+) {
+    let executor = async_app.background_executor().clone();
+    executor
+        .clone()
+        .spawn(async move {
+            while let Ok(event) = clipboard_rx.recv().await {
+                if let Some(ref repo) = repository {
+                    let result = match event {
+                        ClipboardEvent::Text(text) => repo.save_text(text),
+                        ClipboardEvent::Image(path) => repo.save_image_from_path(path),
+                    };
 
-    /// Test that clipboard changes are detected.
-    #[test]
-    fn test_clipboard_change_detection() {
-        let (tx, rx) = channel();
-        let _handle = start_clipboard_monitor(tx);
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        let ctx: ClipboardContext = ClipboardContext::new().unwrap();
-        ctx.set_text("test-poll-1".into()).unwrap();
-        match rx.recv_timeout(Duration::from_millis(500)) {
-            Ok(ClipboardEvent::Text(received)) => assert_eq!(received, "test-poll-1"),
-            _ => {
-                println!("Test skipped: clipboard change event not detected or wrong type");
+                    match result {
+                        Ok(record) => {
+                            let mut guard = match shared_records.lock() {
+                                Ok(g) => g,
+                                Err(poisoned) => poisoned.into_inner(),
+                            };
+                            guard.insert(0, record);
+                            let max_history_records = {
+                                let settings_guard = settings.read().unwrap();
+                                settings_guard.storage.max_history_records
+                            };
+                            if guard.len() > max_history_records {
+                                guard.truncate(max_history_records);
+                                repo.cleanup_old_records(max_history_records).ok();
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[ropy] Failed to save clipboard record: {e}");
+                        }
+                    }
+                }
             }
-        }
-    }
+        })
+        .detach();
 }

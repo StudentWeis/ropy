@@ -13,7 +13,6 @@ use std::sync::{
     Arc, Mutex, RwLock,
     mpsc::{self, channel},
 };
-use std::thread;
 use std::time::Duration;
 
 #[cfg(target_os = "macos")]
@@ -73,57 +72,18 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     }
 }
 
-fn start_clipboard_monitor() -> (mpsc::Receiver<ClipboardEvent>, thread::JoinHandle<()>) {
-    let (clipboard_tx, clipboard_rx) = channel::<ClipboardEvent>();
-    let listener_handle = clipboard::start_clipboard_monitor(clipboard_tx);
-    (clipboard_rx, listener_handle)
+fn start_clipboard_monitor(async_app: AsyncApp) -> async_channel::Receiver<ClipboardEvent> {
+    let (clipboard_tx, clipboard_rx) = async_channel::unbounded::<ClipboardEvent>();
+    clipboard::start_clipboard_monitor(clipboard_tx, async_app);
+    clipboard_rx
 }
 
-fn start_clipboard_listener(
-    clipboard_rx: mpsc::Receiver<ClipboardEvent>,
-    shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    repository: Option<Arc<ClipboardRepository>>,
-    settings: Arc<RwLock<Settings>>,
-) -> thread::JoinHandle<()> {
-    thread::spawn(move || {
-        while let Ok(event) = clipboard_rx.recv() {
-            if let Some(ref repo) = repository {
-                let result = match event {
-                    ClipboardEvent::Text(text) => repo.save_text(text),
-                    ClipboardEvent::Image(path) => repo.save_image_from_path(path),
-                };
-
-                match result {
-                    Ok(record) => {
-                        let mut guard = match shared_records.lock() {
-                            Ok(g) => g,
-                            Err(poisoned) => poisoned.into_inner(),
-                        };
-                        guard.insert(0, record);
-                        let max_history_records = {
-                            let settings_guard = settings.read().unwrap();
-                            settings_guard.storage.max_history_records
-                        };
-                        if guard.len() > max_history_records {
-                            guard.truncate(max_history_records);
-                            repo.cleanup_old_records(max_history_records).ok();
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[ropy] Failed to save clipboard record: {e}");
-                    }
-                }
-            }
-        }
-    })
-}
-
-fn start_hotkey_monitor() -> (mpsc::Receiver<()>, thread::JoinHandle<()>) {
+fn start_hotkey_monitor() -> mpsc::Receiver<()> {
     let (hotkey_tx, hotkey_rx) = channel();
-    let hotkey_handle = crate::gui::hotkey::start_hotkey_listener(move || {
+    crate::gui::hotkey::start_hotkey_listener(move || {
         let _ = hotkey_tx.send(());
     });
-    (hotkey_rx, hotkey_handle)
+    hotkey_rx
 }
 
 fn create_window(
@@ -238,14 +198,16 @@ pub fn launch_app() {
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
-        let (clipboard_rx, _listener_handle) = start_clipboard_monitor();
-        let (hotkey_rx, _hotkey_handle) = start_hotkey_monitor();
-        let copy_tx = crate::clipboard::start_clipboard_writer();
-        let _ = start_clipboard_listener(
+        let async_app = cx.to_async();
+        let clipboard_rx = start_clipboard_monitor(async_app.clone());
+        let hotkey_rx = start_hotkey_monitor();
+        let copy_tx = clipboard::start_clipboard_writer();
+        clipboard::start_clipboard_listener(
             clipboard_rx,
             shared_records.clone(),
             repository.clone(),
             settings.clone(),
+            async_app.clone(),
         );
         let window_handle = create_window(
             cx,
@@ -254,7 +216,6 @@ pub fn launch_app() {
             settings.clone(),
             copy_tx,
         );
-        let async_app = cx.to_async();
         start_hotkey_handler(hotkey_rx, window_handle, async_app.clone());
         start_tray_handler(window_handle, async_app.clone());
 

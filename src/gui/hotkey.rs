@@ -9,7 +9,7 @@ use std::thread;
 /// The manager is kept alive inside the spawned thread so it isn't dropped.
 ///
 /// Returns the JoinHandle so the caller can keep the thread alive or join it when needed.
-pub fn start_hotkey_listener<F>(on_hotkey: F) -> thread::JoinHandle<()>
+pub fn start_hotkey_listener<F>(on_hotkey: F)
 where
     F: Fn() + Send + 'static,
 {
@@ -63,7 +63,7 @@ where
                 }
             }
         }
-    })
+    });
 }
 
 #[cfg(test)]
