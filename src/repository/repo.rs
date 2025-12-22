@@ -11,28 +11,37 @@ use super::models::{ClipboardRecord, ContentType};
 pub struct ClipboardRepository {
     db: Db,
     records_tree: Tree,
+    images_dir: PathBuf,
 }
 
 impl ClipboardRepository {
     /// Create a new repository instance
     pub fn new() -> Result<Self, RepositoryError> {
         // The database file is stored in the user data directory at `ropy/clipboard.db`
-        let data_dir = Self::get_data_dir()?;
-        Self::with_path(data_dir)
+        let db_path = Self::get_db_path()?;
+        let images_dir = dirs::data_local_dir()
+            .ok_or(RepositoryError::DataDirNotFound)?
+            .join("ropy")
+            .join("images");
+        Self::init(db_path, images_dir)
     }
 
-    /// Create a repository with a specific database file path
-    pub fn with_path(path: PathBuf) -> Result<Self, RepositoryError> {
-        let db = sled::open(&path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
+    /// Initialize repository with specific paths
+    pub fn init(db_path: PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
+        let db = sled::open(&db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
         let records_tree = db
             .open_tree("clipboard_records")
             .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
 
-        Ok(Self { db, records_tree })
+        Ok(Self {
+            db,
+            records_tree,
+            images_dir,
+        })
     }
 
     /// Get the data directory path for storing the database file
-    fn get_data_dir() -> Result<PathBuf, RepositoryError> {
+    fn get_db_path() -> Result<PathBuf, RepositoryError> {
         let data_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
@@ -162,12 +171,8 @@ impl ClipboardRepository {
             .clear()
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
         // Clear all image files
-        let data_dir = dirs::data_local_dir()
-            .ok_or(RepositoryError::DataDirNotFound)?
-            .join("ropy")
-            .join("images");
-        if data_dir.exists() {
-            fs::remove_dir_all(&data_dir).ok();
+        if self.images_dir.exists() {
+            fs::remove_dir_all(&self.images_dir).ok();
         }
         Ok(())
     }
@@ -223,7 +228,8 @@ mod tests {
     fn create_test_repo() -> ClipboardRepository {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
-        ClipboardRepository::with_path(db_path).expect("Failed to create test repository")
+        ClipboardRepository::init(db_path, temp_dir.path().join("images"))
+            .expect("Failed to create test repository")
     }
 
     #[test]
