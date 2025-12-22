@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2025-12-22
+
+### 🐛 Bug Fixes
+- Figure the problem of test of clear in repository that deletes user data by @StudentWeis
+
+### 🚜 Refactor
+- Simplify error message formatting across multiple files by @StudentWeis
+- Streamline hotkey listener setup and improve event handling by @StudentWeis
+- Integrate async-channel for clipboard image handling and enhance clipboard listener by @StudentWeis
+- Enhance clipboard image handling and simplify record delete by @StudentWeis
+- Add script to build and package macOS DMG for Ropy by @StudentWeis
+
+### 📚 Documentation
+- Update concurrency documentation to clarify threading model and message passing flow by @StudentWeis
+
 ## [0.1.3] - 2025-12-20
 
 ### 🐛 Bug Fixes
