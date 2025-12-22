@@ -178,6 +178,7 @@ jobs:
 
           stage_dir="$(mktemp -d)"
           cp -R "$app" "$stage_dir/"
+          ln -s /Applications "$stage_dir/Applications"
           hdiutil create -volname "Ropy" -srcfolder "$stage_dir" -ov -format UDZO "$out"
           echo "bundle_dmg=$out" >> "$GITHUB_OUTPUT"
       - name: Build artifacts

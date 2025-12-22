@@ -22,7 +22,7 @@
 
 - Cross-platform support: Windows and macOS.
 - Native GUI application built with Zed's GPUI.
-- Easy-to-use, Lightweight and fast.
+- Easy-to-use, lightweight and fast.
 - Search to quickly find previous records.
 - Auto start on system boot.
 - Keyboard shortcuts for quick access.
@@ -32,6 +32,15 @@
 ## Pre-built Binaries
 
 You can download the latest pre-built binaries from the [Releases](https://github.com/StudentWeis/ropy/releases) page.
+
+### macOS
+
+After downloading the `.dmg` file and dragging Ropy.app to the Applications folder, you may need to remove the quarantine attribute to run the application without issues. Open Terminal and run the following commands:
+
+```sh
+xattr -rc /Applications/Ropy.app
+sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
+```
 
 ## Building from Source
 
