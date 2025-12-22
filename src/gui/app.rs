@@ -78,12 +78,18 @@ fn start_clipboard_monitor(async_app: AsyncApp) -> async_channel::Receiver<Clipb
     clipboard_rx
 }
 
-fn start_hotkey_monitor() -> mpsc::Receiver<()> {
-    let (hotkey_tx, hotkey_rx) = channel();
-    crate::gui::hotkey::start_hotkey_listener(move || {
-        let _ = hotkey_tx.send(());
+fn setup_hotkey_listener(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
+    let fg_executor = async_app.foreground_executor().clone();
+    let bg_executor = async_app.background_executor().clone();
+    crate::gui::hotkey::start_hotkey_listener(fg_executor, bg_executor, move || {
+        let _ = async_app.update(move |cx| {
+            window_handle
+                .update(cx, |_, window, cx| {
+                    window.dispatch_action(Box::new(crate::gui::board::Active), cx)
+                })
+                .ok();
+        });
     });
-    hotkey_rx
 }
 
 fn create_window(
@@ -153,31 +159,6 @@ pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppThe
     }
 }
 
-fn start_hotkey_handler(
-    hotkey_rx: mpsc::Receiver<()>,
-    window_handle: WindowHandle<Root>,
-    async_app: AsyncApp,
-) {
-    let fg_executor = async_app.foreground_executor().clone();
-    let bg_executor = async_app.background_executor().clone();
-    fg_executor
-        .spawn(async move {
-            loop {
-                while let Ok(()) = hotkey_rx.try_recv() {
-                    let _ = async_app.update(move |cx| {
-                        window_handle
-                            .update(cx, |_, window, cx| {
-                                window.dispatch_action(Box::new(crate::gui::board::Active), cx)
-                            })
-                            .ok();
-                    });
-                }
-                bg_executor.timer(Duration::from_millis(16)).await;
-            }
-        })
-        .detach();
-}
-
 pub fn launch_app() {
     Application::new().run(|cx: &mut App| {
         // Set activation policy on macOS
@@ -200,7 +181,6 @@ pub fn launch_app() {
         let shared_records = Arc::new(Mutex::new(initial_records));
         let async_app = cx.to_async();
         let clipboard_rx = start_clipboard_monitor(async_app.clone());
-        let hotkey_rx = start_hotkey_monitor();
         let copy_tx = clipboard::start_clipboard_writer();
         clipboard::start_clipboard_listener(
             clipboard_rx,
@@ -216,7 +196,7 @@ pub fn launch_app() {
             settings.clone(),
             copy_tx,
         );
-        start_hotkey_handler(hotkey_rx, window_handle, async_app.clone());
+        setup_hotkey_listener(window_handle, async_app.clone());
         start_tray_handler(window_handle, async_app.clone());
 
         cx.activate(true);
