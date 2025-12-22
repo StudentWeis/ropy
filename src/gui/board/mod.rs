@@ -23,17 +23,16 @@ use settings::render_settings_content;
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
     records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    filtered_records: Vec<ClipboardRecord>, // The final shown records
     repository: Option<Arc<ClipboardRepository>>,
-    settings: Arc<RwLock<Settings>>,
     focus_handle: FocusHandle,
     _focus_out_subscription: Subscription,
     search_input: Entity<InputState>,
-    selected_index: usize,
     list_state: ListState,
-    filtered_records: Vec<ClipboardRecord>,
+    selected_index: usize,
     copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
-
     // Settings
+    settings: Arc<RwLock<Settings>>,
     show_settings: bool,
     settings_activation_key_input: Entity<InputState>,
     settings_max_history_input: Entity<InputState>,
@@ -271,11 +270,6 @@ impl Render for RopyBoard {
             .on_key_down(cx.listener(Self::on_key_down))
             .child(render_header(cx))
             .child(render_search_input(&self.search_input, cx))
-            .child(self.render_records_list(
-                self.filtered_records.clone(),
-                self.selected_index,
-                self.list_state.clone(),
-                cx,
-            ))
+            .child(self.render_records_list(cx))
     }
 }

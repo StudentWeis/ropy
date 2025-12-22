@@ -3,7 +3,7 @@ use crate::gui::utils::start_window_drag;
 use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
 use gpui::{
-    Context, Entity, ListState, div, img, list,
+    Context, Entity, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
@@ -160,13 +160,10 @@ fn render_text_record(cx: &mut gpui::App, record: &ClipboardRecord) -> gpui::Any
 
 impl RopyBoard {
     /// Render the scrollable list of clipboard records
-    pub fn render_records_list(
-        &self,
-        records: Vec<ClipboardRecord>,
-        selected_index: usize,
-        list_state: ListState,
-        context: &mut Context<'_, RopyBoard>,
-    ) -> impl IntoElement {
+    pub fn render_records_list(&self, context: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+        let records = self.filtered_records.clone();
+        let list_state = self.list_state.clone();
+        let selected_index = self.selected_index;
         let view = context.weak_entity();
         list(list_state, move |index, _window, cx| {
             let record = &records[index];
