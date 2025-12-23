@@ -1,7 +1,7 @@
 use crate::clipboard::{self, ClipboardEvent};
 use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
-use crate::gui::tray::{self, TrayEvent};
+use crate::gui::tray::start_tray_handler;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
@@ -9,11 +9,7 @@ use gpui::{
 };
 use gpui_component::theme::Theme;
 use gpui_component::{Root, ThemeMode};
-use std::sync::{
-    Arc, Mutex, RwLock,
-    mpsc::{self, channel},
-};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, RwLock};
 
 #[cfg(target_os = "macos")]
 use objc2::{class, msg_send, runtime::AnyObject};
@@ -97,7 +93,7 @@ fn create_window(
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
     settings: Arc<RwLock<Settings>>,
-    copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
+    copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -181,7 +177,7 @@ pub fn launch_app() {
         let shared_records = Arc::new(Mutex::new(initial_records));
         let async_app = cx.to_async();
         let clipboard_rx = start_clipboard_monitor(async_app.clone());
-        let copy_tx = clipboard::start_clipboard_writer();
+        let copy_tx = clipboard::start_clipboard_writer(async_app.clone());
         clipboard::start_clipboard_listener(
             clipboard_rx,
             shared_records.clone(),
@@ -229,51 +225,6 @@ fn load_settings() -> Arc<RwLock<Settings>> {
                 eprintln!("[ropy] Failed to save default settings: {err}");
             });
             Arc::new(RwLock::new(default_settings))
-        }
-    }
-}
-
-/// Start the system tray handler
-fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
-    let fg_executor = async_app.foreground_executor().clone();
-    let bg_executor = async_app.background_executor().clone();
-    let (tray_tx, tray_rx) = channel::<TrayEvent>();
-    match tray::init_tray(tray_tx) {
-        Ok(tray) => {
-            println!("[ropy] Tray icon initialized successfully");
-            // Keep tray icon alive for the lifetime of the application
-            Box::leak(Box::new(tray));
-            fg_executor
-                .spawn(async move {
-                    loop {
-                        while let Ok(event) = tray_rx.try_recv() {
-                            match event {
-                                TrayEvent::Show => {
-                                    let _ = async_app.update(move |cx| {
-                                        window_handle
-                                            .update(cx, |_, window, cx| {
-                                                window.dispatch_action(
-                                                    Box::new(crate::gui::board::Active),
-                                                    cx,
-                                                )
-                                            })
-                                            .ok();
-                                    });
-                                }
-                                TrayEvent::Quit => {
-                                    let _ = async_app.update(move |cx| {
-                                        cx.quit();
-                                    });
-                                }
-                            }
-                        }
-                        bg_executor.timer(Duration::from_millis(16)).await;
-                    }
-                })
-                .detach();
-        }
-        Err(e) => {
-            eprintln!("[ropy] Failed to initialize tray icon: {e}");
         }
     }
 }

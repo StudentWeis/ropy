@@ -13,7 +13,7 @@ use gpui::{
 };
 use gpui_component::input::InputState;
 use gpui_component::{ActiveTheme, v_flex};
-use std::sync::{Arc, Mutex, RwLock, mpsc};
+use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
@@ -30,7 +30,7 @@ pub struct RopyBoard {
     search_input: Entity<InputState>,
     list_state: ListState,
     selected_index: usize,
-    copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
+    copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     // Settings
     settings: Arc<RwLock<Settings>>,
     show_settings: bool,
@@ -45,7 +45,7 @@ impl RopyBoard {
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
         settings: Arc<RwLock<Settings>>,
-        copy_tx: mpsc::Sender<crate::clipboard::CopyRequest>,
+        copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -109,7 +109,7 @@ impl RopyBoard {
         };
 
         if let Some(req) = request {
-            let _ = self.copy_tx.send(req);
+            let _ = self.copy_tx.send_blocking(req);
         }
     }
 

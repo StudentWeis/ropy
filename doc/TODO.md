@@ -12,7 +12,6 @@ Windows Bugs:
 
 - WeChat chat box crashes
 - ShareX automatically copies twice
-- Window cannot be dragged.
 
 Bugs:
 

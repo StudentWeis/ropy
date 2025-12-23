@@ -12,7 +12,6 @@ use clipboard_rs::{
 use gpui::AsyncApp;
 use image::DynamicImage;
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -98,11 +97,13 @@ pub fn start_clipboard_monitor(tx: Sender<ClipboardEvent>, async_app: AsyncApp) 
         })
         .detach();
 
-    thread::spawn(move || {
-        let mut watcher = ClipboardWatcherContext::new().unwrap();
-        watcher.add_handler(monitor);
-        watcher.start_watch();
-    });
+    executor
+        .spawn(async move {
+            let mut watcher = ClipboardWatcherContext::new().unwrap();
+            watcher.add_handler(monitor);
+            watcher.start_watch();
+        })
+        .detach();
 }
 
 pub fn start_clipboard_listener(

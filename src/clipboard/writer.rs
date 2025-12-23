@@ -1,26 +1,30 @@
 use super::CopyRequest;
 use clipboard_rs::{Clipboard, ClipboardContext};
+use gpui::AsyncApp;
 use image::ImageReader;
-use std::sync::mpsc::{self, Sender};
-use std::{fs, thread};
+use std::fs;
 
-/// Start a background thread to handle clipboard write requests.
-/// This avoids creating a new ClipboardContext and spawning a new thread for each write.
-pub fn start_clipboard_writer() -> Sender<CopyRequest> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let ctx = ClipboardContext::new().unwrap();
-        while let Ok(req) = rx.recv() {
-            match req {
-                CopyRequest::Text(text) => {
-                    set_text(&ctx, text);
-                }
-                CopyRequest::Image(path) => {
-                    set_image(&ctx, path);
+/// Start a background task to handle clipboard write requests.
+/// This avoids creating a new ClipboardContext and spawning a new task for each write.
+pub fn start_clipboard_writer(async_app: AsyncApp) -> async_channel::Sender<CopyRequest> {
+    let (tx, rx) = async_channel::unbounded();
+    let executor = async_app.background_executor();
+
+    executor
+        .spawn(async move {
+            let ctx = ClipboardContext::new().unwrap();
+            while let Ok(req) = rx.recv().await {
+                match req {
+                    CopyRequest::Text(text) => {
+                        set_text(&ctx, text);
+                    }
+                    CopyRequest::Image(path) => {
+                        set_image(&ctx, path);
+                    }
                 }
             }
-        }
-    });
+        })
+        .detach();
     tx
 }
 
