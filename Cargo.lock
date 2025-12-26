@@ -5532,6 +5532,7 @@ dependencies = [
  "objc2 0.6.3",
  "raw-window-handle",
  "regex",
+ "rust-embed",
  "serde",
  "serde_json",
  "sled",

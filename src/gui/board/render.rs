@@ -1,6 +1,6 @@
+use crate::gui::utils::set_always_on_top;
 #[cfg(target_os = "windows")]
 use crate::gui::utils::start_window_drag;
-use crate::gui::utils::set_always_on_top;
 use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
 use gpui::{
@@ -8,6 +8,7 @@ use gpui::{
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
+use gpui_component::Icon;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, IconName, Sizable, h_flex, v_flex};
@@ -41,8 +42,9 @@ fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
 /// Create the "Clear" button element
 pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
     Button::new("clear-button")
-        .small()
-        .label("Clear All")
+        .ghost()
+        .icon(Icon::empty().path("clear-all.svg"))
+        .tooltip("Clear All")
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
         }))
@@ -89,14 +91,17 @@ pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl Into
                     } else {
                         Button::new("pin-button").ghost()
                     }
-                    .icon(IconName::ArrowUp)
+                    .icon(Icon::empty().path("pin-to-top.svg"))
                     .tooltip("Pin to top")
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.pinned = !this.pinned;
                         set_always_on_top(window, cx, this.pinned);
                         cx.notify();
                     }))
-                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _, _, cx| cx.stop_propagation())),
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    ),
                 )
                 .child(
                     Button::new("settings-button")

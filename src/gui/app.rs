@@ -4,12 +4,37 @@ use crate::gui::board::RopyBoard;
 use crate::gui::tray::start_tray_handler;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
-    App, AppContext, Application, AsyncApp, Bounds, KeyBinding, WindowBounds, WindowHandle,
-    WindowKind, WindowOptions, px, rgb, size,
+    App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions, px, rgb, size,
 };
 use gpui_component::theme::Theme;
 use gpui_component::{Root, ThemeMode};
+use rust_embed::RustEmbed;
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex, RwLock};
+
+#[derive(RustEmbed)]
+#[folder = "assets"]
+pub struct Assets;
+
+impl AssetSource for Assets {
+    fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+        if let Some(data) = Self::get(path) {
+            Ok(Some(data.data))
+        } else {
+            gpui_component_assets::Assets.load(path)
+        }
+    }
+
+    fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
+        let mut list = Self::iter()
+            .filter_map(|p| p.starts_with(path).then(|| p.into()))
+            .collect::<Vec<_>>();
+        let gpui_list = gpui_component_assets::Assets.list(path)?;
+        list.extend(gpui_list);
+        Ok(list)
+    }
+}
 
 #[cfg(target_os = "macos")]
 use objc2::{class, msg_send, runtime::AnyObject};
@@ -156,9 +181,7 @@ pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppThe
 }
 
 pub fn launch_app() {
-    Application::new()
-        .with_assets(gpui_component_assets::Assets)
-        .run(|cx: &mut App| {
+    Application::new().with_assets(Assets).run(|cx: &mut App| {
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();
