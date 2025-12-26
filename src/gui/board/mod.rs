@@ -38,6 +38,7 @@ pub struct RopyBoard {
     settings_max_history_input: Entity<InputState>,
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
     autostart_enabled: bool,
+    pinned: bool,
 }
 
 impl RopyBoard {
@@ -54,9 +55,11 @@ impl RopyBoard {
 
         // Subscribe to focus out events to hide the window
         let _focus_out_subscription =
-            cx.on_focus_out(&focus_handle, window, move |_this, _event, window, cx| {
+            cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window
-                hide_window(window, cx);
+                if !this.pinned {
+                    hide_window(window, cx);
+                }
             });
 
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
@@ -97,6 +100,7 @@ impl RopyBoard {
             settings_max_history_input,
             selected_theme: theme_index,
             autostart_enabled,
+            pinned: false,
         }
     }
 
@@ -268,7 +272,7 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_select_next))
             .on_action(cx.listener(Self::on_confirm_selection))
             .on_key_down(cx.listener(Self::on_key_down))
-            .child(render_header(cx))
+            .child(render_header(self.pinned, cx))
             .child(render_search_input(&self.search_input, cx))
             .child(self.render_records_list(cx))
     }
