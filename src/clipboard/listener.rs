@@ -12,6 +12,8 @@ use clipboard_rs::{
 use gpui::AsyncApp;
 use image::DynamicImage;
 use std::sync::{Arc, Mutex, RwLock};
+use std::hash::{Hasher, Hash};
+use std::collections::hash_map::DefaultHasher;
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -19,6 +21,7 @@ struct ClipboardMonitor {
     image_tx: Sender<DynamicImage>,
     ctx: ClipboardContext,
     last_text: Option<String>,
+    last_image_hash: Option<u64>,
 }
 
 impl ClipboardMonitor {
@@ -29,6 +32,7 @@ impl ClipboardMonitor {
             image_tx,
             ctx,
             last_text: None,
+            last_image_hash: None,
         }
     }
 
@@ -63,12 +67,19 @@ impl ClipboardHandler for ClipboardMonitor {
     fn on_clipboard_change(&mut self) {
         // Check for image
         if let Ok(image) = self.ctx.get_image()
-            && let Ok(dyn_img) = image.get_dynamic_image()
-        {
-            // Reset last_text because we have a new image content
-            self.last_text = None;
-            let _ = self.image_tx.send_blocking(dyn_img);
-            return;
+            && let Ok(dyn_img) = image.get_dynamic_image() {
+            // Calculate image hash
+            let mut hasher = DefaultHasher::new();
+            dyn_img.as_bytes().hash(&mut hasher);
+            let hash = hasher.finish();
+            
+            // Don't send duplicate clipboard contents
+            if Some(&hash) != self.last_image_hash.as_ref() {
+                self.last_image_hash = Some(hash);
+                self.last_text = None;
+                let _ = self.image_tx.send_blocking(dyn_img);
+                return;
+            }
         }
 
         // Check for text
@@ -77,6 +88,7 @@ impl ClipboardHandler for ClipboardMonitor {
             if Some(&value) != self.last_text.as_ref() {
                 let _ = self.tx.send_blocking(ClipboardEvent::Text(value.clone()));
                 self.last_text = Some(value);
+                self.last_image_hash = None;
             }
         }
     }
