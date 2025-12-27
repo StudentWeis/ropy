@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui::{AsyncApp, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
-    Icon, TrayIcon, TrayIconBuilder,
+    Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuId, MenuItem},
 };
 
@@ -25,6 +25,7 @@ pub fn init_tray() -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Err
         .with_menu(Box::new(tray_menu))
         .with_tooltip("Ropy")
         .with_icon(icon)
+        .with_menu_on_left_click(false)
         .build()?;
 
     Ok((tray, show_item.id().clone(), quit_item.id().clone()))
@@ -32,9 +33,7 @@ pub fn init_tray() -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Err
 
 /// Create a simple icon for the tray
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
-    // TODO：Replace with a small icon image
-    let img_data = include_bytes!("../../assets/logo.png");
-    let img = image::load_from_memory(img_data)?;
+    let img = image::open("assets/logo.png")?;
     let rgba = img.to_rgba8().into_raw();
     let width = img.width();
     let height = img.height();
@@ -53,6 +52,7 @@ pub fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp
             fg_executor
                 .spawn(async move {
                     let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                    let tray_channel = TrayIconEvent::receiver();
                     loop {
                         while let Ok(event) = menu_channel.try_recv() {
                             if event.id == show_id {
@@ -69,6 +69,22 @@ pub fn start_tray_handler(window_handle: WindowHandle<Root>, async_app: AsyncApp
                             } else if event.id == quit_id {
                                 let _ = async_app.update(move |cx| {
                                     cx.quit();
+                                });
+                            }
+                        }
+                        while let Ok(event) = tray_channel.try_recv() {
+                            if let TrayIconEvent::Click { button, .. } = event
+                                && button == tray_icon::MouseButton::Left
+                            {
+                                let _ = async_app.update(move |cx| {
+                                    window_handle
+                                        .update(cx, |_, window, cx| {
+                                            window.dispatch_action(
+                                                Box::new(crate::gui::board::Active),
+                                                cx,
+                                            )
+                                        })
+                                        .ok();
                                 });
                             }
                         }

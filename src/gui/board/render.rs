@@ -1,3 +1,4 @@
+use crate::gui::utils::set_always_on_top;
 #[cfg(target_os = "windows")]
 use crate::gui::utils::start_window_drag;
 use crate::repository::ClipboardRecord;
@@ -7,9 +8,10 @@ use gpui::{
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
+use gpui_component::Icon;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
+use gpui_component::{ActiveTheme, IconName, Sizable, h_flex, v_flex};
 use regex::Regex;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -40,8 +42,9 @@ fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
 /// Create the "Clear" button element
 pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
     Button::new("clear-button")
-        .small()
-        .label("Clear All")
+        .ghost()
+        .icon(Icon::empty().path("clear-all.svg"))
+        .tooltip("Clear All")
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
         }))
@@ -61,7 +64,8 @@ pub(super) fn format_clipboard_content(record: &ClipboardRecord) -> String {
 }
 
 /// Render the header section with title and settings/clear buttons
-pub fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+    let is_pinned = pinned;
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
     #[cfg(target_os = "windows")]
@@ -82,10 +86,28 @@ pub fn render_header(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
                 .gap_2()
                 .items_center()
                 .child(
+                    if is_pinned {
+                        Button::new("pin-button").primary()
+                    } else {
+                        Button::new("pin-button").ghost()
+                    }
+                    .icon(Icon::empty().path("pin-to-top.svg"))
+                    .tooltip("Pin to top")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.pinned = !this.pinned;
+                        set_always_on_top(window, cx, this.pinned);
+                        cx.notify();
+                    }))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    ),
+                )
+                .child(
                     Button::new("settings-button")
-                        .large()
                         .ghost()
-                        .label("⚙")
+                        .tooltip("Settings")
+                        .icon(IconName::Settings)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_settings = true;
                             window.focus(&this.focus_handle);
