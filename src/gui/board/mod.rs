@@ -62,7 +62,8 @@ impl RopyBoard {
                 }
             });
 
-        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search ... "));
+        let search_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Use / to search ... "));
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.));
 
         let (max_history_records, activation_key, theme_index) = {
@@ -167,8 +168,10 @@ impl RopyBoard {
             }
         };
         self.copy_to_clipboard(&content, &content_type);
-        hide_window(window, cx);
-        if matches!(content_type, ContentType::Image) || index != 0 {
+        if !self.pinned {
+            hide_window(window, cx);
+        }
+        if index != 0 {
             self.delete_record(id);
         }
     }
