@@ -1,6 +1,6 @@
 //! A simple clipboard change listener using event-driven watching.
 
-use super::ClipboardEvent;
+use super::{ClipboardEvent, LastCopyState};
 use crate::config::Settings;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use async_channel::Sender;
@@ -19,26 +19,32 @@ struct ClipboardMonitor {
     tx: Sender<ClipboardEvent>,
     image_tx: Sender<DynamicImage>,
     ctx: ClipboardContext,
-    last_text: Option<String>,
-    last_image_hash: Option<u64>,
+    last_copy: Arc<Mutex<LastCopyState>>,
 }
 
 impl ClipboardMonitor {
-    fn new(tx: Sender<ClipboardEvent>, image_tx: Sender<DynamicImage>) -> Self {
+    fn new(
+        tx: Sender<ClipboardEvent>,
+        image_tx: Sender<DynamicImage>,
+        last_copy: Arc<Mutex<LastCopyState>>,
+    ) -> Self {
         let ctx = ClipboardContext::new().unwrap();
         Self {
             tx,
             image_tx,
+            last_copy,
             ctx,
-            last_text: None,
-            last_image_hash: None,
         }
     }
 }
 
 impl ClipboardHandler for ClipboardMonitor {
-    /// Don't send duplicate clipboard contents
+    // Don't send duplicate clipboard contents
     fn on_clipboard_change(&mut self) {
+        let mut last_copy_guard = match self.last_copy.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         // Check for image
         if let Ok(image) = self.ctx.get_image()
             && let Ok(dyn_img) = image.get_dynamic_image()
@@ -46,29 +52,29 @@ impl ClipboardHandler for ClipboardMonitor {
             // Calculate image hash
             let mut hasher = DefaultHasher::new();
             dyn_img.as_bytes().hash(&mut hasher);
-            let hash = hasher.finish();
-            if Some(&hash) != self.last_image_hash.as_ref() {
-                let _ = self.image_tx.send_blocking(dyn_img);
-                self.last_image_hash = Some(hash);
-                self.last_text = None;
-                return;
-            }
-        }
+            let hash: u64 = hasher.finish();
 
-        // Check for text
-        if let Ok(value) = self.ctx.get_text()
-            && Some(&value) != self.last_text.as_ref()
+            if !matches!(*last_copy_guard, LastCopyState::Image(h) if h == hash) {
+                let _ = self.image_tx.send_blocking(dyn_img);
+                *last_copy_guard = LastCopyState::Image(hash);
+            }
+        } else if let Ok(text) = self.ctx.get_text()
+            && !matches!(*last_copy_guard, LastCopyState::Text(ref last_text) if *last_text == text)
         {
-            let _ = self.tx.send_blocking(ClipboardEvent::Text(value.clone()));
-            self.last_text = Some(value);
-            self.last_image_hash = None;
+            let _ = self.tx.send_blocking(ClipboardEvent::Text(text.clone()));
+            *last_copy_guard = LastCopyState::Text(text);
         }
     }
 }
+
 /// Spawn a clipboard listener thread that watches for clipboard changes.
-pub fn start_clipboard_monitor(tx: Sender<ClipboardEvent>, async_app: AsyncApp) {
+pub fn start_clipboard_monitor(
+    tx: Sender<ClipboardEvent>,
+    async_app: AsyncApp,
+    last_copy: Arc<Mutex<LastCopyState>>,
+) {
     let (image_tx, image_rx) = async_channel::unbounded::<DynamicImage>();
-    let monitor = ClipboardMonitor::new(tx.clone(), image_tx);
+    let monitor = ClipboardMonitor::new(tx.clone(), image_tx, last_copy);
     let executor = async_app.background_executor();
 
     executor

@@ -2,6 +2,7 @@ mod actions;
 mod render;
 mod settings;
 
+use crate::clipboard::LastCopyState;
 use crate::config::Settings;
 use crate::gui::hide_window;
 use crate::repository::models::ContentType;
@@ -31,6 +32,7 @@ pub struct RopyBoard {
     list_state: ListState,
     selected_index: usize,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
+    last_copy: Arc<Mutex<LastCopyState>>,
     // Settings
     settings: Arc<RwLock<Settings>>,
     show_settings: bool,
@@ -46,6 +48,7 @@ impl RopyBoard {
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
         settings: Arc<RwLock<Settings>>,
+        last_copy: Arc<Mutex<LastCopyState>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -93,6 +96,7 @@ impl RopyBoard {
             _focus_out_subscription,
             search_input,
             selected_index: 0,
+            last_copy,
             list_state,
             filtered_records: Vec::new(),
             copy_tx,
@@ -119,13 +123,25 @@ impl RopyBoard {
     }
 
     /// Clear clipboard history
-    pub fn clear_history(&mut self) {
+    fn clear_history(&mut self) {
         if let Some(ref repo) = self.repository {
             if let Err(e) = repo.clear() {
                 eprintln!("[ropy] Failed to clear clipboard history: {e}");
             } else {
                 let mut guard = self.records.lock().unwrap();
                 guard.clear();
+            }
+        }
+    }
+
+    /// Clear last copy state
+    fn clear_last_copy_state(&mut self) {
+        match self.last_copy.lock() {
+            Ok(mut guard) => {
+                *guard = LastCopyState::Text(String::new());
+            }
+            Err(poisoned) => {
+                *poisoned.into_inner() = LastCopyState::Text(String::new());
             }
         }
     }

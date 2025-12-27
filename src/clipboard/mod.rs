@@ -16,3 +16,8 @@ pub enum CopyRequest {
     Text(String),
     Image(String),
 }
+
+pub enum LastCopyState {
+    Text(String),
+    Image(u64),
+}

@@ -47,6 +47,7 @@ pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoE
         .tooltip("Clear All")
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
+            this.clear_last_copy_state();
         }))
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
@@ -275,6 +276,7 @@ impl RopyBoard {
                                             view_delete
                                                 .update(cx, |this, cx| {
                                                     this.delete_record(record_id);
+                                                    // TODO Delete associated last copy state
                                                     cx.notify();
                                                 })
                                                 .ok();

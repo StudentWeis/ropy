@@ -1,4 +1,4 @@
-use crate::clipboard::{self, ClipboardEvent};
+use crate::clipboard::{self, ClipboardEvent, LastCopyState};
 use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
 use crate::gui::tray::start_tray_handler;
@@ -93,9 +93,12 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     }
 }
 
-fn start_clipboard_monitor(async_app: AsyncApp) -> async_channel::Receiver<ClipboardEvent> {
+fn start_clipboard_monitor(
+    async_app: AsyncApp,
+    last_copy: Arc<Mutex<LastCopyState>>,
+) -> async_channel::Receiver<ClipboardEvent> {
     let (clipboard_tx, clipboard_rx) = async_channel::unbounded::<ClipboardEvent>();
-    clipboard::start_clipboard_monitor(clipboard_tx, async_app);
+    clipboard::start_clipboard_monitor(clipboard_tx, async_app, last_copy);
     clipboard_rx
 }
 
@@ -118,6 +121,7 @@ fn create_window(
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
     settings: Arc<RwLock<Settings>>,
+    last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
@@ -136,8 +140,9 @@ fn create_window(
             let view = cx.new(|cx| {
                 RopyBoard::new(
                     shared_records,
-                    repository.clone(),
-                    settings.clone(),
+                    repository,
+                    settings,
+                    last_copy,
                     copy_tx,
                     window,
                     cx,
@@ -200,8 +205,9 @@ pub fn launch_app() {
         let repository = initialize_repository();
         let initial_records = load_initial_records(&repository);
         let shared_records = Arc::new(Mutex::new(initial_records));
+        let last_copy = Arc::new(Mutex::new(LastCopyState::Text("".to_string())));
         let async_app = cx.to_async();
-        let clipboard_rx = start_clipboard_monitor(async_app.clone());
+        let clipboard_rx = start_clipboard_monitor(async_app.clone(), last_copy.clone());
         let copy_tx = clipboard::start_clipboard_writer(async_app.clone());
         clipboard::start_clipboard_listener(
             clipboard_rx,
@@ -215,6 +221,7 @@ pub fn launch_app() {
             shared_records,
             repository.clone(),
             settings.clone(),
+            last_copy.clone(),
             copy_tx,
         );
         setup_hotkey_listener(window_handle, async_app.clone());

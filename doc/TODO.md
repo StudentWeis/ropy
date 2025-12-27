@@ -11,11 +11,6 @@
 Windows Bugs:
 
 - WeChat chat box crashes
-- ShareX automatically copies twice
-
-Bugs:
-
-- After Clear, the listener should also be cleared, otherwise it will confuse users.
 
 # NOT TODO
 
