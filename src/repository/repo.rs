@@ -110,7 +110,6 @@ impl ClipboardRepository {
     }
 
     /// Get a record by ID
-    #[allow(dead_code)]
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
         if let Some(value) = self
@@ -157,6 +156,16 @@ impl ClipboardRepository {
 
     /// Delete a record
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
+        // If it's an image record, delete the associated image file
+        let record = self.get_by_id(id)?;
+        if let Some(rec) = record
+            && rec.content_type == ContentType::Image
+        {
+            // Delete original image file and thumbnail
+            let _ = fs::remove_file(&rec.content);
+            let thumb_path = rec.content.replace(".png", "_thumb.png");
+            let _ = fs::remove_file(thumb_path);
+        }
         let key = id.to_be_bytes();
         let removed = self
             .records_tree

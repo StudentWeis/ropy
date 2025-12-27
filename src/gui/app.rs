@@ -64,7 +64,7 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
 fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<ClipboardRecord> {
     repository
         .as_ref()
-        .and_then(|repo| repo.get_recent(50).ok())
+        .and_then(|repo| repo.get_recent(50).ok()) // TODO make configurable
         .unwrap_or_default()
 }
 
@@ -181,7 +181,7 @@ pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppThe
 }
 
 pub fn launch_app() {
-    Application::new().with_assets(Assets).run(|cx: &mut App| {
+    Application::new().with_assets(Assets).run(|cx| {
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();

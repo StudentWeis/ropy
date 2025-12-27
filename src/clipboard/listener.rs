@@ -4,16 +4,15 @@ use super::ClipboardEvent;
 use crate::config::Settings;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use async_channel::Sender;
-use chrono::Local;
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
 };
 use gpui::AsyncApp;
 use image::DynamicImage;
-use std::sync::{Arc, Mutex, RwLock};
-use std::hash::{Hasher, Hash};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex, RwLock};
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -35,61 +34,34 @@ impl ClipboardMonitor {
             last_image_hash: None,
         }
     }
-
-    fn save_image(image: DynamicImage) -> Option<String> {
-        let data_dir = dirs::data_local_dir()?.join("ropy").join("images");
-        if !data_dir.exists() {
-            std::fs::create_dir_all(&data_dir).ok()?;
-        }
-
-        let now = Local::now();
-        let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
-        let file_name = format!("{id}.png");
-        let file_path = data_dir.join(&file_name);
-
-        image
-            .save_with_format(&file_path, image::ImageFormat::Png)
-            .ok()?;
-
-        // Save thumbnail
-        let thumb_file_name = format!("{id}_thumb.png");
-        let thumb_file_path = data_dir.join(&thumb_file_name);
-        let thumb = image.thumbnail(300, 300);
-        thumb
-            .save_with_format(&thumb_file_path, image::ImageFormat::Png)
-            .ok()?;
-
-        Some(file_path.to_string_lossy().to_string())
-    }
 }
 
 impl ClipboardHandler for ClipboardMonitor {
+    /// Don't send duplicate clipboard contents
     fn on_clipboard_change(&mut self) {
         // Check for image
         if let Ok(image) = self.ctx.get_image()
-            && let Ok(dyn_img) = image.get_dynamic_image() {
+            && let Ok(dyn_img) = image.get_dynamic_image()
+        {
             // Calculate image hash
             let mut hasher = DefaultHasher::new();
             dyn_img.as_bytes().hash(&mut hasher);
             let hash = hasher.finish();
-            
-            // Don't send duplicate clipboard contents
             if Some(&hash) != self.last_image_hash.as_ref() {
+                let _ = self.image_tx.send_blocking(dyn_img);
                 self.last_image_hash = Some(hash);
                 self.last_text = None;
-                let _ = self.image_tx.send_blocking(dyn_img);
                 return;
             }
         }
 
         // Check for text
-        if let Ok(value) = self.ctx.get_text() {
-            // Don't send duplicate clipboard contents
-            if Some(&value) != self.last_text.as_ref() {
-                let _ = self.tx.send_blocking(ClipboardEvent::Text(value.clone()));
-                self.last_text = Some(value);
-                self.last_image_hash = None;
-            }
+        if let Ok(value) = self.ctx.get_text()
+            && Some(&value) != self.last_text.as_ref()
+        {
+            let _ = self.tx.send_blocking(ClipboardEvent::Text(value.clone()));
+            self.last_text = Some(value);
+            self.last_image_hash = None;
         }
     }
 }
@@ -102,7 +74,7 @@ pub fn start_clipboard_monitor(tx: Sender<ClipboardEvent>, async_app: AsyncApp) 
     executor
         .spawn(async move {
             while let Ok(image) = image_rx.recv().await {
-                if let Some(path) = ClipboardMonitor::save_image(image) {
+                if let Some(path) = super::save_image(image) {
                     let _ = tx.send_blocking(ClipboardEvent::Image(path));
                 }
             }

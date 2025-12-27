@@ -2,7 +2,6 @@ use super::CopyRequest;
 use clipboard_rs::{Clipboard, ClipboardContext};
 use gpui::AsyncApp;
 use image::ImageReader;
-use std::fs;
 
 /// Start a background task to handle clipboard write requests.
 /// This avoids creating a new ClipboardContext and spawning a new task for each write.
@@ -73,10 +72,5 @@ fn set_image(ctx: &ClipboardContext, path: String) {
                 eprintln!("Failed to set image to clipboard: {e}");
             }
         }
-
-        // Delete original image file and thumbnail
-        let _ = fs::remove_file(&path);
-        let thumb_path = path.replace(".png", "_thumb.png");
-        let _ = fs::remove_file(thumb_path);
     }
 }

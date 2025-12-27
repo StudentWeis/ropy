@@ -17,28 +17,32 @@ pub fn start_hotkey_listener<F>(
 {
     fg_executor
         .spawn(async move {
-            let manager = GlobalHotKeyManager::new().expect("Failed to create GlobalHotKeyManager");
-            let hotkey = HotKey::new(Some(Modifiers::SHIFT | Modifiers::CONTROL), Code::KeyD);
-            if let Err(err) = manager.register(hotkey) {
-                eprintln!(
-                "Failed to register hotkey Ctrl+Shift+D: {err}. The hotkey listener will not be available."
-            );
-            }
-
+            let _manage_handle = refister_hotkey();
             let receiver = GlobalHotKeyEvent::receiver();
-
             loop {
                 // Poll for hotkey events
                 if let Ok(event) = receiver.try_recv()
-                    && event.state() == HotKeyState::Pressed {
-                        on_hotkey();
-                    }
+                    && event.state() == HotKeyState::Pressed
+                {
+                    on_hotkey();
+                }
 
                 // Small sleep to avoid busy waiting
                 bg_executor.timer(Duration::from_millis(50)).await;
             }
         })
         .detach();
+}
+
+fn refister_hotkey() -> GlobalHotKeyManager {
+    let manager = GlobalHotKeyManager::new().expect("Failed to create GlobalHotKeyManager");
+    let hotkey = HotKey::new(Some(Modifiers::SHIFT | Modifiers::CONTROL), Code::KeyD);
+    if let Err(err) = manager.register(hotkey) {
+        eprintln!(
+            "Failed to register hotkey Ctrl+Shift+D: {err}. The hotkey listener will not be available."
+        );
+    }
+    manager
 }
 
 #[cfg(test)]
