@@ -14,6 +14,10 @@
 <p align="center">A cross-platform native clipboard manager in pure Rust.</p>
 
 <p align="center">
+English | <a href="README_ZH.md">简体中文</a>
+</p>
+
+<p align="center">
 <img src="https://s2.loli.net/2025/12/19/iqnFu2pdNogyA7P.png" alt="Ropy Dark" width="45%">
 <img src="https://s2.loli.net/2025/12/19/OaiXxnfGQLRvH5T.png" alt="Ropy Light" width="45%">
 </p>
