@@ -38,6 +38,7 @@ impl RopyBoard {
         self.selected_index = 0;
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.show_settings = false;
+        window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
         active_window(window, cx);
     }
 

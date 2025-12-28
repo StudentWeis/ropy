@@ -123,6 +123,7 @@ fn create_window(
     settings: Arc<RwLock<Settings>>,
     last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
+    is_silent: bool,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
     cx.open_window(
@@ -130,6 +131,7 @@ fn create_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
             titlebar: None,
+            show: !is_silent, // 静默启动时窗口直接隐藏
             ..Default::default()
         },
         |window, cx| {
@@ -186,7 +188,10 @@ pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppThe
 }
 
 pub fn launch_app() {
-    Application::new().with_assets(Assets).run(|cx| {
+    let args: Vec<String> = std::env::args().collect();
+    let is_silent = args.iter().any(|arg| arg == "--silent");
+
+    Application::new().with_assets(Assets).run(move |cx| {
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();
@@ -223,11 +228,14 @@ pub fn launch_app() {
             settings.clone(),
             last_copy.clone(),
             copy_tx,
+            is_silent,
         );
         setup_hotkey_listener(window_handle, async_app.clone());
         start_tray_handler(window_handle, async_app.clone());
 
-        cx.activate(true);
+        if !is_silent {
+            cx.activate(true);
+        }
     });
 }
 
