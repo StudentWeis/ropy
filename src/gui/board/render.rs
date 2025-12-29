@@ -40,11 +40,14 @@ fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
 }
 
 /// Create the "Clear" button element
-pub(super) fn create_clear_button(cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+pub(super) fn create_clear_button(
+    board: &RopyBoard,
+    cx: &mut Context<'_, RopyBoard>,
+) -> impl IntoElement {
     Button::new("clear-button")
         .ghost()
         .icon(Icon::empty().path("clear-all.svg"))
-        .tooltip("Clear All")
+        .tooltip(board.i18n.t("clear_all"))
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
             this.clear_last_copy_state();
@@ -65,8 +68,13 @@ pub(super) fn format_clipboard_content(record: &ClipboardRecord) -> String {
 }
 
 /// Render the header section with title and settings/clear buttons
-pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
-    let is_pinned = pinned;
+pub fn render_header(board: &RopyBoard, cx: &mut Context<'_, RopyBoard>) -> impl IntoElement {
+    let is_pinned = board.pinned;
+    let pin_tooltip = if is_pinned {
+        board.i18n.t("unpin")
+    } else {
+        board.i18n.t("pin")
+    };
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
     #[cfg(target_os = "windows")]
@@ -80,7 +88,7 @@ pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl Into
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("Ropy"),
+                .child(board.i18n.t("app_name")),
         )
         .child(
             h_flex()
@@ -93,7 +101,7 @@ pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl Into
                         Button::new("pin-button").ghost()
                     }
                     .icon(Icon::empty().path("pin-to-top.svg"))
-                    .tooltip("Pin to top")
+                    .tooltip(pin_tooltip)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.pinned = !this.pinned;
                         set_always_on_top(window, cx, this.pinned);
@@ -116,7 +124,7 @@ pub fn render_header(pinned: bool, cx: &mut Context<'_, RopyBoard>) -> impl Into
                         }))
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
                 )
-                .child(create_clear_button(cx)),
+                .child(create_clear_button(board, cx)),
         )
 }
 

@@ -1,3 +1,4 @@
+use crate::i18n::{I18n, Language};
 use gpui::{
     Context, div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
@@ -11,20 +12,60 @@ use super::RopyBoard;
 #[cfg(target_os = "windows")]
 use crate::gui::utils::start_window_drag;
 
-/// Render theme selection buttons
-fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> impl IntoElement {
-    let themes = [("Light", 0), ("Dark", 1), ("System", 2)];
+/// Render language selection buttons
+/// Note: Uses index-based selection from Language::all() which maintains a stable order.
+/// The order is: English, ChineseSimplified
+fn render_language_selector(
+    board: &mut RopyBoard,
+    cx: &mut Context<RopyBoard>,
+) -> impl IntoElement {
+    let languages = Language::all();
 
     h_flex()
         .gap_2()
         .items_center()
-        .children(themes.iter().map(|(name, index)| {
-            let is_selected = board.selected_theme == *index;
-            let index_val = *index;
+        .children(languages.iter().enumerate().map(|(index, lang)| {
+            let is_selected = board.selected_language == index;
+            let lang_copy = *lang; // Copy the language for the closure
 
-            let mut button = Button::new(("theme-button", index_val))
+            let mut button = Button::new(("language-button", index))
                 .small()
-                .label(*name);
+                .label(lang.display_name());
+
+            button = if is_selected {
+                button.primary()
+            } else {
+                button.ghost()
+            };
+
+            button.on_click(cx.listener(move |board, _, window, cx| {
+                board.selected_language = index;
+                // Update search placeholder immediately for instant feedback
+                if let Ok(temp_i18n) = I18n::new(lang_copy) {
+                    board.search_input.update(cx, |input, cx| {
+                        input.set_placeholder(temp_i18n.t("search_placeholder"), window, cx);
+                    });
+                }
+                cx.notify();
+            }))
+        }))
+}
+
+/// Render theme selection buttons
+fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> impl IntoElement {
+    let theme_names = vec![
+        board.i18n.t("settings_theme_light"),
+        board.i18n.t("settings_theme_dark"),
+        board.i18n.t("settings_theme_system"),
+    ];
+
+    h_flex()
+        .gap_2()
+        .items_center()
+        .children(theme_names.into_iter().enumerate().map(|(index, name)| {
+            let is_selected = board.selected_theme == index;
+
+            let mut button = Button::new(("theme-button", index)).small().label(name);
 
             button = if is_selected {
                 button.primary()
@@ -33,7 +74,7 @@ fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> 
             };
 
             button.on_click(cx.listener(move |board, _, _window, cx| {
-                board.selected_theme = index_val;
+                board.selected_theme = index;
                 cx.notify();
             }))
         }))
@@ -52,7 +93,7 @@ pub(super) fn render_settings_content(
             Button::new("cancel-button")
                 .small()
                 .ghost()
-                .label("Cancel")
+                .label(board.i18n.t("settings_cancel"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     // Clear input fields
                     board.settings_max_history_input.update(cx, |input, cx| {
@@ -70,7 +111,7 @@ pub(super) fn render_settings_content(
         .child(
             Button::new("save-button")
                 .small()
-                .label("Save")
+                .label(board.i18n.t("settings_save"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_settings(cx, window);
                 })),
@@ -82,7 +123,7 @@ pub(super) fn render_settings_content(
         .child(
             div()
                 .text_color(cx.theme().foreground)
-                .child("Max History Records"),
+                .child(board.i18n.t("settings_max_history")),
         )
         .child(
             Input::new(&board.settings_max_history_input)
@@ -100,7 +141,7 @@ pub(super) fn render_settings_content(
             div()
                 .text_xs()
                 .text_color(cx.theme().foreground)
-                .child("Activation Key"),
+                .child(board.i18n.t("settings_activation_key")),
         )
         .child(
             Input::new(&board.settings_activation_key_input)
@@ -119,9 +160,21 @@ pub(super) fn render_settings_content(
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("Hotkey Configuration"),
+                .child(board.i18n.t("settings_hotkey")),
         )
         .child(activation_key_label);
+
+    let language_section = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child(board.i18n.t("settings_language")),
+        )
+        .child(render_language_selector(board, cx));
+
     let theme_section = v_flex()
         .gap_2()
         .child(
@@ -129,7 +182,7 @@ pub(super) fn render_settings_content(
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("Theme"),
+                .child(board.i18n.t("settings_theme")),
         )
         .child(render_theme_selector(board, cx));
     let storage_section = v_flex()
@@ -139,7 +192,7 @@ pub(super) fn render_settings_content(
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("Storage Configuration"),
+                .child(board.i18n.t("settings_storage")),
         )
         .child(max_history_input_field);
     let autostart_section = v_flex()
@@ -149,7 +202,7 @@ pub(super) fn render_settings_content(
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("System"),
+                .child(board.i18n.t("settings_system")),
         )
         .child(
             h_flex()
@@ -158,15 +211,17 @@ pub(super) fn render_settings_content(
                 .child(
                     div()
                         .text_color(cx.theme().foreground)
-                        .child("Launch at system startup"),
+                        .child(board.i18n.t("settings_autostart")),
                 )
                 .child({
                     let mut button = Button::new("autostart-toggle").small();
 
                     button = if board.autostart_enabled {
-                        button.primary().label("ON")
+                        button
+                            .primary()
+                            .label(board.i18n.t("settings_autostart_on"))
                     } else {
-                        button.ghost().label("OFF")
+                        button.ghost().label(board.i18n.t("settings_autostart_off"))
                     };
 
                     button.on_click(cx.listener(|board, _, _, cx| {
@@ -183,7 +238,7 @@ pub(super) fn render_settings_content(
             Button::new("back-button")
                 .small()
                 .ghost()
-                .label("←")
+                .label(board.i18n.t("settings_back"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.show_settings = false;
                     window.focus(&board.focus_handle);
@@ -196,7 +251,7 @@ pub(super) fn render_settings_content(
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child("Ropy Settings"),
+                .child(board.i18n.t("settings_title")),
         )
         .child(div().w(px(55.)));
 
@@ -212,6 +267,7 @@ pub(super) fn render_settings_content(
             v_flex()
                 .gap_4()
                 .flex_1()
+                .child(language_section)
                 .child(theme_section)
                 // .child(hotkey_section)
                 .child(storage_section)
