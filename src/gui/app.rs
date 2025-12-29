@@ -54,10 +54,14 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     }
 }
 
-fn load_initial_records(repository: &Option<Arc<ClipboardRepository>>) -> Vec<ClipboardRecord> {
+fn load_initial_records(
+    repository: &Option<Arc<ClipboardRepository>>,
+    settings: &Arc<RwLock<Settings>>,
+) -> Vec<ClipboardRecord> {
+    let max_records = settings.read().unwrap().storage.max_history_records;
     repository
         .as_ref()
-        .and_then(|repo| repo.get_recent(50).ok()) // TODO make configurable
+        .and_then(|repo| repo.get_recent(max_records).ok())
         .unwrap_or_default()
 }
 
@@ -206,7 +210,7 @@ pub fn launch_app() {
         sync_autostart_on_launch(&settings);
 
         let repository = initialize_repository();
-        let initial_records = load_initial_records(&repository);
+        let initial_records = load_initial_records(&repository, &settings);
         let shared_records = Arc::new(Mutex::new(initial_records));
         let last_copy = Arc::new(Mutex::new(LastCopyState::Text("".to_string())));
         let async_app = cx.to_async();

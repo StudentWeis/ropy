@@ -72,14 +72,7 @@ pub fn start_tray_handler(
                         while let Ok(event) = menu_channel.try_recv() {
                             if event.id == show_id {
                                 let _ = async_app.update(move |cx| {
-                                    window_handle
-                                        .update(cx, |_, window, cx| {
-                                            window.dispatch_action(
-                                                Box::new(crate::gui::board::Active),
-                                                cx,
-                                            )
-                                        })
-                                        .ok();
+                                    send_active_action(window_handle, cx);
                                 });
                             } else if event.id == quit_id {
                                 let _ = async_app.update(move |cx| {
@@ -92,14 +85,7 @@ pub fn start_tray_handler(
                                 && button == tray_icon::MouseButton::Left
                             {
                                 let _ = async_app.update(move |cx| {
-                                    window_handle
-                                        .update(cx, |_, window, cx| {
-                                            window.dispatch_action(
-                                                Box::new(crate::gui::board::Active),
-                                                cx,
-                                            )
-                                        })
-                                        .ok();
+                                    send_active_action(window_handle, cx);
                                 });
                             }
                         }
@@ -112,6 +98,15 @@ pub fn start_tray_handler(
             eprintln!("[ropy] Failed to initialize tray icon: {e}");
         }
     }
+}
+
+/// Send the active action to the main window
+fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
+    window_handle
+        .update(cx, |_, window, cx| {
+            window.dispatch_action(Box::new(crate::gui::board::Active), cx)
+        })
+        .ok();
 }
 
 #[cfg(test)]
