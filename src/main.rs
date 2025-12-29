@@ -3,6 +3,7 @@
 mod clipboard;
 mod config;
 mod gui;
+mod i18n;
 mod repository;
 
 #[cfg(target_os = "windows")]

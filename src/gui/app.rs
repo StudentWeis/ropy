@@ -231,7 +231,7 @@ pub fn launch_app() {
             is_silent,
         );
         setup_hotkey_listener(window_handle, async_app.clone());
-        start_tray_handler(window_handle, async_app.clone());
+        start_tray_handler(window_handle, async_app.clone(), settings.clone());
 
         if !is_silent {
             cx.activate(true);

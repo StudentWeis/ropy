@@ -1,0 +1,52 @@
+# English translations for Ropy
+
+# Application
+app_name = "Ropy"
+app_description = "A clipboard manager built with Rust and GPUI"
+
+# Tray menu
+tray_show = "Show"
+tray_quit = "Quit"
+
+# Main window
+search_placeholder = "Use / to search ... "
+no_records = "No clipboard records"
+clear_all = "Clear All"
+pin = "Pin"
+unpin = "Unpin"
+
+# Settings
+settings_title = "Ropy Settings"
+settings_back = "←"
+settings_cancel = "Cancel"
+settings_save = "Save"
+
+# Settings sections
+settings_language = "Language"
+settings_language_description = "Select your preferred language"
+
+settings_theme = "Theme"
+settings_theme_light = "Light"
+settings_theme_dark = "Dark"
+settings_theme_system = "System"
+
+settings_hotkey = "Hotkey Configuration"
+settings_activation_key = "Activation Key"
+
+settings_storage = "Storage Configuration"
+settings_max_history = "Max History Records"
+
+settings_system = "System"
+settings_autostart = "Launch at system startup"
+settings_autostart_on = "ON"
+settings_autostart_off = "OFF"
+
+# Content types
+content_type_text = "Text"
+content_type_image = "Image"
+content_type_file = "File"
+
+# Messages
+message_copied = "Copied to clipboard"
+message_deleted = "Record deleted"
+message_cleared = "History cleared"
