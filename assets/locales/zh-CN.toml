@@ -32,6 +32,8 @@ settings_theme_system = "跟随系统"
 
 settings_hotkey = "快捷键配置"
 settings_activation_key = "激活快捷键"
+settings_hotkey_hint = "格式: control+shift+d 或 cmd+shift+v"
+settings_hotkey_invalid = "快捷键格式错误"
 
 settings_storage = "存储配置"
 settings_max_history = "最大历史记录数"

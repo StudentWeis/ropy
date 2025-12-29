@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo.png" alt="Ropy Logo" width="20%"></p>
+<p align="center"><img src="../assets/logo.png" alt="Ropy Logo" width="20%"></p>
 
 <h2 align="center"><em><strong>R</strong>opy <strong>O</strong>rganizes <strong>P</strong>revious <strong>Y</strong>anks</em></h2>
 
@@ -14,7 +14,7 @@
 <p align="center">一个使用纯 Rust 编写的跨平台原生剪贴板管理器。</p>
 
 <p align="center">
-<a href="README.md">English</a> | 简体中文
+<a href="../README.md">English</a> | 简体中文
 </p>
 
 <p align="center">

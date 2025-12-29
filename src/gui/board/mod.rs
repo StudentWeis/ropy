@@ -15,6 +15,7 @@ use gpui::{
 };
 use gpui_component::input::InputState;
 use gpui_component::{ActiveTheme, v_flex};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export utilities for external use
@@ -42,12 +43,17 @@ pub struct RopyBoard {
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
     autostart_enabled: bool,
     pinned: bool,
+    hotkey_tx: Option<async_channel::Sender<String>>,
     // I18n
     i18n: I18n,
     selected_language: usize, // Index into Language::all()
 }
 
 impl RopyBoard {
+    pub fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
+        self.hotkey_tx = Some(tx);
+    }
+
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
@@ -118,6 +124,7 @@ impl RopyBoard {
             selected_theme: theme_index,
             autostart_enabled,
             pinned: false,
+            hotkey_tx: None,
             i18n,
             selected_language,
         }
@@ -207,11 +214,24 @@ impl RopyBoard {
     }
 
     fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        let activation_key = self
+        let mut activation_key = self
             .settings_activation_key_input
             .read(cx)
             .value()
             .to_string();
+
+        let mut is_hotkey_invalid = false;
+        if activation_key.is_empty() {
+            activation_key = self.settings.read().unwrap().hotkey.activation_key.clone();
+            // If current setting is also empty (should not happen with load fix), use default
+            if activation_key.is_empty() {
+                activation_key = Settings::default().hotkey.activation_key;
+            }
+        } else if global_hotkey::hotkey::HotKey::from_str(&activation_key).is_err() {
+            is_hotkey_invalid = true;
+            activation_key = Settings::default().hotkey.activation_key;
+        }
+
         let max_history = self
             .settings_max_history_input
             .read(cx)
@@ -243,14 +263,20 @@ impl RopyBoard {
             }
         }
 
+        // Update hotkey if sender is available
+        if let Some(tx) = &self.hotkey_tx {
+            let _ = tx.try_send(activation_key.clone());
+        }
+
         // Apply the new language
         if let Err(e) = self.i18n.set_language(language) {
             eprintln!("[ropy] Failed to set language: {e}");
         }
 
         // Update search placeholder with new language
+        let search_placeholder = self.i18n.t("search_placeholder");
         self.search_input.update(cx, |input, cx| {
-            input.set_placeholder(self.i18n.t("search_placeholder"), window, cx);
+            input.set_placeholder(search_placeholder, window, cx);
         });
 
         // Sync auto-start state with system
@@ -266,9 +292,15 @@ impl RopyBoard {
             input.set_placeholder(max_history.to_string(), window, cx);
             input.set_value("", window, cx);
         });
+
+        let hotkey_invalid_msg = self.i18n.t("settings_hotkey_invalid");
         self.settings_activation_key_input.update(cx, |input, cx| {
             input.set_placeholder(activation_key, window, cx);
-            input.set_value("", window, cx);
+            if is_hotkey_invalid {
+                input.set_value(hotkey_invalid_msg, window, cx);
+            } else {
+                input.set_value("", window, cx);
+            }
         });
         cx.notify();
     }

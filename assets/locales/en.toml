@@ -32,6 +32,8 @@ settings_theme_system = "System"
 
 settings_hotkey = "Hotkey Configuration"
 settings_activation_key = "Activation Key"
+settings_hotkey_hint = "Format: control+shift+d or cmd+shift+v"
+settings_hotkey_invalid = "Invalid hotkey format"
 
 settings_storage = "Storage Configuration"
 settings_max_history = "Max History Records"

@@ -95,10 +95,15 @@ fn start_clipboard_monitor(
     clipboard_rx
 }
 
-fn setup_hotkey_listener(window_handle: WindowHandle<Root>, async_app: AsyncApp) {
+fn setup_hotkey_listener(
+    window_handle: WindowHandle<Root>,
+    async_app: AsyncApp,
+    settings: Arc<RwLock<Settings>>,
+) -> async_channel::Sender<String> {
     let fg_executor = async_app.foreground_executor().clone();
     let bg_executor = async_app.background_executor().clone();
-    crate::gui::hotkey::start_hotkey_listener(fg_executor, bg_executor, move || {
+    let hotkey_str = settings.read().unwrap().hotkey.activation_key.clone();
+    crate::gui::hotkey::start_hotkey_listener(hotkey_str, fg_executor, bg_executor, move || {
         let _ = async_app.update(move |cx| {
             window_handle
                 .update(cx, |_, window, cx| {
@@ -106,7 +111,7 @@ fn setup_hotkey_listener(window_handle: WindowHandle<Root>, async_app: AsyncApp)
                 })
                 .ok();
         });
-    });
+    })
 }
 
 fn create_window(
@@ -124,7 +129,7 @@ fn create_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
             titlebar: None,
-            show: !is_silent, // 静默启动时窗口直接隐藏
+            show: !is_silent, // When silent mode, do not show the window initially
             ..Default::default()
         },
         |window, cx| {
@@ -223,7 +228,16 @@ pub fn launch_app() {
             copy_tx,
             is_silent,
         );
-        setup_hotkey_listener(window_handle, async_app.clone());
+        let hotkey_tx = setup_hotkey_listener(window_handle, async_app.clone(), settings.clone());
+        let _ = window_handle.update(cx, |root, _, cx| {
+            root.view()
+                .clone()
+                .downcast::<RopyBoard>()
+                .unwrap()
+                .update(cx, |board, _| {
+                    board.set_hotkey_tx(hotkey_tx);
+                });
+        });
         start_tray_handler(window_handle, async_app.clone(), settings.clone());
 
         if !is_silent {

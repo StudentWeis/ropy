@@ -2,6 +2,7 @@ use crate::i18n::Language;
 use config::{Config, ConfigError, File};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Application settings structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ pub enum AppTheme {
 impl AppTheme {
     pub fn get_theme(&self) -> Self {
         match self {
-            AppTheme::System => match dark_light::detect().unwrap() {
+            AppTheme::System => match dark_light::detect().unwrap_or(dark_light::Mode::Light) {
                 dark_light::Mode::Dark => AppTheme::Dark,
                 dark_light::Mode::Light => AppTheme::Light,
                 _ => AppTheme::Light,
@@ -105,7 +106,16 @@ impl Settings {
             .add_source(File::with_name(config_file.to_str().unwrap()).required(false));
 
         let config = builder.build()?;
-        config.try_deserialize()
+        let mut settings: Self = config.try_deserialize()?;
+
+        // Ensure hotkey is not empty and valid
+        if settings.hotkey.activation_key.is_empty()
+            || global_hotkey::hotkey::HotKey::from_str(&settings.hotkey.activation_key).is_err()
+        {
+            settings.hotkey.activation_key = Settings::default().hotkey.activation_key;
+        }
+
+        Ok(settings)
     }
 
     /// Save settings to configuration file

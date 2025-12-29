@@ -151,8 +151,13 @@ pub(super) fn render_settings_content(
                 .rounded_md()
                 .px_3()
                 .py_2(),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(board.i18n.t("settings_hotkey_hint")),
         );
-    #[allow(unused_variables)]
     let hotkey_section = v_flex()
         .gap_2()
         .child(
@@ -269,7 +274,7 @@ pub(super) fn render_settings_content(
                 .flex_1()
                 .child(language_section)
                 .child(theme_section)
-                // .child(hotkey_section)
+                .child(hotkey_section)
                 .child(storage_section)
                 .child(autostart_section),
         )

@@ -14,7 +14,7 @@
 <p align="center">A cross-platform native clipboard manager in pure Rust.</p>
 
 <p align="center">
-English | <a href="README_ZH.md">简体中文</a>
+English | <a href="doc/README_ZH.md">简体中文</a>
 </p>
 
 <p align="center">
