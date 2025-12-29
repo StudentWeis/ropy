@@ -225,7 +225,7 @@ pub fn launch_app() {
             copy_tx,
         );
         setup_hotkey_listener(window_handle, async_app.clone());
-        start_tray_handler(window_handle, async_app.clone());
+        start_tray_handler(window_handle, async_app.clone(), settings.clone());
 
         cx.activate(true);
     });

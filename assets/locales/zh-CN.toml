@@ -1,0 +1,52 @@
+# 简体中文翻译
+
+# 应用程序
+app_name = "Ropy"
+app_description = "基于 Rust 和 GPUI 构建的剪贴板管理器"
+
+# 托盘菜单
+tray_show = "显示"
+tray_quit = "退出"
+
+# 主窗口
+search_placeholder = "使用 / 搜索 ... "
+no_records = "无剪贴板记录"
+clear_all = "清空全部"
+pin = "固定"
+unpin = "取消固定"
+
+# 设置
+settings_title = "Ropy 设置"
+settings_back = "←"
+settings_cancel = "取消"
+settings_save = "保存"
+
+# 设置选项
+settings_language = "语言"
+settings_language_description = "选择您偏好的语言"
+
+settings_theme = "主题"
+settings_theme_light = "浅色"
+settings_theme_dark = "深色"
+settings_theme_system = "跟随系统"
+
+settings_hotkey = "快捷键配置"
+settings_activation_key = "激活快捷键"
+
+settings_storage = "存储配置"
+settings_max_history = "最大历史记录数"
+
+settings_system = "系统"
+settings_autostart = "开机自动启动"
+settings_autostart_on = "开启"
+settings_autostart_off = "关闭"
+
+# 内容类型
+content_type_text = "文本"
+content_type_image = "图片"
+content_type_file = "文件"
+
+# 消息
+message_copied = "已复制到剪贴板"
+message_deleted = "记录已删除"
+message_cleared = "历史已清空"

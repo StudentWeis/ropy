@@ -1,7 +1,6 @@
 # TODO
 
 - Import and export clipboard history
-- Support for multiple languages
 - Support for html content type
 - Log files
 - Provide installation packages and distribution channels

@@ -1,3 +1,4 @@
+use crate::i18n::Language;
 use config::{Config, ConfigError, File};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -13,6 +14,8 @@ pub struct Settings {
     pub theme: AppTheme,
     /// Auto-start configuration
     pub autostart: AutoStartSettings,
+    /// Language configuration
+    pub language: Language,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +70,7 @@ impl Default for Settings {
             },
             theme: AppTheme::System,
             autostart: AutoStartSettings { enabled: false },
+            language: Language::default(),
         }
     }
 }

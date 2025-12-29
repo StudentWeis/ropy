@@ -5,6 +5,7 @@ mod settings;
 use crate::clipboard::LastCopyState;
 use crate::config::Settings;
 use crate::gui::hide_window;
+use crate::i18n::{I18n, Language};
 use crate::repository::models::ContentType;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
@@ -41,6 +42,9 @@ pub struct RopyBoard {
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
     autostart_enabled: bool,
     pinned: bool,
+    // I18n
+    i18n: I18n,
+    selected_language: usize, // Index into Language::all()
 }
 
 impl RopyBoard {
@@ -69,7 +73,7 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder("Use / to search ... "));
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.));
 
-        let (max_history_records, activation_key, theme_index) = {
+        let (max_history_records, activation_key, theme_index, language) = {
             let settings_guard = settings.read().unwrap();
             let theme_idx = match settings_guard.theme {
                 crate::config::AppTheme::Light => 0,
@@ -80,6 +84,7 @@ impl RopyBoard {
                 settings_guard.storage.max_history_records,
                 settings_guard.hotkey.activation_key.clone(),
                 theme_idx,
+                settings_guard.language,
             )
         };
         let autostart_enabled = settings.read().unwrap().autostart.enabled;
@@ -87,6 +92,13 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.to_string()));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
+        
+        // Initialize I18n with the language from settings
+        let i18n = I18n::new(language).unwrap_or_default();
+        let selected_language = Language::all()
+            .iter()
+            .position(|&lang| lang == language)
+            .unwrap_or(0);
 
         Self {
             records,
@@ -106,6 +118,8 @@ impl RopyBoard {
             selected_theme: theme_index,
             autostart_enabled,
             pinned: false,
+            i18n,
+            selected_language,
         }
     }
 
@@ -212,16 +226,29 @@ impl RopyBoard {
             _ => crate::config::AppTheme::System,
         };
 
+        let language = Language::all().get(self.selected_language).copied().unwrap_or_default();
+
         {
             let mut settings = self.settings.write().unwrap();
             settings.hotkey.activation_key = activation_key.clone();
             settings.storage.max_history_records = max_history;
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;
+            settings.language = language;
             if let Err(e) = settings.save() {
                 eprintln!("[ropy] Failed to save settings: {e}");
             }
         }
+
+        // Apply the new language
+        if let Err(e) = self.i18n.set_language(language) {
+            eprintln!("[ropy] Failed to set language: {e}");
+        }
+
+        // Update search placeholder with new language
+        self.search_input.update(cx, |input, cx| {
+            input.set_placeholder(self.i18n.t("search_placeholder"), window, cx);
+        });
 
         // Sync auto-start state with system
         if let Err(e) = self.sync_autostart_state() {
@@ -291,7 +318,7 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_select_next))
             .on_action(cx.listener(Self::on_confirm_selection))
             .on_key_down(cx.listener(Self::on_key_down))
-            .child(render_header(self.pinned, cx))
+            .child(render_header(self, cx))
             .child(render_search_input(&self.search_input, cx))
             .child(self.render_records_list(cx))
     }
