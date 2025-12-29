@@ -42,7 +42,8 @@ Some extension strategies can be applied:
 1. Initialize the clipboard listener to continuously monitor clipboard content changes.
 2. When a change is detected, apply sensitive filtering and deduplication logic.
 3. Store the new clipboard content in the database.
-4. Provide a global hotkey to invoke the interaction interface.
+4. Notify the interaction interface to refresh the UI.
+5. Provide a global hotkey to invoke the interaction interface.
 5. In the interaction interface, users can search and select historical records.
 6. After selecting an entry, write back to the clipboard and trigger the paste operation.
 7. Provide a configuration interface to allow users to customize settings.

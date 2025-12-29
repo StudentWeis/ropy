@@ -30,6 +30,7 @@ The application relies on channels (`async_channel`) for communication between t
   1. Sends `DynamicImage` via `image_tx` (async_channel) to the **Image Processor Task**.
   2. **Image Processor Task** saves the image and sends `ClipboardEvent::Image` via `clipboard_tx` to the **Clipboard Listener Task**.
 - **Handling**: The **Clipboard Listener Task** receives `ClipboardEvent`, updates the `Repository`, and updates the `SharedRecords`.
+- **UI Notification**: After updating the records, the **Clipboard Listener Task** sends a signal through a notification channel to a foreground task, which then calls `cx.notify()` on the `WindowHandle` to refresh the UI.
 
 ## 2. Hotkey Flow
 
@@ -78,6 +79,7 @@ graph TD
     IP -- "Image Event" --> CL
     CL -- "Save/Update" --> Repo
     CL -- "Update" --> Shared
+    CL -- "Notify (via Channel)" --> Main
 
     %% User Input
     HL -- "Dispatch Action" --> Main
@@ -101,6 +103,7 @@ sequenceDiagram
     participant CL as Clipboard Listener (Task)
     participant Repo as Repository
     participant Shared as Shared Records
+    participant Main as Main App (UI)
 
     Sys->>CW: Content Changed
     alt is Text
@@ -115,5 +118,6 @@ sequenceDiagram
     CL->>Repo: Save Record
     Repo-->>CL: Record
     CL->>Shared: Update In-Memory List
+    CL->>Main: Notify UI Update (cx.notify)
     deactivate CL
 ```
