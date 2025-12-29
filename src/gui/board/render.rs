@@ -11,7 +11,7 @@ use gpui::{
 use gpui_component::Icon;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{ActiveTheme, IconName, Sizable, h_flex, v_flex};
+use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use regex::Regex;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -115,8 +115,8 @@ pub fn render_header(board: &RopyBoard, cx: &mut Context<'_, RopyBoard>) -> impl
                 .child(
                     Button::new("settings-button")
                         .ghost()
+                        .icon(Icon::empty().path("settings.svg"))
                         .tooltip("Settings")
-                        .icon(IconName::Settings)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_settings = true;
                             window.focus(&this.focus_handle);

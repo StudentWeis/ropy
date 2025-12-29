@@ -19,20 +19,13 @@ pub struct Assets;
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
-        if let Some(data) = Self::get(path) {
-            Ok(Some(data.data))
-        } else {
-            gpui_component_assets::Assets.load(path)
-        }
+        Ok(Self::get(path).map(|data| data.data))
     }
 
     fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
-        let mut list = Self::iter()
+        Ok(Self::iter()
             .filter_map(|p| p.starts_with(path).then(|| p.into()))
-            .collect::<Vec<_>>();
-        let gpui_list = gpui_component_assets::Assets.list(path)?;
-        list.extend(gpui_list);
-        Ok(list)
+            .collect())
     }
 }
 

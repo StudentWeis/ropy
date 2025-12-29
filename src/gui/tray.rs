@@ -42,8 +42,8 @@ pub fn init_tray(
 
 /// Create a simple icon for the tray
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
-    let asset = crate::gui::app::Assets::get("logo.png")
-        .ok_or_else(|| "Failed to find embedded logo.png")?;
+    let asset =
+        crate::gui::app::Assets::get("logo.png").ok_or("Failed to find embedded logo.png")?;
     let img = image::load_from_memory(&asset.data)?;
     let rgba = img.to_rgba8().into_raw();
     let width = img.width();
