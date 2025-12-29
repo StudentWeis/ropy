@@ -216,21 +216,22 @@ pub fn launch_app() {
         let async_app = cx.to_async();
         let clipboard_rx = start_clipboard_monitor(async_app.clone(), last_copy.clone());
         let copy_tx = clipboard::start_clipboard_writer(async_app.clone());
-        clipboard::start_clipboard_listener(
-            clipboard_rx,
-            shared_records.clone(),
-            repository.clone(),
-            settings.clone(),
-            async_app.clone(),
-        );
         let window_handle = create_window(
             cx,
-            shared_records,
+            shared_records.clone(),
             repository.clone(),
             settings.clone(),
             last_copy.clone(),
             copy_tx,
             is_silent,
+        );
+        clipboard::start_clipboard_listener(
+            clipboard_rx,
+            shared_records,
+            repository.clone(),
+            settings.clone(),
+            async_app.clone(),
+            window_handle,
         );
         let hotkey_tx = setup_hotkey_listener(window_handle, async_app.clone(), settings.clone());
         let _ = window_handle.update(cx, |root, _, cx| {

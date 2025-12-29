@@ -8,7 +8,8 @@ use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
 };
-use gpui::AsyncApp;
+use gpui::{AsyncApp, WindowHandle};
+use gpui_component::Root;
 use image::DynamicImage;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -45,7 +46,6 @@ impl ClipboardHandler for ClipboardMonitor {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        // Check for image
         if let Ok(image) = self.ctx.get_image()
             && let Ok(dyn_img) = image.get_dynamic_image()
         {
@@ -102,10 +102,13 @@ pub fn start_clipboard_listener(
     repository: Option<Arc<ClipboardRepository>>,
     settings: Arc<RwLock<Settings>>,
     async_app: AsyncApp,
+    window_handle: WindowHandle<Root>,
 ) {
-    let executor = async_app.background_executor().clone();
-    executor
-        .clone()
+    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
+    let bg_executor = async_app.background_executor().clone();
+    let fg_executor = async_app.foreground_executor().clone();
+
+    bg_executor
         .spawn(async move {
             while let Ok(event) = clipboard_rx.recv().await {
                 if let Some(ref repo) = repository {
@@ -116,25 +119,43 @@ pub fn start_clipboard_listener(
 
                     match result {
                         Ok(record) => {
-                            let mut guard = match shared_records.lock() {
-                                Ok(g) => g,
-                                Err(poisoned) => poisoned.into_inner(),
-                            };
-                            guard.insert(0, record);
-                            let max_history_records = {
-                                let settings_guard = settings.read().unwrap();
-                                settings_guard.storage.max_history_records
-                            };
-                            if guard.len() > max_history_records {
-                                guard.truncate(max_history_records);
-                                repo.cleanup_old_records(max_history_records).ok();
+                            {
+                                let mut guard = match shared_records.lock() {
+                                    Ok(g) => g,
+                                    Err(poisoned) => poisoned.into_inner(),
+                                };
+                                guard.insert(0, record);
+                                let max_history_records = {
+                                    let settings_guard = settings.read().unwrap();
+                                    settings_guard.storage.max_history_records
+                                };
+                                if guard.len() > max_history_records {
+                                    guard.truncate(max_history_records);
+                                    repo.cleanup_old_records(max_history_records).ok();
+                                }
                             }
+                            let _ = notify_tx.send(()).await;
                         }
                         Err(e) => {
                             eprintln!("[ropy] Failed to save clipboard record: {e}");
                         }
                     }
                 }
+            }
+        })
+        .detach();
+
+    // Notify GUI to refresh clipboard history
+    fg_executor
+        .spawn(async move {
+            while (notify_rx.recv().await).is_ok() {
+                let _ = async_app.update(|cx| {
+                    window_handle
+                        .update(cx, |_, _, cx| {
+                            cx.notify();
+                        })
+                        .ok();
+                });
             }
         })
         .detach();
