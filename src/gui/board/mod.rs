@@ -236,13 +236,16 @@ impl RopyBoard {
             activation_key = Settings::default().hotkey.activation_key;
         }
 
+        // Get current max_history_records from settings as fallback
+        let current_max_history = self.settings.read().unwrap().storage.max_history_records;
+        
         let max_history = self
             .settings_max_history_input
             .read(cx)
             .value()
             .to_string()
             .parse::<usize>()
-            .unwrap_or(100);
+            .unwrap_or(current_max_history);
 
         let theme = match self.selected_theme {
             0 => crate::config::AppTheme::Light,
