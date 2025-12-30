@@ -52,3 +52,10 @@ content_type_file = "File"
 message_copied = "Copied to clipboard"
 message_deleted = "Record deleted"
 message_cleared = "History cleared"
+
+# About
+about_title = "About Ropy"
+about_version = "Version"
+about_description = "A lightweight clipboard manager built with Rust and GPUI."
+about_github = "GitHub"
+about_back = "←"

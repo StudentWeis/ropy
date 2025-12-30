@@ -52,3 +52,10 @@ content_type_file = "文件"
 message_copied = "已复制到剪贴板"
 message_deleted = "记录已删除"
 message_cleared = "历史已清空"
+
+# 关于
+about_title = "关于 Ropy"
+about_version = "版本"
+about_description = "一个使用 Rust 和 GPUI 构建的轻量级剪贴板管理器。"
+about_github = "GitHub"
+about_back = "←"

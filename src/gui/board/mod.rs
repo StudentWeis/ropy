@@ -1,3 +1,4 @@
+mod about;
 mod actions;
 mod render;
 mod settings;
@@ -19,6 +20,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 
 // Re-export utilities for external use
+use about::render_about_content;
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use render::{render_header, render_search_input};
 use settings::render_settings_content;
@@ -38,6 +40,7 @@ pub struct RopyBoard {
     // Settings
     settings: Arc<RwLock<Settings>>,
     show_settings: bool,
+    show_about: bool,
     settings_activation_key_input: Entity<InputState>,
     settings_max_history_input: Entity<InputState>,
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
@@ -119,6 +122,7 @@ impl RopyBoard {
             filtered_records: Vec::new(),
             copy_tx,
             show_settings: false,
+            show_about: false,
             settings_activation_key_input,
             settings_max_history_input,
             selected_theme: theme_index,
@@ -332,6 +336,10 @@ impl Render for RopyBoard {
 
         if self.show_settings {
             return base.child(render_settings_content(self, cx));
+        }
+
+        if self.show_about {
+            return base.child(render_about_content(self, cx));
         }
 
         // Render main clipboard view
