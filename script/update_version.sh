@@ -28,4 +28,6 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\")
 # 3. Update CHANGELOG.md using git cliff
 git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 
+dist plan
+
 echo "Update completed!"

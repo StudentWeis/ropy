@@ -18,8 +18,8 @@ English | <a href="doc/README_ZH.md">简体中文</a>
 </p>
 
 <p align="center">
-<img src="https://s2.loli.net/2025/12/19/iqnFu2pdNogyA7P.png" alt="Ropy Dark" width="45%">
-<img src="https://s2.loli.net/2025/12/19/OaiXxnfGQLRvH5T.png" alt="Ropy Light" width="45%">
+<img src="https://s2.loli.net/2026/01/04/8LNOkP3rwivYtxj.png" alt="Ropy Dark" width="40%">
+<img src="https://s2.loli.net/2026/01/04/IM83wFmDJ6QpKHO.png" alt="Ropy Light" width="40%">
 </p>
 
 # Features
@@ -27,9 +27,7 @@ English | <a href="doc/README_ZH.md">简体中文</a>
 - Cross-platform support: Windows and macOS.
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
-- Search to quickly find previous records.
-- Auto start on system boot.
-- Keyboard shortcuts for quick access.
+- Search/Pin/Preview/Autostart/Shortcuts etcs.
 
 # Installation
 
@@ -72,9 +70,10 @@ cargo build --release
 # Usage
 
 - Launch the application, and it will start monitoring your clipboard.
-- Use the global hotkey(Ctrl/Control + Shift + D) of tray icon to access the clipboard history.
-- Click on any record or use 1/2/3/4/5 to select a record using keyboard to copy it back to the clipboard.
+- Use the configurable global hotkey or tray icon to access the clipboard history.
+- Click on any record or use <kbd>1/2/3/4/5</kbd> or <kbd>Enter</kbd> to select a record.
 - Use the search bar to filter clipboard records.
+- Pin the Ropy window to keep it always on top.
 
 # Acknowledgements
 

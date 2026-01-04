@@ -7,10 +7,6 @@
 - Support more platforms (Linux)
 - Homepage, documentation and user community
 
-Windows Bugs:
-
-- WeChat chat box crashes
-
 # NOT TODO
 
 - Does not support obtaining the application source when copying (the system clipboard does not provide this field, requires Hack to obtain).
