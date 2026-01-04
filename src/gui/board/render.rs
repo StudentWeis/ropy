@@ -258,19 +258,23 @@ impl RopyBoard {
                                         .tooltip({
                                             let content_type_clone = content_type.clone();
                                             let record_content_clone = record_content.clone();
-                                            move |window, cx| {
-                                                match content_type_clone {
-                                                    ContentType::Image => {
-                                                        preview::image_tooltip(record_content_clone.clone(), window, cx)
-                                                    }
-                                                    _ => {
-                                                        let content = if record_content_clone.len() > 800 {
-                                                            record_content_clone.chars().take(800).collect::<String>()
+                                            move |window, cx| match content_type_clone {
+                                                ContentType::Image => preview::image_tooltip(
+                                                    record_content_clone.clone(),
+                                                    window,
+                                                    cx,
+                                                ),
+                                                _ => {
+                                                    let content =
+                                                        if record_content_clone.len() > 800 {
+                                                            record_content_clone
+                                                                .chars()
+                                                                .take(800)
+                                                                .collect::<String>()
                                                         } else {
                                                             record_content_clone.clone()
                                                         };
-                                                        preview::simple_tooltip(content, window, cx)
-                                                    }
+                                                    preview::simple_tooltip(content, window, cx)
                                                 }
                                             }
                                         })

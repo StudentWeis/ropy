@@ -1,6 +1,9 @@
 /// Custom tooltip preview implementation that supports automatic line wrapping
-use gpui::{AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, StyledImage, Window, div, img, px};
+use gpui::{
+    AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, Window, div, img, px,
+};
 use gpui_component::ActiveTheme;
+use image::ImageReader;
 use std::path::PathBuf;
 
 /// Create a tooltip preview that supports automatic line wrapping
@@ -67,53 +70,60 @@ pub fn image_tooltip(image_path: impl Into<String>, window: &mut Window, cx: &mu
     let image_path = image_path.into();
     let window_width = window.bounds().size.width;
     let window_height = window.bounds().size.height;
-    let max_width = (window_width * 0.8).min(px(600.0));
-    let max_height = (window_height * 0.8).min(px(400.0));
+    let max_width = (window_width * 0.9).min(px(600.0));
+    let max_height = (window_height * 0.9).min(px(400.0));
+
+    let (width, height) = calculate_image_size(&image_path, max_width, max_height);
 
     cx.new(move |_cx| ImageTooltipView {
         image_path,
-        max_width: max_width.into(),
-        max_height: max_height.into(),
+        width,
+        height,
     })
     .into()
 }
 
+fn calculate_image_size(
+    path: &str,
+    max_w: gpui::Pixels,
+    max_h: gpui::Pixels,
+) -> (gpui::Pixels, gpui::Pixels) {
+    if let Ok(reader) = ImageReader::open(path).and_then(|r| r.with_guessed_format())
+        && let Ok(dims) = reader.into_dimensions()
+    {
+        let w = dims.0 as f32;
+        let h = dims.1 as f32;
+
+        let width_ratio = Into::<f32>::into(max_w) / w;
+        let height_ratio = Into::<f32>::into(max_h) / h;
+        let scale = width_ratio.min(height_ratio).min(1.0);
+
+        return (px(w * scale), px(h * scale));
+    }
+    (max_w, max_h)
+}
+
 struct ImageTooltipView {
     image_path: String,
-    max_width: f32,
-    max_height: f32,
+    width: gpui::Pixels,
+    height: gpui::Pixels,
 }
 
 impl Render for ImageTooltipView {
     fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
-        let path = PathBuf::from(&self.image_path);
-        let file_stem = path.file_stem().unwrap_or_default().to_string_lossy();
-        let thumb_name = format!("{file_stem}.png");
-        let thumb_path = path.parent().unwrap_or(&path).join(thumb_name);
-
-        // Use thumbnail if exists, otherwise fallback to original
-        let display_path = if thumb_path.exists() {
-            thumb_path
-        } else {
-            path
-        };
-
-        div()
-            .flex()
-            .flex_col()
-            .bg(cx.theme().popover)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .shadow_lg()
-            .p_2()
-            .max_w(px(self.max_width))
-            .max_h(px(self.max_height))
-            .child(
-                img(display_path)
-                    .max_w(px(self.max_width - 16.0))
-                    .max_h(px(self.max_height - 16.0))
-                    .object_fit(gpui::ObjectFit::Contain),
-            )
+        div().flex().flex_row().min_w_0().child(
+            div()
+                .bg(cx.theme().popover)
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_md()
+                .shadow_lg()
+                .p_2()
+                .child(
+                    img(PathBuf::from(&self.image_path))
+                        .w(self.width)
+                        .h(self.height),
+                ),
+        )
     }
 }
