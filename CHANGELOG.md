@@ -2,12 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0-alpha] - 2026-01-04
+
+### 🚀 Features
+
+- Implement preview toggle for clipboard records with hotkey by @StudentWeis in [#27](https://github.com/StudentWeis/ropy/pull/27)
+- Add preview functionality for clipboard records by @StudentWeis
+- Add about panel with version info and GitHub link by @StudentWeis
+- Add hotkey configuration and validation with user hints by @StudentWeis
+- Support i18n by @Copilot
+- Support auto startup in silent mode by @ZhBF
+- Keep window open after copying when "Pin to Top" is enabled by @StudentWeis
+- Add rust-embed for asset management and include clear-all and pin-to-top SVG icons by @StudentWeis
+- Implement window pinning functionality and add gpui-component-assets by @StudentWeis
+- Enhance tray icon functionality with left-click event handling by @StudentWeis
+
+### 🐛 Bug Fixes
+
+- Use current max history records from settings as fallback in RopyBoard by @StudentWeis
+- Failed to initialize tray icon on auto startup by @ZhBF
+- Clear all records will clear the last copy state by @StudentWeis
+- Ensure proper use of image record click operations and refactor the clipboard mod by @StudentWeis
+- Deduplicate clipboard images on Windows by @ZhBF
+
+### 🚜 Refactor
+
+- Improve image tooltip handling by @StudentWeis
+- Refresh window after copy something by @StudentWeis
+- Enhance load_initial_records to use configurable max history records and streamline tray handler action dispatching by @StudentWeis
+- Remove gpui-component-assets to reduce the app size by @StudentWeis
+- Update clipboard and tray handling to use async execution model by @StudentWeis
+
+### 📚 Documentation
+
+- Update doc of clipboard listener to notify UI for refresh after record update by @StudentWeis
+- Add Chinese version of README by @Copilot
+- Add issue templates for bug reports and feature requests by @StudentWeis
+
 ## [0.1.4] - 2025-12-22
 
 ### 🐛 Bug Fixes
+
 - Figure the problem of test of clear in repository that deletes user data by @StudentWeis
 
 ### 🚜 Refactor
+
 - Simplify error message formatting across multiple files by @StudentWeis
 - Streamline hotkey listener setup and improve event handling by @StudentWeis
 - Integrate async-channel for clipboard image handling and enhance clipboard listener by @StudentWeis
@@ -15,6 +54,7 @@ All notable changes to this project will be documented in this file.
 - Add script to build and package macOS DMG for Ropy by @StudentWeis
 
 ### 📚 Documentation
+
 - Update concurrency documentation to clarify threading model and message passing flow by @StudentWeis
 
 ## [0.1.3] - 2025-12-20
