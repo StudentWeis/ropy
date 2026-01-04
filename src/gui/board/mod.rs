@@ -1,5 +1,6 @@
 mod about;
 mod actions;
+mod preview;
 mod render;
 mod settings;
 

@@ -16,7 +16,7 @@ use regex::Regex;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use super::RopyBoard;
+use super::{RopyBoard, preview};
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
     static HEX_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -215,6 +215,7 @@ impl RopyBoard {
             let content_type = record.content_type.clone();
             let view_click = view.clone();
             let view_delete = view.clone();
+            let record_content = record.content.clone();
 
             div()
                 .pb_2()
@@ -253,6 +254,25 @@ impl RopyBoard {
                                                     this.confirm_record(window, cx, index);
                                                 })
                                                 .ok();
+                                        })
+                                        .tooltip({
+                                            let content_type_clone = content_type.clone();
+                                            let record_content_clone = record_content.clone();
+                                            move |window, cx| {
+                                                match content_type_clone {
+                                                    ContentType::Image => {
+                                                        preview::image_tooltip(record_content_clone.clone(), window, cx)
+                                                    }
+                                                    _ => {
+                                                        let content = if record_content_clone.len() > 800 {
+                                                            record_content_clone.chars().take(800).collect::<String>()
+                                                        } else {
+                                                            record_content_clone.clone()
+                                                        };
+                                                        preview::simple_tooltip(content, window, cx)
+                                                    }
+                                                }
+                                            }
                                         })
                                         .child(match content_type {
                                             ContentType::Text => render_text_record(cx, record),
