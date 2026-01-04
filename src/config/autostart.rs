@@ -86,7 +86,6 @@ impl AutoStartManager {
     }
 
     /// Check if auto-start is currently enabled
-    #[allow(dead_code)]
     pub fn is_enabled(&self) -> Result<bool, AutoStartError> {
         self.auto_launch
             .is_enabled()
@@ -98,10 +97,15 @@ impl AutoStartManager {
     /// # Arguments
     /// * `enabled` - Whether auto-start should be enabled
     pub fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
-        if enabled {
-            self.enable()
+        let current_enabled = self.is_enabled().unwrap_or(false);
+        if current_enabled != enabled {
+            if enabled {
+                self.enable()
+            } else {
+                self.disable()
+            }
         } else {
-            self.disable()
+            Ok(())
         }
     }
 }
