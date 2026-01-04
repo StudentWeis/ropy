@@ -4,7 +4,7 @@ use crate::gui::utils::start_window_drag;
 use crate::repository::ClipboardRecord;
 use crate::repository::models::ContentType;
 use gpui::{
-    Context, Entity, div, img, list,
+    Context, Entity, anchored, deferred, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
@@ -201,14 +201,34 @@ fn render_text_record(cx: &mut gpui::App, record: &ClipboardRecord) -> gpui::Any
     }
 }
 
+fn create_preview(
+    content_type: &ContentType,
+    record_content: &str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
+) -> gpui::AnyView {
+    match content_type {
+        ContentType::Image => preview::image_tooltip(record_content, window, cx),
+        _ => {
+            let content = if record_content.len() > 800 {
+                record_content.chars().take(800).collect::<String>()
+            } else {
+                record_content.to_string()
+            };
+            preview::simple_tooltip(content, window, cx)
+        }
+    }
+}
+
 impl RopyBoard {
     /// Render the scrollable list of clipboard records
     pub fn render_records_list(&self, context: &mut Context<'_, RopyBoard>) -> impl IntoElement {
         let records = self.filtered_records.clone();
         let list_state = self.list_state.clone();
         let selected_index = self.selected_index;
+        let show_preview = self.show_preview;
         let view = context.weak_entity();
-        list(list_state, move |index, _window, cx| {
+        list(list_state, move |index, window, cx| {
             let record = &records[index];
             let record_id = record.id;
             let is_selected = index == selected_index;
@@ -217,118 +237,127 @@ impl RopyBoard {
             let view_delete = view.clone();
             let record_content = record.content.clone();
 
-            div()
-                .pb_2()
-                .child(
-                    v_flex()
-                        .w_full()
-                        .p_3()
-                        .bg(if is_selected {
-                            cx.theme().accent
-                        } else {
-                            cx.theme().secondary
-                        })
-                        .rounded_md()
-                        .border_1()
-                        .border_color(if is_selected {
-                            cx.theme().accent
-                        } else {
-                            cx.theme().border
-                        })
-                        .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
-                        .id(("record", index))
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .items_start()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .cursor_pointer()
-                                        .id(("record-content", index))
-                                        .on_click(move |_event, window, cx| {
-                                            view_click
-                                                .update(cx, |this, cx| {
-                                                    this.confirm_record(window, cx, index);
-                                                })
-                                                .ok();
-                                        })
-                                        .tooltip({
-                                            let content_type_clone = content_type.clone();
-                                            let record_content_clone = record_content.clone();
-                                            move |window, cx| match content_type_clone {
-                                                ContentType::Image => preview::image_tooltip(
-                                                    record_content_clone.clone(),
-                                                    window,
-                                                    cx,
-                                                ),
-                                                _ => {
-                                                    let content =
-                                                        if record_content_clone.len() > 800 {
-                                                            record_content_clone
-                                                                .chars()
-                                                                .take(800)
-                                                                .collect::<String>()
-                                                        } else {
-                                                            record_content_clone.clone()
-                                                        };
-                                                    preview::simple_tooltip(content, window, cx)
-                                                }
-                                            }
-                                        })
-                                        .child(match content_type {
-                                            ContentType::Text => render_text_record(cx, record),
-                                            ContentType::Image => render_image_record(record),
-                                            _ => div().child("Unknown content").into_any_element(),
-                                        })
-                                        .child(
-                                            h_flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .mt_1()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .bg(cx.theme().background)
-                                                        .px_1()
-                                                        .py_0()
-                                                        .rounded_sm()
-                                                        .child(format!("{}", index + 1)),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child(
-                                                            record
-                                                                .created_at
-                                                                .format("%Y-%m-%d %H:%M:%S")
-                                                                .to_string(),
-                                                        ),
-                                                ),
-                                        ),
-                                )
-                                .child(
-                                    Button::new(("delete-btn", index))
-                                        .xsmall()
-                                        .ghost()
-                                        .label("×")
-                                        .on_click(move |_event, _window, cx| {
-                                            view_delete
-                                                .update(cx, |this, cx| {
-                                                    this.delete_record(record_id);
-                                                    // TODO Delete associated last copy state
-                                                    cx.notify();
-                                                })
-                                                .ok();
-                                        }),
-                                ),
-                        ),
-                )
-                .into_any_element()
+            let preview_data = (content_type.clone(), record_content.clone());
+
+            let mut item = div().pb_2().relative().child(
+                v_flex()
+                    .w_full()
+                    .p_3()
+                    .bg(if is_selected {
+                        cx.theme().accent
+                    } else {
+                        cx.theme().secondary
+                    })
+                    .rounded_md()
+                    .border_1()
+                    .border_color(if is_selected {
+                        cx.theme().accent
+                    } else {
+                        cx.theme().border
+                    })
+                    .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
+                    .id(("record", index))
+                    .child(
+                        h_flex()
+                            .justify_between()
+                            .items_start()
+                            .gap_2()
+                            .child({
+                                let mut content_div = div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .cursor_pointer()
+                                    .id(("record-content", index))
+                                    .on_click(move |_event, window, cx| {
+                                        view_click
+                                            .update(cx, |this, cx| {
+                                                this.confirm_record(window, cx, index);
+                                            })
+                                            .ok();
+                                    });
+
+                                if !show_preview {
+                                    content_div = content_div.tooltip({
+                                        let (content_type, record_content) = preview_data.clone();
+                                        move |window, cx| {
+                                            create_preview(
+                                                &content_type,
+                                                &record_content,
+                                                window,
+                                                cx,
+                                            )
+                                        }
+                                    });
+                                }
+
+                                content_div
+                                    .child(match content_type {
+                                        ContentType::Text => render_text_record(cx, record),
+                                        ContentType::Image => render_image_record(record),
+                                        _ => div().child("Unknown content").into_any_element(),
+                                    })
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .gap_1()
+                                            .mt_1()
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .bg(cx.theme().background)
+                                                    .px_1()
+                                                    .py_0()
+                                                    .rounded_sm()
+                                                    .child(format!("{}", index + 1)),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(
+                                                        record
+                                                            .created_at
+                                                            .format("%Y-%m-%d %H:%M:%S")
+                                                            .to_string(),
+                                                    ),
+                                            ),
+                                    )
+                            })
+                            .child(
+                                Button::new(("delete-btn", index))
+                                    .xsmall()
+                                    .ghost()
+                                    .label("×")
+                                    .on_click(move |_event, _window, cx| {
+                                        view_delete
+                                            .update(cx, |this, cx| {
+                                                this.delete_record(record_id);
+                                                // TODO Delete associated last copy state
+                                                cx.notify();
+                                            })
+                                            .ok();
+                                    }),
+                            ),
+                    ),
+            );
+
+            if is_selected && show_preview {
+                let (content_type, record_content) = preview_data;
+                item =
+                    item.child(
+                        deferred(
+                            div().absolute().top_full().left_0().child(
+                                anchored().snap_to_window().child(div().mt_1().child(
+                                    create_preview(&content_type, &record_content, window, cx),
+                                )),
+                            ),
+                        )
+                        .with_priority(1),
+                    );
+            }
+
+            item.into_any_element()
         })
         .w_full()
         .flex_1()
