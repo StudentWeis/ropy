@@ -42,6 +42,7 @@ pub struct RopyBoard {
     settings: Arc<RwLock<Settings>>,
     show_settings: bool,
     show_about: bool,
+    show_preview: bool,
     settings_activation_key_input: Entity<InputState>,
     settings_max_history_input: Entity<InputState>,
     selected_theme: usize, // 0: Light, 1: Dark, 2: System
@@ -124,6 +125,7 @@ impl RopyBoard {
             copy_tx,
             show_settings: false,
             show_about: false,
+            show_preview: false,
             settings_activation_key_input,
             settings_max_history_input,
             selected_theme: theme_index,

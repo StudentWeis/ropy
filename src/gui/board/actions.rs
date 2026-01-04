@@ -36,6 +36,7 @@ impl RopyBoard {
 
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_index = 0;
+        self.show_preview = false;
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.show_settings = false;
         window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
@@ -69,10 +70,18 @@ impl RopyBoard {
             window.focus(&self.search_input.focus_handle(cx));
             return;
         }
+
         // If the search input is focused, ignore key presses
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)
         {
+            return;
+        }
+
+        // If the space key is pressed, toggle preview
+        if event.keystroke.key.as_str() == "space" {
+            self.show_preview = !self.show_preview;
+            cx.notify();
             return;
         }
 
