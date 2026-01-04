@@ -44,6 +44,20 @@ impl RopyBoard {
     }
 
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
+        // If still in settings, exit settings view and refocus main board instead of hiding
+        if self.show_settings {
+            self.show_settings = false;
+            self.settings_max_history_input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
+            self.settings_activation_key_input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
+            window.focus(&self.focus_handle);
+            cx.notify();
+            return;
+        }
+
         // If the search input is focused, return focus to the main component before hiding
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)
