@@ -65,6 +65,8 @@ impl Default for Settings {
                 activation_key: "control+shift+d".to_string(),
                 #[cfg(target_os = "windows")]
                 activation_key: "ctrl+shift+d".to_string(),
+                #[cfg(target_os = "linux")]
+                activation_key: "ctrl+shift+d".to_string(),
             },
             storage: StorageSettings {
                 max_history_records: 100,

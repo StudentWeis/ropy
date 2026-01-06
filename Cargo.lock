@@ -5516,6 +5516,7 @@ dependencies = [
  "global-hotkey",
  "gpui",
  "gpui-component",
+ "gtk",
  "image",
  "objc2 0.6.3",
  "raw-window-handle",

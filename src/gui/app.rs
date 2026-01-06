@@ -194,6 +194,11 @@ pub fn launch_app() {
     let is_silent = args.iter().any(|arg| arg == "--silent");
 
     Application::new().with_assets(Assets).run(move |cx| {
+        // Fix panic on message:
+        // GTK has not been initialized. Call `gtk::init` first.
+        #[cfg(target_os = "linux")]
+        gtk::init().expect("Failed to init gtk modules");
+
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
         set_activation_policy_accessory();
@@ -257,6 +262,8 @@ fn bind_application_keys(cx: &mut App) {
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
         #[cfg(target_os = "windows")]
+        KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
+        #[cfg(target_os = "linux")]
         KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
         KeyBinding::new("up", crate::gui::board::SelectPrev, None),
         KeyBinding::new("down", crate::gui::board::SelectNext, None),
