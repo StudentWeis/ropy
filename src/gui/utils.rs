@@ -47,6 +47,15 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     }
     #[cfg(target_os = "macos")]
     _cx.activate(true);
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(x11) = crate::gui::app::X11.get() {
+            if let Err(e) = x11.activate_window() {
+                eprintln!("[ropy] Failed to activate window: {e}")
+            }
+        }
+    }
+
 }
 
 /// Set the window to be always on top

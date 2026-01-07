@@ -16,6 +16,7 @@ pub struct X11 {
     net_wm_state_above: u32,
     net_wm_state: u32,
     window_id: u32,
+    net_active_window: u32,
 }
 
 impl X11 {
@@ -28,6 +29,7 @@ impl X11 {
         let net_wm_pid = Self::get_atom(&conn, b"_NET_WM_PID")?;
         let net_wm_state_above = Self::get_atom(&conn, b"_NET_WM_STATE_ABOVE")?;
         let net_wm_state = Self::get_atom(&conn, b"_NET_WM_STATE")?;
+        let net_active_window = Self::get_atom(&conn, b"_NET_ACTIVE_WINDOW")?;
 
         let windows = Self::get_value32(&conn, root_id, net_client_list)?;
 
@@ -50,6 +52,7 @@ impl X11 {
             net_wm_state_above,
             net_wm_state,
             window_id: window_id.ok_or_else(|| io::Error::other("Failed to get window id"))?,
+            net_active_window,
         })
     }
 
@@ -104,5 +107,28 @@ impl X11 {
 
     pub fn set_always_on_top(&self, always_on_top: bool) -> Result<(), Box<dyn Error>> {
         self.send_wm_state_and_sync(self.net_wm_state_above, always_on_top, self.root_id)
+    }
+
+    pub fn activate_window(&self) -> Result<(), Box<dyn Error>> {
+        self.connection.map_window(self.window_id)?;
+        self.connection.sync()?;
+
+        let event = ClientMessageEvent::new(
+            32,
+            self.window_id,
+            self.net_active_window,
+            [2, x11rb::CURRENT_TIME, 0, 0, 0],
+        );
+
+        self.connection.send_event(
+            false,
+            self.root_id,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
+
+        self.connection.sync()?;
+
+        Ok(())
     }
 }
