@@ -2,6 +2,7 @@ use crate::clipboard::{self, ClipboardEvent, LastCopyState};
 use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
 use crate::gui::tray::start_tray_handler;
+use crate::gui::x11::X11;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
@@ -11,7 +12,11 @@ use gpui_component::theme::Theme;
 use gpui_component::{Root, ThemeMode};
 use rust_embed::RustEmbed;
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex, RwLock};
+#[cfg(target_os = "linux")]
+use std::env;
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+
+pub static X11: OnceLock<X11> = OnceLock::new();
 
 #[derive(RustEmbed)]
 #[folder = "assets"]
@@ -131,6 +136,9 @@ fn create_window(
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            #[cfg(target_os = "linux")]
+            kind: WindowKind::Normal,
+            #[cfg(not(target_os = "linux"))]
             kind: WindowKind::PopUp,
             titlebar: None,
             show: !is_silent, // When silent mode, do not show the window initially
@@ -252,6 +260,12 @@ pub fn launch_app() {
 
         if !is_silent {
             cx.activate(true);
+        }
+
+        // Initialize X11 control
+        #[cfg(target_os = "linux")]
+        if env::var("DISPLAY").is_ok() {
+            X11.get_or_init(|| X11::new().expect("Failed to connect x11rb"));
         }
     });
 }

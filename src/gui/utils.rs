@@ -1,4 +1,6 @@
 use gpui::{Context, Window};
+
+#[cfg(not(target_os = "linux"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 #[cfg(target_os = "windows")]
@@ -43,9 +45,9 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
 }
 
 /// Set the window to be always on top
-pub fn set_always_on_top<T>(window: &mut Window, _cx: &mut Context<T>, always_on_top: bool) {
+pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, always_on_top: bool) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = window.window_handle() {
+    if let Ok(handle) = _window.window_handle() {
         if let RawWindowHandle::Win32(handle) = handle.as_raw() {
             let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
             unsafe {
@@ -62,7 +64,7 @@ pub fn set_always_on_top<T>(window: &mut Window, _cx: &mut Context<T>, always_on
         }
     }
     #[cfg(target_os = "macos")]
-    if let Ok(handle) = window.window_handle()
+    if let Ok(handle) = _window.window_handle()
         && let RawWindowHandle::AppKit(handle) = handle.as_raw()
     {
         // NSFloatingWindowLevel = 3, NSNormalWindowLevel = 0
@@ -72,6 +74,14 @@ pub fn set_always_on_top<T>(window: &mut Window, _cx: &mut Context<T>, always_on
             let ns_window: *mut AnyObject = msg_send![ns_view, window];
             if !ns_window.is_null() {
                 let _: () = msg_send![ns_window, setLevel: level];
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(x11) = crate::gui::app::X11.get() {
+            if let Err(e) = x11.set_always_on_top(always_on_top) {
+                eprintln!("[ropy] Failed to set always on top: {e}")
             }
         }
     }
