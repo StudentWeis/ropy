@@ -14,7 +14,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use objc2::{msg_send, runtime::AnyObject};
 
 /// Hide the window based on the platform
-pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
+pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, _is_keybinding: bool) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = _window.window_handle() {
         if let RawWindowHandle::Win32(handle) = handle.as_raw() {
@@ -26,6 +26,11 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     }
     #[cfg(target_os = "macos")]
     _cx.hide();
+
+    #[cfg(target_os = "linux")]
+    if _is_keybinding {
+        _window.minimize_window();
+    }
 }
 
 /// Activate the window based on the platform

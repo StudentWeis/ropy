@@ -76,7 +76,7 @@ impl RopyBoard {
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window
                 if !this.pinned {
-                    hide_window(window, cx);
+                    hide_window(window, cx, false);
                 }
             });
 
@@ -213,7 +213,7 @@ impl RopyBoard {
         };
         self.copy_to_clipboard(&content, &content_type);
         if !self.pinned {
-            hide_window(window, cx);
+            hide_window(window, cx, false);
         }
         if index != 0 {
             self.delete_record(id);
