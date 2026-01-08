@@ -109,10 +109,21 @@ impl X11 {
         self.send_wm_state_and_sync(self.net_wm_state_above, always_on_top, self.root_id)
     }
 
-    pub fn activate_window(&self) -> Result<(), Box<dyn Error>> {
+    pub fn display_and_activate_window(&self) -> Result<(), Box<dyn Error>> {
+        self.display_window()?;
+        self.active_window()?;
+
+        Ok(())
+    }
+
+    pub fn display_window(&self) -> Result<(), Box<dyn Error>> {
         self.connection.map_window(self.window_id)?;
         self.connection.sync()?;
 
+        Ok(())
+    }
+
+    pub fn active_window(&self) -> Result<(), Box<dyn Error>> {
         let event = ClientMessageEvent::new(
             32,
             self.window_id,

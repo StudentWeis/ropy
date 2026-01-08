@@ -262,7 +262,8 @@ pub fn launch_app() {
         // Initialize X11 control
         #[cfg(target_os = "linux")]
         if env::var("DISPLAY").is_ok() {
-            X11.get_or_init(|| X11::new().expect("Failed to connect x11rb"));
+            let x11 = X11.get_or_init(|| X11::new().expect("Failed to connect x11rb"));
+            let _ = x11.active_window();
         }
     });
 }

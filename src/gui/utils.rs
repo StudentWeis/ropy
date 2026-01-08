@@ -52,7 +52,7 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     #[cfg(target_os = "linux")]
     {
         if let Some(x11) = crate::gui::app::X11.get() {
-            if let Err(e) = x11.activate_window() {
+            if let Err(e) = x11.display_and_activate_window() {
                 eprintln!("[ropy] Failed to activate window: {e}")
             }
         }
