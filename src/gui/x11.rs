@@ -131,4 +131,11 @@ impl X11 {
 
         Ok(())
     }
+
+    pub fn hide_window(&self) -> Result<(), Box<dyn Error>> {
+        self.connection.unmap_window(self.window_id)?;
+        self.connection.sync()?;
+
+        Ok(())
+    }
 }

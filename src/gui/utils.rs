@@ -14,7 +14,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use objc2::{msg_send, runtime::AnyObject};
 
 /// Hide the window based on the platform
-pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, _is_keybinding: bool) {
+pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = _window.window_handle() {
         if let RawWindowHandle::Win32(handle) = handle.as_raw() {
@@ -28,8 +28,10 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, _is_keybinding
     _cx.hide();
 
     #[cfg(target_os = "linux")]
-    if _is_keybinding {
-        _window.minimize_window();
+    if let Some(x11) = crate::gui::app::X11.get() {
+        if let Err(e) = x11.hide_window() {
+            eprintln!("[ropy] Failed to hide window: {e}")
+        }
     }
 }
 
@@ -55,7 +57,6 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
             }
         }
     }
-
 }
 
 /// Set the window to be always on top

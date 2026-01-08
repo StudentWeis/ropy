@@ -140,9 +140,6 @@ fn create_window(
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            #[cfg(target_os = "linux")]
-            kind: WindowKind::Normal,
-            #[cfg(not(target_os = "linux"))]
             kind: WindowKind::PopUp,
             titlebar: None,
             show: !is_silent, // When silent mode, do not show the window initially

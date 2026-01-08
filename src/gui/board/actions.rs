@@ -65,7 +65,7 @@ impl RopyBoard {
             window.focus(&self.focus_handle);
             return;
         }
-        hide_window(window, cx, true);
+        hide_window(window, cx);
         self.pinned = false;
     }
 
