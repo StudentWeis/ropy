@@ -2,9 +2,11 @@ use crate::config::Settings;
 use crate::i18n::I18n;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::mpsc::Sender;
+use std::thread;
 use std::time::Duration;
 
-use gpui::{AsyncApp, WindowHandle};
+use gpui::WindowHandle;
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -51,48 +53,43 @@ fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
     Icon::from_rgba(rgba, width, height).map_err(|e| format!("Failed to create icon: {e:?}").into())
 }
 
+pub enum TrayEvent {
+    Show,
+    Quit,
+}
+
 /// Start the system tray handler
-pub fn start_tray_handler(
-    window_handle: WindowHandle<Root>,
-    async_app: AsyncApp,
-    settings: Arc<RwLock<Settings>>,
-) {
-    let fg_executor = async_app.foreground_executor().clone();
-    let bg_executor = async_app.background_executor().clone();
+pub fn start_tray_handler_inner(settings: Arc<RwLock<Settings>>, tx: Sender<TrayEvent>) {
     match init_tray(settings) {
         Ok((tray, show_id, quit_id)) => {
             println!("[ropy] Tray icon initialized successfully");
             // Keep tray icon alive for the lifetime of the application
             Box::leak(Box::new(tray));
-            fg_executor
-                .spawn(async move {
-                    let menu_channel = tray_icon::menu::MenuEvent::receiver();
-                    let tray_channel = TrayIconEvent::receiver();
-                    loop {
-                        while let Ok(event) = menu_channel.try_recv() {
-                            if event.id == show_id {
-                                let _ = async_app.update(move |cx| {
-                                    send_active_action(window_handle, cx);
-                                });
-                            } else if event.id == quit_id {
-                                let _ = async_app.update(move |cx| {
-                                    cx.quit();
-                                });
-                            }
+
+            thread::spawn(move || {
+                let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                let tray_channel = TrayIconEvent::receiver();
+
+                loop {
+                    while let Ok(event) = menu_channel.try_recv() {
+                        if event.id == show_id {
+                            let _ = tx.send(TrayEvent::Show);
+                        } else if event.id == quit_id {
+                            let _ = tx.send(TrayEvent::Quit);
                         }
-                        while let Ok(event) = tray_channel.try_recv() {
-                            if let TrayIconEvent::Click { button, .. } = event
-                                && button == tray_icon::MouseButton::Left
-                            {
-                                let _ = async_app.update(move |cx| {
-                                    send_active_action(window_handle, cx);
-                                });
-                            }
-                        }
-                        bg_executor.timer(Duration::from_millis(100)).await;
                     }
-                })
-                .detach();
+
+                    while let Ok(event) = tray_channel.try_recv() {
+                        if let TrayIconEvent::Click { button, .. } = event
+                            && button == tray_icon::MouseButton::Left
+                        {
+                            let _ = tx.send(TrayEvent::Show);
+                        }
+                    }
+
+                    thread::sleep(Duration::from_millis(100));
+                }
+            });
         }
         Err(e) => {
             eprintln!("[ropy] Failed to initialize tray icon: {e}");
@@ -101,7 +98,7 @@ pub fn start_tray_handler(
 }
 
 /// Send the active action to the main window
-fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
+pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
     window_handle
         .update(cx, |_, window, cx| {
             window.dispatch_action(Box::new(crate::gui::board::Active), cx)
