@@ -15,7 +15,6 @@ use std::borrow::Cow;
 #[cfg(target_os = "linux")]
 use std::env;
 use std::sync::{Arc, Mutex, OnceLock, RwLock, mpsc};
-use std::thread;
 use std::time::Duration;
 
 pub static X11: OnceLock<X11> = OnceLock::new();
@@ -275,18 +274,21 @@ fn start_tray_handler(
 ) {
     let (tx, rx) = mpsc::channel();
 
-    thread::spawn(move || {
-        #[cfg(target_os = "linux")]
-        gtk::init().expect("Failed to init gtk modules");
-
-        start_tray_handler_inner(settings, tx);
-
-        #[cfg(target_os = "linux")]
-        gtk::main();
-    });
-
     let fg_executor = async_app.foreground_executor().clone();
     let bg_executor = async_app.background_executor().clone();
+    let bg_executor_clone = bg_executor.clone();
+
+    bg_executor
+        .spawn(async move {
+            #[cfg(target_os = "linux")]
+            gtk::init().expect("Failed to init gtk modules");
+
+            start_tray_handler_inner(settings, tx, bg_executor_clone);
+
+            #[cfg(target_os = "linux")]
+            gtk::main();
+        })
+        .detach();
 
     fg_executor
         .spawn(async move {

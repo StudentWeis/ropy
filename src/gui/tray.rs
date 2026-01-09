@@ -3,9 +3,9 @@ use crate::i18n::I18n;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::mpsc::Sender;
-use std::thread;
 use std::time::Duration;
 
+use gpui::BackgroundExecutor;
 use gpui::WindowHandle;
 use gpui_component::Root;
 use tray_icon::{
@@ -59,37 +59,45 @@ pub enum TrayEvent {
 }
 
 /// Start the system tray handler
-pub fn start_tray_handler_inner(settings: Arc<RwLock<Settings>>, tx: Sender<TrayEvent>) {
+pub fn start_tray_handler_inner(
+    settings: Arc<RwLock<Settings>>,
+    tx: Sender<TrayEvent>,
+    bg_executor: BackgroundExecutor,
+) {
     match init_tray(settings) {
         Ok((tray, show_id, quit_id)) => {
             println!("[ropy] Tray icon initialized successfully");
             // Keep tray icon alive for the lifetime of the application
             Box::leak(Box::new(tray));
 
-            thread::spawn(move || {
-                let menu_channel = tray_icon::menu::MenuEvent::receiver();
-                let tray_channel = TrayIconEvent::receiver();
+            let bg_executor_clone = bg_executor.clone();
 
-                loop {
-                    while let Ok(event) = menu_channel.try_recv() {
-                        if event.id == show_id {
-                            let _ = tx.send(TrayEvent::Show);
-                        } else if event.id == quit_id {
-                            let _ = tx.send(TrayEvent::Quit);
+            bg_executor
+                .spawn(async move {
+                    let menu_channel = tray_icon::menu::MenuEvent::receiver();
+                    let tray_channel = TrayIconEvent::receiver();
+
+                    loop {
+                        while let Ok(event) = menu_channel.try_recv() {
+                            if event.id == show_id {
+                                let _ = tx.send(TrayEvent::Show);
+                            } else if event.id == quit_id {
+                                let _ = tx.send(TrayEvent::Quit);
+                            }
                         }
-                    }
 
-                    while let Ok(event) = tray_channel.try_recv() {
-                        if let TrayIconEvent::Click { button, .. } = event
-                            && button == tray_icon::MouseButton::Left
-                        {
-                            let _ = tx.send(TrayEvent::Show);
+                        while let Ok(event) = tray_channel.try_recv() {
+                            if let TrayIconEvent::Click { button, .. } = event
+                                && button == tray_icon::MouseButton::Left
+                            {
+                                let _ = tx.send(TrayEvent::Show);
+                            }
                         }
-                    }
 
-                    thread::sleep(Duration::from_millis(100));
-                }
-            });
+                        bg_executor_clone.timer(Duration::from_millis(100)).await;
+                    }
+                })
+                .detach();
         }
         Err(e) => {
             eprintln!("[ropy] Failed to initialize tray icon: {e}");
