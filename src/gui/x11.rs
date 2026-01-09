@@ -1,4 +1,4 @@
-use std::{error::Error, io};
+use std::{error::Error, io, thread, time::Duration};
 
 use x11rb::{
     connection::Connection,
@@ -139,6 +139,7 @@ impl X11 {
         )?;
 
         self.connection.sync()?;
+        self.wait_actvate_window()?;
 
         Ok(())
     }
@@ -148,5 +149,27 @@ impl X11 {
         self.connection.sync()?;
 
         Ok(())
+    }
+
+    fn wait_actvate_window(&self) -> Result<(), Box<dyn std::error::Error>> {
+        loop {
+            let prop = self
+                .connection
+                .get_property(
+                    false,
+                    self.root_id,
+                    self.net_active_window,
+                    AtomEnum::WINDOW,
+                    0,
+                    1,
+                )?
+                .reply()?;
+
+            if u32::from_ne_bytes(prop.value[0..4].try_into()?) == self.window_id {
+                return Ok(());
+            }
+
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 }
