@@ -1,7 +1,8 @@
 use crate::clipboard::{self, ClipboardEvent, LastCopyState};
 use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
-use crate::gui::tray::start_tray_handler;
+use crate::gui::tray::start_tray_handler_inner;
+use crate::gui::x11::X11;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
@@ -11,7 +12,12 @@ use gpui_component::theme::Theme;
 use gpui_component::{Root, ThemeMode};
 use rust_embed::RustEmbed;
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex, RwLock};
+#[cfg(target_os = "linux")]
+use std::env;
+use std::sync::{Arc, Mutex, OnceLock, RwLock, mpsc};
+use std::time::Duration;
+
+pub static X11: OnceLock<X11> = OnceLock::new();
 
 #[derive(RustEmbed)]
 #[folder = "assets"]
@@ -31,6 +37,8 @@ impl AssetSource for Assets {
 
 #[cfg(target_os = "macos")]
 use objc2::{class, msg_send, runtime::AnyObject};
+
+use super::tray::TrayEvent;
 
 #[cfg(target_os = "macos")]
 fn set_activation_policy_accessory() {
@@ -243,12 +251,67 @@ pub fn launch_app() {
                     board.set_hotkey_tx(hotkey_tx);
                 });
         });
-        start_tray_handler(window_handle, async_app.clone(), settings.clone());
+
+        start_tray_handler(settings, async_app, window_handle);
 
         if !is_silent {
             cx.activate(true);
         }
+
+        // Initialize X11 control
+        #[cfg(target_os = "linux")]
+        if env::var("DISPLAY").is_ok() {
+            let x11 = X11.get_or_init(|| X11::new().expect("Failed to connect x11rb"));
+            let _ = x11.active_window();
+        }
     });
+}
+
+fn start_tray_handler(
+    settings: Arc<RwLock<Settings>>,
+    async_app: AsyncApp,
+    window_handle: WindowHandle<Root>,
+) {
+    let (tx, rx) = mpsc::channel();
+
+    let fg_executor = async_app.foreground_executor().clone();
+    let bg_executor = async_app.background_executor().clone();
+    let bg_executor_clone = bg_executor.clone();
+
+    bg_executor
+        .spawn(async move {
+            #[cfg(target_os = "linux")]
+            gtk::init().expect("Failed to init gtk modules");
+
+            start_tray_handler_inner(settings, tx, bg_executor_clone);
+
+            #[cfg(target_os = "linux")]
+            gtk::main();
+        })
+        .detach();
+
+    fg_executor
+        .spawn(async move {
+            loop {
+                while let Ok(event) = rx.try_recv() {
+                    match event {
+                        TrayEvent::Show => {
+                            let _ = async_app.update(move |cx| {
+                                crate::gui::tray::send_active_action(window_handle, cx);
+                            });
+                        }
+                        TrayEvent::Quit => {
+                            let _ = async_app.update(move |cx| {
+                                cx.quit();
+                            });
+                        }
+                    }
+                }
+
+                bg_executor.timer(Duration::from_millis(100)).await;
+            }
+        })
+        .detach();
 }
 
 fn bind_application_keys(cx: &mut App) {
@@ -257,6 +320,8 @@ fn bind_application_keys(cx: &mut App) {
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
         #[cfg(target_os = "windows")]
+        KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
+        #[cfg(target_os = "linux")]
         KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
         KeyBinding::new("up", crate::gui::board::SelectPrev, None),
         KeyBinding::new("down", crate::gui::board::SelectNext, None),
