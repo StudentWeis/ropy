@@ -17,6 +17,7 @@ use std::env;
 use std::sync::{Arc, Mutex, OnceLock, RwLock, mpsc};
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
 pub static X11: OnceLock<X11> = OnceLock::new();
 
 #[derive(RustEmbed)]
