@@ -1,7 +1,8 @@
-use super::CopyRequest;
 use clipboard_rs::{Clipboard, ClipboardContext};
 use gpui::AsyncApp;
 use image::ImageReader;
+
+use super::CopyRequest;
 
 /// Start a background task to handle clipboard write requests.
 /// This avoids creating a new ClipboardContext and spawning a new task for each write.

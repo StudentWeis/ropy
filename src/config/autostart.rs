@@ -1,5 +1,6 @@
-use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use std::env;
+
+use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

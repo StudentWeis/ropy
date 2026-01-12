@@ -1,7 +1,6 @@
-#[cfg(target_os = "windows")]
-use crate::gui::utils::start_window_drag;
-use crate::repository::ClipboardRecord;
-use crate::repository::models::ContentType;
+use std::path::PathBuf;
+use std::sync::OnceLock;
+
 use gpui::{
     Context, Entity, anchored, deferred, div, img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
@@ -12,10 +11,12 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState};
 use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use regex::Regex;
-use std::path::PathBuf;
-use std::sync::OnceLock;
 
 use super::{RopyBoard, preview};
+#[cfg(target_os = "windows")]
+use crate::gui::utils::start_window_drag;
+use crate::repository::ClipboardRecord;
+use crate::repository::models::ContentType;
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
     static HEX_REGEX: OnceLock<Regex> = OnceLock::new();

@@ -1,5 +1,6 @@
 #[cfg(debug_assertions)]
 use std::{thread, time::Duration};
+
 #[cfg(debug_assertions)]
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
@@ -27,8 +28,9 @@ pub fn spawn_rss_monitor(interval: Duration) -> std::thread::JoinHandle<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn smoke() {

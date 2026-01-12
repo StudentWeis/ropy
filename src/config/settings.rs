@@ -1,8 +1,10 @@
-use crate::i18n::Language;
-use config::{Config, ConfigError, File};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
+
+use config::{Config, ConfigError, File};
+use serde::{Deserialize, Serialize};
+
+use crate::i18n::Language;
 
 /// Application settings structure
 #[derive(Debug, Clone, Serialize, Deserialize)]

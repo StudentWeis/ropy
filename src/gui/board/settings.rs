@@ -1,4 +1,3 @@
-use crate::i18n::{I18n, Language};
 use gpui::{
     Context, div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
@@ -11,6 +10,7 @@ use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
 use super::RopyBoard;
 #[cfg(target_os = "windows")]
 use crate::gui::utils::start_window_drag;
+use crate::i18n::{I18n, Language};
 
 /// Render language selection buttons
 /// Note: Uses index-based selection from Language::all() which maintains a stable order.

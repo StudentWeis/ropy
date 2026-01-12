@@ -4,12 +4,12 @@ mod preview;
 mod render;
 mod settings;
 
-use crate::clipboard::LastCopyState;
-use crate::config::Settings;
-use crate::gui::hide_window;
-use crate::i18n::{I18n, Language};
-use crate::repository::models::ContentType;
-use crate::repository::{ClipboardRecord, ClipboardRepository};
+use std::str::FromStr;
+use std::sync::{Arc, Mutex, RwLock};
+
+// Re-export utilities for external use
+use about::render_about_content;
+pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, Subscription,
     Window,
@@ -17,14 +17,15 @@ use gpui::{
 };
 use gpui_component::input::InputState;
 use gpui_component::{ActiveTheme, v_flex};
-use std::str::FromStr;
-use std::sync::{Arc, Mutex, RwLock};
-
-// Re-export utilities for external use
-use about::render_about_content;
-pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use render::{render_header, render_search_input};
 use settings::render_settings_content;
+
+use crate::clipboard::LastCopyState;
+use crate::config::Settings;
+use crate::gui::hide_window;
+use crate::i18n::{I18n, Language};
+use crate::repository::models::ContentType;
+use crate::repository::{ClipboardRecord, ClipboardRepository};
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {

@@ -1,11 +1,11 @@
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
+
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
-
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 
 pub fn ensure_single_instance() -> bool {
     let mutex_name = "RopySingleInstanceMutex";

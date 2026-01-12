@@ -1,10 +1,11 @@
+use std::path::PathBuf;
+
 /// Custom tooltip preview implementation that supports automatic line wrapping
 use gpui::{
     AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, Window, div, img, px,
 };
 use gpui_component::ActiveTheme;
 use image::ImageReader;
-use std::path::PathBuf;
 
 /// Create a tooltip preview that supports automatic line wrapping
 ///

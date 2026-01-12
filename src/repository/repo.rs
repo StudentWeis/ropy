@@ -1,9 +1,10 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
-use chrono::Local;
-use sled::{Db, Tree};
 use std::fs;
 use std::path::PathBuf;
+
+use chrono::Local;
+use sled::{Db, Tree};
 
 use super::errors::RepositoryError;
 use super::models::{ClipboardRecord, ContentType};
@@ -229,10 +230,12 @@ impl Drop for ClipboardRepository {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::thread;
     use std::time::Duration;
+
     use tempfile::tempdir;
+
+    use super::*;
 
     fn create_test_repo() -> ClipboardRepository {
         let temp_dir = tempdir().expect("Failed to create temp dir");
