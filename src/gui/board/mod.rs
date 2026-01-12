@@ -52,6 +52,8 @@ pub struct RopyBoard {
     // I18n
     i18n: I18n,
     selected_language: usize, // Index into Language::all()
+    /// Track if we're in a delete operation to preserve scroll position
+    deleting_record: bool,
 }
 
 impl RopyBoard {
@@ -134,6 +136,7 @@ impl RopyBoard {
             hotkey_tx: None,
             i18n,
             selected_language,
+            deleting_record: false,
         }
     }
 
@@ -182,6 +185,8 @@ impl RopyBoard {
             } else {
                 let mut guard = self.records.lock().unwrap();
                 guard.retain(|record| record.id != id);
+                // Mark that we're in a delete operation to preserve scroll position
+                self.deleting_record = true;
             }
         }
     }
@@ -353,8 +358,36 @@ impl Render for RopyBoard {
         let new_filtered_records = self.get_filtered_records(&query);
 
         if new_filtered_records != self.filtered_records {
+            let old_len = self.filtered_records.len();
+            let new_len = new_filtered_records.len();
+            
+            // If we're deleting a record, preserve the scroll position
+            let scroll_position = if self.deleting_record {
+                Some(self.list_state.logical_scroll_top())
+            } else {
+                None
+            };
+            
             self.filtered_records = new_filtered_records;
-            self.list_state.reset(self.filtered_records.len());
+            
+            // Use splice to inform list state about the change instead of reset
+            // This helps preserve scroll position better
+            if old_len > new_len && self.deleting_record {
+                // A record was deleted - use splice to update just that range
+                // We replace the entire range with the new count
+                self.list_state.splice(0..old_len, new_len);
+                
+                // Restore scroll position
+                if let Some(scroll_pos) = scroll_position {
+                    self.list_state.scroll_to(scroll_pos);
+                }
+                
+                // Reset the flag
+                self.deleting_record = false;
+            } else {
+                // For other changes (like search), reset the list state
+                self.list_state.reset(new_len);
+            }
         }
 
         if self.selected_index >= self.filtered_records.len() && !self.filtered_records.is_empty() {
