@@ -24,7 +24,7 @@
 
 # 特性
 
-- 跨平台支持：Windows、macOS 和 Linux。
+- 跨平台支持：Windows、macOS 和 Linux(X11)。
 - 使用 Zed 的 GPUI 构建的原生 GUI 应用。
 - 易于使用、轻量且快速。
 - 搜索/置顶/预览/自动启动/快捷键。

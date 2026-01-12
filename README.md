@@ -24,7 +24,7 @@ English | <a href="doc/README_ZH.md">简体中文</a>
 
 # Features
 
-- Cross-platform: Windows, macOS & Linux.
+- Cross-platform: Windows, macOS & Linux(X11).
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
 - Search/Pin/Preview/Autostart/Shortcuts.
