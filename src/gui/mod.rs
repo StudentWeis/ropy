@@ -3,6 +3,7 @@ mod board;
 mod hotkey;
 mod tray;
 mod utils;
+
 #[cfg(target_os = "linux")]
 mod x11;
 

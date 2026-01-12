@@ -1,7 +1,6 @@
 use crate::config::Settings;
 use crate::i18n::I18n;
-use gpui::AsyncApp;
-use gpui::{BackgroundExecutor, WindowHandle};
+use gpui::{AsyncApp, BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock, mpsc};

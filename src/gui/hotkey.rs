@@ -1,6 +1,5 @@
-use global_hotkey::HotKeyState;
 use global_hotkey::hotkey::HotKey;
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use gpui::{BackgroundExecutor, ForegroundExecutor};
 use std::time::Duration;
 
@@ -87,7 +86,6 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use global_hotkey::GlobalHotKeyEvent;
 
     #[test]
     fn test_hotkey_registration_and_unregistration() {

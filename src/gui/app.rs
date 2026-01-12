@@ -1,6 +1,6 @@
 use crate::clipboard::{self, ClipboardEvent, LastCopyState};
 use crate::config::{AppTheme, AutoStartManager, Settings};
-use crate::gui::board::RopyBoard;
+use crate::gui::board::{ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev};
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
@@ -11,9 +11,6 @@ use gpui_component::{Root, ThemeMode};
 use rust_embed::RustEmbed;
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex, RwLock};
-
-#[cfg(target_os = "macos")]
-use objc2::{class, msg_send, runtime::AnyObject};
 
 #[cfg(target_os = "linux")]
 use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
@@ -39,6 +36,7 @@ impl AssetSource for Assets {
 
 #[cfg(target_os = "macos")]
 fn set_activation_policy_accessory() {
+    use objc2::{class, msg_send, runtime::AnyObject};
     unsafe {
         // Config the app to be accessory (no dock icon & cmd tab)
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
@@ -266,16 +264,16 @@ pub fn launch_app() {
 
 fn bind_application_keys(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("escape", crate::gui::board::Hide, None),
+        KeyBinding::new("escape", Hide, None),
         #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-q", crate::gui::board::Quit, None),
+        KeyBinding::new("cmd-q", Quit, None),
         #[cfg(target_os = "windows")]
-        KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
+        KeyBinding::new("alt-f4", Quit, None),
         #[cfg(target_os = "linux")]
-        KeyBinding::new("alt-f4", crate::gui::board::Quit, None),
-        KeyBinding::new("up", crate::gui::board::SelectPrev, None),
-        KeyBinding::new("down", crate::gui::board::SelectNext, None),
-        KeyBinding::new("enter", crate::gui::board::ConfirmSelection, None),
+        KeyBinding::new("alt-f4", Quit, None),
+        KeyBinding::new("up", SelectPrev, None),
+        KeyBinding::new("down", SelectNext, None),
+        KeyBinding::new("enter", ConfirmSelection, None),
     ]);
 }
 
