@@ -67,12 +67,14 @@ pub fn start_tray_handler(
     let bg_executor = async_app.background_executor().clone();
     let bg_executor_clone = bg_executor.clone();
 
+    #[cfg(not(target_os = "linux"))]
     start_tray_handler_inner(settings, tx, bg_executor_clone);
 
     #[cfg(target_os = "linux")]
     bg_executor
         .spawn(async move {
             gtk::init().expect("Failed to init gtk modules");
+            start_tray_handler_inner(settings, tx, bg_executor_clone);
             gtk::main();
         })
         .detach();
