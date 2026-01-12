@@ -3,8 +3,11 @@ use gpui::{
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
-use gpui_component::button::{Button, ButtonVariants};
-use gpui_component::{ActiveTheme, Sizable, h_flex, v_flex};
+use gpui_component::{
+    ActiveTheme, Sizable,
+    button::{Button, ButtonVariants},
+    h_flex, v_flex,
+};
 
 use super::RopyBoard;
 #[cfg(target_os = "windows")]

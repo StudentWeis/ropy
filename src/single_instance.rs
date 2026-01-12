@@ -1,10 +1,9 @@
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
+use std::{ffi::OsStr, os::windows::ffi::OsStrExt};
 
-use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
-use windows_sys::Win32::System::Threading::CreateMutexW;
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+use windows_sys::Win32::{
+    Foundation::{ERROR_ALREADY_EXISTS, GetLastError},
+    System::Threading::CreateMutexW,
+    UI::WindowsAndMessaging::{FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow},
 };
 
 pub fn ensure_single_instance() -> bool {

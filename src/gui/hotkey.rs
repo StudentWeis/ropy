@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use global_hotkey::hotkey::HotKey;
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 use gpui::{BackgroundExecutor, ForegroundExecutor};
 
 /// Start a global hotkey listener in a background task with a custom callback.

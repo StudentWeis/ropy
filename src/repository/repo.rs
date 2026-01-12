@@ -1,13 +1,14 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use chrono::Local;
 use sled::{Db, Tree};
 
-use super::errors::RepositoryError;
-use super::models::{ClipboardRecord, ContentType};
+use super::{
+    errors::RepositoryError,
+    models::{ClipboardRecord, ContentType},
+};
 
 pub struct ClipboardRepository {
     db: Db,
@@ -230,8 +231,7 @@ impl Drop for ClipboardRepository {
 
 #[cfg(test)]
 mod tests {
-    use std::thread;
-    use std::time::Duration;
+    use std::{thread, time::Duration};
 
     use tempfile::tempdir;
 

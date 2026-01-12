@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
 use serde::{Deserialize, Serialize};

@@ -1,6 +1,7 @@
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock, mpsc};
-use std::time::Duration;
+use std::{
+    sync::{Arc, RwLock, mpsc, mpsc::Sender},
+    time::Duration,
+};
 
 use gpui::{AsyncApp, BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
@@ -9,8 +10,7 @@ use tray_icon::{
     menu::{Menu, MenuId, MenuItem},
 };
 
-use crate::config::Settings;
-use crate::i18n::I18n;
+use crate::{config::Settings, i18n::I18n};
 
 /// Initialize and return the tray icon
 pub fn init_tray(

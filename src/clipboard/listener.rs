@@ -1,21 +1,25 @@
 //! A simple clipboard change listener using event-driven watching.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    sync::{Arc, Mutex, RwLock},
+};
 
 use async_channel::Sender;
-use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
+    common::RustImage,
 };
 use gpui::{AsyncApp, WindowHandle};
 use gpui_component::Root;
 use image::DynamicImage;
 
 use super::{ClipboardEvent, LastCopyState};
-use crate::config::Settings;
-use crate::repository::{ClipboardRecord, ClipboardRepository};
+use crate::{
+    config::Settings,
+    repository::{ClipboardRecord, ClipboardRepository},
+};
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {

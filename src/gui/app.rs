@@ -1,20 +1,23 @@
-use std::borrow::Cow;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use gpui::{
     App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
     WindowHandle, WindowKind, WindowOptions, px, rgb, size,
 };
-use gpui_component::theme::Theme;
-use gpui_component::{Root, ThemeMode};
+use gpui_component::{Root, ThemeMode, theme::Theme};
 use rust_embed::RustEmbed;
 #[cfg(target_os = "linux")]
 use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
 
-use crate::clipboard::{self, ClipboardEvent, LastCopyState};
-use crate::config::{AppTheme, AutoStartManager, Settings};
-use crate::gui::board::{ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev};
-use crate::repository::{ClipboardRecord, ClipboardRepository};
+use crate::{
+    clipboard::{self, ClipboardEvent, LastCopyState},
+    config::{AppTheme, AutoStartManager, Settings},
+    gui::board::{ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
+    repository::{ClipboardRecord, ClipboardRepository},
+};
 
 #[cfg(target_os = "linux")]
 pub static X11: OnceLock<X11> = OnceLock::new();

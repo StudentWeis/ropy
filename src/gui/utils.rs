@@ -60,8 +60,10 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
 /// Start dragging the window
 #[cfg(target_os = "windows")]
 pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{HTCAPTION, PostMessageA, WM_NCLBUTTONDOWN};
+    use windows_sys::Win32::UI::{
+        Input::KeyboardAndMouse::ReleaseCapture,
+        WindowsAndMessaging::{HTCAPTION, PostMessageA, WM_NCLBUTTONDOWN},
+    };
     if let Ok(handle) = window.window_handle() {
         if let RawWindowHandle::Win32(handle) = handle.as_raw() {
             let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;

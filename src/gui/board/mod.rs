@@ -4,8 +4,10 @@ mod preview;
 mod render;
 mod settings;
 
-use std::str::FromStr;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex, RwLock},
+};
 
 // Re-export utilities for external use
 use about::render_about_content;
@@ -15,17 +17,17 @@ use gpui::{
     Window,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
 };
-use gpui_component::input::InputState;
-use gpui_component::{ActiveTheme, v_flex};
+use gpui_component::{ActiveTheme, input::InputState, v_flex};
 use render::{render_header, render_search_input};
 use settings::render_settings_content;
 
-use crate::clipboard::LastCopyState;
-use crate::config::Settings;
-use crate::gui::hide_window;
-use crate::i18n::{I18n, Language};
-use crate::repository::models::ContentType;
-use crate::repository::{ClipboardRecord, ClipboardRepository};
+use crate::{
+    clipboard::LastCopyState,
+    config::Settings,
+    gui::hide_window,
+    i18n::{I18n, Language},
+    repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
+};
 
 /// RopyBoard Main Window Component
 pub struct RopyBoard {
