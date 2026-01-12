@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0-beta] - 2026-01-12
+
+### 🚀 Features
+- Add support for preserving scroll position during record deletion by @StudentWeis
+- Add linux platform support (#31) by @eatradish in [#31](https://github.com/StudentWeis/ropy/pull/31)
+
+### 🐛 Bug Fixes
+- Fix build on non linux platform by @eatradish in [#32](https://github.com/StudentWeis/ropy/pull/32)
+- Handle settings exit in hide action by @StudentWeis in [#30](https://github.com/StudentWeis/ropy/pull/30)
+- Clean up auto-start manager logic in windows by @StudentWeis
+
+### 🚜 Refactor
+- Reorganize tray and app module imports and functions by @StudentWeis
+
+### 📚 Documentation
+- Update README and TODO by @StudentWeis
+
+### New Contributors
+
+- @eatradish made his first contribution in [#32](https://github.com/StudentWeis/ropy/pull/32)
+
 ## [0.2.0-alpha] - 2026-01-04
 
 ### 🚀 Features

@@ -24,10 +24,10 @@ English | <a href="doc/README_ZH.md">简体中文</a>
 
 # Features
 
-- Cross-platform support: Windows and macOS.
+- Cross-platform: Windows, macOS & Linux.
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
-- Search/Pin/Preview/Autostart/Shortcuts etcs.
+- Search/Pin/Preview/Autostart/Shortcuts.
 
 # Installation
 
@@ -46,7 +46,7 @@ sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 
 ## Building from Source
 
-Make sure you have Rust installed. You can install Rust using [rustup](https://rustup.rs/).
+Make sure you have Rust installed. You can install Rust using [rustup](https://rustup.rs).
 
 1. Clone the repository:
 
