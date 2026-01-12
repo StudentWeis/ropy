@@ -3,7 +3,7 @@ use gpui::{Context, Window};
 use {
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     windows_sys::Win32::UI::WindowsAndMessaging::{
-        PostMessageA, SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow,
+        SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow,
     },
 };
 
@@ -13,12 +13,12 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) 
         return;
     }
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = _window.window_handle() {
-        if let RawWindowHandle::Win32(handle) = handle.as_raw() {
-            let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
-            unsafe {
-                ShowWindow(hwnd, SW_HIDE);
-            }
+    if let Ok(handle) = _window.window_handle()
+        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    {
+        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        unsafe {
+            ShowWindow(hwnd, SW_HIDE);
         }
     }
 
@@ -36,13 +36,13 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) 
 /// Activate the window based on the platform
 pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = _window.window_handle() {
-        if let RawWindowHandle::Win32(handle) = handle.as_raw() {
-            let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
-            unsafe {
-                ShowWindow(hwnd, SW_RESTORE);
-                SetForegroundWindow(hwnd);
-            }
+    if let Ok(handle) = _window.window_handle()
+        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    {
+        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        unsafe {
+            ShowWindow(hwnd, SW_RESTORE);
+            SetForegroundWindow(hwnd);
         }
     }
 
@@ -57,6 +57,32 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     }
 }
 
+/// Set the window to be always on top
+pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) {
+    #[cfg(target_os = "windows")]
+    if let Ok(handle) = _window.window_handle()
+        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    {
+        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        unsafe {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+            };
+            let hwnd_insert_after = if pinned { HWND_TOPMOST } else { HWND_NOTOPMOST };
+            SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(x11) = crate::gui::app::X11.get() {
+            if let Err(e) = x11.set_always_on_top(always_on_top) {
+                eprintln!("[ropy] Failed to set always on top: {e}")
+            }
+        }
+    }
+}
+
 /// Start dragging the window
 #[cfg(target_os = "windows")]
 pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
@@ -64,13 +90,13 @@ pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
         Input::KeyboardAndMouse::ReleaseCapture,
         WindowsAndMessaging::{HTCAPTION, PostMessageA, WM_NCLBUTTONDOWN},
     };
-    if let Ok(handle) = window.window_handle() {
-        if let RawWindowHandle::Win32(handle) = handle.as_raw() {
-            let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
-            unsafe {
-                ReleaseCapture();
-                PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
-            }
+    if let Ok(handle) = window.window_handle()
+        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    {
+        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        unsafe {
+            ReleaseCapture();
+            PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
         }
     }
 }
