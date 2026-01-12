@@ -1,4 +1,3 @@
-use crate::gui::utils::set_always_on_top;
 #[cfg(target_os = "windows")]
 use crate::gui::utils::start_window_drag;
 use crate::repository::ClipboardRecord;
@@ -102,9 +101,8 @@ pub fn render_header(board: &RopyBoard, cx: &mut Context<'_, RopyBoard>) -> impl
                     }
                     .icon(Icon::empty().path("pin-to-top.svg"))
                     .tooltip(pin_tooltip)
-                    .on_click(cx.listener(|this, _, window, cx| {
+                    .on_click(cx.listener(|this, _event, _window, cx| {
                         this.pinned = !this.pinned;
-                        set_always_on_top(window, cx, this.pinned);
                         cx.notify();
                     }))
                     .on_mouse_down(

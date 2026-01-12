@@ -78,7 +78,7 @@ impl RopyBoard {
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window
                 if !this.pinned {
-                    hide_window(window, cx);
+                    hide_window(window, cx, this.pinned);
                 }
             });
 
@@ -218,7 +218,7 @@ impl RopyBoard {
         };
         self.copy_to_clipboard(&content, &content_type);
         if !self.pinned {
-            hide_window(window, cx);
+            hide_window(window, cx, self.pinned);
         }
         if index != 0 {
             self.delete_record(id);
@@ -360,28 +360,28 @@ impl Render for RopyBoard {
         if new_filtered_records != self.filtered_records {
             let old_len = self.filtered_records.len();
             let new_len = new_filtered_records.len();
-            
+
             // If we're deleting a record, preserve the scroll position
             let scroll_position = if self.deleting_record {
                 Some(self.list_state.logical_scroll_top())
             } else {
                 None
             };
-            
+
             self.filtered_records = new_filtered_records;
-            
+
             // Use splice to inform list state about the change instead of reset
             // This helps preserve scroll position better
             if old_len > new_len && self.deleting_record {
                 // A record was deleted - use splice to update just that range
                 // We replace the entire range with the new count
                 self.list_state.splice(0..old_len, new_len);
-                
+
                 // Restore scroll position
                 if let Some(scroll_pos) = scroll_position {
                     self.list_state.scroll_to(scroll_pos);
                 }
-                
+
                 // Reset the flag
                 self.deleting_record = false;
             } else {
