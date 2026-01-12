@@ -4,10 +4,12 @@ use gpui::{Context, Window};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
-#[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    HTCAPTION, PostMessageA, SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow, WM_NCLBUTTONDOWN,
+use {
+    windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture,
+    windows_sys::Win32::UI::WindowsAndMessaging::{
+        HTCAPTION, PostMessageA, SW_HIDE, SW_RESTORE, SetForegroundWindow, ShowWindow,
+        WM_NCLBUTTONDOWN,
+    },
 };
 
 #[cfg(target_os = "macos")]
@@ -24,6 +26,7 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
             }
         }
     }
+
     #[cfg(target_os = "macos")]
     _cx.hide();
 
@@ -47,14 +50,14 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
             }
         }
     }
+
     #[cfg(target_os = "macos")]
     _cx.activate(true);
+
     #[cfg(target_os = "linux")]
-    {
-        if let Some(x11) = crate::gui::app::X11.get() {
-            if let Err(e) = x11.display_and_activate_window() {
-                eprintln!("[ropy] Failed to activate window: {e}")
-            }
+    if let Some(x11) = crate::gui::app::X11.get() {
+        if let Err(e) = x11.display_and_activate_window() {
+            eprintln!("[ropy] Failed to activate window: {e}")
         }
     }
 }
@@ -78,6 +81,7 @@ pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, always_o
             }
         }
     }
+
     #[cfg(target_os = "macos")]
     if let Ok(handle) = _window.window_handle()
         && let RawWindowHandle::AppKit(handle) = handle.as_raw()
@@ -92,6 +96,7 @@ pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, always_o
             }
         }
     }
+
     #[cfg(target_os = "linux")]
     {
         if let Some(x11) = crate::gui::app::X11.get() {

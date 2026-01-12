@@ -1,8 +1,6 @@
 use crate::clipboard::{self, ClipboardEvent, LastCopyState};
 use crate::config::{AppTheme, AutoStartManager, Settings};
 use crate::gui::board::RopyBoard;
-use crate::gui::tray::start_tray_handler_inner;
-use crate::gui::x11::X11;
 use crate::repository::{ClipboardRecord, ClipboardRepository};
 use gpui::{
     App, AppContext, Application, AssetSource, AsyncApp, Bounds, KeyBinding, WindowBounds,
@@ -12,10 +10,13 @@ use gpui_component::theme::Theme;
 use gpui_component::{Root, ThemeMode};
 use rust_embed::RustEmbed;
 use std::borrow::Cow;
+use std::sync::{Arc, Mutex, RwLock};
+
+#[cfg(target_os = "macos")]
+use objc2::{class, msg_send, runtime::AnyObject};
+
 #[cfg(target_os = "linux")]
-use std::env;
-use std::sync::{Arc, Mutex, OnceLock, RwLock, mpsc};
-use std::time::Duration;
+use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
 
 #[cfg(target_os = "linux")]
 pub static X11: OnceLock<X11> = OnceLock::new();
@@ -35,11 +36,6 @@ impl AssetSource for Assets {
             .collect())
     }
 }
-
-#[cfg(target_os = "macos")]
-use objc2::{class, msg_send, runtime::AnyObject};
-
-use super::tray::TrayEvent;
 
 #[cfg(target_os = "macos")]
 fn set_activation_policy_accessory() {
@@ -253,7 +249,7 @@ pub fn launch_app() {
                 });
         });
 
-        start_tray_handler(settings, async_app, window_handle);
+        super::tray::start_tray_handler(settings, async_app, window_handle);
 
         if !is_silent {
             cx.activate(true);
@@ -266,53 +262,6 @@ pub fn launch_app() {
             let _ = x11.active_window();
         }
     });
-}
-
-fn start_tray_handler(
-    settings: Arc<RwLock<Settings>>,
-    async_app: AsyncApp,
-    window_handle: WindowHandle<Root>,
-) {
-    let (tx, rx) = mpsc::channel();
-
-    let fg_executor = async_app.foreground_executor().clone();
-    let bg_executor = async_app.background_executor().clone();
-    let bg_executor_clone = bg_executor.clone();
-
-    bg_executor
-        .spawn(async move {
-            #[cfg(target_os = "linux")]
-            gtk::init().expect("Failed to init gtk modules");
-
-            start_tray_handler_inner(settings, tx, bg_executor_clone);
-
-            #[cfg(target_os = "linux")]
-            gtk::main();
-        })
-        .detach();
-
-    fg_executor
-        .spawn(async move {
-            loop {
-                while let Ok(event) = rx.try_recv() {
-                    match event {
-                        TrayEvent::Show => {
-                            let _ = async_app.update(move |cx| {
-                                crate::gui::tray::send_active_action(window_handle, cx);
-                            });
-                        }
-                        TrayEvent::Quit => {
-                            let _ = async_app.update(move |cx| {
-                                cx.quit();
-                            });
-                        }
-                    }
-                }
-
-                bg_executor.timer(Duration::from_millis(100)).await;
-            }
-        })
-        .detach();
 }
 
 fn bind_application_keys(cx: &mut App) {

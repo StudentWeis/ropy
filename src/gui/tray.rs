@@ -1,13 +1,11 @@
 use crate::config::Settings;
 use crate::i18n::I18n;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::sync::mpsc::Sender;
-use std::time::Duration;
-
-use gpui::BackgroundExecutor;
-use gpui::WindowHandle;
+use gpui::AsyncApp;
+use gpui::{BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock, mpsc};
+use std::time::Duration;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuId, MenuItem},
@@ -56,6 +54,51 @@ fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
 pub enum TrayEvent {
     Show,
     Quit,
+}
+
+pub fn start_tray_handler(
+    settings: Arc<RwLock<Settings>>,
+    async_app: AsyncApp,
+    window_handle: WindowHandle<Root>,
+) {
+    let (tx, rx) = mpsc::channel();
+
+    let fg_executor = async_app.foreground_executor().clone();
+    let bg_executor = async_app.background_executor().clone();
+    let bg_executor_clone = bg_executor.clone();
+
+    start_tray_handler_inner(settings, tx, bg_executor_clone);
+
+    #[cfg(target_os = "linux")]
+    bg_executor
+        .spawn(async move {
+            gtk::init().expect("Failed to init gtk modules");
+            gtk::main();
+        })
+        .detach();
+
+    fg_executor
+        .spawn(async move {
+            loop {
+                while let Ok(event) = rx.try_recv() {
+                    match event {
+                        TrayEvent::Show => {
+                            let _ = async_app.update(move |cx| {
+                                crate::gui::tray::send_active_action(window_handle, cx);
+                            });
+                        }
+                        TrayEvent::Quit => {
+                            let _ = async_app.update(move |cx| {
+                                cx.quit();
+                            });
+                        }
+                    }
+                }
+
+                bg_executor.timer(Duration::from_millis(100)).await;
+            }
+        })
+        .detach();
 }
 
 /// Start the system tray handler
