@@ -12,8 +12,6 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
-#[cfg(target_os = "windows")]
-use crate::gui::utils::start_window_drag;
 use crate::i18n::{I18n, Language};
 
 /// Render language selection buttons
@@ -266,7 +264,7 @@ pub(super) fn render_settings_content(
 
     #[cfg(target_os = "windows")]
     let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        start_window_drag(window, cx);
+        crate::gui::utils::start_window_drag(window, cx);
     });
 
     v_flex()

@@ -10,8 +10,6 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
-#[cfg(target_os = "windows")]
-use crate::gui::utils::start_window_drag;
 
 /// Render the about panel content
 pub(super) fn render_about_content(
@@ -48,7 +46,7 @@ pub(super) fn render_about_content(
 
     #[cfg(target_os = "windows")]
     let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        start_window_drag(window, cx);
+        crate::gui::utils::start_window_drag(window, cx);
     });
 
     v_flex().size_full().child(header).child(

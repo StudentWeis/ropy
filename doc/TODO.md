@@ -1,10 +1,9 @@
 # TODO
 
 - Import and export clipboard history
-- Support for html content type
+- Support for html/RTF content type
 - Log files
 - Provide installation packages and distribution channels
-- Support more platforms (Linux)
 - Homepage, documentation and user community
 
 # NOT TODO

@@ -15,8 +15,6 @@ use gpui_component::{
 use regex::Regex;
 
 use super::{RopyBoard, preview};
-#[cfg(target_os = "windows")]
-use crate::gui::utils::start_window_drag;
 use crate::repository::{ClipboardRecord, models::ContentType};
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
@@ -80,7 +78,7 @@ pub fn render_header(board: &RopyBoard, cx: &mut Context<'_, RopyBoard>) -> impl
 
     #[cfg(target_os = "windows")]
     let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        start_window_drag(window, cx);
+        crate::gui::utils::start_window_drag(window, cx);
     });
 
     header

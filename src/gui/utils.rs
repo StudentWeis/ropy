@@ -58,7 +58,7 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
 }
 
 /// Set the window to be always on top
-pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) {
+pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _pinned: bool) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = _window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
@@ -68,7 +68,11 @@ pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: 
             use windows_sys::Win32::UI::WindowsAndMessaging::{
                 HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
             };
-            let hwnd_insert_after = if pinned { HWND_TOPMOST } else { HWND_NOTOPMOST };
+            let hwnd_insert_after = if _pinned {
+                HWND_TOPMOST
+            } else {
+                HWND_NOTOPMOST
+            };
             SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         }
     }
