@@ -16,6 +16,7 @@ pin = "Pin"
 unpin = "Unpin"
 
 # Settings
+settings_button = "Settings"
 settings_title = "Ropy Settings"
 settings_back = "←"
 settings_cancel = "Cancel"

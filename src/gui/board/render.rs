@@ -127,7 +127,7 @@ pub fn render_header(board: &RopyBoard, cx: &mut Context<'_, RopyBoard>) -> impl
                     Button::new("settings-button")
                         .ghost()
                         .icon(Icon::empty().path("settings.svg"))
-                        .tooltip("Settings")
+                        .tooltip(board.i18n.t("settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_settings = true;
                             window.focus(&this.focus_handle);

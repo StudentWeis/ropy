@@ -16,6 +16,7 @@ pin = "固定"
 unpin = "取消固定"
 
 # 设置
+settings_button = "设置"
 settings_title = "Ropy 设置"
 settings_back = "←"
 settings_cancel = "取消"
