@@ -1,0 +1,63 @@
+# Japanese translations for Ropy
+# 日本語翻訳
+
+# Application
+app_name = "Ropy"
+app_description = "RustとGPUIで構築されたクリップボードマネージャー"
+
+# Tray menu
+tray_show = "表示"
+tray_quit = "終了"
+
+# Main window
+search_placeholder = "/ で検索 ... "
+no_records = "クリップボード履歴がありません"
+clear_all = "すべてクリア"
+pin = "ピン留め"
+unpin = "ピン留め解除"
+
+# Settings
+settings_button = "設定"
+settings_title = "Ropy 設定"
+settings_back = "←"
+settings_cancel = "キャンセル"
+settings_save = "保存"
+
+# Settings sections
+settings_language = "言語"
+settings_language_description = "使用する言語を選択してください"
+
+settings_theme = "テーマ"
+settings_theme_light = "ライト"
+settings_theme_dark = "ダーク"
+settings_theme_system = "システム"
+
+settings_hotkey = "ホットキー設定"
+settings_activation_key = "起動キー"
+settings_hotkey_hint = "形式: control+shift+d または cmd+shift+v"
+settings_hotkey_invalid = "無効なホットキー形式です"
+
+settings_storage = "ストレージ設定"
+settings_max_history = "最大履歴件数"
+
+settings_system = "システム"
+settings_autostart = "システム起動時に起動"
+settings_autostart_on = "オン"
+settings_autostart_off = "オフ"
+
+# Content types
+content_type_text = "テキスト"
+content_type_image = "画像"
+content_type_file = "ファイル"
+
+# Messages
+message_copied = "クリップボードにコピーしました"
+message_deleted = "レコードを削除しました"
+message_cleared = "履歴をクリアしました"
+
+# About
+about_title = "Ropy について"
+about_version = "バージョン"
+about_description = "RustとGPUIで構築された軽量クリップボードマネージャーです。"
+about_github = "GitHub"
+about_back = "←"

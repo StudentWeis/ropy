@@ -11,6 +11,8 @@ pub enum Language {
     English,
     #[serde(rename = "zh-CN")]
     ChineseSimplified,
+    #[serde(rename = "ja")]
+    Japanese,
 }
 
 impl Language {
@@ -18,11 +20,12 @@ impl Language {
         match self {
             Language::English => "English",
             Language::ChineseSimplified => "简体中文",
+            Language::Japanese => "日本語",
         }
     }
 
     pub fn all() -> Vec<Language> {
-        vec![Language::English, Language::ChineseSimplified]
+        vec![Language::English, Language::ChineseSimplified, Language::Japanese]
     }
 }
 
@@ -71,6 +74,7 @@ impl I18n {
         let content = match language {
             Language::English => include_str!("../../assets/locales/en.toml"),
             Language::ChineseSimplified => include_str!("../../assets/locales/zh-CN.toml"),
+            Language::Japanese => include_str!("../../assets/locales/ja.toml"),
         };
         Translations::from_toml(content)
     }
@@ -125,6 +129,7 @@ mod tests {
     fn test_language_display_name() {
         assert_eq!(Language::English.display_name(), "English");
         assert_eq!(Language::ChineseSimplified.display_name(), "简体中文");
+        assert_eq!(Language::Japanese.display_name(), "日本語");
     }
 
     #[test]
@@ -171,8 +176,9 @@ mod tests {
     #[test]
     fn test_language_all() {
         let languages = Language::all();
-        assert_eq!(languages.len(), 2);
+        assert_eq!(languages.len(), 3);
         assert!(languages.contains(&Language::English));
         assert!(languages.contains(&Language::ChineseSimplified));
+        assert!(languages.contains(&Language::Japanese));
     }
 }
