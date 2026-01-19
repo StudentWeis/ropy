@@ -25,7 +25,11 @@ impl Language {
     }
 
     pub fn all() -> Vec<Language> {
-        vec![Language::English, Language::ChineseSimplified, Language::Japanese]
+        vec![
+            Language::English,
+            Language::ChineseSimplified,
+            Language::Japanese,
+        ]
     }
 }
 

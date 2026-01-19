@@ -1,6 +1,6 @@
 use gpui::{
     Context, div,
-    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
+    prelude::{IntoElement, ParentElement, Styled},
     px,
 };
 use gpui_component::{
@@ -66,15 +66,12 @@ fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> 
         .items_center()
         .children(theme_names.into_iter().enumerate().map(|(index, name)| {
             let is_selected = board.selected_theme == index;
-
             let mut button = Button::new(("theme-button", index)).small().label(name);
-
             button = if is_selected {
                 button.primary()
             } else {
                 button.ghost()
             };
-
             button.on_click(cx.listener(move |board, _, _window, cx| {
                 board.selected_theme = index;
                 cx.notify();
@@ -87,37 +84,6 @@ pub(super) fn render_settings_content(
     board: &mut RopyBoard,
     cx: &mut Context<RopyBoard>,
 ) -> impl IntoElement {
-    let setting_button_group = h_flex()
-        .gap_2()
-        .justify_end()
-        .mt_4()
-        .child(
-            Button::new("cancel-button")
-                .small()
-                .ghost()
-                .label(board.i18n.t("settings_cancel"))
-                .on_click(cx.listener(|board, _, window, cx| {
-                    // Clear input fields
-                    board.settings_max_history_input.update(cx, |input, cx| {
-                        input.set_value("", window, cx);
-                    });
-                    board.settings_activation_key_input.update(cx, |input, cx| {
-                        input.set_value("", window, cx);
-                    });
-
-                    board.show_settings = false;
-                    window.focus(&board.focus_handle);
-                    cx.notify();
-                })),
-        )
-        .child(
-            Button::new("save-button")
-                .small()
-                .label(board.i18n.t("settings_save"))
-                .on_click(cx.listener(|board, _, window, cx| {
-                    board.save_settings(cx, window);
-                })),
-        );
     let max_history_input_field = h_flex()
         .gap_2()
         .items_center()
@@ -242,16 +208,13 @@ pub(super) fn render_settings_content(
         .mb_4()
         .pt_4()
         .child(
-            Button::new("back-button")
+            Button::new("cancel-button")
                 .small()
                 .ghost()
-                .label(board.i18n.t("settings_back"))
-                .on_click(cx.listener(|board, _, window, cx| {
-                    board.show_settings = false;
-                    window.focus(&board.focus_handle);
-                    cx.notify();
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .label(board.i18n.t("settings_cancel"))
+                .on_click(cx.listener(|board, _click_event, window, cx| {
+                    reset_settings_dialog(board, window, cx);
+                })),
         )
         .child(
             div()
@@ -260,25 +223,60 @@ pub(super) fn render_settings_content(
                 .font_weight(gpui::FontWeight::BOLD)
                 .child(board.i18n.t("settings_title")),
         )
-        .child(div().w(px(55.)));
+        .child(
+            Button::new("save-button")
+                .small()
+                .label(board.i18n.t("settings_save"))
+                .on_click(cx.listener(|board, _, window, cx| {
+                    board.save_settings(cx, window);
+                })),
+        );
 
     #[cfg(target_os = "windows")]
     let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
         crate::gui::utils::start_window_drag(window, cx);
     });
 
-    v_flex()
-        .size_full()
-        .child(header)
-        .child(
-            v_flex()
-                .gap_4()
-                .flex_1()
-                .child(language_section)
-                .child(theme_section)
-                .child(hotkey_section)
-                .child(storage_section)
-                .child(autostart_section),
-        )
-        .child(setting_button_group)
+    v_flex().size_full().child(header).child(
+        v_flex()
+            .gap_4()
+            .flex_1()
+            .child(language_section)
+            .child(theme_section)
+            .child(hotkey_section)
+            .child(storage_section)
+            .child(autostart_section),
+    )
+}
+
+pub fn reset_settings_dialog(
+    board: &mut RopyBoard,
+    window: &mut gpui::Window,
+    cx: &mut Context<'_, RopyBoard>,
+) {
+    // Reset selections to persisted values
+    let settings_guard = board.settings.read().unwrap();
+    board.selected_language = Language::all()
+        .iter()
+        .position(|&lang| lang == settings_guard.language)
+        .unwrap_or(0);
+    board.selected_theme = match settings_guard.theme {
+        crate::config::AppTheme::Light => 0,
+        crate::config::AppTheme::Dark => 1,
+        crate::config::AppTheme::System => 2,
+    };
+    board.autostart_enabled = settings_guard.autostart.enabled;
+    drop(settings_guard);
+
+    // Clear input fields
+    board.settings_max_history_input.update(cx, |input, cx| {
+        input.set_value("", window, cx);
+    });
+    board.settings_activation_key_input.update(cx, |input, cx| {
+        input.set_value("", window, cx);
+    });
+
+    board.show_settings = false;
+    window.focus(&board.focus_handle);
+    cx.notify();
 }

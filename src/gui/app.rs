@@ -38,16 +38,6 @@ impl AssetSource for Assets {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn set_activation_policy_accessory() {
-    use objc2::{class, msg_send, runtime::AnyObject};
-    unsafe {
-        // Config the app to be accessory (no dock icon & cmd tab)
-        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
-        let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
-    }
-}
-
 fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     match ClipboardRepository::new() {
         Ok(repo) => {
@@ -203,7 +193,7 @@ pub fn launch_app() {
     Application::new().with_assets(Assets).run(move |cx| {
         // Set activation policy on macOS
         #[cfg(target_os = "macos")]
-        set_activation_policy_accessory();
+        super::utils::set_activation_policy_accessory();
 
         // Initialize gpui-component
         gpui_component::init(cx);

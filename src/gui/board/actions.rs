@@ -36,7 +36,9 @@ impl RopyBoard {
 
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_index = 0;
-        self.show_preview = false;
+        if self.show_settings {
+            super::settings::reset_settings_dialog(self, window, cx);
+        }
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.show_settings = false;
         window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
@@ -44,20 +46,10 @@ impl RopyBoard {
     }
 
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
-        // If still in settings, exit settings view and refocus main board instead of hiding
         if self.show_settings {
-            self.show_settings = false;
-            self.settings_max_history_input.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-            });
-            self.settings_activation_key_input.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-            });
-            window.focus(&self.focus_handle);
-            cx.notify();
+            super::settings::reset_settings_dialog(self, window, cx);
             return;
         }
-
         // If the search input is focused, return focus to the main component before hiding
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)

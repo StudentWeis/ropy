@@ -104,3 +104,13 @@ pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
         }
     }
 }
+
+#[cfg(target_os = "macos")]
+pub fn set_activation_policy_accessory() {
+    use objc2::{class, msg_send, runtime::AnyObject};
+    unsafe {
+        // Config the app to be accessory (no dock icon & cmd tab)
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
+    }
+}
