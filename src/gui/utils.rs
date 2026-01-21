@@ -80,7 +80,7 @@ pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _pinned:
     #[cfg(target_os = "linux")]
     {
         if let Some(x11) = crate::gui::app::X11.get() {
-            if let Err(e) = x11.set_always_on_top(always_on_top) {
+            if let Err(e) = x11.set_always_on_top(_pinned) {
                 eprintln!("[ropy] Failed to set always on top: {e}")
             }
         }
