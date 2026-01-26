@@ -2,21 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-01-26
+
+### 🚀 Features
+
+- Add Japanese translations by @ZhBF
+- Update cross-platform support CI workflow. by @StudentWeis
+
+### 🐛 Bug Fixes
+
+- Fix missing var name change on linux by @eatradish in [#39](https://github.com/StudentWeis/ropy/pull/39)
+- (windows) pin to top functionality by @StudentWeis
+- Ensure init gtk and build tray icon on same thread on linux... by @eatradish in [#34](https://github.com/StudentWeis/ropy/pull/34)
+
+### 🚜 Refactor
+
+- Improve the logic of the Settings page and clean the code by @StudentWeis
+- Simplify the function start_window_drag import by @StudentWeis
+- Improve import organization and simplify code structure across multiple files by @StudentWeis
+- Simplify the logic of "pin to top" by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+
+- Reorganize imports and update precheck script for nightly compatibility by @StudentWeis
+- Update dependencies and improve import organization by @StudentWeis
+
 ## [0.2.0-beta] - 2026-01-12
 
 ### 🚀 Features
+
 - Add support for preserving scroll position during record deletion by @StudentWeis
 - Add linux platform support (#31) by @eatradish in [#31](https://github.com/StudentWeis/ropy/pull/31)
 
 ### 🐛 Bug Fixes
+
 - Fix build on non linux platform by @eatradish in [#32](https://github.com/StudentWeis/ropy/pull/32)
 - Handle settings exit in hide action by @StudentWeis in [#30](https://github.com/StudentWeis/ropy/pull/30)
 - Clean up auto-start manager logic in windows by @StudentWeis
 
 ### 🚜 Refactor
+
 - Reorganize tray and app module imports and functions by @StudentWeis
 
 ### 📚 Documentation
+
 - Update README and TODO by @StudentWeis
 
 ### New Contributors
