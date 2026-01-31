@@ -57,15 +57,17 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
     let manager = match GlobalHotKeyManager::new() {
         Ok(m) => m,
         Err(err) => {
-            eprintln!("Failed to create GlobalHotKeyManager: {err}");
+            tracing::error!(error = %err, "failed to create GlobalHotKeyManager");
             return None;
         }
     };
     match hotkey_str.parse::<HotKey>() {
         Ok(hotkey) => {
             if let Err(err) = manager.register(hotkey) {
-                eprintln!(
-                    "Failed to register hotkey {hotkey_str}: {err}. The hotkey listener will not be available."
+                tracing::warn!(
+                    hotkey = hotkey_str,
+                    error = %err,
+                    "failed to register hotkey; the hotkey listener will not be available"
                 );
                 None
             } else {
@@ -73,8 +75,10 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
             }
         }
         Err(err) => {
-            eprintln!(
-                "Failed to parse hotkey {hotkey_str}: {err}. The hotkey listener will not be available."
+            tracing::warn!(
+                hotkey = hotkey_str,
+                error = %err,
+                "failed to parse hotkey; the hotkey listener will not be available"
             );
             None
         }

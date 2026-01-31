@@ -29,6 +29,12 @@ raw-window-handle = "0.6"
 async-channel = "2.5.0"
 rust-embed = "8.11.0"
 
+# Logging / tracing
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
 

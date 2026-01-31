@@ -99,10 +99,7 @@ impl Default for I18n {
         match Self::new(Language::default()) {
             Ok(i18n) => i18n,
             Err(e) => {
-                eprintln!("[ropy] Warning: Failed to load default language translations: {e}");
-                eprintln!(
-                    "[ropy] Falling back to empty translations - all strings will show as '[Missing: key]'"
-                );
+                tracing::warn!(error = %e, "failed to load default language translations; falling back to empty translations");
                 Self {
                     current_language: Language::default(),
                     translations: Translations {

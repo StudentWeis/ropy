@@ -109,7 +109,7 @@ impl Settings {
         if let Some(path_str) = config_file.to_str() {
             builder = builder.add_source(File::with_name(path_str).required(false));
         } else {
-            eprintln!("[ropy] Warning: Config file path contains invalid UTF-8 characters");
+            tracing::warn!("config file path contains invalid UTF-8 characters");
         }
 
         let config = builder.build()?;

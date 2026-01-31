@@ -41,11 +41,11 @@ impl AssetSource for Assets {
 fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     match ClipboardRepository::new() {
         Ok(repo) => {
-            println!("[ropy] Clipboard history repository initialized");
+            tracing::info!("clipboard history repository initialized");
             Some(Arc::new(repo))
         }
         Err(e) => {
-            eprintln!("[ropy] Clipboard repository initialization failed: {e}");
+            tracing::error!(error = %e, "clipboard repository initialization failed");
             None
         }
     }
@@ -79,20 +79,13 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     match AutoStartManager::new("Ropy") {
         Ok(manager) => {
             if let Err(e) = manager.sync_state(autostart_enabled) {
-                eprintln!("[ropy] Failed to sync auto-start state on launch: {e}");
+                tracing::warn!(error = %e, "failed to sync auto-start state on launch");
             } else {
-                println!(
-                    "[ropy] Auto-start state synced: {}",
-                    if autostart_enabled {
-                        "enabled"
-                    } else {
-                        "disabled"
-                    }
-                );
+                tracing::info!(autostart_enabled, "auto-start state synced");
             }
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to initialize auto-start manager: {e}");
+            tracing::error!(error = %e, "failed to initialize auto-start manager");
         }
     }
 }
@@ -174,7 +167,7 @@ fn create_window(
         },
     )
     .unwrap_or_else(|e| {
-        eprintln!("[ropy] Fatal: Failed to create window: {e}");
+        tracing::error!(error = %e, "fatal: failed to create window");
         std::process::exit(1);
     })
 }
@@ -261,7 +254,7 @@ pub fn launch_app() {
                     board.set_hotkey_tx(hotkey_tx);
                 });
             } else {
-                eprintln!("[ropy] Failed to downcast root view to RopyBoard");
+                tracing::error!("failed to downcast root view to RopyBoard");
             }
         });
 
@@ -298,14 +291,14 @@ fn bind_application_keys(cx: &mut App) {
 fn load_settings() -> Arc<RwLock<Settings>> {
     match Settings::load() {
         Ok(s) => {
-            println!("[ropy] Settings loaded successfully");
+            tracing::info!("settings loaded successfully");
             Arc::new(RwLock::new(s))
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to load settings, using defaults: {e}");
+            tracing::warn!(error = %e, "failed to load settings; using defaults");
             let default_settings = Settings::default();
             default_settings.save().unwrap_or_else(|err| {
-                eprintln!("[ropy] Failed to save default settings: {err}");
+                tracing::error!(error = %err, "failed to save default settings");
             });
             Arc::new(RwLock::new(default_settings))
         }

@@ -15,7 +15,7 @@ pub fn start_clipboard_writer(async_app: &AsyncApp) -> async_channel::Sender<Cop
             let ctx = match ClipboardContext::new() {
                 Ok(ctx) => ctx,
                 Err(e) => {
-                    eprintln!("[ropy] Failed to create clipboard output context: {e}");
+                    tracing::error!(error = %e, "failed to create clipboard output context");
                     return;
                 }
             };
@@ -65,7 +65,7 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
                 .is_ok()
                 && let Err(e) = ctx.set_buffer("public.png", bytes)
             {
-                eprintln!("Failed to set image to clipboard: {e}");
+                tracing::warn!(error = %e, "failed to set image to clipboard");
             }
         }
 
@@ -76,7 +76,7 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
 
             let rust_image = clipboard_rs::RustImageData::from_dynamic_image(img);
             if let Err(e) = ctx.set_image(rust_image) {
-                eprintln!("Failed to set image to clipboard: {e}");
+                tracing::warn!(error = %e, "failed to set image to clipboard");
             }
         }
     }

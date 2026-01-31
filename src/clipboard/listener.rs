@@ -38,7 +38,7 @@ impl ClipboardMonitor {
         let ctx = match ClipboardContext::new() {
             Ok(ctx) => ctx,
             Err(e) => {
-                eprintln!("[ropy] Failed to initialize clipboard context: {e}");
+                tracing::error!(error = %e, "failed to initialize clipboard context");
                 return None;
             }
         };
@@ -106,7 +106,7 @@ pub fn start_clipboard_monitor(
             let mut watcher = match ClipboardWatcherContext::new() {
                 Ok(w) => w,
                 Err(e) => {
-                    eprintln!("[ropy] Failed to create clipboard watcher: {e}");
+                    tracing::error!(error = %e, "failed to create clipboard watcher");
                     return;
                 }
             };
@@ -160,7 +160,7 @@ pub fn start_clipboard_listener(
                             let _ = notify_tx.send(()).await;
                         }
                         Err(e) => {
-                            eprintln!("[ropy] Failed to save clipboard record: {e}");
+                            tracing::warn!(error = %e, "failed to save clipboard record");
                         }
                     }
                 }

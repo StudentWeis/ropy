@@ -21,7 +21,7 @@ fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
     static HEX_REGEX: OnceLock<Regex> = OnceLock::new();
     let regex = HEX_REGEX.get_or_init(|| {
         Regex::new(r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$").unwrap_or_else(|e| {
-            eprintln!("[ropy] Fatel: Invalid hex color regex: {e}");
+            tracing::error!(error = %e, "fatal: invalid hex color regex");
             // Fallback to a regex that matches nothing to avoid crash
             #[allow(clippy::unwrap_used)]
             Regex::new(r"a^").unwrap()

@@ -169,7 +169,7 @@ impl RopyBoard {
     fn clear_history(&self) {
         if let Some(ref repo) = self.repository {
             if let Err(e) = repo.clear() {
-                eprintln!("[ropy] Failed to clear clipboard history: {e}");
+                tracing::warn!(error = %e, "failed to clear clipboard history");
             } else {
                 let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
                 guard.clear();
@@ -193,7 +193,7 @@ impl RopyBoard {
     pub fn delete_record(&mut self, id: u64) {
         if let Some(ref repo) = self.repository {
             if let Err(e) = repo.delete(id) {
-                eprintln!("[ropy] Failed to delete clipboard record: {e}");
+                tracing::warn!(error = %e, "failed to delete clipboard record");
             } else {
                 self.records
                     .lock()
@@ -305,7 +305,7 @@ impl RopyBoard {
             settings.autostart.enabled = self.autostart_enabled;
             settings.language = language;
             if let Err(e) = settings.save() {
-                eprintln!("[ropy] Failed to save settings: {e}");
+                tracing::warn!(error = %e, "failed to save settings");
             }
         }
 
@@ -316,7 +316,7 @@ impl RopyBoard {
 
         // Apply the new language
         if let Err(e) = self.i18n.set_language(language) {
-            eprintln!("[ropy] Failed to set language: {e}");
+            tracing::warn!(error = %e, "failed to set language");
         }
 
         // Update search placeholder with new language
@@ -327,7 +327,7 @@ impl RopyBoard {
 
         // Sync auto-start state with system
         if let Err(e) = self.sync_autostart_state() {
-            eprintln!("[ropy] Failed to sync auto-start state: {e}");
+            tracing::warn!(error = %e, "failed to sync auto-start state");
         }
 
         // Apply the new theme

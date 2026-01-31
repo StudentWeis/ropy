@@ -116,7 +116,7 @@ pub fn start_tray_handler_inner(
 ) {
     match init_tray(settings) {
         Ok((tray, show_id, quit_id)) => {
-            println!("[ropy] Tray icon initialized successfully");
+            tracing::info!("tray icon initialized successfully");
             // Keep tray icon alive for the lifetime of the application
             Box::leak(Box::new(tray));
 
@@ -150,7 +150,7 @@ pub fn start_tray_handler_inner(
                 .detach();
         }
         Err(e) => {
-            eprintln!("[ropy] Failed to initialize tray icon: {e}");
+            tracing::error!(error = %e, "failed to initialize tray icon");
         }
     }
 }
