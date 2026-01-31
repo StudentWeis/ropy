@@ -5,21 +5,27 @@ use image::ImageReader;
 use super::CopyRequest;
 
 /// Start a background task to handle clipboard write requests.
-/// This avoids creating a new ClipboardContext and spawning a new task for each write.
-pub fn start_clipboard_writer(async_app: AsyncApp) -> async_channel::Sender<CopyRequest> {
+/// This avoids creating a new `ClipboardContext` and spawning a new task for each write.
+pub fn start_clipboard_writer(async_app: &AsyncApp) -> async_channel::Sender<CopyRequest> {
     let (tx, rx) = async_channel::unbounded();
     let executor = async_app.background_executor();
 
     executor
         .spawn(async move {
-            let ctx = ClipboardContext::new().unwrap();
+            let ctx = match ClipboardContext::new() {
+                Ok(ctx) => ctx,
+                Err(e) => {
+                    eprintln!("[ropy] Failed to create clipboard output context: {e}");
+                    return;
+                }
+            };
             while let Ok(req) = rx.recv().await {
                 match req {
                     CopyRequest::Text(text) => {
                         set_text(&ctx, text);
                     }
                     CopyRequest::Image(path) => {
-                        set_image(&ctx, path);
+                        set_image(&ctx, &path);
                     }
                 }
             }
@@ -35,10 +41,10 @@ fn set_text(ctx: &ClipboardContext, text: String) {
 
 /// Set image to clipboard. The image is read from the given file path.
 /// After setting the image, the original file and its thumbnail are deleted.
-fn set_image(ctx: &ClipboardContext, path: String) {
-    let img_res = ImageReader::open(&path)
+fn set_image(ctx: &ClipboardContext, path: &str) {
+    let img_res = ImageReader::open(path)
         .map_err(image::ImageError::from)
-        .and_then(|r| r.decode());
+        .and_then(image::ImageReader::decode);
     if let Ok(img) = img_res {
         #[cfg(target_os = "macos")]
         {
@@ -59,7 +65,7 @@ fn set_image(ctx: &ClipboardContext, path: String) {
                 .is_ok()
                 && let Err(e) = ctx.set_buffer("public.png", bytes)
             {
-                eprintln!("Failed to set image to clipboard: {}", e);
+                eprintln!("Failed to set image to clipboard: {e}");
             }
         }
 

@@ -17,12 +17,9 @@ use super::RopyBoard;
 use crate::i18n::{I18n, Language};
 
 /// Render language selection buttons
-/// Note: Uses index-based selection from Language::all() which maintains a stable order.
-/// The order is: English, ChineseSimplified
-fn render_language_selector(
-    board: &mut RopyBoard,
-    cx: &mut Context<RopyBoard>,
-) -> impl IntoElement {
+/// Note: Uses index-based selection from `Language::all()` which maintains a stable order.
+/// The order is: English, `ChineseSimplified`
+fn render_language_selector(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let languages = Language::all();
 
     h_flex()
@@ -56,7 +53,7 @@ fn render_language_selector(
 }
 
 /// Render theme selection buttons
-fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> impl IntoElement {
+fn render_theme_selector(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let theme_names = vec![
         board.i18n.t("settings_theme_light"),
         board.i18n.t("settings_theme_dark"),
@@ -81,11 +78,7 @@ fn render_theme_selector(board: &mut RopyBoard, cx: &mut Context<RopyBoard>) -> 
         }))
 }
 
-/// Render the settings panel content
-pub(super) fn render_settings_content(
-    board: &mut RopyBoard,
-    cx: &mut Context<RopyBoard>,
-) -> impl IntoElement {
+fn render_storage_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let max_history_input_field = h_flex()
         .gap_2()
         .items_center()
@@ -105,6 +98,20 @@ pub(super) fn render_settings_content(
                 .px_3()
                 .py_2(),
         );
+
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child(board.i18n.t("settings_storage")),
+        )
+        .child(max_history_input_field)
+}
+
+fn render_hotkey_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let activation_key_label = v_flex()
         .gap_1()
         .child(
@@ -128,7 +135,8 @@ pub(super) fn render_settings_content(
                 .text_color(cx.theme().muted_foreground)
                 .child(board.i18n.t("settings_hotkey_hint")),
         );
-    let hotkey_section = v_flex()
+
+    v_flex()
         .gap_2()
         .child(
             div()
@@ -137,40 +145,11 @@ pub(super) fn render_settings_content(
                 .font_weight(gpui::FontWeight::BOLD)
                 .child(board.i18n.t("settings_hotkey")),
         )
-        .child(activation_key_label);
+        .child(activation_key_label)
+}
 
-    let language_section = v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_language")),
-        )
-        .child(render_language_selector(board, cx));
-
-    let theme_section = v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_theme")),
-        )
-        .child(render_theme_selector(board, cx));
-    let storage_section = v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_storage")),
-        )
-        .child(max_history_input_field);
-    let autostart_section = v_flex()
+fn render_system_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    v_flex()
         .gap_2()
         .child(
             div()
@@ -203,7 +182,36 @@ pub(super) fn render_settings_content(
                         board.toggle_autostart(cx);
                     }))
                 }),
-        );
+        )
+}
+
+/// Render the settings panel content
+pub(super) fn render_settings_content(
+    board: &RopyBoard,
+    cx: &Context<RopyBoard>,
+) -> impl IntoElement {
+    let language_section = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child(board.i18n.t("settings_language")),
+        )
+        .child(render_language_selector(board, cx));
+
+    let theme_section = v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .font_weight(gpui::FontWeight::BOLD)
+                .child(board.i18n.t("settings_theme")),
+        )
+        .child(render_theme_selector(board, cx));
+
     let header = h_flex()
         .justify_between()
         .items_center()
@@ -245,9 +253,9 @@ pub(super) fn render_settings_content(
             .flex_1()
             .child(language_section)
             .child(theme_section)
-            .child(hotkey_section)
-            .child(storage_section)
-            .child(autostart_section),
+            .child(render_hotkey_section(board, cx))
+            .child(render_storage_section(board, cx))
+            .child(render_system_section(board, cx)),
     )
 }
 
@@ -257,7 +265,10 @@ pub fn reset_settings_dialog(
     cx: &mut Context<'_, RopyBoard>,
 ) {
     // Reset selections to persisted values
-    let settings_guard = board.settings.read().unwrap();
+    let settings_guard = match board.settings.read() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    };
     board.selected_language = Language::all()
         .iter()
         .position(|&lang| lang == settings_guard.language)

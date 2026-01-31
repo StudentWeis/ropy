@@ -14,9 +14,13 @@ use crate::{config::Settings, i18n::I18n};
 
 /// Initialize and return the tray icon
 pub fn init_tray(
-    settings: Arc<RwLock<Settings>>,
+    settings: &Arc<RwLock<Settings>>,
 ) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
-    let language = settings.read().unwrap().language;
+    let language = match settings.read() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    }
+    .language;
     let i18n = I18n::new(language).unwrap_or_default();
 
     // Create menu items
@@ -69,13 +73,13 @@ pub fn start_tray_handler(
     let bg_executor_clone = bg_executor.clone();
 
     #[cfg(not(target_os = "linux"))]
-    start_tray_handler_inner(settings, tx, bg_executor_clone);
+    start_tray_handler_inner(&settings, tx, &bg_executor_clone);
 
     #[cfg(target_os = "linux")]
     bg_executor
         .spawn(async move {
             gtk::init().expect("Failed to init gtk modules");
-            start_tray_handler_inner(settings, tx, bg_executor_clone);
+            start_tray_handler_inner(&settings, tx, &bg_executor_clone);
             gtk::main();
         })
         .detach();
@@ -106,9 +110,9 @@ pub fn start_tray_handler(
 
 /// Start the system tray handler
 pub fn start_tray_handler_inner(
-    settings: Arc<RwLock<Settings>>,
+    settings: &Arc<RwLock<Settings>>,
     tx: Sender<TrayEvent>,
-    bg_executor: BackgroundExecutor,
+    bg_executor: &BackgroundExecutor,
 ) {
     match init_tray(settings) {
         Ok((tray, show_id, quit_id)) => {
@@ -155,7 +159,7 @@ pub fn start_tray_handler_inner(
 pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
     window_handle
         .update(cx, |_, window, cx| {
-            window.dispatch_action(Box::new(crate::gui::board::Active), cx)
+            window.dispatch_action(Box::new(crate::gui::board::Active), cx);
         })
         .ok();
 }

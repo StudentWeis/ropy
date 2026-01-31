@@ -61,6 +61,7 @@ impl RopyBoard {
         self.pinned = false;
     }
 
+    #[allow(clippy::unused_self)]
     pub fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
         cx.quit();
     }

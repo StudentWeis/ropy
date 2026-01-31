@@ -9,7 +9,7 @@ use image::ImageReader;
 
 /// Create a tooltip preview that supports automatic line wrapping
 ///
-/// This implementation returns a View that will be correctly rendered by GPUI's tooltip system
+/// This implementation returns a `View` that will be correctly rendered by `GPUI`'s tooltip system
 ///
 /// # Usage Example
 /// ```rust
@@ -18,7 +18,7 @@ use image::ImageReader;
 ///         simple_tooltip("This is tooltip content", window, cx)
 ///     })
 /// ```
-pub fn simple_tooltip(content: impl Into<String>, window: &mut Window, cx: &mut App) -> AnyView {
+pub fn simple_tooltip(content: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let content = content.into();
     let window_width = window.bounds().size.width;
     let max_width = (window_width - px(40.0)).into();
@@ -67,7 +67,7 @@ impl Render for TooltipView {
 ///         image_tooltip("/path/to/image.png", window, cx)
 ///     })
 /// ```
-pub fn image_tooltip(image_path: impl Into<String>, window: &mut Window, cx: &mut App) -> AnyView {
+pub fn image_tooltip(image_path: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let image_path = image_path.into();
     let window_width = window.bounds().size.width;
     let window_height = window.bounds().size.height;
@@ -89,7 +89,7 @@ fn calculate_image_size(
     max_w: gpui::Pixels,
     max_h: gpui::Pixels,
 ) -> (gpui::Pixels, gpui::Pixels) {
-    if let Ok(reader) = ImageReader::open(path).and_then(|r| r.with_guessed_format())
+    if let Ok(reader) = ImageReader::open(path).and_then(image::ImageReader::with_guessed_format)
         && let Ok(dims) = reader.into_dimensions()
     {
         let w = dims.0 as f32;

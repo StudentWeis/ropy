@@ -8,7 +8,7 @@ use {
 };
 
 /// Hide the window based on the platform
-pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) {
+pub fn hide_window<T>(_window: &mut Window, cx: &Context<T>, pinned: bool) {
     if pinned {
         return;
     }
@@ -23,7 +23,7 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) 
     }
 
     #[cfg(target_os = "macos")]
-    _cx.hide();
+    cx.hide();
 
     #[cfg(target_os = "linux")]
     if let Some(x11) = crate::gui::app::X11.get() {
@@ -34,7 +34,7 @@ pub fn hide_window<T>(_window: &mut Window, _cx: &mut Context<T>, pinned: bool) 
 }
 
 /// Activate the window based on the platform
-pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
+pub fn active_window<T>(_window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = _window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
@@ -47,7 +47,7 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
     }
 
     #[cfg(target_os = "macos")]
-    _cx.activate(true);
+    cx.activate(true);
 
     #[cfg(target_os = "linux")]
     if let Some(x11) = crate::gui::app::X11.get() {
@@ -58,7 +58,7 @@ pub fn active_window<T>(_window: &mut Window, _cx: &mut Context<T>) {
 }
 
 /// Set the window to be always on top
-pub fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _pinned: bool) {
+pub const fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _pinned: bool) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = _window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()

@@ -16,20 +16,16 @@ pub enum Language {
 }
 
 impl Language {
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
-            Language::English => "English",
-            Language::ChineseSimplified => "简体中文",
-            Language::Japanese => "日本語",
+            Self::English => "English",
+            Self::ChineseSimplified => "简体中文",
+            Self::Japanese => "日本語",
         }
     }
 
-    pub fn all() -> Vec<Language> {
-        vec![
-            Language::English,
-            Language::ChineseSimplified,
-            Language::Japanese,
-        ]
+    pub fn all() -> Vec<Self> {
+        vec![Self::English, Self::ChineseSimplified, Self::Japanese]
     }
 }
 
@@ -40,7 +36,7 @@ pub struct Translations {
 }
 
 impl Translations {
-    /// Load translations from a TOML string
+    /// Load translations from a `TOML` string
     pub fn from_toml(content: &str) -> Result<Self, I18nError> {
         let strings: HashMap<String, String> =
             toml::from_str(content).map_err(|e| I18nError::ParseError(e.to_string()))?;
@@ -52,7 +48,7 @@ impl Translations {
         self.strings
             .get(key)
             .cloned()
-            .unwrap_or_else(|| format!("[Missing: {}]", key))
+            .unwrap_or_else(|| format!("[Missing: {key}]"))
     }
 }
 

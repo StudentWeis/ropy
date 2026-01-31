@@ -1,7 +1,7 @@
 use chrono::Local;
 use image::DynamicImage;
 
-pub fn save_image(image: DynamicImage) -> Option<String> {
+pub fn save_image(image: &DynamicImage) -> Option<String> {
     let data_dir = dirs::data_local_dir()?.join("ropy").join("images");
     if !data_dir.exists() {
         std::fs::create_dir_all(&data_dir).ok()?;
