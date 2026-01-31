@@ -34,14 +34,20 @@ impl ClipboardMonitor {
         tx: Sender<ClipboardEvent>,
         image_tx: Sender<DynamicImage>,
         last_copy: Arc<Mutex<LastCopyState>>,
-    ) -> Self {
-        let ctx = ClipboardContext::new().unwrap();
-        Self {
+    ) -> Option<Self> {
+        let ctx = match ClipboardContext::new() {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                eprintln!("[ropy] Failed to initialize clipboard context: {e}");
+                return None;
+            }
+        };
+        Some(Self {
             tx,
             image_tx,
-            last_copy,
             ctx,
-        }
+            last_copy,
+        })
     }
 }
 
@@ -76,17 +82,19 @@ impl ClipboardHandler for ClipboardMonitor {
 /// Spawn a clipboard listener thread that watches for clipboard changes.
 pub fn start_clipboard_monitor(
     tx: Sender<ClipboardEvent>,
-    async_app: AsyncApp,
+    async_app: &AsyncApp,
     last_copy: Arc<Mutex<LastCopyState>>,
 ) {
     let (image_tx, image_rx) = async_channel::unbounded::<DynamicImage>();
-    let monitor = ClipboardMonitor::new(tx.clone(), image_tx, last_copy);
+    let Some(monitor) = ClipboardMonitor::new(tx.clone(), image_tx, last_copy) else {
+        return;
+    };
     let executor = async_app.background_executor();
 
     executor
         .spawn(async move {
             while let Ok(image) = image_rx.recv().await {
-                if let Some(path) = super::save_image(image) {
+                if let Some(path) = super::save_image(&image) {
                     let _ = tx.send_blocking(ClipboardEvent::Image(path));
                 }
             }
@@ -95,7 +103,13 @@ pub fn start_clipboard_monitor(
 
     executor
         .spawn(async move {
-            let mut watcher = ClipboardWatcherContext::new().unwrap();
+            let mut watcher = match ClipboardWatcherContext::new() {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[ropy] Failed to create clipboard watcher: {e}");
+                    return;
+                }
+            };
             watcher.add_handler(monitor);
             watcher.start_watch();
         })
@@ -132,7 +146,10 @@ pub fn start_clipboard_listener(
                                 };
                                 guard.insert(0, record);
                                 let max_history_records = {
-                                    let settings_guard = settings.read().unwrap();
+                                    let settings_guard = match settings.read() {
+                                        Ok(g) => g,
+                                        Err(e) => e.into_inner(),
+                                    };
                                     settings_guard.storage.max_history_records
                                 };
                                 if guard.len() > max_history_records {

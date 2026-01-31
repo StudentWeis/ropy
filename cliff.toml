@@ -1,8 +1,6 @@
 # git-cliff configuration for generating CHANGELOG.md with GitHub usernames and contributors
 # see: https://git-cliff.org/docs/integration/github
-
 [remote.github]
-# Project GitHub repo used for templating contributors/PR links
 owner = "StudentWeis"
 repo = "ropy"
 

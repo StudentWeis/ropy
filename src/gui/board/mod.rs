@@ -6,7 +6,7 @@ mod settings;
 
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, PoisonError, RwLock},
 };
 
 // Re-export utilities for external use
@@ -29,7 +29,8 @@ use crate::{
     repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
 };
 
-/// RopyBoard Main Window Component
+/// `RopyBoard` Main Window Component
+#[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
     records: Arc<Mutex<Vec<ClipboardRecord>>>,
     filtered_records: Vec<ClipboardRecord>, // The final shown records
@@ -77,7 +78,7 @@ impl RopyBoard {
         window.focus(&focus_handle);
 
         // Subscribe to focus out events to hide the window
-        let _focus_out_subscription =
+        let focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window
                 if !this.pinned {
@@ -90,7 +91,10 @@ impl RopyBoard {
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.));
 
         let (max_history_records, activation_key, theme_index, language) = {
-            let settings_guard = settings.read().unwrap();
+            let settings_guard = match settings.read() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
             let theme_idx = match settings_guard.theme {
                 crate::config::AppTheme::Light => 0,
                 crate::config::AppTheme::Dark => 1,
@@ -103,9 +107,14 @@ impl RopyBoard {
                 settings_guard.language,
             )
         };
-        let autostart_enabled = settings.read().unwrap().autostart.enabled;
+        let autostart_enabled = match settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+        .autostart
+        .enabled;
         let settings_activation_key_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.to_string()));
+            cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.clone()));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
 
@@ -121,7 +130,7 @@ impl RopyBoard {
             repository,
             settings,
             focus_handle,
-            _focus_out_subscription,
+            _focus_out_subscription: focus_out_subscription,
             search_input,
             selected_index: 0,
             last_copy,
@@ -144,11 +153,11 @@ impl RopyBoard {
     }
 
     /// Copy content to clipboard
-    fn copy_to_clipboard(&mut self, content: &str, content_type: &ContentType) {
+    fn copy_to_clipboard(&self, content: &str, content_type: &ContentType) {
         let request = match content_type {
             ContentType::Text => Some(crate::clipboard::CopyRequest::Text(content.to_string())),
             ContentType::Image => Some(crate::clipboard::CopyRequest::Image(content.to_string())),
-            _ => None,
+            ContentType::FilePath => todo!(),
         };
 
         if let Some(req) = request {
@@ -157,19 +166,19 @@ impl RopyBoard {
     }
 
     /// Clear clipboard history
-    fn clear_history(&mut self) {
+    fn clear_history(&self) {
         if let Some(ref repo) = self.repository {
             if let Err(e) = repo.clear() {
                 eprintln!("[ropy] Failed to clear clipboard history: {e}");
             } else {
-                let mut guard = self.records.lock().unwrap();
+                let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
                 guard.clear();
             }
         }
     }
 
     /// Clear last copy state
-    fn clear_last_copy_state(&mut self) {
+    fn clear_last_copy_state(&self) {
         match self.last_copy.lock() {
             Ok(mut guard) => {
                 *guard = LastCopyState::Text(String::new());
@@ -186,8 +195,10 @@ impl RopyBoard {
             if let Err(e) = repo.delete(id) {
                 eprintln!("[ropy] Failed to delete clipboard record: {e}");
             } else {
-                let mut guard = self.records.lock().unwrap();
-                guard.retain(|record| record.id != id);
+                self.records
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .retain(|record| record.id != id);
                 // Mark that we're in a delete operation to preserve scroll position
                 self.deleting_record = true;
             }
@@ -197,8 +208,10 @@ impl RopyBoard {
     /// Get filtered records based on search query
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
         if query.is_empty() {
-            let guard = self.records.lock().unwrap();
-            guard.clone()
+            self.records
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
         } else if let Some(ref repo) = self.repository {
             repo.search(query).unwrap_or_default()
         } else {
@@ -207,7 +220,7 @@ impl RopyBoard {
     }
 
     /// Confirm, hide and delete.
-    fn confirm_record(&mut self, window: &mut Window, cx: &mut Context<Self>, index: usize) {
+    fn confirm_record(&mut self, window: &mut Window, cx: &Context<Self>, index: usize) {
         let (id, content, content_type) = {
             if let Some(record) = self.filtered_records.get(index) {
                 (
@@ -237,7 +250,14 @@ impl RopyBoard {
 
         let mut is_hotkey_invalid = false;
         if activation_key.is_empty() {
-            activation_key = self.settings.read().unwrap().hotkey.activation_key.clone();
+            activation_key.clone_from(
+                &match self.settings.read() {
+                    Ok(g) => g,
+                    Err(e) => e.into_inner(),
+                }
+                .hotkey
+                .activation_key,
+            );
             // If current setting is also empty (should not happen with load fix), use default
             if activation_key.is_empty() {
                 activation_key = Settings::default().hotkey.activation_key;
@@ -248,7 +268,12 @@ impl RopyBoard {
         }
 
         // Get current max_history_records from settings as fallback
-        let current_max_history = self.settings.read().unwrap().storage.max_history_records;
+        let current_max_history = match self.settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+        .storage
+        .max_history_records;
 
         let max_history = self
             .settings_max_history_input
@@ -270,8 +295,11 @@ impl RopyBoard {
             .unwrap_or_default();
 
         {
-            let mut settings = self.settings.write().unwrap();
-            settings.hotkey.activation_key = activation_key.clone();
+            let mut settings = match self.settings.write() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
+            settings.hotkey.activation_key.clone_from(&activation_key);
             settings.storage.max_history_records = max_history;
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;

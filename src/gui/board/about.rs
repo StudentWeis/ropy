@@ -12,10 +12,7 @@ use gpui_component::{
 use super::RopyBoard;
 
 /// Render the about panel content
-pub(super) fn render_about_content(
-    board: &mut RopyBoard,
-    cx: &mut Context<RopyBoard>,
-) -> impl IntoElement {
+pub(super) fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let version = env!("CARGO_PKG_VERSION");
 
     let header = h_flex()

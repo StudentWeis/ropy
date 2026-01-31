@@ -24,13 +24,13 @@ pub struct AutoStartManager {
 }
 
 impl AutoStartManager {
-    /// Create a new AutoStartManager instance
+    /// Create a new `AutoStartManager` instance
     ///
     /// # Arguments
     /// * `app_name` - The name of the application
     ///
     /// # Returns
-    /// Result containing AutoStartManager or AutoStartError
+    /// Result containing `AutoStartManager` or `AutoStartError`
     pub fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
@@ -49,7 +49,7 @@ impl AutoStartManager {
     /// Get the application executable path
     ///
     /// For development builds, returns the debug executable path
-    /// For bundled macOS apps, returns the .app bundle path
+    /// For bundled `macOS` apps, returns the `.app` bundle path
     fn get_app_path() -> Result<String, AutoStartError> {
         // Get the current executable path
         let exe_path =
@@ -67,9 +67,12 @@ impl AutoStartManager {
         }
 
         // For non-bundled or Windows builds, return the executable path
-        exe_path.to_str().map(|s| s.to_string()).ok_or_else(|| {
-            AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
-        })
+        exe_path
+            .to_str()
+            .map(std::string::ToString::to_string)
+            .ok_or_else(|| {
+                AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
+            })
     }
 
     /// Enable auto-start at system startup
@@ -99,14 +102,12 @@ impl AutoStartManager {
     /// * `enabled` - Whether auto-start should be enabled
     pub fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
         let current_enabled = self.is_enabled().unwrap_or(false);
-        if current_enabled != enabled {
-            if enabled {
-                self.enable()
-            } else {
-                self.disable()
-            }
-        } else {
+        if current_enabled == enabled {
             Ok(())
+        } else if enabled {
+            self.enable()
+        } else {
+            self.disable()
         }
     }
 }
@@ -138,7 +139,7 @@ mod tests {
 
         // Verify state if possible
         if let Ok(enabled) = manager.is_enabled() {
-            assert!(!enabled)
+            assert!(!enabled);
         }
     }
 }

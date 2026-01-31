@@ -25,15 +25,15 @@ pub enum RepositoryError {
 impl std::fmt::Display for RepositoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RepositoryError::DataDirNotFound => write!(f, "Data directory not found"),
-            RepositoryError::DatabaseOpen(e) => write!(f, "Database open failed: {e}"),
-            RepositoryError::TreeOpen(e) => write!(f, "Tree open failed: {e}"),
-            RepositoryError::Serialization(e) => write!(f, "Serialization error: {e}"),
-            RepositoryError::Deserialization(e) => write!(f, "Deserialization error: {e}"),
-            RepositoryError::Insert(e) => write!(f, "Insert error: {e}"),
-            RepositoryError::Query(e) => write!(f, "Query error: {e}"),
-            RepositoryError::Delete(e) => write!(f, "Delete error: {e}"),
-            RepositoryError::Flush(e) => write!(f, "Flush error: {e}"),
+            Self::DataDirNotFound => write!(f, "Data directory not found"),
+            Self::DatabaseOpen(e) => write!(f, "Database open failed: {e}"),
+            Self::TreeOpen(e) => write!(f, "Tree open failed: {e}"),
+            Self::Serialization(e) => write!(f, "Serialization error: {e}"),
+            Self::Deserialization(e) => write!(f, "Deserialization error: {e}"),
+            Self::Insert(e) => write!(f, "Insert error: {e}"),
+            Self::Query(e) => write!(f, "Query error: {e}"),
+            Self::Delete(e) => write!(f, "Delete error: {e}"),
+            Self::Flush(e) => write!(f, "Flush error: {e}"),
         }
     }
 }

@@ -9,7 +9,7 @@ use gpui::{BackgroundExecutor, ForegroundExecutor};
 /// Returns a sender to update the hotkey string dynamically.
 pub fn start_hotkey_listener<F>(
     initial_hotkey: String,
-    fg_executor: ForegroundExecutor,
+    fg_executor: &ForegroundExecutor,
     bg_executor: BackgroundExecutor,
     on_hotkey: F,
 ) -> async_channel::Sender<String>
@@ -20,7 +20,7 @@ where
     fg_executor
         .spawn(async move {
             let mut current_hotkey = initial_hotkey;
-            let mut _manage_handle = register_hotkey(&current_hotkey);
+            let mut manage_handle = register_hotkey(&current_hotkey);
             let receiver = GlobalHotKeyEvent::receiver();
             loop {
                 // Check for hotkey updates
@@ -31,8 +31,8 @@ where
                 }
 
                 if updated {
-                    drop(_manage_handle);
-                    _manage_handle = register_hotkey(&current_hotkey);
+                    drop(manage_handle);
+                    manage_handle = register_hotkey(&current_hotkey);
                 }
 
                 // Poll for hotkey events
@@ -65,8 +65,7 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
         Ok(hotkey) => {
             if let Err(err) = manager.register(hotkey) {
                 eprintln!(
-                    "Failed to register hotkey {}: {}. The hotkey listener will not be available.",
-                    hotkey_str, err
+                    "Failed to register hotkey {hotkey_str}: {err}. The hotkey listener will not be available."
                 );
                 None
             } else {
@@ -75,8 +74,7 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
         }
         Err(err) => {
             eprintln!(
-                "Failed to parse hotkey {}: {}. The hotkey listener will not be available.",
-                hotkey_str, err
+                "Failed to parse hotkey {hotkey_str}: {err}. The hotkey listener will not be available."
             );
             None
         }

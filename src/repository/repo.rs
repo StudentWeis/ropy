@@ -25,12 +25,12 @@ impl ClipboardRepository {
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
             .join("images");
-        Self::init(db_path, images_dir)
+        Self::init(&db_path, images_dir)
     }
 
     /// Initialize repository with specific paths
-    pub fn init(db_path: PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
-        let db = sled::open(&db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
+    pub fn init(db_path: &PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
+        let db = sled::open(db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
         let records_tree = db
             .open_tree("clipboard_records")
             .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
@@ -240,7 +240,7 @@ mod tests {
     fn create_test_repo() -> ClipboardRepository {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
-        ClipboardRepository::init(db_path, temp_dir.path().join("images"))
+        ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
             .expect("Failed to create test repository")
     }
 
@@ -334,7 +334,7 @@ mod tests {
         let repo = create_test_repo();
 
         for i in 1..=10 {
-            repo.save_text(format!("Record {}", i))
+            repo.save_text(format!("Record {i}"))
                 .expect("Failed to save");
             thread::sleep(Duration::from_millis(10));
         }

@@ -52,19 +52,29 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
 }
 
 fn load_initial_records(
-    repository: &Option<Arc<ClipboardRepository>>,
+    repository: Option<&Arc<ClipboardRepository>>,
     settings: &Arc<RwLock<Settings>>,
 ) -> Vec<ClipboardRecord> {
-    let max_records = settings.read().unwrap().storage.max_history_records;
+    let max_records = {
+        let settings_guard = match settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        settings_guard.storage.max_history_records
+    };
     repository
-        .as_ref()
         .and_then(|repo| repo.get_recent(max_records).ok())
         .unwrap_or_default()
 }
 
 /// Synchronize auto-start state with system on application launch
 fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
-    let autostart_enabled = settings.read().unwrap().autostart.enabled;
+    let autostart_enabled = match settings.read() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    }
+    .autostart
+    .enabled;
 
     match AutoStartManager::new("Ropy") {
         Ok(manager) => {
@@ -88,7 +98,7 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
 }
 
 fn start_clipboard_monitor(
-    async_app: AsyncApp,
+    async_app: &AsyncApp,
     last_copy: Arc<Mutex<LastCopyState>>,
 ) -> async_channel::Receiver<ClipboardEvent> {
     let (clipboard_tx, clipboard_rx) = async_channel::unbounded::<ClipboardEvent>();
@@ -99,16 +109,22 @@ fn start_clipboard_monitor(
 fn setup_hotkey_listener(
     window_handle: WindowHandle<Root>,
     async_app: AsyncApp,
-    settings: Arc<RwLock<Settings>>,
+    settings: &Arc<RwLock<Settings>>,
 ) -> async_channel::Sender<String> {
     let fg_executor = async_app.foreground_executor().clone();
     let bg_executor = async_app.background_executor().clone();
-    let hotkey_str = settings.read().unwrap().hotkey.activation_key.clone();
-    crate::gui::hotkey::start_hotkey_listener(hotkey_str, fg_executor, bg_executor, move || {
+    let hotkey_str = match settings.read() {
+        Ok(g) => g,
+        Err(e) => e.into_inner(),
+    }
+    .hotkey
+    .activation_key
+    .clone();
+    crate::gui::hotkey::start_hotkey_listener(hotkey_str, &fg_executor, bg_executor, move || {
         let _ = async_app.update(move |cx| {
             window_handle
                 .update(cx, |_, window, cx| {
-                    window.dispatch_action(Box::new(crate::gui::board::Active), cx)
+                    window.dispatch_action(Box::new(crate::gui::board::Active), cx);
                 })
                 .ok();
         });
@@ -135,7 +151,12 @@ fn create_window(
         },
         |window, cx| {
             // Apply the application theme based on settings
-            let app_theme = &settings.read().unwrap().theme.get_theme();
+            let app_theme = &match settings.read() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            }
+            .theme
+            .get_theme();
             set_app_theme(window, cx, app_theme);
 
             let view = cx.new(|cx| {
@@ -152,7 +173,10 @@ fn create_window(
             cx.new(|cx| Root::new(view, window, cx))
         },
     )
-    .unwrap()
+    .unwrap_or_else(|e| {
+        eprintln!("[ropy] Fatal: Failed to create window: {e}");
+        std::process::exit(1);
+    })
 }
 
 /// Set the application theme (light or dark)
@@ -161,28 +185,28 @@ pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppThe
         AppTheme::Dark => {
             Theme::change(ThemeMode::Dark, Some(window), cx);
             let theme = Theme::global_mut(cx);
-            theme.background = rgb(0x2d2d2d).into();
-            theme.foreground = rgb(0xffffff).into();
-            theme.secondary = rgb(0x3d3d3d).into();
-            theme.secondary_foreground = rgb(0xffffff).into();
-            theme.border = rgb(0x4d4d4d).into();
-            theme.accent = rgb(0x4d4d4d).into();
-            theme.muted_foreground = rgb(0x888888).into();
-            theme.input = rgb(0x555555).into();
+            theme.background = rgb(0x002d_2d2d).into();
+            theme.foreground = rgb(0x00ff_ffff).into();
+            theme.secondary = rgb(0x003d_3d3d).into();
+            theme.secondary_foreground = rgb(0x00ff_ffff).into();
+            theme.border = rgb(0x004d_4d4d).into();
+            theme.accent = rgb(0x004d_4d4d).into();
+            theme.muted_foreground = rgb(0x0088_8888).into();
+            theme.input = rgb(0x0055_5555).into();
         }
         AppTheme::Light => {
             Theme::change(ThemeMode::Light, Some(window), cx);
             let theme = Theme::global_mut(cx);
-            theme.background = rgb(0xffffff).into();
-            theme.foreground = rgb(0x1a1a1a).into();
-            theme.secondary = rgb(0xf5f5f5).into();
-            theme.secondary_foreground = rgb(0x1a1a1a).into();
-            theme.border = rgb(0xe0e0e0).into();
-            theme.accent = rgb(0xadd8e6).into();
-            theme.muted_foreground = rgb(0x6b6b6b).into();
-            theme.input = rgb(0xf0f0f0).into();
+            theme.background = rgb(0x00ff_ffff).into();
+            theme.foreground = rgb(0x001a_1a1a).into();
+            theme.secondary = rgb(0x00f5_f5f5).into();
+            theme.secondary_foreground = rgb(0x001a_1a1a).into();
+            theme.border = rgb(0x00e0_e0e0).into();
+            theme.accent = rgb(0x00ad_d8e6).into();
+            theme.muted_foreground = rgb(0x006b_6b6b).into();
+            theme.input = rgb(0x00f0_f0f0).into();
         }
-        _ => {}
+        AppTheme::System => todo!(),
     }
 }
 
@@ -207,38 +231,38 @@ pub fn launch_app() {
         sync_autostart_on_launch(&settings);
 
         let repository = initialize_repository();
-        let initial_records = load_initial_records(&repository, &settings);
+        let initial_records = load_initial_records(repository.as_ref(), &settings);
         let shared_records = Arc::new(Mutex::new(initial_records));
-        let last_copy = Arc::new(Mutex::new(LastCopyState::Text("".to_string())));
+        let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
         let async_app = cx.to_async();
-        let clipboard_rx = start_clipboard_monitor(async_app.clone(), last_copy.clone());
-        let copy_tx = clipboard::start_clipboard_writer(async_app.clone());
+        let clipboard_rx = start_clipboard_monitor(&async_app, last_copy.clone());
+        let copy_tx = clipboard::start_clipboard_writer(&async_app);
         let window_handle = create_window(
             cx,
             shared_records.clone(),
             repository.clone(),
             settings.clone(),
-            last_copy.clone(),
+            last_copy,
             copy_tx,
             is_silent,
         );
         clipboard::start_clipboard_listener(
             clipboard_rx,
             shared_records,
-            repository.clone(),
+            repository,
             settings.clone(),
             async_app.clone(),
             window_handle,
         );
-        let hotkey_tx = setup_hotkey_listener(window_handle, async_app.clone(), settings.clone());
+        let hotkey_tx = setup_hotkey_listener(window_handle, async_app.clone(), &settings);
         let _ = window_handle.update(cx, |root, _, cx| {
-            root.view()
-                .clone()
-                .downcast::<RopyBoard>()
-                .unwrap()
-                .update(cx, |board, _| {
+            if let Ok(board) = root.view().clone().downcast::<RopyBoard>() {
+                board.update(cx, |board, _| {
                     board.set_hotkey_tx(hotkey_tx);
                 });
+            } else {
+                eprintln!("[ropy] Failed to downcast root view to RopyBoard");
+            }
         });
 
         super::tray::start_tray_handler(settings, async_app, window_handle);

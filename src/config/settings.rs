@@ -30,10 +30,9 @@ pub enum AppTheme {
 impl AppTheme {
     pub fn get_theme(&self) -> Self {
         match self {
-            AppTheme::System => match dark_light::detect().unwrap_or(dark_light::Mode::Light) {
-                dark_light::Mode::Dark => AppTheme::Dark,
-                dark_light::Mode::Light => AppTheme::Light,
-                _ => AppTheme::Light,
+            Self::System => match dark_light::detect().unwrap_or(dark_light::Mode::Light) {
+                dark_light::Mode::Dark => Self::Dark,
+                _ => Self::Light,
             },
             _ => self.clone(),
         }
@@ -42,7 +41,7 @@ impl AppTheme {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeySettings {
-    /// Global hotkey to activate clipboard manager (e.g., "cmd+shift+v")
+    /// Global hotkey to activate clipboard manager (e.g., "`cmd+shift+v`")
     pub activation_key: String,
 }
 
@@ -102,11 +101,16 @@ impl Settings {
             std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
         }
 
-        let builder = Config::builder()
+        let mut builder = Config::builder()
             // Start with default values
-            .add_source(Config::try_from(&Settings::default())?)
-            // Add configuration from file (optional)
-            .add_source(File::with_name(config_file.to_str().unwrap()).required(false));
+            .add_source(Config::try_from(&Self::default())?);
+
+        // Add configuration from file (optional)
+        if let Some(path_str) = config_file.to_str() {
+            builder = builder.add_source(File::with_name(path_str).required(false));
+        } else {
+            eprintln!("[ropy] Warning: Config file path contains invalid UTF-8 characters");
+        }
 
         let config = builder.build()?;
         let mut settings: Self = config.try_deserialize()?;
@@ -115,7 +119,7 @@ impl Settings {
         if settings.hotkey.activation_key.is_empty()
             || global_hotkey::hotkey::HotKey::from_str(&settings.hotkey.activation_key).is_err()
         {
-            settings.hotkey.activation_key = Settings::default().hotkey.activation_key;
+            settings.hotkey.activation_key = Self::default().hotkey.activation_key;
         }
 
         Ok(settings)
