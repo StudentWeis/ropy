@@ -243,8 +243,8 @@ pub(super) fn render_settings_content(
         );
 
     #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        crate::gui::utils::start_window_drag(window, cx);
+    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
+        crate::gui::utils::start_window_drag(window);
     });
 
     v_flex().size_full().child(header).child(

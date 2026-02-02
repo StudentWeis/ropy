@@ -8,12 +8,13 @@ use {
 };
 
 /// Hide the window based on the platform
-pub fn hide_window<T>(_window: &mut Window, cx: &Context<T>, pinned: bool) {
+#[allow(unused_variables)]
+pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     if pinned {
         return;
     }
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = _window.window_handle()
+    if let Ok(handle) = window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
     {
         let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
@@ -34,9 +35,10 @@ pub fn hide_window<T>(_window: &mut Window, cx: &Context<T>, pinned: bool) {
 }
 
 /// Activate the window based on the platform
-pub fn active_window<T>(_window: &mut Window, cx: &Context<T>) {
+#[allow(unused_variables)]
+pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = _window.window_handle()
+    if let Ok(handle) = window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
     {
         let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
@@ -58,9 +60,10 @@ pub fn active_window<T>(_window: &mut Window, cx: &Context<T>) {
 }
 
 /// Set the window to be always on top
-pub const fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _pinned: bool) {
+#[allow(unused_variables)]
+pub fn set_always_on_top(window: &mut Window, pinned: bool) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = _window.window_handle()
+    if let Ok(handle) = window.window_handle()
         && let RawWindowHandle::Win32(handle) = handle.as_raw()
     {
         let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
@@ -68,11 +71,8 @@ pub const fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _p
             use windows_sys::Win32::UI::WindowsAndMessaging::{
                 HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
             };
-            let hwnd_insert_after = if _pinned {
-                HWND_TOPMOST
-            } else {
-                HWND_NOTOPMOST
-            };
+            let hwnd_insert_after: *mut std::ffi::c_void =
+                if pinned { HWND_TOPMOST } else { HWND_NOTOPMOST };
             SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         }
     }
@@ -80,7 +80,7 @@ pub const fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _p
     #[cfg(target_os = "linux")]
     {
         if let Some(x11) = crate::gui::app::X11.get() {
-            if let Err(e) = x11.set_always_on_top(_pinned) {
+            if let Err(e) = x11.set_always_on_top(pinned) {
                 tracing::warn!(error = %e, "failed to set always on top");
             }
         }
@@ -89,7 +89,7 @@ pub const fn set_always_on_top<T>(_window: &mut Window, _cx: &mut Context<T>, _p
 
 /// Start dragging the window
 #[cfg(target_os = "windows")]
-pub fn start_window_drag(window: &mut Window, _cx: &mut gpui::App) {
+pub fn start_window_drag(window: &mut Window) {
     use windows_sys::Win32::UI::{
         Input::KeyboardAndMouse::ReleaseCapture,
         WindowsAndMessaging::{HTCAPTION, PostMessageA, WM_NCLBUTTONDOWN},

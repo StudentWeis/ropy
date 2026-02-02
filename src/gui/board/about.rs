@@ -42,8 +42,8 @@ pub(super) fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -
         .child(div().w(px(55.)));
 
     #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        crate::gui::utils::start_window_drag(window, cx);
+    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
+        crate::gui::utils::start_window_drag(window);
     });
 
     v_flex().size_full().child(header).child(

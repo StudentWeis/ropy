@@ -83,8 +83,8 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
     #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, cx| {
-        crate::gui::utils::start_window_drag(window, cx);
+    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
+        crate::gui::utils::start_window_drag(window);
     });
 
     header
@@ -109,7 +109,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                     .tooltip(pin_tooltip)
                     .on_click(cx.listener(|this, _event, window, cx| {
                         this.pinned = !this.pinned;
-                        crate::gui::utils::set_always_on_top(window, cx, this.pinned);
+                        crate::gui::utils::set_always_on_top(window, this.pinned);
                         cx.notify();
                     }))
                     .on_mouse_down(
