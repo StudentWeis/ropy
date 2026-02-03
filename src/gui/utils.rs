@@ -14,10 +14,10 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
         return;
     }
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = window.window_handle()
-        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
-        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
         unsafe {
             ShowWindow(hwnd, SW_HIDE);
         }
@@ -38,10 +38,10 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
 #[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = window.window_handle()
-        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
-        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
         unsafe {
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
@@ -62,12 +62,12 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
 /// Set the window to be always on top
 #[allow(unused_variables)]
 #[cfg(not(target_os = "macos"))]
-pub fn set_always_on_top(window: &mut Window, pinned: bool) {
+pub fn set_always_on_top(window: &Window, pinned: bool) {
     #[cfg(target_os = "windows")]
-    if let Ok(handle) = window.window_handle()
-        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
-        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{
                 HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
@@ -90,15 +90,15 @@ pub fn set_always_on_top(window: &mut Window, pinned: bool) {
 
 /// Start dragging the window
 #[cfg(target_os = "windows")]
-pub fn start_window_drag(window: &mut Window) {
+pub fn start_window_drag(window: &Window) {
     use windows_sys::Win32::UI::{
         Input::KeyboardAndMouse::ReleaseCapture,
         WindowsAndMessaging::{HTCAPTION, PostMessageA, WM_NCLBUTTONDOWN},
     };
-    if let Ok(handle) = window.window_handle()
-        && let RawWindowHandle::Win32(handle) = handle.as_raw()
+    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
-        let hwnd = handle.hwnd.get() as *mut std::ffi::c_void;
+        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
         unsafe {
             ReleaseCapture();
             PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
