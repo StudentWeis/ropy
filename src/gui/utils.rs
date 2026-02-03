@@ -8,7 +8,7 @@ use {
 };
 
 /// Hide the window based on the platform
-#[allow(unused_variables)]
+#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     if pinned {
         return;
@@ -35,7 +35,7 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
 }
 
 /// Activate the window based on the platform
-#[allow(unused_variables)]
+#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = window.window_handle()
@@ -61,6 +61,7 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
 
 /// Set the window to be always on top
 #[allow(unused_variables)]
+#[cfg(not(target_os = "macos"))]
 pub fn set_always_on_top(window: &mut Window, pinned: bool) {
     #[cfg(target_os = "windows")]
     if let Ok(handle) = window.window_handle()

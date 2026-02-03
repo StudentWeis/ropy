@@ -140,11 +140,6 @@ pub fn start_clipboard_listener(
                     match result {
                         Ok(record) => {
                             {
-                                let mut guard = match shared_records.lock() {
-                                    Ok(g) => g,
-                                    Err(poisoned) => poisoned.into_inner(),
-                                };
-                                guard.insert(0, record);
                                 let max_history_records = {
                                     let settings_guard = match settings.read() {
                                         Ok(g) => g,
@@ -152,8 +147,14 @@ pub fn start_clipboard_listener(
                                     };
                                     settings_guard.storage.max_history_records
                                 };
+                                let mut guard = match shared_records.lock() {
+                                    Ok(g) => g,
+                                    Err(poisoned) => poisoned.into_inner(),
+                                };
+                                guard.insert(0, record);
                                 if guard.len() > max_history_records {
                                     guard.truncate(max_history_records);
+                                    drop(guard);
                                     repo.cleanup_old_records(max_history_records).ok();
                                 }
                             }

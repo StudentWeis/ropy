@@ -90,6 +90,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_hotkey_registration_and_unregistration() {
         // This test verifies registration/unregistration and receiver availability
         let manager = GlobalHotKeyManager::new().unwrap();

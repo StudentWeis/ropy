@@ -107,11 +107,14 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                     }
                     .icon(Icon::empty().path("pin-to-top.svg"))
                     .tooltip(pin_tooltip)
-                    .on_click(cx.listener(|this, _event, window, cx| {
-                        this.pinned = !this.pinned;
-                        crate::gui::utils::set_always_on_top(window, this.pinned);
-                        cx.notify();
-                    }))
+                    .on_click(
+                        cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
+                            this.pinned = !this.pinned;
+                            #[cfg(not(target_os = "macos"))]
+                            crate::gui::utils::set_always_on_top(window, this.pinned);
+                            cx.notify();
+                        }),
+                    )
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(|_, _, _, cx| cx.stop_propagation()),

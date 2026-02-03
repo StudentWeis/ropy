@@ -237,6 +237,7 @@ mod tests {
 
     use super::*;
 
+    #[allow(clippy::expect_used)]
     fn create_test_repo() -> ClipboardRepository {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
@@ -245,6 +246,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_save_and_get_text() {
         let repo = create_test_repo();
 
@@ -262,11 +264,12 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_get_recent() {
         let repo = create_test_repo();
 
         for i in 1..=5 {
-            repo.save_text(format!("Record {}", i))
+            repo.save_text(format!("Record {i}"))
                 .expect("Failed to save");
             thread::sleep(Duration::from_millis(10));
         }
@@ -279,6 +282,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_search() {
         let repo = create_test_repo();
 
@@ -300,6 +304,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_delete() {
         let repo = create_test_repo();
 
@@ -317,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_clear() {
         let repo = create_test_repo();
 
@@ -330,6 +336,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records() {
         let repo = create_test_repo();
 

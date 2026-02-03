@@ -130,6 +130,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_translations_from_toml() {
         let content = r#"
             app_name = "Ropy"
@@ -143,6 +144,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_missing_translation() {
         let content = r#"
             app_name = "Ropy"
@@ -152,6 +154,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_i18n_initialization() {
         let i18n = I18n::new(Language::English);
         assert!(i18n.is_ok());
@@ -160,6 +163,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn test_i18n_language_switch() {
         let mut i18n = I18n::new(Language::English).unwrap();
         assert_eq!(i18n.t("tray_show"), "Show");

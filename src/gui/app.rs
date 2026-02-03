@@ -258,7 +258,7 @@ pub fn launch_app() {
             }
         });
 
-        super::tray::start_tray_handler(settings, async_app, window_handle);
+        super::tray::start_tray_handler(&settings, async_app, window_handle);
 
         if !is_silent {
             cx.activate(true);
