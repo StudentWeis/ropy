@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-02-10
+
+### 🚀 Features
+
+- Integrate tracing for improved logging and error handling by @StudentWeis
+
+### 🐛 Bug Fixes
+
+- Fix windows problem from clippy refactor by @StudentWeis
+
+### 🚜 Refactor
+
+- Clean up code and improve linting compliance across multiple files by @StudentWeis
+- Use strict clippy lints to improve the quality of code by @StudentWeis
+- Remove debug RSS monitor functionality and related code by @StudentWeis
+
 ## [0.2.0] - 2026-01-26
 
 ### 🚀 Features

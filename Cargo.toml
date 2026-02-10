@@ -1,6 +1,6 @@
 [package]
 name = "ropy"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 repository = "https://github.com/StudentWeis/ropy"
@@ -9,7 +9,8 @@ license = "MIT"
 [dependencies]
 clipboard-rs = "0.3.2"
 gpui = "0.2.2"
-gpui-component = "0.5.0"
+gpui-component = "0.5.1"
+# Can't use latest sysinfo due to dependency conflicts
 sysinfo = "0.38.0"
 global-hotkey = "0.7"
 sled = "0.34"
@@ -24,16 +25,16 @@ image = "0.25"
 tray-icon = "0.21.3"
 dark-light = "2.0"
 auto-launch = "0.6.0"
-regex = "1.12.2"
+regex = "1.12.3"
 raw-window-handle = "0.6"
 async-channel = "2.5.0"
 rust-embed = "8.11.0"
 
 # Logging / tracing
-tracing = "0.1"
+tracing = "0.1.44"
 tracing-appender = "0.2"
 tracing-log = "0.2"
-tracing-subscriber = { version = "0.3", features = [
+tracing-subscriber = { version = "0.3.22", features = [
     "env-filter",
     "json",
     "time",
@@ -53,7 +54,7 @@ gtk = "0.18.2"
 x11rb = "0.13"
 
 [dev-dependencies]
-tempfile = "3.24.0"
+tempfile = "3.25.0"
 
 [build-dependencies]
 winres = "0.1"
@@ -83,7 +84,7 @@ lto = "thin"
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"
-version = "0.2.0"
+version = "0.2.1"
 copyright = "Copyright 2025 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"
