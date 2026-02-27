@@ -1,8 +1,10 @@
-mod about;
 mod actions;
 mod preview;
 mod render;
-mod settings;
+
+// moved panels to gui::panel
+use crate::gui::panel::about::render_about_content;
+use crate::gui::panel::settings::render_settings_content;
 
 use std::{
     str::FromStr,
@@ -10,7 +12,6 @@ use std::{
 };
 
 // Re-export utilities for external use
-use about::render_about_content;
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, SharedString,
@@ -24,7 +25,6 @@ use gpui_component::{
     v_flex,
 };
 use render::{render_header, render_search_input};
-use settings::render_settings_content;
 
 use crate::{
     clipboard::LastCopyState,
@@ -38,37 +38,37 @@ use crate::{
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
-    records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    filtered_records: Vec<ClipboardRecord>, // The final shown records
-    repository: Option<Arc<ClipboardRepository>>,
-    focus_handle: FocusHandle,
-    _focus_out_subscription: Subscription,
-    search_input: Entity<InputState>,
-    list_state: ListState,
-    selected_index: usize,
-    copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
-    last_copy: Arc<Mutex<LastCopyState>>,
+    pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    pub(crate) filtered_records: Vec<ClipboardRecord>, // The final shown records
+    pub(crate) repository: Option<Arc<ClipboardRepository>>,
+    pub(crate) focus_handle: FocusHandle,
+    pub(crate) _focus_out_subscription: Subscription,
+    pub(crate) search_input: Entity<InputState>,
+    pub(crate) list_state: ListState,
+    pub(crate) selected_index: usize,
+    pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
+    pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
     // Settings
-    settings: Arc<RwLock<Settings>>,
-    show_settings: bool,
-    show_about: bool,
-    show_preview: bool,
-    settings_activation_key_input: Entity<InputState>,
-    settings_max_history_input: Entity<InputState>,
-    selected_theme: usize, // 0: Light, 1: Dark, 2: System
-    autostart_enabled: bool,
-    pinned: bool,
-    hotkey_tx: Option<async_channel::Sender<String>>,
+    pub(crate) settings: Arc<RwLock<Settings>>,
+    pub(crate) show_settings: bool,
+    pub(crate) show_about: bool,
+    pub(crate) show_preview: bool,
+    pub(crate) settings_activation_key_input: Entity<InputState>,
+    pub(crate) settings_max_history_input: Entity<InputState>,
+    pub(crate) selected_theme: usize, // 0: Light, 1: Dark, 2: System
+    pub(crate) autostart_enabled: bool,
+    pub(crate) pinned: bool,
+    pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
     // I18n
-    i18n: I18n,
-    selected_language: usize, // Index into Language::all()
-    language_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) i18n: I18n,
+    pub(crate) selected_language: usize, // Index into Language::all()
+    pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
     /// Track if we're in a delete operation to preserve scroll position
-    deleting_record: bool,
+    pub(crate) deleting_record: bool,
     /// Current auto-update status
-    update_status: UpdateStatus,
+    pub(crate) update_status: UpdateStatus,
     /// Whether auto-check for updates is enabled (mirrors settings)
-    auto_check_enabled: bool,
+    pub(crate) auto_check_enabled: bool,
 }
 
 impl RopyBoard {
@@ -293,7 +293,7 @@ impl RopyBoard {
         }
     }
 
-    fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let mut activation_key = self
             .settings_activation_key_input
             .read(cx)
@@ -404,7 +404,7 @@ impl RopyBoard {
         cx.notify();
     }
 
-    fn toggle_autostart(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_autostart(&mut self, cx: &mut Context<Self>) {
         self.autostart_enabled = !self.autostart_enabled;
         cx.notify();
     }

@@ -1,6 +1,7 @@
 use gpui::{Context, Focusable, Window};
 
 use crate::gui::{active_window, board::RopyBoard, hide_window};
+use crate::gui::panel::settings;
 
 gpui::actions!(
     board,
@@ -37,7 +38,7 @@ impl RopyBoard {
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_index = 0;
         if self.show_settings {
-            super::settings::reset_settings_dialog(self, window, cx);
+            settings::reset_settings_dialog(self, window, cx);
         }
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.show_settings = false;
@@ -47,7 +48,7 @@ impl RopyBoard {
 
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
         if self.show_settings {
-            super::settings::reset_settings_dialog(self, window, cx);
+            settings::reset_settings_dialog(self, window, cx);
             return;
         }
         // If the search input is focused, return focus to the main component before hiding

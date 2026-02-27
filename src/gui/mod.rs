@@ -1,5 +1,6 @@
 mod app;
 mod board;
+mod panel;
 mod hotkey;
 mod tray;
 mod utils;
