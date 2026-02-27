@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-02-27
+
+### 🚜 Refactor
+
+- Move about and setting panel to new mod by @StudentWeis
+- Beautify the settings page by @StudentWeis
+
 ## [0.2.2] - 2026-02-27
 
 ### 🚀 Features

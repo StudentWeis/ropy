@@ -5670,7 +5670,7 @@ dependencies = [
 
 [[package]]
 name = "ropy"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-channel 2.5.0",
  "auto-launch",
