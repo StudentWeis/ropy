@@ -101,9 +101,10 @@ fn download_file(
             UpdateError::Network(format!("failed to launch curl: {e}"))
         })?;
 
-    let mut reader = child.stdout.take().ok_or_else(|| {
-        UpdateError::Network("failed to capture curl stdout".into())
-    })?;
+    let mut reader = child
+        .stdout
+        .take()
+        .ok_or_else(|| UpdateError::Network("failed to capture curl stdout".into()))?;
 
     let mut file = std::fs::File::create(dest).map_err(UpdateError::Io)?;
 
@@ -168,9 +169,8 @@ fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateEr
         )));
     }
 
-    let checksum_body = String::from_utf8(output.stdout).map_err(|e| {
-        UpdateError::Network(format!("invalid UTF-8 in checksum response: {e}"))
-    })?;
+    let checksum_body = String::from_utf8(output.stdout)
+        .map_err(|e| UpdateError::Network(format!("invalid UTF-8 in checksum response: {e}")))?;
 
     // The checksum file format from cargo-dist is:  "<hex>  <filename>\n"
     let expected_hex = checksum_body

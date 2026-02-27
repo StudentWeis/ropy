@@ -13,11 +13,16 @@ use std::{
 use about::render_about_content;
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, Subscription,
-    Window,
+    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, SharedString,
+    Subscription, Window,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
 };
-use gpui_component::{ActiveTheme, input::InputState, v_flex};
+use gpui_component::{
+    ActiveTheme, IndexPath,
+    input::InputState,
+    select::{SelectEvent, SelectState},
+    v_flex,
+};
 use render::{render_header, render_search_input};
 use settings::render_settings_content;
 
@@ -57,6 +62,7 @@ pub struct RopyBoard {
     // I18n
     i18n: I18n,
     selected_language: usize, // Index into Language::all()
+    language_select: Entity<SelectState<Vec<SharedString>>>,
     /// Track if we're in a delete operation to preserve scroll position
     deleting_record: bool,
     /// Current auto-update status
@@ -70,6 +76,7 @@ impl RopyBoard {
         self.hotkey_tx = Some(tx);
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
@@ -85,8 +92,11 @@ impl RopyBoard {
         // Subscribe to focus out events to hide the window
         let focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
-                // When the window loses focus, hide the window
-                if !this.pinned {
+                // When the window loses focus, hide the window.
+                // Do NOT hide while settings panels are open — their popups
+                // (Select dropdowns, overlays) steal focus and would cause the window
+                // to disappear and become un-reopenable.
+                if !this.pinned && !this.show_settings {
                     hide_window(window, cx, this.pinned);
                 }
             });
@@ -136,6 +146,34 @@ impl RopyBoard {
             .position(|&lang| lang == language)
             .unwrap_or(0);
 
+        // Create language select dropdown
+        let language_items: Vec<SharedString> = Language::all()
+            .iter()
+            .map(|l| SharedString::from(l.display_name()))
+            .collect();
+        let language_select = cx.new(|cx| {
+            SelectState::new(
+                language_items,
+                Some(IndexPath::default().row(selected_language)),
+                window,
+                cx,
+            )
+        });
+        cx.subscribe_in(
+            &language_select,
+            window,
+            |this, _entity, event: &SelectEvent<Vec<SharedString>>, _window, cx| {
+                if let SelectEvent::Confirm(Some(val)) = event {
+                    let langs = Language::all();
+                    if let Some(idx) = langs.iter().position(|l| l.display_name() == val.as_ref()) {
+                        this.selected_language = idx;
+                        cx.notify();
+                    }
+                }
+            },
+        )
+        .detach();
+
         Self {
             records,
             repository,
@@ -159,6 +197,7 @@ impl RopyBoard {
             hotkey_tx: None,
             i18n,
             selected_language,
+            language_select,
             deleting_record: false,
             update_status: UpdateStatus::Idle,
             auto_check_enabled,

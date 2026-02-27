@@ -4,354 +4,109 @@ use gpui::{
     px,
 };
 use gpui_component::{
-    ActiveTheme, Sizable,
+    ActiveTheme, IndexPath, Sizable,
     button::{Button, ButtonVariants},
+    divider::Divider,
     h_flex,
     input::Input,
     scroll::ScrollableElement,
+    select::Select,
     v_flex,
 };
 
 use super::RopyBoard;
-use crate::{
-    i18n::{I18n, Language},
-    updater::models::UpdateStatus,
-};
+use crate::{i18n::Language, updater::models::UpdateStatus};
 
-/// Render language selection buttons
-/// Note: Uses index-based selection from `Language::all()` which maintains a stable order.
-/// The order is: English, `ChineseSimplified`
-fn render_language_selector(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let languages = Language::all();
-
-    h_flex()
-        .gap_2()
-        .items_center()
-        .children(languages.iter().enumerate().map(|(index, lang)| {
-            let is_selected = board.selected_language == index;
-            let lang_copy = *lang; // Copy the language for the closure
-
-            let mut button = Button::new(("language-button", index))
-                .small()
-                .label(lang.display_name());
-
-            button = if is_selected {
-                button.primary()
-            } else {
-                button.ghost()
-            };
-
-            button.on_click(cx.listener(move |board, _, window, cx| {
-                board.selected_language = index;
-                // Update search placeholder immediately for instant feedback
-                if let Ok(temp_i18n) = I18n::new(lang_copy) {
-                    board.search_input.update(cx, |input, cx| {
-                        input.set_placeholder(temp_i18n.t("search_placeholder"), window, cx);
-                    });
-                }
-                cx.notify();
-            }))
-        }))
-}
-
-/// Render theme selection buttons
-fn render_theme_selector(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let theme_names = vec![
-        board.i18n.t("settings_theme_light"),
-        board.i18n.t("settings_theme_dark"),
-        board.i18n.t("settings_theme_system"),
-    ];
-
-    h_flex()
-        .gap_2()
-        .items_center()
-        .children(theme_names.into_iter().enumerate().map(|(index, name)| {
-            let is_selected = board.selected_theme == index;
-            let mut button = Button::new(("theme-button", index)).small().label(name);
-            button = if is_selected {
-                button.primary()
-            } else {
-                button.ghost()
-            };
-            button.on_click(cx.listener(move |board, _, _window, cx| {
-                board.selected_theme = index;
-                cx.notify();
-            }))
-        }))
-}
-
-fn render_storage_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let max_history_input_field = h_flex()
-        .gap_2()
-        .items_center()
-        .justify_between()
-        .child(
-            div()
-                .text_color(cx.theme().foreground)
-                .child(board.i18n.t("settings_max_history")),
-        )
-        .child(
-            Input::new(&board.settings_max_history_input)
-                .appearance(false)
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_md()
-                .w(px(60.0))
-                .px_3()
-                .py_2(),
-        );
-
-    v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_storage")),
-        )
-        .child(max_history_input_field)
-}
-
-fn render_hotkey_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let activation_key_label = v_flex()
-        .gap_1()
-        .child(
-            div()
-                .text_xs()
-                .text_color(cx.theme().foreground)
-                .child(board.i18n.t("settings_activation_key")),
-        )
-        .child(
-            Input::new(&board.settings_activation_key_input)
-                .appearance(false)
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_md()
-                .px_3()
-                .py_2(),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child(board.i18n.t("settings_hotkey_hint")),
-        );
-
-    v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_hotkey")),
-        )
-        .child(activation_key_label)
-}
-
-fn render_system_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_system")),
-        )
-        .child(
-            h_flex()
-                .justify_between()
-                .items_center()
-                .child(
-                    div()
-                        .text_color(cx.theme().foreground)
-                        .child(board.i18n.t("settings_autostart")),
-                )
-                .child({
-                    let mut button = Button::new("autostart-toggle").small();
-
-                    button = if board.autostart_enabled {
-                        button
-                            .primary()
-                            .label(board.i18n.t("settings_autostart_on"))
-                    } else {
-                        button.ghost().label(board.i18n.t("settings_autostart_off"))
-                    };
-
-                    button.on_click(cx.listener(|board, _, _, cx| {
-                        board.toggle_autostart(cx);
-                    }))
-                }),
-        )
-}
-
-fn render_update_status_element(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let version = crate::updater::checker::current_version();
-
-    match &board.update_status {
-        UpdateStatus::Idle => div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child(format!(
-                "{}: v{}",
-                board.i18n.t("update_current_version"),
-                version
-            )),
-        UpdateStatus::Checking => div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child(board.i18n.t("update_checking")),
-        UpdateStatus::Available(info) => {
-            div()
-                .text_xs()
-                .text_color(cx.theme().foreground)
-                .child(format!(
-                    "{}: v{}",
-                    board.i18n.t("update_available"),
-                    info.version
-                ))
-        }
-        UpdateStatus::UpToDate => div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child(board.i18n.t("update_up_to_date")),
-        UpdateStatus::Downloading(progress) => div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child(format!(
-                "{} {:.0}%",
-                board.i18n.t("update_downloading"),
-                progress * 100.0
-            )),
-        UpdateStatus::ReadyToRestart => div()
-            .text_xs()
-            .text_color(cx.theme().foreground)
-            .child(board.i18n.t("update_restart")),
-        UpdateStatus::Error(msg) => div()
-            .text_xs()
-            .text_color(gpui::rgb(0x00cc_3333))
-            .child(format!("{}: {}", board.i18n.t("update_error"), msg)),
-    }
-}
-
-fn render_update_action_button(board: &RopyBoard, cx: &Context<RopyBoard>) -> Option<Button> {
-    match &board.update_status {
-        UpdateStatus::Available(_) => Some(
-            Button::new("update-download-button")
-                .small()
-                .primary()
-                .label(board.i18n.t("update_download"))
-                .on_click(cx.listener(|board, _, _, cx| {
-                    board.download_and_install_update(cx);
-                })),
-        ),
-        UpdateStatus::ReadyToRestart => Some(
-            Button::new("update-restart-button")
-                .small()
-                .primary()
-                .label(board.i18n.t("update_restart_button"))
-                .on_click(cx.listener(|_, _, _, cx| {
-                    // Restart the application
-                    if let Ok(exe) = std::env::current_exe() {
-                        let _ = std::process::Command::new(exe).spawn();
-                    }
-                    cx.quit();
-                })),
-        ),
-        UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_) => Some(
-            Button::new("update-check-button")
-                .small()
-                .ghost()
-                .label(board.i18n.t("update_check_now"))
-                .on_click(cx.listener(|board, _, _, cx| {
-                    board.check_for_update_async(cx);
-                })),
-        ),
-        _ => None, // Checking or Downloading — no button
-    }
-}
-
-fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+/// Render a settings row with label centered against the control.
+fn settings_row<C: IntoElement>(
+    label: impl Into<gpui::SharedString>,
+    control: C,
+    cx: &Context<RopyBoard>,
+) -> impl IntoElement {
     h_flex()
         .justify_between()
         .items_center()
+        .w_full()
+        .py_3()
         .child(
             div()
-                .text_color(cx.theme().foreground)
-                .child(board.i18n.t("update_auto_check")),
-        )
-        .child({
-            let mut button = Button::new("auto-check-toggle").small();
-            button = if board.auto_check_enabled {
-                button.primary().label(board.i18n.t("update_on"))
-            } else {
-                button.ghost().label(board.i18n.t("update_off"))
-            };
-            button.on_click(cx.listener(|board, _, _, cx| {
-                board.auto_check_enabled = !board.auto_check_enabled;
-                cx.notify();
-            }))
-        })
-}
-
-fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let status_element = render_update_status_element(board, cx);
-    let action_button = render_update_action_button(board, cx);
-    let auto_check_row = render_auto_check_row(board, cx);
-
-    let mut section = v_flex()
-        .gap_2()
-        .child(
-            div()
+                .flex_1()
                 .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("update_title")),
+                .text_color(cx.theme().foreground)
+                .child(label.into()),
         )
-        .child(auto_check_row)
-        .child(status_element);
-
-    if let Some(btn) = action_button {
-        section = section.child(btn);
-    }
-
-    section
+        .child(control)
 }
 
-/// Render the settings panel content
+/// Render a settings row where the label is top-aligned (for multi-line right controls).
+fn settings_row_top<C: IntoElement>(
+    label: impl Into<gpui::SharedString>,
+    control: C,
+    cx: &Context<RopyBoard>,
+) -> impl IntoElement {
+    h_flex()
+        .justify_between()
+        .items_start()
+        .w_full()
+        .py_3()
+        .child(
+            div()
+                .flex_1()
+                .text_sm()
+                .pt_1()
+                .text_color(cx.theme().foreground)
+                .child(label.into()),
+        )
+        .child(control)
+}
+
+/// Render the settings panel content — all items at the same level, left-right layout.
 pub(super) fn render_settings_content(
     board: &RopyBoard,
     cx: &Context<RopyBoard>,
 ) -> impl IntoElement {
-    let language_section = v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_language")),
-        )
-        .child(render_language_selector(board, cx));
+    let header = render_settings_header(board, cx);
+    let language_row = render_language_row(board, cx);
+    let theme_row = render_theme_row(board, cx);
+    let activation_key_row = render_activation_key_row(board, cx);
+    let max_history_row = render_max_history_row(board, cx);
+    let autostart_row = render_autostart_row(board, cx);
+    let auto_check_row = render_auto_check_row(board, cx);
+    let update_row = render_update_row(board, cx);
 
-    let theme_section = v_flex()
-        .gap_2()
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_theme")),
-        )
-        .child(render_theme_selector(board, cx));
+    v_flex().size_full().child(header).child(
+        v_flex()
+            .id("settings-content")
+            .overflow_y_scrollbar()
+            .flex_1()
+            .px_4()
+            .pb_4()
+            .child(language_row)
+            .child(Divider::horizontal())
+            .child(theme_row)
+            .child(Divider::horizontal())
+            .child(activation_key_row)
+            .child(Divider::horizontal())
+            .child(max_history_row)
+            .child(Divider::horizontal())
+            .child(autostart_row)
+            .child(Divider::horizontal())
+            .child(auto_check_row)
+            .child(Divider::horizontal())
+            .child(update_row),
+    )
+}
 
+fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = h_flex()
         .justify_between()
         .items_center()
-        .mb_4()
+        .mb_2()
+        .px_4()
         .pt_4()
+        .pb_3()
+        .border_b_1()
+        .border_color(cx.theme().border)
         .child(
             Button::new("cancel-button")
                 .small()
@@ -382,19 +137,171 @@ pub(super) fn render_settings_content(
         crate::gui::utils::start_window_drag(window);
     });
 
-    v_flex().size_full().child(header).child(
-        v_flex()
-            .id("settings-content")
-            .overflow_y_scrollbar()
-            .gap_4()
-            .flex_1()
-            .child(language_section)
-            .child(theme_section)
-            .child(render_hotkey_section(board, cx))
-            .child(render_storage_section(board, cx))
-            .child(render_system_section(board, cx))
-            .child(render_update_section(board, cx)),
+    header
+}
+
+fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        board.i18n.t("settings_language"),
+        div()
+            .flex_shrink_0()
+            .child(Select::new(&board.language_select).small().w(px(140.0))),
+        cx,
     )
+}
+
+fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let theme_names = [
+        board.i18n.t("settings_theme_light"),
+        board.i18n.t("settings_theme_dark"),
+        board.i18n.t("settings_theme_system"),
+    ];
+    // Wrap in a border-grouped container to give a segmented-control look
+    let theme_buttons = h_flex()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded_md()
+        .overflow_hidden()
+        .children(theme_names.into_iter().enumerate().map(|(index, name)| {
+            let is_selected = board.selected_theme == index;
+            let mut btn = Button::new(("theme-button", index)).small().label(name);
+            btn = if is_selected {
+                btn.primary()
+            } else {
+                btn.ghost()
+            };
+            btn.rounded_none()
+                .on_click(cx.listener(move |board, _, _window, cx| {
+                    board.selected_theme = index;
+                    cx.notify();
+                }))
+        }));
+    settings_row(board.i18n.t("settings_theme"), theme_buttons, cx)
+}
+
+fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row_top(
+        board.i18n.t("settings_activation_key"),
+        v_flex()
+            .gap_1()
+            .items_end()
+            .child(
+                Input::new(&board.settings_activation_key_input)
+                    .appearance(false)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_md()
+                    .w(px(180.0))
+                    .px_3()
+                    .py_1(),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(board.i18n.t("settings_hotkey_hint")),
+            ),
+        cx,
+    )
+}
+
+fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        board.i18n.t("settings_max_history"),
+        Input::new(&board.settings_max_history_input)
+            .appearance(false)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_md()
+            .w(px(70.0))
+            .px_3()
+            .py_1(),
+        cx,
+    )
+}
+
+fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut btn = Button::new("autostart-toggle").small();
+    btn = if board.autostart_enabled {
+        btn.primary().label(board.i18n.t("settings_autostart_on"))
+    } else {
+        btn.ghost().label(board.i18n.t("settings_autostart_off"))
+    };
+    let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
+    settings_row(board.i18n.t("settings_autostart"), toggle, cx)
+}
+
+fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut btn = Button::new("auto-check-toggle").small();
+    btn = if board.auto_check_enabled {
+        btn.primary().label(board.i18n.t("update_on"))
+    } else {
+        btn.ghost().label(board.i18n.t("update_off"))
+    };
+    let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
+        board.auto_check_enabled = !board.auto_check_enabled;
+        cx.notify();
+    }));
+    settings_row(board.i18n.t("update_auto_check"), toggle, cx)
+}
+
+fn render_update_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let version = crate::updater::checker::current_version();
+    let status_text: gpui::SharedString = match &board.update_status {
+        UpdateStatus::Idle => format!("v{version}").into(),
+        UpdateStatus::Checking => board.i18n.t("update_checking").into(),
+        UpdateStatus::Available(info) => {
+            format!("{}: v{}", board.i18n.t("update_available"), info.version).into()
+        }
+        UpdateStatus::UpToDate => board.i18n.t("update_up_to_date").into(),
+        UpdateStatus::Downloading(p) => {
+            format!("{} {:.0}%", board.i18n.t("update_downloading"), p * 100.0).into()
+        }
+        UpdateStatus::ReadyToRestart => board.i18n.t("update_restart").into(),
+        UpdateStatus::Error(msg) => format!("{}: {}", board.i18n.t("update_error"), msg).into(),
+    };
+    let status_color = match &board.update_status {
+        UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,
+        UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
+        _ => cx.theme().muted_foreground,
+    };
+
+    let action_button: Option<Button> = match &board.update_status {
+        UpdateStatus::Available(_) => Some(
+            Button::new("update-download-button")
+                .small()
+                .primary()
+                .label(board.i18n.t("update_download"))
+                .on_click(cx.listener(|board, _, _, cx| board.download_and_install_update(cx))),
+        ),
+        UpdateStatus::ReadyToRestart => Some(
+            Button::new("update-restart-button")
+                .small()
+                .primary()
+                .label(board.i18n.t("update_restart_button"))
+                .on_click(cx.listener(|_, _, _, cx| {
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new(exe).spawn();
+                    }
+                    cx.quit();
+                })),
+        ),
+        UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_) => Some(
+            Button::new("update-check-button")
+                .small()
+                .ghost()
+                .label(board.i18n.t("update_check_now"))
+                .on_click(cx.listener(|board, _, _, cx| board.check_for_update_async(cx))),
+        ),
+        _ => None,
+    };
+
+    let mut right_col = v_flex().gap_1().items_end();
+    right_col = right_col.child(div().text_xs().text_color(status_color).child(status_text));
+    if let Some(btn) = action_button {
+        right_col = right_col.child(btn);
+    }
+    settings_row_top(board.i18n.t("update_title"), right_col, cx)
 }
 
 pub fn reset_settings_dialog(
@@ -407,10 +314,11 @@ pub fn reset_settings_dialog(
         Ok(g) => g,
         Err(e) => e.into_inner(),
     };
-    board.selected_language = Language::all()
+    let lang_idx = Language::all()
         .iter()
         .position(|&lang| lang == settings_guard.language)
         .unwrap_or(0);
+    board.selected_language = lang_idx;
     board.selected_theme = match settings_guard.theme {
         crate::config::AppTheme::Light => 0,
         crate::config::AppTheme::Dark => 1,
@@ -419,6 +327,11 @@ pub fn reset_settings_dialog(
     board.autostart_enabled = settings_guard.autostart.enabled;
     board.auto_check_enabled = settings_guard.update.auto_check;
     drop(settings_guard);
+
+    // Reset the language select dropdown
+    board.language_select.update(cx, |state, cx| {
+        state.set_selected_index(Some(IndexPath::default().row(lang_idx)), window, cx);
+    });
 
     // Clear input fields
     board.settings_max_history_input.update(cx, |input, cx| {
