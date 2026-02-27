@@ -14,7 +14,7 @@
 <p align="center">A cross-platform native clipboard manager in pure Rust.</p>
 
 <p align="center">
-English | <a href="doc/README_ZH.md">简体中文</a>
+English | <a href="doc/README/README_ZH.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@ English | <a href="doc/README_ZH.md">简体中文</a>
 - Cross-platform: Windows, macOS & Linux(X11).
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
-- Search/Pin/Preview/Autostart/Shortcuts.
+- Search/Pin/Preview/Autostart/Shortcuts/Autoupdate.
 
 # Installation
 
@@ -74,6 +74,20 @@ cargo build --release
 - Click on any record or use <kbd>1/2/3/4/5</kbd> or <kbd>Enter</kbd> to select a record.
 - Use the search bar to filter clipboard records.
 - Pin the Ropy window to keep it always on top.
+
+# TODO
+
+- Import and export clipboard history
+- Support for html/RTF content type
+- Provide installation packages and distribution channels
+- Homepage, documentation and user community
+
+# NOT TODO
+
+- Does not support obtaining the application source when copying (the system clipboard does not provide this field, requires Hack to obtain).
+- Does not support plugin extension functionality (currently no plans to support plugin mechanism, Ropy aims to remain lightweight and simple).
+- Does not support online synchronization of clipboard content (currently not considering cloud sync functionality).
+- Does not support command-line operations (Ropy is mainly for GUI users, does not provide a command-line interface).
 
 # Acknowledgements
 

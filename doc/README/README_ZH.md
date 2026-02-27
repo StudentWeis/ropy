@@ -1,4 +1,4 @@
-<p align="center"><img src="../assets/logo.png" alt="Ropy Logo" width="20%"></p>
+<p align="center"><img src="../../assets/logo.png" alt="Ropy Logo" width="20%"></p>
 
 <h2 align="center"><em><strong>R</strong>opy <strong>O</strong>rganizes <strong>P</strong>revious <strong>Y</strong>anks</em></h2>
 
@@ -14,7 +14,7 @@
 <p align="center">一个使用纯 Rust 编写的跨平台原生剪贴板管理器。</p>
 
 <p align="center">
-<a href="../README.md">English</a> | 简体中文
+<a href="../../README.md">English</a> | 简体中文
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 - 跨平台支持：Windows、macOS 和 Linux(X11)。
 - 使用 Zed 的 GPUI 构建的原生 GUI 应用。
 - 易于使用、轻量且快速。
-- 搜索/置顶/预览/自动启动/快捷键。
+- 搜索/置顶/预览/自动启动/快捷键/自动更新。
 
 # 安装
 
@@ -74,6 +74,20 @@ cargo build --release
 - 点击任意记录或使用 <kbd>1/2/3/4/5</kbd> 或 <kbd>Enter</kbd> 选择记录。
 - 使用搜索栏筛选剪贴板记录。
 - 置顶 Ropy 窗口以使其始终保持在最上层。
+
+# TODO
+
+- 导入和导出剪贴板历史
+- 支持 html/RTF 内容类型
+- 提供安装包和分发渠道
+- 主页、文档和用户社区
+
+# NOT TODO
+
+- 不支持获取复制时的应用来源（系统剪贴板未提供此字段，需要 Hack 才能获取）。
+- 不支持插件扩展功能（目前无计划支持插件机制，Ropy 旨在保持轻量和简单）。
+- 不支持剪贴板内容的在线同步（目前不考虑云同步功能）。
+- 不支持命令行操作（Ropy 主要面向 GUI 用户，不提供命令行接口）。
 
 # 致谢
 

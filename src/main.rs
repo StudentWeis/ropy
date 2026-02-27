@@ -6,6 +6,7 @@ mod gui;
 mod i18n;
 mod logging;
 mod repository;
+mod updater;
 mod utils;
 
 fn main() {

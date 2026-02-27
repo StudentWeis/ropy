@@ -51,7 +51,7 @@ pub(super) fn create_clear_button(
 ) -> impl IntoElement {
     Button::new("clear-button")
         .ghost()
-        .icon(Icon::empty().path("clear-all.svg"))
+        .icon(Icon::empty().path("icon/clear-all.svg"))
         .tooltip(board.i18n.t("clear_all"))
         .on_click(cx.listener(|this, _, _, _| {
             this.clear_history();
@@ -105,7 +105,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                     } else {
                         Button::new("pin-button").ghost()
                     }
-                    .icon(Icon::empty().path("pin-to-top.svg"))
+                    .icon(Icon::empty().path("icon/pin-to-top.svg"))
                     .tooltip(pin_tooltip)
                     .on_click(
                         cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
@@ -123,7 +123,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .child(
                     Button::new("about-button")
                         .ghost()
-                        .icon(Icon::empty().path("info.svg"))
+                        .icon(Icon::empty().path("icon/info.svg"))
                         .tooltip(board.i18n.t("about_title"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_about = true;
@@ -135,7 +135,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .child(
                     Button::new("settings-button")
                         .ghost()
-                        .icon(Icon::empty().path("settings.svg"))
+                        .icon(Icon::empty().path("icon/settings.svg"))
                         .tooltip(board.i18n.t("settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_settings = true;

@@ -253,6 +253,20 @@ pub fn launch_app() {
                 board.update(cx, |board, _| {
                     board.set_hotkey_tx(hotkey_tx);
                 });
+
+                // Trigger auto-update check on startup if enabled
+                let auto_check = match settings.read() {
+                    Ok(g) => g,
+                    Err(e) => e.into_inner(),
+                }
+                .update
+                .auto_check;
+
+                if auto_check {
+                    board.update(cx, |board, cx| {
+                        board.check_for_update_async(cx);
+                    });
+                }
             } else {
                 tracing::error!("failed to downcast root view to RopyBoard");
             }

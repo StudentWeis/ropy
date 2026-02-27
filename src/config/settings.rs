@@ -18,6 +18,8 @@ pub struct Settings {
     pub autostart: AutoStartSettings,
     /// Language configuration
     pub language: Language,
+    /// Update configuration
+    pub update: UpdateSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +59,26 @@ pub struct AutoStartSettings {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSettings {
+    /// Whether to automatically check for updates on startup
+    pub auto_check: bool,
+    /// Check interval in hours
+    pub check_interval_hours: u64,
+    /// Whether to include pre-release versions
+    pub include_prerelease: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self {
+            auto_check: true,
+            check_interval_hours: 24,
+            include_prerelease: false,
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -74,6 +96,7 @@ impl Default for Settings {
             theme: AppTheme::System,
             autostart: AutoStartSettings { enabled: false },
             language: Language::default(),
+            update: UpdateSettings::default(),
         }
     }
 }

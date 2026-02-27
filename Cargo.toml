@@ -7,7 +7,7 @@ repository = "https://github.com/StudentWeis/ropy"
 license = "MIT"
 
 [dependencies]
-clipboard-rs = "0.3.2"
+clipboard-rs = "0.3.3"
 gpui = "0.2.2"
 gpui-component = "0.5.1"
 # Can't use latest sysinfo due to dependency conflicts
@@ -16,7 +16,7 @@ global-hotkey = "0.7"
 sled = "0.34"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
-chrono = { version = "0.4.43", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 dirs = "6.0"
 thiserror = "2.0.18"
 config = "0.15"
@@ -29,6 +29,12 @@ regex = "1.12.3"
 raw-window-handle = "0.6"
 async-channel = "2.5.0"
 rust-embed = "8.11.0"
+smol = "2"
+sha2 = "0.10"
+self-replace = "1"
+semver = "1"
+hex = "0.4"
+tempfile = "3.26.0"
 
 # Logging / tracing
 tracing = "0.1.44"
@@ -41,17 +47,22 @@ tracing-subscriber = { version = "0.3.22", features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.3"
+objc2 = "0.6.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
 ] }
+zip = "8.1.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18.2"
 x11rb = "0.13"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+tar = "0.4"
+xz2 = "0.1"
 
 [dev-dependencies]
 tempfile = "3.25.0"
@@ -84,9 +95,15 @@ lto = "thin"
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"
+icon = ["assets/logo.png"]
+resources = ["assets/locales"]
+osx_minimum_system_version = "10.15"
+
+# macOS specific settings
+[package.metadata.bundle.bin.ropy]
+name = "Ropy"
 version = "0.2.1"
-copyright = "Copyright 2025 Ropy Team"
+copyright = "Copyright 2026 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"
 long_description = "A clipboard manager built with Rust and GPUI."
-codesign_identity = "adhoc"

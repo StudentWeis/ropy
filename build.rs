@@ -1,11 +1,14 @@
-#[cfg(target_os = "windows")]
-use std::{env, path::Path};
-
 fn main() {
+    // Inject the build target triple for auto-update platform detection
+    println!(
+        "cargo:rustc-env=TARGET={}",
+        std::env::var("TARGET").unwrap_or_default()
+    );
+
     #[cfg(target_os = "windows")]
     {
-        let out_dir = env::var("OUT_DIR").unwrap();
-        let icon_path = Path::new(&out_dir).join("logo.ico");
+        let out_dir = std::env::var("OUT_DIR").unwrap();
+        let icon_path = std::path::Path::new(&out_dir).join("logo.ico");
 
         // Convert png to ico if it doesn't exist or if png is newer.
         println!("cargo:rerun-if-changed=assets/logo.png");

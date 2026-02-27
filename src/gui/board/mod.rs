@@ -27,6 +27,7 @@ use crate::{
     gui::hide_window,
     i18n::{I18n, Language},
     repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
+    updater::models::UpdateStatus,
 };
 
 /// `RopyBoard` Main Window Component
@@ -58,6 +59,10 @@ pub struct RopyBoard {
     selected_language: usize, // Index into Language::all()
     /// Track if we're in a delete operation to preserve scroll position
     deleting_record: bool,
+    /// Current auto-update status
+    update_status: UpdateStatus,
+    /// Whether auto-check for updates is enabled (mirrors settings)
+    auto_check_enabled: bool,
 }
 
 impl RopyBoard {
@@ -113,6 +118,12 @@ impl RopyBoard {
         }
         .autostart
         .enabled;
+        let auto_check_enabled = match settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+        .update
+        .auto_check;
         let settings_activation_key_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.clone()));
         let settings_max_history_input =
@@ -149,6 +160,8 @@ impl RopyBoard {
             i18n,
             selected_language,
             deleting_record: false,
+            update_status: UpdateStatus::Idle,
+            auto_check_enabled,
         }
     }
 
@@ -304,6 +317,7 @@ impl RopyBoard {
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;
             settings.language = language;
+            settings.update.auto_check = self.auto_check_enabled;
             if let Err(e) = settings.save() {
                 tracing::warn!(error = %e, "failed to save settings");
             }
@@ -360,6 +374,77 @@ impl RopyBoard {
         let manager = crate::config::AutoStartManager::new("Ropy")?;
         manager.sync_state(self.autostart_enabled)?;
         Ok(())
+    }
+
+    /// Trigger a manual update check in the background
+    pub fn check_for_update_async(&mut self, cx: &mut Context<Self>) {
+        self.update_status = UpdateStatus::Checking;
+        cx.notify();
+
+        let include_prerelease = match self.settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+        .update
+        .include_prerelease;
+
+        cx.spawn(async move |this, cx| {
+            let result = smol::unblock(move || {
+                crate::updater::checker::check_for_update(include_prerelease)
+            })
+            .await;
+
+            let _ = this.update(cx, |board, cx| {
+                match result {
+                    Ok(Some(info)) => {
+                        board.update_status = UpdateStatus::Available(info);
+                    }
+                    Ok(None) => {
+                        board.update_status = UpdateStatus::UpToDate;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "update check failed");
+                        board.update_status = UpdateStatus::Error(e.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Trigger download and install in the background
+    pub fn download_and_install_update(&mut self, cx: &mut Context<Self>) {
+        let release = match &self.update_status {
+            UpdateStatus::Available(info) => info.clone(),
+            _ => return,
+        };
+        self.update_status = UpdateStatus::Downloading(0.0);
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let result = smol::unblock(move || {
+                crate::updater::downloader::download_and_install(&release, |_progress| {
+                    // Progress callback runs on blocking thread;
+                    // mid-download UI updates are skipped for simplicity.
+                })
+            })
+            .await;
+
+            let _ = this.update(cx, |board, cx| {
+                match result {
+                    Ok(()) => {
+                        board.update_status = UpdateStatus::ReadyToRestart;
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "update installation failed");
+                        board.update_status = UpdateStatus::Error(e.to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }
 
