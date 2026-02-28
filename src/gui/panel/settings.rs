@@ -219,9 +219,9 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("autostart-toggle").small();
     btn = if board.autostart_enabled {
-        btn.primary().label(board.i18n.t("settings_autostart_on"))
+        btn.primary().label(board.i18n.t("on"))
     } else {
-        btn.ghost().label(board.i18n.t("settings_autostart_off"))
+        btn.ghost().label(board.i18n.t("off"))
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
     settings_row(board.i18n.t("settings_autostart"), toggle, cx)
@@ -230,9 +230,9 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("auto-check-toggle").small();
     btn = if board.auto_check_enabled {
-        btn.primary().label(board.i18n.t("update_on"))
+        btn.primary().label(board.i18n.t("on"))
     } else {
-        btn.ghost().label(board.i18n.t("update_off"))
+        btn.ghost().label(board.i18n.t("off"))
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
         board.auto_check_enabled = !board.auto_check_enabled;

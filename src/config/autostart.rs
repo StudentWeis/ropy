@@ -118,7 +118,8 @@ mod tests {
 
     #[test]
     fn test_autostart_manager_creation() {
-        let manager = AutoStartManager::new("Ropy");
+        use crate::constants::APP_NAME;
+        let manager = AutoStartManager::new(APP_NAME);
         assert!(manager.is_ok());
     }
 

@@ -15,7 +15,10 @@ use gpui_component::{
 use regex::Regex;
 
 use super::{RopyBoard, preview};
-use crate::repository::{ClipboardRecord, models::ContentType};
+use crate::{
+    constants::APP_NAME,
+    repository::{ClipboardRecord, models::ContentType},
+};
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
     static HEX_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -93,7 +96,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("app_name")),
+                .child(APP_NAME),
         )
         .child(
             h_flex()

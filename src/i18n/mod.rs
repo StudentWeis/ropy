@@ -186,24 +186,27 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     fn test_translations_from_toml() {
         let content = r#"
-            app_name = "Ropy"
             show = "Show"
             quit = "Quit"
+            on = "ON"
+            off = "OFF"
         "#;
         let translations = Translations::from_toml(content).unwrap();
-        assert_eq!(translations.get("app_name"), "Ropy");
         assert_eq!(translations.get("show"), "Show");
         assert_eq!(translations.get("quit"), "Quit");
+        assert_eq!(translations.get("on"), "ON");
+        assert_eq!(translations.get("off"), "OFF");
     }
 
     #[test]
     #[allow(clippy::unwrap_used)]
     fn test_missing_translation() {
         let content = r#"
-            app_name = "Ropy"
+            foo = "bar"
         "#;
         let translations = Translations::from_toml(content).unwrap();
         assert_eq!(translations.get("missing_key"), "[Missing: missing_key]");
+        assert_eq!(translations.get("on"), "[Missing: on]");
     }
 
     #[test]
@@ -212,7 +215,7 @@ mod tests {
         let i18n = I18n::new(Language::new("en"));
         assert!(i18n.is_ok());
         let i18n = i18n.unwrap();
-        assert_eq!(i18n.t("app_name"), "Ropy");
+        assert_eq!(i18n.t("tray_show"), "Show");
     }
 
     #[test]

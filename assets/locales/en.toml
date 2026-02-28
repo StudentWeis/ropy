@@ -2,8 +2,6 @@
 language_name = "English"
 
 # Application
-app_name = "Ropy"
-app_description = "A clipboard manager built with Rust and GPUI"
 
 # Tray menu
 tray_show = "Show"
@@ -11,7 +9,6 @@ tray_quit = "Quit"
 
 # Main window
 search_placeholder = "Use / to search ... "
-no_records = "No clipboard records"
 clear_all = "Clear All"
 pin = "Pin"
 unpin = "Unpin"
@@ -19,48 +16,27 @@ unpin = "Unpin"
 # Settings
 settings_button = "Settings"
 settings_title = "Ropy Settings"
-settings_back = "←"
 settings_cancel = "Cancel"
 settings_save = "Save"
 
 # Settings sections
 settings_language = "Language"
-settings_language_description = "Select your preferred language"
-
 settings_theme = "Theme"
 settings_theme_light = "Light"
 settings_theme_dark = "Dark"
 settings_theme_system = "System"
-
-settings_hotkey = "Hotkey Configuration"
 settings_activation_key = "Activation Key"
 settings_hotkey_hint = "Format: control+shift+d or cmd+shift+v"
 settings_hotkey_invalid = "Invalid hotkey format"
-
-settings_storage = "Storage Configuration"
 settings_max_history = "Max History Records"
-
-settings_system = "System"
 settings_autostart = "Launch at system startup"
-settings_autostart_on = "ON"
-settings_autostart_off = "OFF"
-
-# Content types
-content_type_text = "Text"
-content_type_image = "Image"
-content_type_file = "File"
-
-# Messages
-message_copied = "Copied to clipboard"
-message_deleted = "Record deleted"
-message_cleared = "History cleared"
+on = "ON"
+off = "OFF"
 
 # About
 about_title = "About Ropy"
 about_version = "Version"
 about_description = "A lightweight clipboard manager built with Rust and GPUI."
-about_github = "GitHub"
-about_back = "←"
 
 # Update
 update_title = "Update"
@@ -71,12 +47,6 @@ update_available = "New version available"
 update_up_to_date = "You're up to date!"
 update_download = "Download & Install"
 update_downloading = "Downloading..."
-update_installing = "Installing..."
 update_restart = "Update installed. Restart to apply."
 update_restart_button = "Restart Now"
-update_later = "Later"
 update_error = "Update check failed"
-update_release_notes = "Release Notes"
-update_on = "ON"
-update_off = "OFF"
-update_current_version = "Current Version"

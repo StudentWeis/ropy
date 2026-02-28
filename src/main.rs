@@ -2,6 +2,7 @@
 
 mod clipboard;
 mod config;
+mod constants;
 mod gui;
 mod i18n;
 mod logging;

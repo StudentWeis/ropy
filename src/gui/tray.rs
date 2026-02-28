@@ -10,7 +10,7 @@ use tray_icon::{
     menu::{Menu, MenuId, MenuItem},
 };
 
-use crate::{config::Settings, i18n::I18n};
+use crate::{config::Settings, constants::APP_NAME, i18n::I18n};
 
 /// Initialize and return the tray icon
 pub fn init_tray(
@@ -38,7 +38,7 @@ pub fn init_tray(
     // Create tray icon
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(tray_menu))
-        .with_tooltip(i18n.t("app_name").as_str())
+        .with_tooltip(APP_NAME)
         .with_icon(icon)
         .with_menu_on_left_click(false)
         .build()?;

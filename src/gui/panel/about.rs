@@ -9,7 +9,10 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::gui::board::RopyBoard;
+use crate::{
+    constants::{ABOUT_BACK_ARROW, APP_NAME},
+    gui::board::RopyBoard,
+};
 
 /// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -24,7 +27,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             Button::new("back-button")
                 .small()
                 .ghost()
-                .label(board.i18n.t("about_back"))
+                .label(ABOUT_BACK_ARROW)
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.show_about = false;
                     window.focus(&board.focus_handle);
@@ -63,7 +66,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .text_2xl()
                     .font_weight(gpui::FontWeight::BOLD)
                     .text_color(cx.theme().foreground)
-                    .child(board.i18n.t("app_name")),
+                    .child(APP_NAME),
             )
             .child(
                 div()
@@ -82,7 +85,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             .child(
                 Button::new("github-button")
                     .ghost()
-                    .label(board.i18n.t("about_github"))
+                    .label("GitHub")
                     .on_click(|_, _, cx| {
                         cx.open_url("https://github.com/StudentWeis/ropy");
                     }),

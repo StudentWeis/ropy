@@ -410,7 +410,8 @@ impl RopyBoard {
     }
 
     fn sync_autostart_state(&self) -> Result<(), crate::config::AutoStartError> {
-        let manager = crate::config::AutoStartManager::new("Ropy")?;
+        use crate::constants::APP_NAME;
+        let manager = crate::config::AutoStartManager::new(APP_NAME)?;
         manager.sync_state(self.autostart_enabled)?;
         Ok(())
     }

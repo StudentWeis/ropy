@@ -15,6 +15,7 @@ use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
 use crate::{
     clipboard::{self, ClipboardEvent, LastCopyState},
     config::{AppTheme, AutoStartManager, Settings},
+    constants::APP_NAME,
     gui::board::{ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     repository::{ClipboardRecord, ClipboardRepository},
 };
@@ -76,7 +77,7 @@ fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
     .autostart
     .enabled;
 
-    match AutoStartManager::new("Ropy") {
+    match AutoStartManager::new(APP_NAME) {
         Ok(manager) => {
             if let Err(e) = manager.sync_state(autostart_enabled) {
                 tracing::warn!(error = %e, "failed to sync auto-start state on launch");

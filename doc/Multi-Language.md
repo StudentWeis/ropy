@@ -47,13 +47,20 @@ Keys correspond to identifiers used throughout the GUI code – for example:
 
 ```toml
 # Application
-app_name = "Ropy"
 app_description = "RustとGPUIで構築されたクリップボードマネージャー"
 
 # Tray menu
 tray_show = "表示"
 tray_quit = "終了"
+
+# Common toggle labels (used for buttons that switch between two states)
+on = "オン"
+off = "オフ"
 ```
+
+> ℹ️ The application name and other static decorations are not stored in the
+> translation files; they are defined as constants (`APP_NAME`,
+> `ABOUT_BACK_ARROW`, etc.) in the Rust code.
 
 Missing keys are reported at runtime by displaying `[Missing: <key>]` in the UI, and unit tests cover this behaviour.
 
