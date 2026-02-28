@@ -110,7 +110,8 @@ fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .label(board.i18n.t("settings_cancel"))
                 .on_click(cx.listener(|board, _click_event, window, cx| {
                     reset_settings_dialog(board, window, cx);
-                })),
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
         )
         .child(
             div()
@@ -125,7 +126,8 @@ fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .label(board.i18n.t("settings_save"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_settings(cx, window);
-                })),
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
         );
 
     #[cfg(target_os = "windows")]
