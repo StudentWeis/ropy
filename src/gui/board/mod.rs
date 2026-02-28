@@ -119,7 +119,7 @@ impl RopyBoard {
                 settings_guard.storage.max_history_records,
                 settings_guard.hotkey.activation_key.clone(),
                 theme_idx,
-                settings_guard.language,
+                settings_guard.language.clone(),
             )
         };
         let autostart_enabled = match settings.read() {
@@ -140,10 +140,10 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
 
         // Initialize I18n with the language from settings
-        let i18n = I18n::new(language).unwrap_or_default();
+        let i18n = I18n::new(language.clone()).unwrap_or_default();
         let selected_language = Language::all()
             .iter()
-            .position(|&lang| lang == language)
+            .position(|lang| lang == &language)
             .unwrap_or(0);
 
         // Create language select dropdown
@@ -343,7 +343,7 @@ impl RopyBoard {
 
         let language = Language::all()
             .get(self.selected_language)
-            .copied()
+            .cloned()
             .unwrap_or_default();
 
         {
@@ -355,7 +355,7 @@ impl RopyBoard {
             settings.storage.max_history_records = max_history;
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;
-            settings.language = language;
+            settings.language = language.clone();
             settings.update.auto_check = self.auto_check_enabled;
             if let Err(e) = settings.save() {
                 tracing::warn!(error = %e, "failed to save settings");

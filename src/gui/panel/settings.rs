@@ -312,7 +312,7 @@ pub fn reset_settings_dialog(
     };
     let lang_idx = Language::all()
         .iter()
-        .position(|&lang| lang == settings_guard.language)
+        .position(|lang| lang == &settings_guard.language)
         .unwrap_or(0);
     board.selected_language = lang_idx;
     board.selected_theme = match settings_guard.theme {

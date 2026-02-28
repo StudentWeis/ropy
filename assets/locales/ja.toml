@@ -1,5 +1,6 @@
 # Japanese translations for Ropy
 # 日本語翻訳
+language_name = "日本語"
 
 # Application
 app_name = "Ropy"

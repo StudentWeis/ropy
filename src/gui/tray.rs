@@ -20,7 +20,8 @@ pub fn init_tray(
         Ok(g) => g,
         Err(e) => e.into_inner(),
     }
-    .language;
+    .language
+    .clone();
     let i18n = I18n::new(language).unwrap_or_default();
 
     // Create menu items

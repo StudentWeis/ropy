@@ -1,50 +1,70 @@
 # Multi-Language Support
 
-Ropy now supports multiple languages! Users can easily switch between different languages through the settings panel.
+Ropy provides built‑in support for multiple UI languages, and users can switch between them directly from the settings panel. The system is designed to be simple to extend and efficient at runtime.
 
 ## Supported Languages
 
-- **English** (en)
-- **简体中文** (Simplified Chinese, zh-CN)
+Ropy discovers available languages at compile time by scanning the `assets/locales` directory. Each `.toml` file represents one locale, and the list shown in the settings panel is generated from those filenames (the human‑readable names are read from a `language_name` key inside the file).
 
-## How to Use
+The stock installation ships with at least three files:
 
-1. Open Ropy application
-2. Click the **Settings** button (gear icon) in the top right corner
-3. In the Settings panel, find the **Language** section
-4. Click on your preferred language button
-5. Click **Save** to apply the changes
-6. The UI will immediately switch to the selected language
+- **English** (`en`)
+- **简体中文** (Simplified Chinese, `zh-CN`)
+- **日本語** (Japanese, `ja`)
 
-## Adding New Languages
+Because there is no hard‑coded enum any more, simply adding or removing a `.toml` file is sufficient to change the available languages; no Rust source modifications are required.
 
-To add a new language:
+## Changing Language
 
-1. Create a new TOML file in `assets/locales/` directory (e.g., `fr.toml` for French)
-2. Copy the structure from `en.toml` and translate all strings
-3. Update `src/i18n/mod.rs`:
-   - Add a new variant to the `Language` enum
-   - Update the `code()`, `display_name()`, and `all()` methods
-   - Add the new language to the `load_language()` match statement
-4. Recompile the application
+1. Launch the Ropy application.
+2. Click the **Settings** button (gear icon) in the top‑right corner of the main window.
+3. Scroll down to the **Language** section.
+4. Select your preferred language from the drop‑down menu.
+5. Click **Save** at the bottom of the settings panel.
+6. The UI immediately reloads with the chosen locale.
+
+> ⚠️ Changing the language does **not** require restarting the application; it occurs at runtime.
+
+## Adding a New Language
+
+Adding a new locale is very simple and requires only a translation file:
+
+1. **Create a translation file**
+   - Add a new TOML file under `assets/locales/` (for example, `fr.toml` for French).
+   - Use `en.toml` or any existing file as a template and translate every key.
+   - Include a `language_name = "…"` entry near the top so the UI can show the name.
+
+2. **Rebuild and test**
+   - Run `cargo test`. The unit tests automatically iterate over `Language::all()` (which reads the assets) so your new locale will be exercised alongside the defaults.
+   - Build and launch the application; the new entry should appear in the Language dropdown immediately. No code edits are necessary since the language list is generated at runtime from the embedded assets.
+
+> 💡 Locale files are bundled with the binary via `rust_embed`, so there is no runtime file I/O. If a requested language file is ever missing the code gracefully falls back to the first available locale.
 
 ## Translation File Format
 
-Translation files use TOML format with simple key-value pairs:
+Each translation file is a plain TOML document containing key/value pairs.
+Keys correspond to identifiers used throughout the GUI code – for example:
 
 ```toml
 # Application
 app_name = "Ropy"
-app_description = "A clipboard manager built with Rust and GPUI"
+app_description = "RustとGPUIで構築されたクリップボードマネージャー"
 
 # Tray menu
-tray_show = "Show"
-tray_quit = "Quit"
+tray_show = "表示"
+tray_quit = "終了"
 ```
+
+Missing keys are reported at runtime by displaying `[Missing: <key>]` in the UI, and unit tests cover this behaviour.
 
 ## Implementation Details
 
-- Translations are embedded into the binary at compile time using `include_str!()` for optimal performance
-- The i18n system is lightweight and has minimal runtime overhead
-- Language selection is persisted in the user's configuration file
-- All UI strings are centralized in locale files for easy maintenance
+- **Compile‑time embedding:** the `rust_embed` crate scans `assets/locales` and embeds every `.toml` file in the binary. There is no manual `include_str!`; adding or removing files is enough.
+- **Language representation:** `Language` is now a thin wrapper around a locale code string. `display_name()` reads the `language_name` key from the corresponding TOML file and returns it, defaulting to the code if absent.
+- **Dynamic discovery:** `Language::all()` inspects the embedded asset list, strips the `.toml` suffixes, sorts the codes alphabetically, and returns them. This allows the UI to construct the dropdown without any source‑level maintenance.
+- **Runtime behaviour:** lookups are still simple `HashMap<String, String>` accesses and are fast. When changing languages the code attempts to load the requested file and falls back to the first available locale if the file is missing.
+- **Persistence:** the selected language is stored in `settings.language` as before; the string value is deserialized back into a `Language` object. Components such as the tray menu read the configured language on creation.
+- **Tests:** unit tests cover `Language::display_name`, `Language::all`, translation parsing, missing keys, switching languages, and fallback behaviour. Any new TOML file is automatically exercised by the `Language::all()` tests.
+
+Maintaining translations remains as easy as editing or adding TOML files; the rest of the system adapts without additional work.
+
