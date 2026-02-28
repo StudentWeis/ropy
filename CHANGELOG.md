@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-02-28
+
+### 🐛 Bug Fixes
+
+- Prevent event propagation on mouse down for settings header buttons in Windows OS by @StudentWeis
+
+### 🚜 Refactor
+
+- Add i18n checkt script and improve localization consistency by @StudentWeis
+- Enhance multi-language support and improve language handling by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies and improve code organization by @StudentWeis
+
 ## [0.2.3] - 2026-02-27
 
 ### 🚜 Refactor
