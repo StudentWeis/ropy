@@ -30,6 +30,7 @@ settings_hotkey_hint = "Format: control+shift+d or cmd+shift+v"
 settings_hotkey_invalid = "Invalid hotkey format"
 settings_max_history = "Max History Records"
 settings_autostart = "Launch at system startup"
+settings_open_log = "Open Log File"
 on = "ON"
 off = "OFF"
 

@@ -30,6 +30,7 @@ settings_hotkey_hint = "格式: control+shift+d 或 cmd+shift+v"
 settings_hotkey_invalid = "快捷键格式错误"
 settings_max_history = "最大历史记录数"
 settings_autostart = "开机自动启动"
+settings_open_log = "打开日志文件"
 on = "开启"
 off = "关闭"
 

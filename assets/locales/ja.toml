@@ -31,6 +31,7 @@ settings_hotkey_hint = "形式: control+shift+d または cmd+shift+v"
 settings_hotkey_invalid = "無効なホットキー形式です"
 settings_max_history = "最大履歴件数"
 settings_autostart = "システム起動時に起動"
+settings_open_log = "ログファイルを開く"
 on = "オン"
 off = "オフ"
 

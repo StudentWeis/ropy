@@ -67,6 +67,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let activation_key_row = render_activation_key_row(board, cx);
     let max_history_row = render_max_history_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
+    let open_log_row = render_open_log_row(board, cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let update_row = render_update_row(board, cx);
 
@@ -86,6 +87,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(max_history_row)
             .child(Divider::horizontal())
             .child(autostart_row)
+            .child(Divider::horizontal())
+            .child(open_log_row)
             .child(Divider::horizontal())
             .child(auto_check_row)
             .child(Divider::horizontal())
@@ -227,6 +230,23 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
     settings_row(board.i18n.t("settings_autostart"), toggle, cx)
+}
+
+fn render_open_log_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let btn = Button::new("open-log-button")
+        .small()
+        .ghost()
+        .label(board.i18n.t("settings_open_log"))
+        .on_click(cx.listener(|_, _, _, _| {
+            let log_dir = crate::logging::log_dir();
+            #[cfg(target_os = "macos")]
+            let _ = std::process::Command::new("open").arg(&log_dir).spawn();
+            #[cfg(target_os = "windows")]
+            let _ = std::process::Command::new("explorer").arg(&log_dir).spawn();
+            #[cfg(target_os = "linux")]
+            let _ = std::process::Command::new("xdg-open").arg(&log_dir).spawn();
+        }));
+    settings_row(board.i18n.t("settings_open_log"), btn, cx)
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

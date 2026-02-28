@@ -51,8 +51,7 @@ pub fn download_and_install(
     tracing::info!("replacing running executable");
     self_replace::self_replace(&binary_path).map_err(|e| UpdateError::Replace(e.to_string()))?;
 
-    // 5. On Unix set the executable permission (self_replace should handle this,
-    //    but be safe)
+    // 5. On Unix set the executable permission (self_replace should handle this, but be safe)
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

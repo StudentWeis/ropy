@@ -22,6 +22,11 @@ fn default_log_dir() -> PathBuf {
     base.join("logs")
 }
 
+/// Returns the directory where log files are stored.
+pub fn log_dir() -> PathBuf {
+    default_log_dir()
+}
+
 fn build_file_subscriber(
     writer: impl for<'a> fmt::MakeWriter<'a> + Send + Sync + 'static,
 ) -> impl tracing::Subscriber + Send + Sync {
