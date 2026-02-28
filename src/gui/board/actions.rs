@@ -4,7 +4,7 @@ use crate::gui::{active_window, board::RopyBoard, hide_window, panel::settings};
 
 gpui::actions!(
     board,
-    [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection]
+    [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection, DeleteRecord]
 );
 
 impl RopyBoard {
@@ -32,6 +32,25 @@ impl RopyBoard {
         cx: &mut Context<Self>,
     ) {
         self.confirm_record(window, cx, self.selected_index);
+    }
+
+    pub fn on_delete_record(
+        &mut self,
+        _: &DeleteRecord,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(record) = self.filtered_records.get(self.selected_index) {
+            let id = record.id;
+            self.delete_record(id);
+            // Clamp selected_index after deletion
+            if self.selected_index > 0
+                && self.selected_index >= self.filtered_records.len().saturating_sub(1)
+            {
+                self.selected_index -= 1;
+            }
+            cx.notify();
+        }
     }
 
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {

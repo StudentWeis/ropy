@@ -9,7 +9,7 @@ use std::{
 };
 
 // Re-export utilities for external use
-pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
+pub use actions::{Active, ConfirmSelection, DeleteRecord, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, SharedString,
     Subscription, Window,
@@ -555,6 +555,7 @@ impl Render for RopyBoard {
         base.on_action(cx.listener(Self::on_select_prev))
             .on_action(cx.listener(Self::on_select_next))
             .on_action(cx.listener(Self::on_confirm_selection))
+            .on_action(cx.listener(Self::on_delete_record))
             .on_key_down(cx.listener(Self::on_key_down))
             .child(render_header(self, cx))
             .child(render_search_input(&self.search_input, cx))

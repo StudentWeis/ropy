@@ -72,6 +72,7 @@ cargo build --release
 - Launch the application, and it will start monitoring your clipboard.
 - Use the configurable global hotkey or tray icon to access the clipboard history.
 - Click on any record or use <kbd>1/2/3/4/5</kbd> or <kbd>Enter</kbd> to select a record.
+- Use <kbd>Space</kbd> to preview the content of a record without pasting.
 - Use the search bar to filter clipboard records.
 - Pin the Ropy window to keep it always on top.
 
