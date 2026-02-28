@@ -3,9 +3,6 @@ mod preview;
 mod render;
 
 // moved panels to gui::panel
-use crate::gui::panel::about::render_about_content;
-use crate::gui::panel::settings::render_settings_content;
-
 use std::{
     str::FromStr,
     sync::{Arc, Mutex, PoisonError, RwLock},
@@ -29,7 +26,10 @@ use render::{render_header, render_search_input};
 use crate::{
     clipboard::LastCopyState,
     config::Settings,
-    gui::hide_window,
+    gui::{
+        hide_window,
+        panel::{about::render_about_content, settings::render_settings_content},
+    },
     i18n::{I18n, Language},
     repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
     updater::models::UpdateStatus,

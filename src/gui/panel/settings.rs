@@ -14,8 +14,7 @@ use gpui_component::{
     v_flex,
 };
 
-use crate::gui::board::RopyBoard;
-use crate::{i18n::Language, updater::models::UpdateStatus};
+use crate::{gui::board::RopyBoard, i18n::Language, updater::models::UpdateStatus};
 
 /// Render a settings row with label centered against the control.
 fn settings_row<C: IntoElement>(
@@ -61,10 +60,7 @@ fn settings_row_top<C: IntoElement>(
 }
 
 /// Render the settings panel content — all items at the same level, left-right layout.
-pub(crate) fn render_settings_content(
-    board: &RopyBoard,
-    cx: &Context<RopyBoard>,
-) -> impl IntoElement {
+pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = render_settings_header(board, cx);
     let language_row = render_language_row(board, cx);
     let theme_row = render_theme_row(board, cx);

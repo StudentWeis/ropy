@@ -4,6 +4,8 @@ version = "0.2.3"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 repository = "https://github.com/StudentWeis/ropy"
+keywords = ["clipboard","gpui","productivity"]
+categories = ["productivity"]
 license = "MIT"
 
 [dependencies]
@@ -63,9 +65,6 @@ x11rb = "0.13"
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tar = "0.4"
 xz2 = "0.1"
-
-[dev-dependencies]
-tempfile = "3.25.0"
 
 [build-dependencies]
 winres = "0.1"

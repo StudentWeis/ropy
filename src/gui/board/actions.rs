@@ -1,7 +1,6 @@
 use gpui::{Context, Focusable, Window};
 
-use crate::gui::{active_window, board::RopyBoard, hide_window};
-use crate::gui::panel::settings;
+use crate::gui::{active_window, board::RopyBoard, hide_window, panel::settings};
 
 gpui::actions!(
     board,
