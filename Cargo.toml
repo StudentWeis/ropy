@@ -12,7 +12,7 @@ license = "MIT"
 clipboard-rs = "0.3.3"
 gpui = "0.2.2"
 gpui-component = "0.5.1"
-# Can't use latest sysinfo due to dependency conflicts
+# Can't use latest sysinfo (0.38.3) due to dependency conflicts
 sysinfo = "0.38.0"
 global-hotkey = "0.7"
 sled = "0.34"
@@ -22,7 +22,7 @@ chrono = { version = "0.4.44", features = ["serde"] }
 dirs = "6.0"
 thiserror = "2.0.18"
 config = "0.15"
-toml = "0.9.8"
+toml = "1.0.6"
 image = "0.25"
 tray-icon = "0.21.3"
 dark-light = "2.0"
@@ -57,7 +57,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
 ] }
-zip = "8.1.0"
+zip = "8.2.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18.2"
