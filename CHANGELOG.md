@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-09
+
+### Attention
+
+This update includes a breaking change: the auto-deduplication feature will upgrade the database schema version, which will automatically clear all history records and recreate the database on startup. This change is irreversible, so please make sure to back up your data before upgrading!
+
+破坏性更新提示：自动去重功能将升级数据库模式版本，这将自动清除所有历史记录并在启动时重新创建数据库。此更改不可逆，请确保在升级前备份您的重要数据！
+
+### 🚀 Features
+- Implement record pinning functionality and update related UI components by @StudentWeis
+- Implement clipboard record deduplication using content hash and update repository logic by @StudentWeis
+- Add vim-like key-binding(j/k/d/q) by @StudentWeis
+- Add "Open Log File" option in settings and implement log directory retrieval by @StudentWeis
+
+### 🚜 Refactor
+- Use a boolean pinned field instead of Category enum for pinning functionality by @StudentWeis
+- Split i18n mod.rs into error, language, and translations submodules and re-export public types by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Update image dependency version to 0.25.9 by @StudentWeis
+- Update dependencies and toolchain version to 1.94 by @StudentWeis
+
 ## [0.2.4] - 2026-02-28
 
 ### 🐛 Bug Fixes
