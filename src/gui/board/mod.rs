@@ -257,18 +257,39 @@ impl RopyBoard {
         }
     }
 
+    /// Toggle pin category of a record
+    pub fn toggle_record_pin(&self, id: u64) {
+        if let Some(ref repo) = self.repository {
+            match repo.toggle_pin(id) {
+                Ok(updated) => {
+                    // Update in-memory records
+                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                    if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
+                        record.category = updated.category;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
+                }
+            }
+        }
+    }
+
     /// Get filtered records based on search query
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
-        if query.is_empty() {
+        let mut records = if query.is_empty() {
             self.records
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone()
         } else if let Some(ref repo) = self.repository {
-            repo.search(query).unwrap_or_default()
+            // search() already sorts pinned first
+            return repo.search(query).unwrap_or_default();
         } else {
-            Vec::new()
-        }
+            return Vec::new();
+        };
+        ClipboardRepository::sort_pinned_first(&mut records);
+        records
     }
 
     /// Confirm selection: copy record to clipboard and hide.

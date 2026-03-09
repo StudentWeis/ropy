@@ -7,7 +7,7 @@ use sled::{Db, Tree};
 
 use super::{
     errors::RepositoryError,
-    models::{ClipboardRecord, ContentType},
+    models::{Category, ClipboardRecord, ContentType},
 };
 
 /// Compute a deterministic content hash using seahash.
@@ -138,6 +138,7 @@ impl ClipboardRepository {
             content,
             created_at: now,
             content_type,
+            category: Category::default(),
         };
 
         let value = serde_json::to_vec(&record)
@@ -193,6 +194,7 @@ impl ClipboardRepository {
             content: file_path,
             created_at: now,
             content_type: ContentType::Image,
+            category: Category::default(),
         };
 
         let value = serde_json::to_vec(&record)
@@ -225,27 +227,42 @@ impl ClipboardRepository {
     }
 
     /// Get recent N records (in reverse chronological order)
+    ///
+    /// Pinned records are always displayed first, followed by unpinned
+    /// records. Records that fail to deserialize (e.g. old format) are
+    /// silently skipped.
     pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let mut records = Vec::new();
         for result in &self.records_tree {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            records.push(record);
+            match serde_json::from_slice::<ClipboardRecord>(&value) {
+                Ok(record) => records.push(record),
+                Err(e) => {
+                    tracing::warn!(error = %e, "skipping record that failed to deserialize");
+                }
+            }
         }
-        records.sort_unstable_by(|a, b| b.created_at.cmp(&a.created_at));
+        Self::sort_pinned_first(&mut records);
         records.truncate(limit);
         Ok(records)
     }
 
     /// Search records by keyword
+    ///
+    /// Records that fail to deserialize (e.g. old format) are silently
+    /// skipped rather than causing the entire search to fail.
     pub fn search(&self, keyword: &str) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let keyword_lower = keyword.to_lowercase();
         let mut records = Vec::new();
         for result in &self.records_tree {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+            let record: ClipboardRecord = match serde_json::from_slice(&value) {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(error = %e, "skipping record that failed to deserialize");
+                    continue;
+                }
+            };
             // Only search in text records
             if record.content_type == ContentType::Text
                 && record.content.to_lowercase().contains(&keyword_lower)
@@ -253,8 +270,47 @@ impl ClipboardRepository {
                 records.push(record);
             }
         }
-        records.sort_unstable_by(|a, b| b.created_at.cmp(&a.created_at));
+        Self::sort_pinned_first(&mut records);
         Ok(records)
+    }
+
+    /// Sort records so that pinned items appear first and both groups remain
+    /// ordered by descending creation time.
+    pub(crate) fn sort_pinned_first(records: &mut [ClipboardRecord]) {
+        records.sort_unstable_by(
+            |a, b| match (a.category.is_pinned(), b.category.is_pinned()) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => b.created_at.cmp(&a.created_at),
+            },
+        );
+    }
+
+    /// Toggle the pin state of a record
+    pub fn toggle_pin(&self, id: u64) -> Result<ClipboardRecord, RepositoryError> {
+        let key = id.to_be_bytes();
+        let value = self
+            .records_tree
+            .get(key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+            .ok_or_else(|| RepositoryError::Query("record not found".to_string()))?;
+
+        let mut record: ClipboardRecord = serde_json::from_slice(&value)
+            .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+
+        record.category = if record.category.is_pinned() {
+            Category::None
+        } else {
+            Category::Pinned
+        };
+
+        let new_value = serde_json::to_vec(&record)
+            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+        self.records_tree
+            .insert(key, new_value)
+            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+
+        Ok(record)
     }
 
     /// Delete a record
@@ -303,25 +359,33 @@ impl ClipboardRepository {
     }
 
     /// Clean up old records, keeping the most recent N records
+    ///
+    /// Pinned records are never removed during cleanup.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
         if total <= keep_count {
             return Ok(0);
         }
 
-        let mut records: Vec<(u64, chrono::DateTime<Local>)> = Vec::new();
+        let mut records: Vec<(u64, chrono::DateTime<Local>, bool)> = Vec::new();
         for result in &self.records_tree {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let record: ClipboardRecord = serde_json::from_slice(&value)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            records.push((record.id, record.created_at));
+            records.push((record.id, record.created_at, record.category.is_pinned()));
         }
         // Sort by created_at ascending so the oldest come first
         records.sort_unstable_by(|a, b| a.1.cmp(&b.1));
 
         let to_remove = total - keep_count;
         let mut removed = 0;
-        for (id, _) in records.into_iter().take(to_remove) {
+        for (id, _, is_pinned) in records {
+            if removed >= to_remove {
+                break;
+            }
+            if is_pinned {
+                continue;
+            }
             let key = id.to_be_bytes();
             self.records_tree
                 .remove(key)
@@ -524,5 +588,195 @@ mod tests {
             .save_text("stable hash".to_string())
             .expect("Failed to save");
         assert_eq!(r2.id, expected_id);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_toggle_pin() {
+        let repo = create_test_repo();
+        let record = repo
+            .save_text("Pin me".to_string())
+            .expect("Failed to save");
+
+        assert!(!record.category.is_pinned());
+
+        let pinned = repo.toggle_pin(record.id).expect("Failed to toggle pin");
+        assert!(pinned.category.is_pinned());
+
+        let unpinned = repo.toggle_pin(record.id).expect("Failed to toggle pin");
+        assert!(!unpinned.category.is_pinned());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_pinned_records_appear_first() {
+        let repo = create_test_repo();
+
+        repo.save_text("First".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let second = repo
+            .save_text("Second".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("Third".to_string()).expect("Failed to save");
+
+        // Pin the second record
+        repo.toggle_pin(second.id).expect("Failed to toggle pin");
+
+        let recent = repo.get_recent(10).expect("Failed to get recent");
+        assert_eq!(recent[0].content, "Second"); // pinned → first
+        assert_eq!(recent[1].content, "Third");
+        assert_eq!(recent[2].content, "First");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_multiple_pinned_ordering() {
+        let repo = create_test_repo();
+
+        let r1 = repo.save_text("Alpha".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("Beta".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r3 = repo.save_text("Gamma".to_string()).expect("Failed to save");
+
+        repo.toggle_pin(r1.id).expect("Failed to toggle pin");
+        repo.toggle_pin(r3.id).expect("Failed to toggle pin");
+
+        let recent = repo.get_recent(10).expect("Failed to get recent");
+        // Both pinned, newer first
+        assert_eq!(recent[0].content, "Gamma");
+        assert_eq!(recent[1].content, "Alpha");
+        // Unpinned
+        assert_eq!(recent[2].content, "Beta");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_pinned_search() {
+        let repo = create_test_repo();
+
+        repo.save_text("hello world".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r2 = repo
+            .save_text("hello rust".to_string())
+            .expect("Failed to save");
+
+        repo.toggle_pin(r2.id).expect("Failed to toggle pin");
+
+        let results = repo.search("hello").expect("Failed to search");
+        assert_eq!(results.len(), 2);
+        // Pinned result appears first
+        assert_eq!(results[0].content, "hello rust");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_skips_pinned() {
+        let repo = create_test_repo();
+
+        let r1 = repo
+            .save_text("Old pinned".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        for i in 2..=6 {
+            repo.save_text(format!("Record {i}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        repo.toggle_pin(r1.id).expect("Failed to toggle pin");
+        assert_eq!(repo.count(), 6);
+
+        let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
+        // The pinned record survives, and cleanup continues removing
+        // unpinned records until the total count reaches the keep limit.
+        assert_eq!(removed, 3);
+        assert_eq!(repo.count(), 3);
+        // Pinned record should survive
+        let pinned = repo
+            .get_by_id(r1.id)
+            .expect("Failed to get")
+            .expect("Pinned record should still exist");
+        assert!(pinned.category.is_pinned());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_backward_compat_old_pinned_fields() {
+        // Simulate a record stored with old `pinned`/`pin_order` fields
+        let repo = create_test_repo();
+        let old_json = serde_json::json!({
+            "id": 1000_u64,
+            "content": "legacy record",
+            "created_at": chrono::Local::now(),
+            "content_type": "Text",
+            "pinned": true,
+            "pin_order": 42
+        });
+        let key = 1000_u64.to_be_bytes();
+        let value = serde_json::to_vec(&old_json).expect("failed to serialize");
+        repo.records_tree
+            .insert(key, value)
+            .expect("failed to insert");
+
+        // get_recent should deserialize it with default category
+        let records = repo.get_recent(10).expect("Failed to get recent");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].content, "legacy record");
+        assert!(!records[0].category.is_pinned());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
+        let repo = create_test_repo();
+
+        // Create 4 records, pin 3 of them
+        let r1 = repo.save_text("A".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r2 = repo.save_text("B".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r3 = repo.save_text("C".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("D".to_string()).expect("Failed to save");
+
+        repo.toggle_pin(r1.id).expect("Failed to toggle pin");
+        repo.toggle_pin(r2.id).expect("Failed to toggle pin");
+        repo.toggle_pin(r3.id).expect("Failed to toggle pin");
+
+        // keep_count = 2, but 3 pinned records cannot be removed
+        let removed = repo.cleanup_old_records(2).expect("Failed to clean up");
+        // Only the 1 unpinned record (D) can be removed
+        assert_eq!(removed, 1);
+        // Total count = 3 (all pinned), which is above keep_count
+        assert_eq!(repo.count(), 3);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_search_skips_corrupt_records() {
+        let repo = create_test_repo();
+
+        // Insert a valid record
+        repo.save_text("valid hello".to_string())
+            .expect("Failed to save");
+
+        // Insert corrupt data
+        let corrupt_key = 9999_u64.to_be_bytes();
+        repo.records_tree
+            .insert(corrupt_key, b"not valid json")
+            .expect("failed to insert corrupt");
+
+        // Search should still return the valid record
+        let results = repo.search("hello").expect("search should not fail");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].content, "valid hello");
+
+        // get_recent should also work
+        let recent = repo.get_recent(10).expect("get_recent should not fail");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].content, "valid hello");
     }
 }

@@ -27,7 +27,7 @@ English | <a href="doc/README/README_ZH.md">简体中文</a>
 - Cross-platform: Windows, macOS & Linux(X11).
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
-- Search/Pin/Preview/Autostart/Shortcuts/Autoupdate.
+- Search/Pin/Preview/Autostart/Shortcuts/Autoupdate/Record-Pin.
 
 # Installation
 
@@ -75,6 +75,7 @@ cargo build --release
 - Use <kbd>Space</kbd> to preview the content of a record without pasting.
 - Use the search bar to filter clipboard records.
 - Pin the Ropy window to keep it always on top.
+- Pin the clipboard records to prevent them from being removed when the history limit is exceeded.
 
 # TODO
 
@@ -89,6 +90,7 @@ cargo build --release
 - Does not support plugin extension functionality (currently no plans to support plugin mechanism, Ropy aims to remain lightweight and simple).
 - Does not support online synchronization of clipboard content (currently not considering cloud sync functionality).
 - Does not support command-line operations (Ropy is mainly for GUI users, does not provide a command-line interface).
+- Does not support total save of clipboard history (with strategies for managing large histories such as pruning repeat entries).
 
 # Acknowledgements
 

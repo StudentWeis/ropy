@@ -2,7 +2,10 @@ use std::{path::PathBuf, sync::OnceLock};
 
 use gpui::{
     Context, Entity, anchored, deferred, div, img, list,
-    prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
+    prelude::{
+        FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
+        Styled,
+    },
     px,
 };
 use gpui_component::{
@@ -244,7 +247,9 @@ fn render_list_item(
     let content_type = record.content_type.clone();
     let view_click = view.clone();
     let view_delete = view.clone();
+    let view_pin = view.clone();
     let record_content = record.content.clone();
+    let is_pinned = record.category.is_pinned();
 
     let preview_data = (content_type.clone(), record_content);
 
@@ -305,6 +310,9 @@ fn render_list_item(
                                     .items_center()
                                     .gap_1()
                                     .mt_1()
+                                    .when(is_pinned, |el: gpui::Div| {
+                                        el.child(div().text_xs().child("📌"))
+                                    })
                                     .child(
                                         div()
                                             .text_xs()
@@ -329,19 +337,42 @@ fn render_list_item(
                             )
                     })
                     .child(
-                        Button::new(("delete-btn", index))
-                            .xsmall()
-                            .ghost()
-                            .label("×")
-                            .on_click(move |_event, _window, cx| {
-                                view_delete
-                                    .update(cx, |this, cx| {
-                                        this.delete_record(record_id);
-                                        // TODO Delete associated last copy state
-                                        cx.notify();
-                                    })
-                                    .ok();
-                            }),
+                        h_flex().gap_1().child(
+                            v_flex()
+                                .gap_1()
+                                .items_center()
+                                .child({
+                                    let btn = if is_pinned {
+                                        Button::new(("pin-btn", index)).xsmall().primary()
+                                    } else {
+                                        Button::new(("pin-btn", index)).xsmall().ghost()
+                                    };
+                                    btn.icon(Icon::empty().path("icon/record-pin.svg")).on_click(
+                                        move |_event, _window, cx| {
+                                            view_pin
+                                                .update(cx, |this, cx| {
+                                                    this.toggle_record_pin(record_id);
+                                                    cx.notify();
+                                                })
+                                                .ok();
+                                        },
+                                    )
+                                })
+                                .child(
+                                    Button::new(("delete-btn", index))
+                                        .xsmall()
+                                        .ghost()
+                                        .label("×")
+                                        .on_click(move |_event, _window, cx| {
+                                            view_delete
+                                                .update(cx, |this, cx| {
+                                                    this.delete_record(record_id);
+                                                    cx.notify();
+                                                })
+                                                .ok();
+                                        }),
+                                ),
+                        ),
                     ),
             ),
     );
