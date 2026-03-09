@@ -1,10 +1,6 @@
 //! A simple clipboard change listener using event-driven watching.
 
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    sync::{Arc, Mutex, RwLock},
-};
+use std::sync::{Arc, Mutex, RwLock};
 
 use async_channel::Sender;
 use clipboard_rs::{
@@ -24,7 +20,7 @@ use crate::{
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
     tx: Sender<ClipboardEvent>,
-    image_tx: Sender<DynamicImage>,
+    image_tx: Sender<(DynamicImage, u64)>,
     ctx: ClipboardContext,
     last_copy: Arc<Mutex<LastCopyState>>,
 }
@@ -32,7 +28,7 @@ struct ClipboardMonitor {
 impl ClipboardMonitor {
     fn new(
         tx: Sender<ClipboardEvent>,
-        image_tx: Sender<DynamicImage>,
+        image_tx: Sender<(DynamicImage, u64)>,
         last_copy: Arc<Mutex<LastCopyState>>,
     ) -> Option<Self> {
         let ctx = match ClipboardContext::new() {
@@ -61,13 +57,11 @@ impl ClipboardHandler for ClipboardMonitor {
         if let Ok(image) = self.ctx.get_image()
             && let Ok(dyn_img) = image.get_dynamic_image()
         {
-            // Calculate image hash
-            let mut hasher = DefaultHasher::new();
-            dyn_img.as_bytes().hash(&mut hasher);
-            let hash: u64 = hasher.finish();
+            // Calculate deterministic image hash using seahash
+            let hash: u64 = seahash::hash(dyn_img.as_bytes());
 
             if !matches!(*last_copy_guard, LastCopyState::Image(h) if h == hash) {
-                let _ = self.image_tx.send_blocking(dyn_img);
+                let _ = self.image_tx.send_blocking((dyn_img, hash));
                 *last_copy_guard = LastCopyState::Image(hash);
             }
         } else if let Ok(text) = self.ctx.get_text()
@@ -85,7 +79,7 @@ pub fn start_clipboard_monitor(
     async_app: &AsyncApp,
     last_copy: Arc<Mutex<LastCopyState>>,
 ) {
-    let (image_tx, image_rx) = async_channel::unbounded::<DynamicImage>();
+    let (image_tx, image_rx) = async_channel::unbounded::<(DynamicImage, u64)>();
     let Some(monitor) = ClipboardMonitor::new(tx.clone(), image_tx, last_copy) else {
         return;
     };
@@ -93,9 +87,9 @@ pub fn start_clipboard_monitor(
 
     executor
         .spawn(async move {
-            while let Ok(image) = image_rx.recv().await {
+            while let Ok((image, hash)) = image_rx.recv().await {
                 if let Some(path) = super::save_image(&image) {
-                    let _ = tx.send_blocking(ClipboardEvent::Image(path));
+                    let _ = tx.send_blocking(ClipboardEvent::Image(path, hash));
                 }
             }
         })
@@ -134,7 +128,7 @@ pub fn start_clipboard_listener(
                 if let Some(ref repo) = repository {
                     let result = match event {
                         ClipboardEvent::Text(text) => repo.save_text(text),
-                        ClipboardEvent::Image(path) => repo.save_image_from_path(path),
+                        ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
                     };
 
                     match result {
@@ -151,6 +145,8 @@ pub fn start_clipboard_listener(
                                     Ok(g) => g,
                                     Err(poisoned) => poisoned.into_inner(),
                                 };
+                                // Remove existing record with same id (dedup upsert)
+                                guard.retain(|r| r.id != record.id);
                                 guard.insert(0, record);
                                 if guard.len() > max_history_records {
                                     guard.truncate(max_history_records);

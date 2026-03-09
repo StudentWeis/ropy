@@ -4,7 +4,15 @@ use crate::gui::{active_window, board::RopyBoard, hide_window, panel::settings};
 
 gpui::actions!(
     board,
-    [Hide, Quit, Active, SelectPrev, SelectNext, ConfirmSelection, DeleteRecord]
+    [
+        Hide,
+        Quit,
+        Active,
+        SelectPrev,
+        SelectNext,
+        ConfirmSelection,
+        DeleteRecord
+    ]
 );
 
 impl RopyBoard {

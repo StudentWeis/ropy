@@ -8,7 +8,8 @@ pub use writer::start_clipboard_writer;
 
 pub enum ClipboardEvent {
     Text(String),
-    Image(String),
+    /// Image(path, `content_hash`)
+    Image(String, u64),
 }
 
 pub enum CopyRequest {

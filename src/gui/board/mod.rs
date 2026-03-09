@@ -271,15 +271,13 @@ impl RopyBoard {
         }
     }
 
-    /// Confirm, hide and delete.
-    fn confirm_record(&mut self, window: &mut Window, cx: &Context<Self>, index: usize) {
-        let (id, content, content_type) = {
+    /// Confirm selection: copy record to clipboard and hide.
+    /// The clipboard listener will re-capture the copy event and the
+    /// repository layer handles deduplication via content hash upsert.
+    fn confirm_record(&self, window: &mut Window, cx: &Context<Self>, index: usize) {
+        let (content, content_type) = {
             if let Some(record) = self.filtered_records.get(index) {
-                (
-                    record.id,
-                    record.content.clone(),
-                    record.content_type.clone(),
-                )
+                (record.content.clone(), record.content_type.clone())
             } else {
                 return;
             }
@@ -287,9 +285,6 @@ impl RopyBoard {
         self.copy_to_clipboard(&content, &content_type);
         if !self.pinned {
             hide_window(window, cx, self.pinned);
-        }
-        if index != 0 {
-            self.delete_record(id);
         }
     }
 

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Data model for clipboard records
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClipboardRecord {
-    /// Unique identifier (timestamp in nanoseconds)
+    /// Unique identifier (content hash)
     pub id: u64,
     /// Clipboard content
     pub content: String,

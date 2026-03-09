@@ -5686,6 +5686,7 @@ dependencies = [
  "raw-window-handle",
  "regex",
  "rust-embed",
+ "seahash",
  "self-replace",
  "semver",
  "serde",

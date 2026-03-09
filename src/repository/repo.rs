@@ -10,6 +10,23 @@ use super::{
     models::{ClipboardRecord, ContentType},
 };
 
+/// Compute a deterministic content hash using seahash.
+/// The content type is encoded as a prefix byte to avoid collisions
+/// between different types with the same content.
+fn content_hash(content: &str, content_type: &ContentType) -> u64 {
+    let type_tag: u8 = match content_type {
+        ContentType::Text => 0,
+        ContentType::Image => 1,
+        ContentType::FilePath => 2,
+    };
+    let mut data = vec![type_tag];
+    data.extend_from_slice(content.as_bytes());
+    seahash::hash(&data)
+}
+
+/// Schema version for the database. Bump this when the key format changes.
+const SCHEMA_VERSION: u64 = 2;
+
 pub struct ClipboardRepository {
     db: Db,
     records_tree: Tree,
@@ -31,9 +48,44 @@ impl ClipboardRepository {
     /// Initialize repository with specific paths
     pub fn init(db_path: &PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
         let db = sled::open(db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
+
+        // Check schema version and clear old data if mismatched
+        let meta_tree = db
+            .open_tree("meta")
+            .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
+        let version_key = b"schema_version";
+        let needs_clear = match meta_tree
+            .get(version_key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+        {
+            Some(v) if v.len() == 8 => {
+                let stored =
+                    u64::from_be_bytes(v.as_ref().try_into().map_err(|_| {
+                        RepositoryError::Deserialization("bad schema version".into())
+                    })?);
+                stored != SCHEMA_VERSION
+            }
+            _ => true,
+        };
+
         let records_tree = db
             .open_tree("clipboard_records")
             .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
+
+        if needs_clear {
+            records_tree
+                .clear()
+                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+            // Clear old image files
+            if images_dir.exists() {
+                fs::remove_dir_all(&images_dir).ok();
+            }
+            meta_tree
+                .insert(version_key, &SCHEMA_VERSION.to_be_bytes())
+                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+            db.flush()
+                .map_err(|e| RepositoryError::Flush(e.to_string()))?;
+        }
 
         Ok(Self {
             db,
@@ -53,14 +105,33 @@ impl ClipboardRepository {
 
     /// Save a clipboard record
     ///
-    /// Uses a timestamp as the key to ensure chronological storage
+    /// Uses content hash as the key for deduplication.
+    /// If a record with the same content already exists, only `created_at` is updated.
     pub fn save(
         &self,
         content: String,
         content_type: ContentType,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        let id = content_hash(&content, &content_type);
+        let key = id.to_be_bytes();
         let now = Local::now();
-        let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
+
+        // Check if a record with the same hash already exists
+        if let Some(existing) = self
+            .records_tree
+            .get(key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+        {
+            let mut record: ClipboardRecord = serde_json::from_slice(&existing)
+                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+            record.created_at = now;
+            let value = serde_json::to_vec(&record)
+                .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+            self.records_tree
+                .insert(key, value)
+                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+            return Ok(record);
+        }
 
         let record = ClipboardRecord {
             id,
@@ -69,10 +140,8 @@ impl ClipboardRepository {
             content_type,
         };
 
-        let key = id.to_be_bytes();
         let value = serde_json::to_vec(&record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-
         self.records_tree
             .insert(key, value)
             .map_err(|e| RepositoryError::Insert(e.to_string()))?;
@@ -81,12 +150,43 @@ impl ClipboardRepository {
     }
 
     /// Save image record from existing file path
+    ///
+    /// Uses the provided `content_hash` (computed from image bytes) as the key
+    /// for deduplication. When a duplicate is found the newly saved image file
+    /// is removed and only `created_at` is updated on the existing record.
     pub fn save_image_from_path(
         &self,
         file_path: String,
+        image_content_hash: u64,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        let id = image_content_hash;
+        let key = id.to_be_bytes();
         let now = Local::now();
-        let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;
+
+        // Check if a record with the same image hash already exists
+        if let Some(existing) = self
+            .records_tree
+            .get(key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+        {
+            let mut record: ClipboardRecord = serde_json::from_slice(&existing)
+                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+
+            // If paths differ, delete the newly generated duplicate image file
+            if record.content != file_path {
+                let _ = fs::remove_file(&file_path);
+                let thumb_path = file_path.replace(".png", "_thumb.png");
+                let _ = fs::remove_file(thumb_path);
+            }
+
+            record.created_at = now;
+            let value = serde_json::to_vec(&record)
+                .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+            self.records_tree
+                .insert(key, value)
+                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+            return Ok(record);
+        }
 
         let record = ClipboardRecord {
             id,
@@ -95,10 +195,8 @@ impl ClipboardRepository {
             content_type: ContentType::Image,
         };
 
-        let key = id.to_be_bytes();
         let value = serde_json::to_vec(&record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-
         self.records_tree
             .insert(key, value)
             .map_err(|e| RepositoryError::Insert(e.to_string()))?;
@@ -129,12 +227,14 @@ impl ClipboardRepository {
     /// Get recent N records (in reverse chronological order)
     pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let mut records = Vec::new();
-        for result in self.records_tree.iter().rev().take(limit) {
+        for result in &self.records_tree {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let record: ClipboardRecord = serde_json::from_slice(&value)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             records.push(record);
         }
+        records.sort_unstable_by(|a, b| b.created_at.cmp(&a.created_at));
+        records.truncate(limit);
         Ok(records)
     }
 
@@ -142,7 +242,7 @@ impl ClipboardRepository {
     pub fn search(&self, keyword: &str) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let keyword_lower = keyword.to_lowercase();
         let mut records = Vec::new();
-        for result in self.records_tree.iter().rev() {
+        for result in &self.records_tree {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let record: ClipboardRecord = serde_json::from_slice(&value)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
@@ -153,6 +253,7 @@ impl ClipboardRepository {
                 records.push(record);
             }
         }
+        records.sort_unstable_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(records)
     }
 
@@ -208,11 +309,20 @@ impl ClipboardRepository {
             return Ok(0);
         }
 
+        let mut records: Vec<(u64, chrono::DateTime<Local>)> = Vec::new();
+        for result in &self.records_tree {
+            let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
+            let record: ClipboardRecord = serde_json::from_slice(&value)
+                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+            records.push((record.id, record.created_at));
+        }
+        // Sort by created_at ascending so the oldest come first
+        records.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+
         let to_remove = total - keep_count;
         let mut removed = 0;
-
-        for result in self.records_tree.iter().take(to_remove) {
-            let (key, _) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
+        for (id, _) in records.into_iter().take(to_remove) {
+            let key = id.to_be_bytes();
             self.records_tree
                 .remove(key)
                 .map_err(|e| RepositoryError::Delete(e.to_string()))?;
@@ -355,5 +465,64 @@ mod tests {
         let recent = repo.get_recent(5).expect("Failed to get recent");
         assert_eq!(recent[0].content, "Record 10");
         assert_eq!(recent[4].content, "Record 6");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_dedup_same_content() {
+        let repo = create_test_repo();
+
+        let r1 = repo
+            .save_text("duplicate".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r2 = repo
+            .save_text("duplicate".to_string())
+            .expect("Failed to save");
+
+        // Same content produces the same id (content hash)
+        assert_eq!(r1.id, r2.id);
+        // Only one record in the database
+        assert_eq!(repo.count(), 1);
+        // created_at was updated
+        assert!(r2.created_at > r1.created_at);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_dedup_aba_pattern() {
+        let repo = create_test_repo();
+
+        repo.save_text("A".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("B".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let a2 = repo.save_text("A".to_string()).expect("Failed to save");
+
+        // Only 2 unique records (A and B)
+        assert_eq!(repo.count(), 2);
+        // A is now the most recent
+        let recent = repo.get_recent(2).expect("Failed to get recent");
+        assert_eq!(recent[0].content, "A");
+        assert_eq!(recent[0].created_at, a2.created_at);
+        assert_eq!(recent[1].content, "B");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_content_hash_deterministic() {
+        // Verify that the same content always maps to the same id
+        let repo = create_test_repo();
+
+        let r1 = repo
+            .save_text("stable hash".to_string())
+            .expect("Failed to save");
+        let expected_id = r1.id;
+
+        // Save again — should return the same id
+        let r2 = repo
+            .save_text("stable hash".to_string())
+            .expect("Failed to save");
+        assert_eq!(r2.id, expected_id);
     }
 }
