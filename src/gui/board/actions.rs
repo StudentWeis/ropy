@@ -68,6 +68,8 @@ impl RopyBoard {
         }
         self.list_state.scroll_to_reveal_item(self.selected_index);
         self.show_settings = false;
+        self.show_about = false;
+        self.show_help = false;
         window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
         active_window(window, cx);
     }
@@ -75,6 +77,16 @@ impl RopyBoard {
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
         if self.show_settings {
             settings::reset_settings_dialog(self, window, cx);
+            return;
+        }
+        if self.show_about {
+            self.show_about = false;
+            cx.notify();
+            return;
+        }
+        if self.show_help {
+            self.show_help = false;
+            cx.notify();
             return;
         }
         // If the search input is focused, return focus to the main component before hiding
@@ -117,6 +129,32 @@ impl RopyBoard {
             self.show_preview = !self.show_preview;
             cx.notify();
             return;
+        }
+
+        // If the "p" key is pressed, toggle window pin
+        if event.keystroke.key.as_str() == "p" {
+            self.pinned = !self.pinned;
+            #[cfg(not(target_os = "macos"))]
+            crate::gui::utils::set_always_on_top(window, self.pinned);
+            cx.notify();
+            return;
+        }
+
+        // Vim-style navigation: j = next, k = prev, d = delete
+        match event.keystroke.key.as_str() {
+            "j" => {
+                self.on_select_next(&SelectNext, window, cx);
+                return;
+            }
+            "k" => {
+                self.on_select_prev(&SelectPrev, window, cx);
+                return;
+            }
+            "d" => {
+                self.on_delete_record(&DeleteRecord, window, cx);
+                return;
+            }
+            _ => {}
         }
 
         // Map number keys to record selection

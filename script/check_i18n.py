@@ -54,14 +54,22 @@ def collect_used_keys(src_root: Path) -> set[str]:
       * self.i18n.t("key")
       * board.i18n.t("key")
       * translations.get("key")
+      * any_field_key: "key"  (struct field ending with ``_key``, used for
+                               indirect i18n lookups like ``i18n.t(row.label_key)``)
     """
-    pattern = re.compile(r'\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
+    # Direct .t() / .get() call patterns
+    direct_pattern = re.compile(r'\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
+    # Struct field whose name ends with ``_key`` assigned a string literal,
+    # e.g. ``label_key: "help_search"``
+    field_key_pattern = re.compile(r'\b\w+_key\s*:\s*"([^"]+)"')
     used: set[str] = set()
     for rs_file in src_root.rglob("*.rs"):
         text = rs_file.read_text(encoding="utf-8")
-        for m in pattern.finditer(text):
+        for m in direct_pattern.finditer(text):
             key = m.group(1) or m.group(2)
             used.add(key)
+        for m in field_key_pattern.finditer(text):
+            used.add(m.group(1))
     return used
 
 

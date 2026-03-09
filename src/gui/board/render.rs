@@ -127,6 +127,18 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                     ),
                 )
                 .child(
+                    Button::new("help-button")
+                        .ghost()
+                        .icon(Icon::empty().path("icon/help.svg"))
+                        .tooltip(board.i18n.t("help_title"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.show_help = true;
+                            window.focus(&this.focus_handle);
+                            cx.notify();
+                        }))
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                )
+                .child(
                     Button::new("about-button")
                         .ghost()
                         .icon(Icon::empty().path("icon/info.svg"))

@@ -28,7 +28,10 @@ use crate::{
     config::Settings,
     gui::{
         hide_window,
-        panel::{about::render_about_content, settings::render_settings_content},
+        panel::{
+            about::render_about_content, help::render_help_content,
+            settings::render_settings_content,
+        },
     },
     i18n::{I18n, Language},
     repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
@@ -52,6 +55,7 @@ pub struct RopyBoard {
     pub(crate) settings: Arc<RwLock<Settings>>,
     pub(crate) show_settings: bool,
     pub(crate) show_about: bool,
+    pub(crate) show_help: bool,
     pub(crate) show_preview: bool,
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
@@ -188,6 +192,7 @@ impl RopyBoard {
             copy_tx,
             show_settings: false,
             show_about: false,
+            show_help: false,
             show_preview: false,
             settings_activation_key_input,
             settings_max_history_input,
@@ -520,6 +525,10 @@ impl Render for RopyBoard {
 
         if self.show_about {
             return base.child(render_about_content(self, cx));
+        }
+
+        if self.show_help {
+            return base.child(render_help_content(self, cx));
         }
 
         // Render main clipboard view
