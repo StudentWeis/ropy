@@ -347,16 +347,15 @@ fn render_list_item(
                                     } else {
                                         Button::new(("pin-btn", index)).xsmall().ghost()
                                     };
-                                    btn.icon(Icon::empty().path("icon/record-pin.svg")).on_click(
-                                        move |_event, _window, cx| {
+                                    btn.icon(Icon::empty().path("icon/record-pin.svg"))
+                                        .on_click(move |_event, _window, cx| {
                                             view_pin
                                                 .update(cx, |this, cx| {
                                                     this.toggle_record_pin(record_id);
                                                     cx.notify();
                                                 })
                                                 .ok();
-                                        },
-                                    )
+                                        })
                                 })
                                 .child(
                                     Button::new(("delete-btn", index))

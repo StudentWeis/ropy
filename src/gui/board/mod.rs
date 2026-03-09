@@ -385,7 +385,7 @@ impl RopyBoard {
 
         // Apply the new language
         if let Err(e) = self.i18n.set_language(language) {
-            tracing::warn!(error = %e, "failed to set language");
+            tracing::warn!(error = ?e, "failed to set language");
         }
 
         // Update search placeholder with new language
@@ -396,7 +396,7 @@ impl RopyBoard {
 
         // Sync auto-start state with system
         if let Err(e) = self.sync_autostart_state() {
-            tracing::warn!(error = %e, "failed to sync auto-start state");
+            tracing::warn!(error = ?e, "failed to sync auto-start state");
         }
 
         // Apply the new theme
@@ -459,7 +459,7 @@ impl RopyBoard {
                         board.update_status = UpdateStatus::UpToDate;
                     }
                     Err(e) => {
-                        tracing::warn!(error = %e, "update check failed");
+                        tracing::warn!(error = ?e, "update check failed");
                         board.update_status = UpdateStatus::Error(e.to_string());
                     }
                 }
@@ -493,7 +493,7 @@ impl RopyBoard {
                         board.update_status = UpdateStatus::ReadyToRestart;
                     }
                     Err(e) => {
-                        tracing::error!(error = %e, "update installation failed");
+                        tracing::error!(error = ?e, "update installation failed");
                         board.update_status = UpdateStatus::Error(e.to_string());
                     }
                 }
