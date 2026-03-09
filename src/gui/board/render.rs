@@ -249,7 +249,7 @@ fn render_list_item(
     let view_delete = view.clone();
     let view_pin = view.clone();
     let record_content = record.content.clone();
-    let is_pinned = record.category.is_pinned();
+    let is_pinned = record.pinned;
 
     let preview_data = (content_type.clone(), record_content);
 

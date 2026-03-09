@@ -7,7 +7,7 @@ use sled::{Db, Tree};
 
 use super::{
     errors::RepositoryError,
-    models::{Category, ClipboardRecord, ContentType},
+    models::{ClipboardRecord, ContentType},
 };
 
 /// Compute a deterministic content hash using seahash.
@@ -138,7 +138,7 @@ impl ClipboardRepository {
             content,
             created_at: now,
             content_type,
-            category: Category::default(),
+            pinned: false,
         };
 
         let value = serde_json::to_vec(&record)
@@ -194,7 +194,7 @@ impl ClipboardRepository {
             content: file_path,
             created_at: now,
             content_type: ContentType::Image,
-            category: Category::default(),
+            pinned: false,
         };
 
         let value = serde_json::to_vec(&record)
@@ -277,40 +277,29 @@ impl ClipboardRepository {
     /// Sort records so that pinned items appear first and both groups remain
     /// ordered by descending creation time.
     pub(crate) fn sort_pinned_first(records: &mut [ClipboardRecord]) {
-        records.sort_unstable_by(
-            |a, b| match (a.category.is_pinned(), b.category.is_pinned()) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => b.created_at.cmp(&a.created_at),
-            },
-        );
+        records.sort_unstable_by(|a, b| match (a.pinned, b.pinned) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b.created_at.cmp(&a.created_at),
+        });
     }
 
     /// Toggle the pin state of a record
-    pub fn toggle_pin(&self, id: u64) -> Result<ClipboardRecord, RepositoryError> {
-        let key = id.to_be_bytes();
-        let value = self
-            .records_tree
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
+    pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
+        let mut record = self
+            .get_by_id(id)?
             .ok_or_else(|| RepositoryError::Query("record not found".to_string()))?;
 
-        let mut record: ClipboardRecord = serde_json::from_slice(&value)
-            .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+        record.pinned = !record.pinned;
 
-        record.category = if record.category.is_pinned() {
-            Category::None
-        } else {
-            Category::Pinned
-        };
-
-        let new_value = serde_json::to_vec(&record)
+        let key = id.to_be_bytes();
+        let value = serde_json::to_vec(&record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
         self.records_tree
-            .insert(key, new_value)
+            .insert(key, value)
             .map_err(|e| RepositoryError::Insert(e.to_string()))?;
 
-        Ok(record)
+        Ok(())
     }
 
     /// Delete a record
@@ -372,7 +361,7 @@ impl ClipboardRepository {
             let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let record: ClipboardRecord = serde_json::from_slice(&value)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            records.push((record.id, record.created_at, record.category.is_pinned()));
+            records.push((record.id, record.created_at, record.pinned));
         }
         // Sort by created_at ascending so the oldest come first
         records.sort_unstable_by(|a, b| a.1.cmp(&b.1));
@@ -598,13 +587,21 @@ mod tests {
             .save_text("Pin me".to_string())
             .expect("Failed to save");
 
-        assert!(!record.category.is_pinned());
+        assert!(!record.pinned);
 
-        let pinned = repo.toggle_pin(record.id).expect("Failed to toggle pin");
-        assert!(pinned.category.is_pinned());
+        repo.toggle_pin(record.id).expect("Failed to toggle pin");
+        let pinned = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("not found");
+        assert!(pinned.pinned);
 
-        let unpinned = repo.toggle_pin(record.id).expect("Failed to toggle pin");
-        assert!(!unpinned.category.is_pinned());
+        repo.toggle_pin(record.id).expect("Failed to toggle pin");
+        let unpinned = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("not found");
+        assert!(!unpinned.pinned);
     }
 
     #[test]
@@ -699,21 +696,20 @@ mod tests {
             .get_by_id(r1.id)
             .expect("Failed to get")
             .expect("Pinned record should still exist");
-        assert!(pinned.category.is_pinned());
+        assert!(pinned.pinned);
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_backward_compat_old_pinned_fields() {
-        // Simulate a record stored with old `pinned`/`pin_order` fields
+    fn test_backward_compat_old_category_fields() {
+        // Simulate a record stored with old `category` field
         let repo = create_test_repo();
         let old_json = serde_json::json!({
             "id": 1000_u64,
             "content": "legacy record",
             "created_at": chrono::Local::now(),
             "content_type": "Text",
-            "pinned": true,
-            "pin_order": 42
+            "category": "Pinned"
         });
         let key = 1000_u64.to_be_bytes();
         let value = serde_json::to_vec(&old_json).expect("failed to serialize");
@@ -721,11 +717,11 @@ mod tests {
             .insert(key, value)
             .expect("failed to insert");
 
-        // get_recent should deserialize it with default category
+        // get_recent should deserialize it with default pinned = false
         let records = repo.get_recent(10).expect("Failed to get recent");
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].content, "legacy record");
-        assert!(!records[0].category.is_pinned());
+        assert!(!records[0].pinned);
     }
 
     #[test]

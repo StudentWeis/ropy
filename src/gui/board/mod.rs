@@ -257,21 +257,18 @@ impl RopyBoard {
         }
     }
 
-    /// Toggle pin category of a record
+    /// Toggle pin state of a record
     pub fn toggle_record_pin(&self, id: u64) {
-        if let Some(ref repo) = self.repository {
-            match repo.toggle_pin(id) {
-                Ok(updated) => {
-                    // Update in-memory records
-                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-                    if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
-                        record.category = updated.category;
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
-                }
-            }
+        let Some(ref repo) = self.repository else {
+            return;
+        };
+        if let Err(e) = repo.toggle_pin(id) {
+            tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
+            return;
+        }
+        let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
+            record.pinned = !record.pinned;
         }
     }
 

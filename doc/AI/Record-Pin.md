@@ -33,7 +33,7 @@ Ropy 当前的历史记录管理已经具备以下基础能力：
 
 ## 数据模型设计
 
-在 `ClipboardRecord` 中新增分类字段：
+在 `ClipboardRecord` 中新增布尔字段：
 
 ```rust
 pub struct ClipboardRecord {
@@ -42,28 +42,22 @@ pub struct ClipboardRecord {
     pub created_at: DateTime<Local>,
     pub content_type: ContentType,
     #[serde(default)]
-    pub category: Category,
-}
-
-pub enum Category {
-    None,
-    Pinned,
+    pub pinned: bool,
 }
 ```
 
 设计说明：
 
-- 使用 `Category` 而不是单独的 `pinned: bool`，为后续扩展更多类别预留空间。
-- `#[serde(default)]` 保证旧版本序列化的数据在缺少 `category` 字段时仍可正常反序列化，并自动落为 `Category::None`。
-- 当前仅定义 `None` 和 `Pinned` 两种枚举值，避免过早设计。
+- 使用 `pinned: bool` 直接表达置顶语义，简单明了。
+- `#[serde(default)]` 保证旧版本序列化的数据在缺少 `pinned` 字段时仍可正常反序列化，并自动落为 `false`。
 
 ## 存储层设计
 
 ### 1. 保存记录
 
-文本和图片记录在首次写入时默认使用 `Category::None`。
+文本和图片记录在首次写入时默认使用 `pinned = false`。
 
-当出现内容重复时，仓储层仍然沿用“根据内容哈希覆盖已有记录”的策略，只更新 `created_at`，不重置 `category`。这样可以保证：
+当出现内容重复时，仓储层仍然沿用"根据内容哈希覆盖已有记录"的策略，只更新 `created_at`，不重置 `pinned`。这样可以保证：
 
 - 同一内容再次复制后仍然保持原有置顶状态。
 - 去重策略与置顶策略不会互相覆盖。
@@ -73,8 +67,7 @@ pub enum Category {
 仓储层提供 `toggle_pin(id)`：
 
 - 通过 `id` 读取记录。
-- 若当前为 `Pinned`，则切换为 `None`。
-- 若当前为 `None`，则切换为 `Pinned`。
+- 将 `pinned` 字段取反。
 - 将更新后的记录重新序列化写回 `sled`。
 
 该接口返回更新后的 `ClipboardRecord`，便于 UI 层直接刷新内存态。
@@ -121,7 +114,7 @@ pub enum Category {
 1. 遍历仓储记录并提取 `(id, created_at, is_pinned)`。
 2. 按 `created_at` 升序排序。
 3. 计算目标删除数量 `total - keep_count`。
-4. 遍历排序结果，跳过 `is_pinned == true` 的记录，只删除最旧的普通记录，直到达到删除目标或没有可删记录。
+4. 遍历排序结果，跳过 `pinned == true` 的记录，只删除最旧的普通记录，直到达到删除目标或没有可删记录。
 
 该策略的结果是：
 
@@ -148,7 +141,7 @@ pub enum Category {
 
 1. UI 调用 `RopyBoard::toggle_record_pin(id)`。
 2. `RopyBoard` 转调仓储层 `toggle_pin(id)`。
-3. 使用返回的记录更新内存中的 `records`。
+3. 使用返回的记录更新内存中的 `records`（同步 `pinned` 字段）。
 4. 重新计算过滤结果并通知界面刷新。
 
 ### 3. 与选择行为的关系
@@ -168,7 +161,8 @@ pub enum Category {
 
 - 老版本历史记录不需要迁移脚本。
 - 应用升级后可以直接读取旧数据。
-- 缺失 `category` 的记录会自动视为未置顶。
+- 缺失 `pinned` 的记录会自动视为未置顶（`false`）。
+- 旧版本使用 `Category` 枚举的数据，由于字段名不同会被忽略，`pinned` 同样默认为 `false`。
 
 ### 2. 异常数据兼容
 
@@ -186,7 +180,7 @@ pub enum Category {
 - `test_multiple_pinned_ordering`：验证多个置顶记录按 `created_at` 倒序排序。
 - `test_pinned_search`：验证搜索结果仍遵循置顶优先。
 - `test_cleanup_skips_pinned`：验证历史清理不会删除置顶记录。
-- `test_backward_compat_old_pinned_fields`：验证旧数据读取时使用默认分类。
+- `test_backward_compat_old_category_fields`：验证旧 `Category` 格式数据读取时使用默认 `pinned = false`。
 - 去重相关测试：验证重复内容再次保存时仍保留原记录的置顶状态。
 
 ## 性能与复杂度评估
@@ -201,11 +195,7 @@ pub enum Category {
 
 如果用户置顶过多记录，普通记录会被明显挤压，降低“最近使用”列表的可见性。当前版本接受这一权衡，后续可以通过增加筛选或分组 UI 缓解。
 
-### 2. 类别枚举扩展
-
-`Category` 便于未来增加更多分类，但也意味着排序规则需要保持集中管理，避免 UI 层和仓储层出现多套不一致逻辑。
-
-### 3. 清理语义
+### 2. 清理语义
 
 当置顶记录较多时，最终存量可能高于配置中的 `keep_count`。这属于有意设计，因为“保护置顶记录”优先级高于“严格压缩总量”。
 
