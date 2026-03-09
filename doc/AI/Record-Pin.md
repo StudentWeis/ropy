@@ -1,39 +1,39 @@
-# Record 置顶技术方案
+Record Pinning — Technical Proposal
 
-## 背景
+## Background
 
-Ropy 当前的历史记录管理已经具备以下基础能力：
+Ropy's current history management already has the following basic capabilities:
 
-- 使用内容哈希作为主键，对重复内容做去重。
-- 使用 `created_at` 维护最近使用顺序。
-- 通过 `sled` 持久化文本、图片和文件路径记录。
-- 在 UI 层支持搜索、预览、删除和快速选择。
+- Uses content hashes as primary keys to deduplicate identical items.
+- Uses `created_at` to maintain recent-use ordering.
+- Persists text, images, and file-path records using `sled`.
+- Supports search, preview, delete, and quick-select in the UI layer.
 
-在此基础上，需要为单条历史记录增加“置顶”能力，使用户可以长期保留高频记录，同时不破坏既有的去重、检索和清理策略。
+On top of this, we need to add a "pin" capability for individual history records so users can keep frequently used records longer without breaking existing deduplication, retrieval, or cleanup strategies.
 
-## 目标
+## Goals
 
-- 支持用户对任意 `record` 执行置顶和取消置顶。
-- 置顶记录在列表展示和搜索结果中优先显示。
-- 置顶状态需要持久化，应用重启后仍然保留。
-- 与现有去重逻辑兼容，同一内容被再次复制时不丢失置顶状态。
-- 与清理逻辑兼容，历史裁剪时不删除已置顶记录。
+- Allow users to pin and unpin any `record`.
+- Pinned records should be shown with priority in lists and search results.
+- Pin state must be persisted so it remains after app restarts.
+- Compatible with current deduplication: if the same content is copied again, it must not lose its pinned state.
+- Compatible with cleanup logic: pinned records should not be deleted during history trimming.
 
-## 非目标
+## Non-Goals
 
-- 不引入多级优先级、手动拖拽排序或自定义 pin 顺序。
-- 不修改现有数据库引擎或引入新的索引结构。
+- Not introducing multi-level priorities, manual drag-sorting, or custom pin ordering.
+- Not changing the database engine or adding a new index structure.
 
-## 设计原则
+## Design Principles
 
-1. 最小侵入：优先复用现有 `ClipboardRecord`、`ClipboardRepository` 和 `RopyBoard` 结构。
-2. 数据兼容：新增字段必须允许旧数据平滑读取。
-3. 排序可解释：用户看到的顺序需要稳定且容易理解。
-4. 行为一致：普通列表与搜索结果遵循同一套置顶规则。
+1. Minimal intrusion: Prefer reusing existing `ClipboardRecord`, `ClipboardRepository`, and `RopyBoard` structures.
+2. Data compatibility: New fields must allow smooth reading of older data.
+3. Explainable ordering: The ordering users see should be stable and easy to understand.
+4. Consistent behavior: Both normal lists and search results follow the same pin rules.
 
-## 数据模型设计
+## Data Model Design
 
-在 `ClipboardRecord` 中新增布尔字段：
+Add a boolean field in `ClipboardRecord`:
 
 ```rust
 pub struct ClipboardRecord {
@@ -46,162 +46,161 @@ pub struct ClipboardRecord {
 }
 ```
 
-设计说明：
+Design notes:
 
-- 使用 `pinned: bool` 直接表达置顶语义，简单明了。
-- `#[serde(default)]` 保证旧版本序列化的数据在缺少 `pinned` 字段时仍可正常反序列化，并自动落为 `false`。
+- Use `pinned: bool` to express pin semantics directly and simply.
+- `#[serde(default)]` ensures older serialized data missing the `pinned` field can still deserialize correctly and defaults to `false`.
 
-## 存储层设计
+## Storage Layer Design
 
-### 1. 保存记录
+### 1. Saving Records
 
-文本和图片记录在首次写入时默认使用 `pinned = false`。
+Text and image records default to `pinned = false` on first write.
 
-当出现内容重复时，仓储层仍然沿用"根据内容哈希覆盖已有记录"的策略，只更新 `created_at`，不重置 `pinned`。这样可以保证：
+When duplicates occur, the repository still follows the "overwrite existing record by content hash" strategy and only updates `created_at`, without resetting `pinned`. This ensures:
 
-- 同一内容再次复制后仍然保持原有置顶状态。
-- 去重策略与置顶策略不会互相覆盖。
+- Re-copying the same content preserves any existing pin state.
+- Deduplication and pinning do not overwrite each other.
 
-### 2. 置顶切换接口
+### 2. Pin Toggle Interface
 
-仓储层提供 `toggle_pin(id)`：
+The repository should provide `toggle_pin(id)`:
 
-- 通过 `id` 读取记录。
-- 将 `pinned` 字段取反。
-- 将更新后的记录重新序列化写回 `sled`。
+- Read the record by `id`.
+- Flip the `pinned` boolean.
+- Re-serialize the updated record back into `sled`.
 
-该接口返回更新后的 `ClipboardRecord`，便于 UI 层直接刷新内存态。
+This interface should return the updated `ClipboardRecord` so the UI layer can refresh in-memory state immediately.
 
-### 3. 排序规则
+### 3. Sorting Rules
 
-排序函数统一抽象为：
+Abstract the sorting function as:
 
-1. 已置顶记录优先。
-2. 同组内按 `created_at` 倒序排列。
+1. Pinned records first.
+2. Within each group, sort by `created_at` descending.
 
-排序后的结果示意：
+Example ordering after sorting:
 
-- 置顶记录 A（最新）
-- 置顶记录 B（较早）
-- 普通记录 C（最新）
-- 普通记录 D（较早）
+- Pinned record A (newest)
+- Pinned record B (older)
+- Normal record C (newest)
+- Normal record D (older)
 
-这样做的原因：
+Rationale:
 
-- 用户可以快速理解“置顶优先，组内最近优先”的规则。
-- 与现有最近使用排序一致，不需要引入额外的 pin 顺序字段。
-- 搜索结果和主列表可共用同一套排序逻辑。
+- Users can quickly understand "pinned first, then recent within each group."
+- Keeps recent-use ordering unchanged within groups—no extra pin-order field required.
+- Both search results and the main list can share this sorting logic.
 
-### 4. 搜索结果
+### 4. Search Results
 
-`search(keyword)` 在完成文本匹配后，仍然执行统一排序：
+After text matching in `search(keyword)`, apply the same unified sort:
 
-- 先显示匹配到的置顶记录。
-- 再显示匹配到的普通记录。
-- 每组内部按最近使用时间倒序。
+- Show matching pinned records first.
+- Then show matching normal records.
+- Within each group, sort by `created_at` descending.
 
-这样可以保证用户在搜索场景下仍然能优先看到常用的固定内容。
+This guarantees pinned items remain prioritized in search scenarios as well.
 
-### 5. 清理策略
+### 5. Cleanup Strategy
 
-`cleanup_old_records(keep_count)` 需要满足两个条件：
+`cleanup_old_records(keep_count)` must satisfy:
 
-- 已置顶记录不参与删除。
-- 删除顺序仍然遵循“从最旧的普通记录开始”。
+- Pinned records are excluded from deletion.
+- Deletion order still proceeds from the oldest normal records first.
 
-建议流程：
+Suggested process:
 
-1. 遍历仓储记录并提取 `(id, created_at, is_pinned)`。
-2. 按 `created_at` 升序排序。
-3. 计算目标删除数量 `total - keep_count`。
-4. 遍历排序结果，跳过 `pinned == true` 的记录，只删除最旧的普通记录，直到达到删除目标或没有可删记录。
+1. Iterate repository records and extract `(id, created_at, is_pinned)`.
+2. Sort by `created_at` ascending.
+3. Compute the number to delete: `total - keep_count`.
+4. Traverse the sorted list, skip records with `pinned == true`, and delete the oldest normal records until the deletion target is reached or no more deletable records remain.
 
-该策略的结果是：
+This yields:
 
-- 如果普通记录足够多，最终总量会回落到 `keep_count`。
-- 如果普通记录不足，仓储总量可能大于 `keep_count`，但置顶记录始终保留。
+- If there are enough normal records, the total will reduce to `keep_count`.
+- If normal records are insufficient, repository size may remain above `keep_count`, but pinned records are always preserved.
 
-## UI 交互设计
+## UI Interaction Design
 
-### 1. 展示方式
+### 1. Presentation
 
-在历史列表项中增加两类视觉元素：
+Add two visual elements to history list items:
 
-- 记录元信息区展示置顶标识，例如 `📌`。
-- 操作区增加 pin 按钮，使用独立图标资源，例如 `assets/icon/pin.svg`。
+- A pin indicator (for example, 📌) in the record meta area.
+- A pin/unpin action button in the operations area, with a dedicated icon resource such as `assets/icon/pin.svg`.
 
-按钮状态建议如下：
+Button states:
 
-- 已置顶：使用高亮样式，表示当前已生效。
-- 未置顶：使用幽灵按钮或弱化样式，表示可操作。
+- Pinned: use a highlighted style to indicate active status.
+- Unpinned: use a ghost or subdued style to indicate actionability.
 
-### 2. 交互流程
+### 2. Interaction Flow
 
-用户点击 pin 按钮后：
+When the user clicks the pin button:
 
-1. UI 调用 `RopyBoard::toggle_record_pin(id)`。
-2. `RopyBoard` 转调仓储层 `toggle_pin(id)`。
-3. 使用返回的记录更新内存中的 `records`（同步 `pinned` 字段）。
-4. 重新计算过滤结果并通知界面刷新。
+1. UI calls `RopyBoard::toggle_record_pin(id)`.
+2. `RopyBoard` delegates to the repository `toggle_pin(id)`.
+3. Use the returned record to update the in-memory `records` (synchronizing the `pinned` field).
+4. Recompute filtered results and notify the UI to refresh.
 
-### 3. 与选择行为的关系
+### 3. Relation to Selection Behavior
 
-置顶记录的核心语义是“保留在历史列表顶部，避免被常规历史消费流程淘汰”。
+The pin semantic is "keep at the top of history and protect from normal history consumption/eviction."
 
-因此建议选择行为遵循以下约束：
+Therefore, selection behavior should adhere to:
 
-- 复制或确认记录后，不应因为普通的历史消费逻辑误删已置顶记录。
-- 若项目保留“选择后删除未置顶记录”的现有行为，则需显式跳过已置顶记录。
+- Selecting/confirming a record should not cause pinned records to be deleted by normal consumption flows.
+- If the project keeps a behavior like "delete after selection for unpinned items", explicitly skip pinned records in that logic.
 
-## 兼容性设计
+## Compatibility Design
 
-### 1. 旧数据兼容
+### 1. Backward Compatibility
 
-由于新增字段使用 `#[serde(default)]`：
+Because the new field uses `#[serde(default)]`:
 
-- 老版本历史记录不需要迁移脚本。
-- 应用升级后可以直接读取旧数据。
-- 缺失 `pinned` 的记录会自动视为未置顶（`false`）。
-- 旧版本使用 `Category` 枚举的数据，由于字段名不同会被忽略，`pinned` 同样默认为 `false`。
+- Older history records do not require a migration script.
+- After upgrading, the app can read old data directly.
+- Missing `pinned` fields in old records default to `false`.
+- Data serialized with older `Category` enum forms will be ignored for the new field; `pinned` still defaults to `false`.
 
-### 2. 异常数据兼容
+### 2. Fault Tolerance
 
-在 `get_recent()` 和 `search()` 中，遇到无法反序列化的记录时建议跳过并记录日志，而不是让整个查询失败。原因如下：
+In `get_recent()` and `search()`, if a record cannot be deserialized, prefer skipping that record and logging the error rather than failing the whole query. Reasons:
 
-- 可以提高升级和异常场景下的容错能力。
-- 避免单条坏数据影响整个历史列表的可用性。
+- Improves tolerance during upgrades and error scenarios.
+- Prevents a single corrupted record from making the entire history list unusable.
 
-## 测试方案
+## Test Plan
 
-建议覆盖以下单元测试：
+Recommended unit tests:
 
-- `test_toggle_pin`：验证置顶状态可来回切换。
-- `test_pinned_records_appear_first`：验证主列表中置顶记录优先展示。
-- `test_multiple_pinned_ordering`：验证多个置顶记录按 `created_at` 倒序排序。
-- `test_pinned_search`：验证搜索结果仍遵循置顶优先。
-- `test_cleanup_skips_pinned`：验证历史清理不会删除置顶记录。
-- `test_backward_compat_old_category_fields`：验证旧 `Category` 格式数据读取时使用默认 `pinned = false`。
-- 去重相关测试：验证重复内容再次保存时仍保留原记录的置顶状态。
+- `test_toggle_pin`: verify pin state toggles back and forth.
+- `test_pinned_records_appear_first`: verify pinned records are shown before others in the main list.
+- `test_multiple_pinned_ordering`: verify multiple pinned records are ordered by `created_at` descending.
+- `test_pinned_search`: verify search results respect pinned-first ordering.
+- `test_cleanup_skips_pinned`: verify cleanup does not remove pinned records.
+- `test_backward_compat_old_category_fields`: verify old `Category`-format data reads with default `pinned = false`.
+- Deduplication-related tests: verify re-saving duplicate content preserves the original record's pinned state.
 
-## 性能与复杂度评估
+## Performance and Complexity Assessment
 
-- 当前排序和搜索实现基于全量遍历，时间复杂度为 $O(n \log n)$。
-- 在历史记录规模较小时，该实现简单直接，便于维护。
-- 若未来记录量显著增长，可考虑增加二级索引或缓存排序结果，但不建议在当前阶段提前优化。
+- Current sorting and search implementations are based on full traversal and have time complexity O(n log n).
+- For small-to-moderate record counts, this approach is simple and maintainable.
+- If record volume grows significantly in the future, consider adding secondary indexes or caching sorted results, but avoid premature optimization now.
 
-## 风险与权衡
+## Risks and Trade-offs
 
-### 1. 置顶数量过多
+### 1. Too Many Pins
 
-如果用户置顶过多记录，普通记录会被明显挤压，降低“最近使用”列表的可见性。当前版本接受这一权衡，后续可以通过增加筛选或分组 UI 缓解。
+If a user pins many records, normal records will be crowded out and reduce the visibility of recent items. This initial version accepts that trade-off; subsequent UI improvements (filters/groups) can mitigate it.
 
-### 2. 清理语义
+### 2. Cleanup Semantics
 
-当置顶记录较多时，最终存量可能高于配置中的 `keep_count`。这属于有意设计，因为“保护置顶记录”优先级高于“严格压缩总量”。
+When many records are pinned, the final stored total may exceed the configured `keep_count`. This is an intentional design choice: protecting pinned records is prioritized over strict compression to `keep_count`.
 
-## 后续演进建议
+## Future Enhancements
 
-- 增加“仅看置顶”筛选视图。
-- 增加快捷键切换置顶状态。
-- 在设置中开放“确认选择后是否删除未置顶记录”的开关。
-- 如果未来确实需要手工排序，再单独引入 `pin_order`，不在当前版本中提前实现。
+- Add a "Show only pinned" filter view.
+- Add a keyboard shortcut to toggle pin state.
+- Add a settings option to control whether selected items are deleted when unpinned (e.g., "after confirm, delete unpinned records" toggle).
