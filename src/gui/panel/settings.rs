@@ -70,6 +70,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let open_log_row = render_open_log_row(board, cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let update_row = render_update_row(board, cx);
+    let hover_preview_row = render_hover_preview_row(board, cx);
 
     v_flex().size_full().child(header).child(
         v_flex()
@@ -87,6 +88,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(max_history_row)
             .child(Divider::horizontal())
             .child(autostart_row)
+            .child(Divider::horizontal())
+            .child(hover_preview_row)
             .child(Divider::horizontal())
             .child(open_log_row)
             .child(Divider::horizontal())
@@ -230,6 +233,20 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
     settings_row(board.i18n.t("settings_autostart"), toggle, cx)
+}
+
+fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut btn = Button::new("hover-preview-toggle").small();
+    btn = if board.hover_preview_enabled {
+        btn.primary().label(board.i18n.t("on"))
+    } else {
+        btn.ghost().label(board.i18n.t("off"))
+    };
+    let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
+        board.hover_preview_enabled = !board.hover_preview_enabled;
+        cx.notify();
+    }));
+    settings_row(board.i18n.t("settings_hover_preview"), toggle, cx)
 }
 
 fn render_open_log_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

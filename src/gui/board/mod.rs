@@ -73,6 +73,8 @@ pub struct RopyBoard {
     pub(crate) update_status: UpdateStatus,
     /// Whether auto-check for updates is enabled (mirrors settings)
     pub(crate) auto_check_enabled: bool,
+    /// Whether hover preview is enabled (mirrors settings)
+    pub(crate) hover_preview_enabled: bool,
 }
 
 impl RopyBoard {
@@ -139,6 +141,12 @@ impl RopyBoard {
         }
         .update
         .auto_check;
+        let hover_preview_enabled = match settings.read() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        }
+        .preview
+        .hover_preview_enabled;
         let settings_activation_key_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.clone()));
         let settings_max_history_input =
@@ -207,6 +215,7 @@ impl RopyBoard {
             deleting_record: false,
             update_status: UpdateStatus::Idle,
             auto_check_enabled,
+            hover_preview_enabled,
         }
     }
 
@@ -376,6 +385,7 @@ impl RopyBoard {
             settings.autostart.enabled = self.autostart_enabled;
             settings.language = language.clone();
             settings.update.auto_check = self.auto_check_enabled;
+            settings.preview.hover_preview_enabled = self.hover_preview_enabled;
             if let Err(e) = settings.save() {
                 tracing::warn!(error = %e, "failed to save settings");
             }

@@ -247,11 +247,13 @@ fn create_preview(
 }
 
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn render_list_item(
     index: usize,
     record: &ClipboardRecord,
     is_selected: bool,
     show_preview: bool,
+    hover_preview_enabled: bool,
     view: &gpui::WeakEntity<RopyBoard>,
     window: &gpui::Window,
     cx: &mut gpui::App,
@@ -303,7 +305,7 @@ fn render_list_item(
                                     .ok();
                             });
 
-                        if !show_preview {
+                        if !show_preview && hover_preview_enabled {
                             content_div = content_div.tooltip({
                                 let (content_type, record_content) = preview_data.clone();
                                 move |window, cx| {
@@ -389,7 +391,8 @@ fn render_list_item(
             ),
     );
 
-    if is_selected && show_preview {
+    // Show preview if the item is selected and preview is enabled
+    if hover_preview_enabled && is_selected && show_preview {
         let (content_type, record_content) = preview_data;
         item = item.child(
             deferred(
@@ -419,6 +422,7 @@ impl RopyBoard {
         let scrollbar_state = list_state.clone();
         let selected_index = self.selected_index;
         let show_preview = self.show_preview;
+        let hover_preview_enabled = self.hover_preview_enabled;
         let view = context.weak_entity();
 
         div()
@@ -429,7 +433,16 @@ impl RopyBoard {
                 list(list_state, move |index, window, cx| {
                     let record = &records[index];
                     let is_selected = index == selected_index;
-                    render_list_item(index, record, is_selected, show_preview, &view, window, cx)
+                    render_list_item(
+                        index,
+                        record,
+                        is_selected,
+                        show_preview,
+                        hover_preview_enabled,
+                        &view,
+                        window,
+                        cx,
+                    )
                 })
                 .size_full(),
             )

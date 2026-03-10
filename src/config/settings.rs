@@ -20,6 +20,8 @@ pub struct Settings {
     pub language: Language,
     /// Update configuration
     pub update: UpdateSettings,
+    /// Preview configuration
+    pub preview: PreviewSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,12 +71,26 @@ pub struct UpdateSettings {
     pub include_prerelease: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreviewSettings {
+    /// Whether to enable hover preview for clipboard items
+    pub hover_preview_enabled: bool,
+}
+
 impl Default for UpdateSettings {
     fn default() -> Self {
         Self {
             auto_check: true,
             check_interval_hours: 24,
             include_prerelease: false,
+        }
+    }
+}
+
+impl Default for PreviewSettings {
+    fn default() -> Self {
+        Self {
+            hover_preview_enabled: true,
         }
     }
 }
@@ -97,6 +113,7 @@ impl Default for Settings {
             autostart: AutoStartSettings { enabled: false },
             language: Language::default(),
             update: UpdateSettings::default(),
+            preview: PreviewSettings::default(),
         }
     }
 }
