@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 repository = "https://github.com/StudentWeis/ropy"
-keywords = ["clipboard","gpui","productivity"]
+keywords = ["clipboard", "gpui", "productivity"]
 categories = ["productivity"]
 license = "MIT"
 
@@ -12,8 +12,6 @@ license = "MIT"
 clipboard-rs = "0.3.3"
 gpui = "0.2.2"
 gpui-component = "0.5.1"
-# Can't use latest sysinfo (0.38.3) due to dependency conflicts
-sysinfo = "0.38.0"
 global-hotkey = "0.7"
 sled = "0.34"
 serde = { version = "1.0", features = ["derive"] }
@@ -69,7 +67,6 @@ xz2 = "0.1"
 
 [build-dependencies]
 winres = "0.1"
-image = "0.25"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
