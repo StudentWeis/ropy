@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-03-10
+
+### 🚀 Features
+- Add prek configuration by @StudentWeis
+- Add hover preview settings and UI toggle by @StudentWeis
+- Enhance records list rendering with scrollbar by @StudentWeis
+- Add help panel with keyboard shortcuts and corresponding translations by @StudentWeis
+
+### 🚜 Refactor
+- Update async handling in RopyBoard for background tasks by @StudentWeis
+- Remove sysinfo dependency by @StudentWeis
+- Change filtered_records to use Arc by @StudentWeis
+
 ## [0.3.0] - 2026-03-09
 
 ### Attention
