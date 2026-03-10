@@ -1,41 +1,33 @@
 //! Repository error types
 
-#[derive(Debug)]
+/// Errors that can occur during repository operations.
+#[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
     /// Data directory not found
+    #[error("Data directory not found")]
     DataDirNotFound,
     /// Database open failed
+    #[error("Database open failed: {0}")]
     DatabaseOpen(String),
     /// Tree open failed
+    #[error("Tree open failed: {0}")]
     TreeOpen(String),
     /// Serialization error
+    #[error("Serialization error: {0}")]
     Serialization(String),
     /// Deserialization error
+    #[error("Deserialization error: {0}")]
     Deserialization(String),
     /// Insert error
+    #[error("Insert error: {0}")]
     Insert(String),
     /// Query error
+    #[error("Query error: {0}")]
     Query(String),
     /// Delete error
+    #[error("Delete error: {0}")]
     Delete(String),
     /// Flush error
+    #[error("Flush error: {0}")]
     Flush(String),
 }
-
-impl std::fmt::Display for RepositoryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DataDirNotFound => write!(f, "Data directory not found"),
-            Self::DatabaseOpen(e) => write!(f, "Database open failed: {e}"),
-            Self::TreeOpen(e) => write!(f, "Tree open failed: {e}"),
-            Self::Serialization(e) => write!(f, "Serialization error: {e}"),
-            Self::Deserialization(e) => write!(f, "Deserialization error: {e}"),
-            Self::Insert(e) => write!(f, "Insert error: {e}"),
-            Self::Query(e) => write!(f, "Query error: {e}"),
-            Self::Delete(e) => write!(f, "Delete error: {e}"),
-            Self::Flush(e) => write!(f, "Flush error: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for RepositoryError {}

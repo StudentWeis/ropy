@@ -29,3 +29,14 @@ pub enum ContentType {
     /// File path
     FilePath,
 }
+
+impl ContentType {
+    /// Encode content type as a single byte for the time index.
+    pub(crate) const fn as_tag(&self) -> u8 {
+        match self {
+            Self::Text => 0,
+            Self::Image => 1,
+            Self::FilePath => 2,
+        }
+    }
+}

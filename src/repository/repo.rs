@@ -3,41 +3,38 @@
 use std::{fs, path::PathBuf};
 
 use chrono::Local;
-use sled::{Db, Tree};
+use sled::Db;
 
 use super::{
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
+    time_index::TimeIndex,
 };
 
 /// Compute a deterministic content hash using seahash.
 /// The content type is encoded as a prefix byte to avoid collisions
 /// between different types with the same content.
 fn content_hash(content: &str, content_type: &ContentType) -> u64 {
-    let type_tag: u8 = match content_type {
-        ContentType::Text => 0,
-        ContentType::Image => 1,
-        ContentType::FilePath => 2,
-    };
+    let type_tag = content_type.as_tag();
     let mut data = vec![type_tag];
     data.extend_from_slice(content.as_bytes());
     seahash::hash(&data)
 }
 
 /// Schema version for the database. Bump this when the key format changes.
-const SCHEMA_VERSION: u64 = 2;
+const SCHEMA_VERSION: u64 = 3;
 
 pub struct ClipboardRepository {
     db: Db,
-    records_tree: Tree,
+    records: sled::Tree,
+    time_index: TimeIndex,
     images_dir: PathBuf,
 }
 
 impl ClipboardRepository {
-    /// Create a new repository instance
+    /// Create a new repository using the default data directory.
     pub fn new() -> Result<Self, RepositoryError> {
-        // The database file is stored in the user data directory at `ropy/clipboard.db`
-        let db_path = Self::get_db_path()?;
+        let db_path = Self::default_db_path()?;
         let images_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
@@ -45,43 +42,30 @@ impl ClipboardRepository {
         Self::init(&db_path, images_dir)
     }
 
-    /// Initialize repository with specific paths
+    /// Initialize repository with explicit paths (used by tests).
     pub fn init(db_path: &PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
         let db = sled::open(db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
 
-        // Check schema version and clear old data if mismatched
-        let meta_tree = db
+        let meta = db
             .open_tree("meta")
             .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
-        let version_key = b"schema_version";
-        let needs_clear = match meta_tree
-            .get(version_key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
-            Some(v) if v.len() == 8 => {
-                let stored =
-                    u64::from_be_bytes(v.as_ref().try_into().map_err(|_| {
-                        RepositoryError::Deserialization("bad schema version".into())
-                    })?);
-                stored != SCHEMA_VERSION
-            }
-            _ => true,
-        };
-
-        let records_tree = db
+        let records = db
             .open_tree("clipboard_records")
             .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
+        let time_index = TimeIndex::new(
+            db.open_tree("time_index")
+                .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?,
+        );
 
-        if needs_clear {
-            records_tree
+        if Self::needs_schema_migration(&meta)? {
+            records
                 .clear()
                 .map_err(|e| RepositoryError::Delete(e.to_string()))?;
-            // Clear old image files
+            time_index.clear()?;
             if images_dir.exists() {
                 fs::remove_dir_all(&images_dir).ok();
             }
-            meta_tree
-                .insert(version_key, &SCHEMA_VERSION.to_be_bytes())
+            meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())
                 .map_err(|e| RepositoryError::Insert(e.to_string()))?;
             db.flush()
                 .map_err(|e| RepositoryError::Flush(e.to_string()))?;
@@ -89,21 +73,54 @@ impl ClipboardRepository {
 
         Ok(Self {
             db,
-            records_tree,
+            records,
+            time_index,
             images_dir,
         })
     }
 
-    /// Get the data directory path for storing the database file
-    fn get_db_path() -> Result<PathBuf, RepositoryError> {
-        let data_dir = dirs::data_local_dir()
-            .ok_or(RepositoryError::DataDirNotFound)?
-            .join("ropy")
-            .join("clipboard.db");
-        Ok(data_dir)
+    /// Flush data to disk.
+    pub fn flush(&self) -> Result<(), RepositoryError> {
+        self.db
+            .flush()
+            .map_err(|e| RepositoryError::Flush(e.to_string()))?;
+        Ok(())
     }
 
-    /// Save a clipboard record
+    fn default_db_path() -> Result<PathBuf, RepositoryError> {
+        Ok(dirs::data_local_dir()
+            .ok_or(RepositoryError::DataDirNotFound)?
+            .join("ropy")
+            .join("clipboard.db"))
+    }
+
+    fn needs_schema_migration(meta: &sled::Tree) -> Result<bool, RepositoryError> {
+        match meta
+            .get(b"schema_version")
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+        {
+            Some(v) if v.len() == 8 => {
+                let stored =
+                    u64::from_be_bytes(v.as_ref().try_into().map_err(|_| {
+                        RepositoryError::Deserialization("bad schema version".into())
+                    })?);
+                Ok(stored != SCHEMA_VERSION)
+            }
+            _ => Ok(true),
+        }
+    }
+}
+
+impl Drop for ClipboardRepository {
+    fn drop(&mut self) {
+        self.flush().ok();
+    }
+}
+
+// ── Save operations ───────────────────────────────────────────────
+
+impl ClipboardRepository {
+    /// Save a clipboard record.
     ///
     /// Uses content hash as the key for deduplication.
     /// If a record with the same content already exists, only `created_at` is updated.
@@ -116,20 +133,12 @@ impl ClipboardRepository {
         let key = id.to_be_bytes();
         let now = Local::now();
 
-        // Check if a record with the same hash already exists
-        if let Some(existing) = self
-            .records_tree
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
+        if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = serde_json::from_slice(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             record.created_at = now;
-            let value = serde_json::to_vec(&record)
-                .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-            self.records_tree
-                .insert(key, value)
-                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+            self.put_raw(&key, &record)?;
+            self.time_index.upsert(&record)?;
             return Ok(record);
         }
 
@@ -140,21 +149,15 @@ impl ClipboardRepository {
             content_type,
             pinned: false,
         };
-
-        let value = serde_json::to_vec(&record)
-            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-        self.records_tree
-            .insert(key, value)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-
+        self.put_raw(&key, &record)?;
+        self.time_index.upsert(&record)?;
         Ok(record)
     }
 
-    /// Save image record from existing file path
+    /// Save an image record from an existing file path.
     ///
-    /// Uses the provided `content_hash` (computed from image bytes) as the key
-    /// for deduplication. When a duplicate is found the newly saved image file
-    /// is removed and only `created_at` is updated on the existing record.
+    /// When a duplicate is found the newly saved image file is removed
+    /// and only `created_at` is updated on the existing record.
     pub fn save_image_from_path(
         &self,
         file_path: String,
@@ -164,28 +167,15 @@ impl ClipboardRepository {
         let key = id.to_be_bytes();
         let now = Local::now();
 
-        // Check if a record with the same image hash already exists
-        if let Some(existing) = self
-            .records_tree
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
+        if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = serde_json::from_slice(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-
-            // If paths differ, delete the newly generated duplicate image file
             if record.content != file_path {
-                let _ = fs::remove_file(&file_path);
-                let thumb_path = file_path.replace(".png", "_thumb.png");
-                let _ = fs::remove_file(thumb_path);
+                Self::remove_image_files(&file_path);
             }
-
             record.created_at = now;
-            let value = serde_json::to_vec(&record)
-                .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-            self.records_tree
-                .insert(key, value)
-                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+            self.put_raw(&key, &record)?;
+            self.time_index.upsert(&record)?;
             return Ok(record);
         }
 
@@ -196,95 +186,81 @@ impl ClipboardRepository {
             content_type: ContentType::Image,
             pinned: false,
         };
-
-        let value = serde_json::to_vec(&record)
-            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-        self.records_tree
-            .insert(key, value)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-
+        self.put_raw(&key, &record)?;
+        self.time_index.upsert(&record)?;
         Ok(record)
     }
 
-    /// Save text content (convenience method)
+    /// Save text content (convenience wrapper).
     pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)
     }
+}
 
-    /// Get a record by ID
+// ── Query operations ──────────────────────────────────────────────
+
+impl ClipboardRepository {
+    /// Get a record by ID.
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
-        if let Some(value) = self
-            .records_tree
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            return Ok(Some(record));
+        match self.get_raw(&key)? {
+            Some(value) => {
+                let record = serde_json::from_slice(&value)
+                    .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+                Ok(Some(record))
+            }
+            None => Ok(None),
         }
-        Ok(None)
     }
 
-    /// Get recent N records (in reverse chronological order)
+    /// Get the most recent `limit` records (pinned first).
     ///
-    /// Pinned records are always displayed first, followed by unpinned
-    /// records. Records that fail to deserialize (e.g. old format) are
-    /// silently skipped.
+    /// Uses the lightweight time index to select IDs, then batch-loads
+    /// only the needed records from the main tree.
     pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let mut records = Vec::new();
-        for result in &self.records_tree {
-            let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            match serde_json::from_slice::<ClipboardRecord>(&value) {
-                Ok(record) => records.push(record),
-                Err(e) => {
-                    tracing::warn!(error = %e, "skipping record that failed to deserialize");
-                }
-            }
-        }
+        let selected_ids = self.time_index.select_recent_ids(limit)?;
+        let mut records = self.load_records(&selected_ids);
         Self::sort_pinned_first(&mut records);
-        records.truncate(limit);
         Ok(records)
     }
 
-    /// Search records by keyword
+    /// Search text records by keyword (case-insensitive).
     ///
-    /// Records that fail to deserialize (e.g. old format) are silently
-    /// skipped rather than causing the entire search to fail.
+    /// Uses the time index to skip non-text records.
     pub fn search(&self, keyword: &str) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let keyword_lower = keyword.to_lowercase();
+        let text_ids = self.time_index.text_record_ids()?;
+
         let mut records = Vec::new();
-        for result in &self.records_tree {
-            let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let record: ClipboardRecord = match serde_json::from_slice(&value) {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::warn!(error = %e, "skipping record that failed to deserialize");
-                    continue;
+        for id in text_ids {
+            let key = id.to_be_bytes();
+            if let Some(value) = self.get_raw(&key)? {
+                let record: ClipboardRecord = match serde_json::from_slice(&value) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "skipping record that failed to deserialize");
+                        continue;
+                    }
+                };
+                if record.content.to_lowercase().contains(&keyword_lower) {
+                    records.push(record);
                 }
-            };
-            // Only search in text records
-            if record.content_type == ContentType::Text
-                && record.content.to_lowercase().contains(&keyword_lower)
-            {
-                records.push(record);
             }
         }
         Self::sort_pinned_first(&mut records);
         Ok(records)
     }
 
-    /// Sort records so that pinned items appear first and both groups remain
-    /// ordered by descending creation time.
-    pub(crate) fn sort_pinned_first(records: &mut [ClipboardRecord]) {
-        records.sort_unstable_by(|a, b| match (a.pinned, b.pinned) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => b.created_at.cmp(&a.created_at),
-        });
+    /// Get the total number of records.
+    pub fn count(&self) -> usize {
+        self.records.len()
     }
+}
 
-    /// Toggle the pin state of a record
+// ── Mutation operations ───────────────────────────────────────────
+
+impl ClipboardRepository {
+    /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
             .get_by_id(id)?
@@ -293,102 +269,132 @@ impl ClipboardRepository {
         record.pinned = !record.pinned;
 
         let key = id.to_be_bytes();
-        let value = serde_json::to_vec(&record)
-            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-        self.records_tree
-            .insert(key, value)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-
+        self.put_raw(&key, &record)?;
+        self.time_index.update_pinned(
+            record.created_at.timestamp_millis(),
+            record.id,
+            record.pinned,
+            &record.content_type,
+        )?;
         Ok(())
     }
 
-    /// Delete a record
+    /// Delete a single record.
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
-        // If it's an image record, delete the associated image file
         let record = self.get_by_id(id)?;
-        if let Some(rec) = record
+        if let Some(ref rec) = record
             && rec.content_type == ContentType::Image
         {
-            // Delete original image file and thumbnail
-            let _ = fs::remove_file(&rec.content);
-            let thumb_path = rec.content.replace(".png", "_thumb.png");
-            let _ = fs::remove_file(thumb_path);
+            Self::remove_image_files(&rec.content);
         }
+
         let key = id.to_be_bytes();
         let removed = self
-            .records_tree
+            .records
             .remove(key)
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+
+        if let Some(rec) = record {
+            self.time_index
+                .remove(rec.created_at.timestamp_millis(), rec.id)?;
+        }
         Ok(removed.is_some())
     }
 
-    /// Clear all records
+    /// Clear all records and images.
     pub fn clear(&self) -> Result<(), RepositoryError> {
-        self.records_tree
+        self.records
             .clear()
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
-        // Clear all image files
+        self.time_index.clear()?;
         if self.images_dir.exists() {
             fs::remove_dir_all(&self.images_dir).ok();
         }
         Ok(())
     }
 
-    /// Get the total number of records
-    pub fn count(&self) -> usize {
-        self.records_tree.len()
-    }
-
-    /// Flush data to disk
-    pub fn flush(&self) -> Result<(), RepositoryError> {
-        self.db
-            .flush()
-            .map_err(|e| RepositoryError::Flush(e.to_string()))?;
-        Ok(())
-    }
-
-    /// Clean up old records, keeping the most recent N records
+    /// Clean up old records, keeping the most recent `keep_count` records.
     ///
-    /// Pinned records are never removed during cleanup.
+    /// Pinned records are never removed.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
         if total <= keep_count {
             return Ok(0);
         }
 
-        let mut records: Vec<(u64, chrono::DateTime<Local>, bool)> = Vec::new();
-        for result in &self.records_tree {
-            let (_, value) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let record: ClipboardRecord = serde_json::from_slice(&value)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            records.push((record.id, record.created_at, record.pinned));
-        }
-        // Sort by created_at ascending so the oldest come first
-        records.sort_unstable_by(|a, b| a.1.cmp(&b.1));
-
-        let to_remove = total - keep_count;
+        let candidates = self.time_index.oldest_unpinned(total - keep_count)?;
         let mut removed = 0;
-        for (id, _, is_pinned) in records {
-            if removed >= to_remove {
-                break;
+
+        for (ti_key, id) in candidates {
+            let rec_key = id.to_be_bytes();
+            // Delete associated image files if this is an image record
+            if let Some(value) = self.get_raw(&rec_key)?
+                && let Ok(record) = serde_json::from_slice::<ClipboardRecord>(&value)
+                && record.content_type == ContentType::Image
+            {
+                Self::remove_image_files(&record.content);
             }
-            if is_pinned {
-                continue;
-            }
-            let key = id.to_be_bytes();
-            self.records_tree
-                .remove(key)
+            self.records
+                .remove(rec_key)
                 .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+            self.time_index.remove_raw(&ti_key)?;
             removed += 1;
         }
-
         Ok(removed)
     }
 }
 
-impl Drop for ClipboardRepository {
-    fn drop(&mut self) {
-        self.flush().ok();
+// ── Internal helpers ──────────────────────────────────────────────
+
+impl ClipboardRepository {
+    /// Sort records with pinned items first, each group in descending time.
+    pub(crate) fn sort_pinned_first(records: &mut [ClipboardRecord]) {
+        records.sort_unstable_by(|a, b| match (a.pinned, b.pinned) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b.created_at.cmp(&a.created_at),
+        });
+    }
+
+    /// Raw sled get on the records tree.
+    fn get_raw(&self, key: &[u8]) -> Result<Option<sled::IVec>, RepositoryError> {
+        self.records
+            .get(key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))
+    }
+
+    /// Serialize and insert a record into the records tree.
+    fn put_raw(&self, key: &[u8], record: &ClipboardRecord) -> Result<(), RepositoryError> {
+        let value = serde_json::to_vec(record)
+            .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+        self.records
+            .insert(key, value)
+            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Load multiple records by ID, silently skipping failures.
+    fn load_records(&self, ids: &[u64]) -> Vec<ClipboardRecord> {
+        let mut out = Vec::with_capacity(ids.len());
+        for &id in ids {
+            let key = id.to_be_bytes();
+            if let Ok(Some(value)) = self.get_raw(&key) {
+                match serde_json::from_slice::<ClipboardRecord>(&value) {
+                    Ok(record) => out.push(record),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "skipping record that failed to deserialize");
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Remove image file and its thumbnail.
+    fn remove_image_files(path: &str) {
+        let _ = fs::remove_file(path);
+        let thumb_path = path.replace(".png", "_thumb.png");
+        let _ = fs::remove_file(thumb_path);
     }
 }
 
@@ -702,20 +708,24 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)]
     fn test_backward_compat_old_category_fields() {
-        // Simulate a record stored with old `category` field
+        // Simulate a record stored with old `category` field and a
+        // corresponding time_index entry (as would exist after schema v3).
         let repo = create_test_repo();
+        let now = chrono::Local::now();
         let old_json = serde_json::json!({
             "id": 1000_u64,
             "content": "legacy record",
-            "created_at": chrono::Local::now(),
+            "created_at": now,
             "content_type": "Text",
             "category": "Pinned"
         });
         let key = 1000_u64.to_be_bytes();
         let value = serde_json::to_vec(&old_json).expect("failed to serialize");
-        repo.records_tree
-            .insert(key, value)
-            .expect("failed to insert");
+        repo.records.insert(key, value).expect("failed to insert");
+
+        // Insert matching time_index entry
+        repo.time_index
+            .insert_raw(now.timestamp_millis(), 1000, false, &ContentType::Text);
 
         // get_recent should deserialize it with default pinned = false
         let records = repo.get_recent(10).expect("Failed to get recent");
@@ -755,15 +765,18 @@ mod tests {
     fn test_search_skips_corrupt_records() {
         let repo = create_test_repo();
 
-        // Insert a valid record
+        // Insert a valid record (via save_text, which also inserts time_index)
         repo.save_text("valid hello".to_string())
             .expect("Failed to save");
 
-        // Insert corrupt data
-        let corrupt_key = 9999_u64.to_be_bytes();
-        repo.records_tree
+        // Insert corrupt data into records tree and a matching time_index entry
+        let corrupt_id = 9999_u64;
+        let corrupt_key = corrupt_id.to_be_bytes();
+        repo.records
             .insert(corrupt_key, b"not valid json")
             .expect("failed to insert corrupt");
+        repo.time_index
+            .insert_raw(0, corrupt_id, false, &ContentType::Text);
 
         // Search should still return the valid record
         let results = repo.search("hello").expect("search should not fail");
