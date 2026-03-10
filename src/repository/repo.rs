@@ -134,7 +134,7 @@ impl ClipboardRepository {
         let now = Local::now();
 
         if let Some(existing) = self.get_raw(&key)? {
-            let mut record: ClipboardRecord = serde_json::from_slice(&existing)
+            let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             record.created_at = now;
             self.put_raw(&key, &record)?;
@@ -168,7 +168,7 @@ impl ClipboardRepository {
         let now = Local::now();
 
         if let Some(existing) = self.get_raw(&key)? {
-            let mut record: ClipboardRecord = serde_json::from_slice(&existing)
+            let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             if record.content != file_path {
                 Self::remove_image_files(&file_path);
@@ -205,7 +205,7 @@ impl ClipboardRepository {
         let key = id.to_be_bytes();
         match self.get_raw(&key)? {
             Some(value) => {
-                let record = serde_json::from_slice(&value)
+                let record = postcard::from_bytes(&value)
                     .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
                 Ok(Some(record))
             }
@@ -235,7 +235,7 @@ impl ClipboardRepository {
         for id in text_ids {
             let key = id.to_be_bytes();
             if let Some(value) = self.get_raw(&key)? {
-                let record: ClipboardRecord = match serde_json::from_slice(&value) {
+                let record: ClipboardRecord = match postcard::from_bytes(&value) {
                     Ok(r) => r,
                     Err(e) => {
                         tracing::warn!(error = %e, "skipping record that failed to deserialize");
@@ -329,7 +329,7 @@ impl ClipboardRepository {
             let rec_key = id.to_be_bytes();
             // Delete associated image files if this is an image record
             if let Some(value) = self.get_raw(&rec_key)?
-                && let Ok(record) = serde_json::from_slice::<ClipboardRecord>(&value)
+                && let Ok(record) = postcard::from_bytes::<ClipboardRecord>(&value)
                 && record.content_type == ContentType::Image
             {
                 Self::remove_image_files(&record.content);
@@ -365,7 +365,7 @@ impl ClipboardRepository {
 
     /// Serialize and insert a record into the records tree.
     fn put_raw(&self, key: &[u8], record: &ClipboardRecord) -> Result<(), RepositoryError> {
-        let value = serde_json::to_vec(record)
+        let value = postcard::to_allocvec(record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
         self.records
             .insert(key, value)
@@ -379,7 +379,7 @@ impl ClipboardRepository {
         for &id in ids {
             let key = id.to_be_bytes();
             if let Ok(Some(value)) = self.get_raw(&key) {
-                match serde_json::from_slice::<ClipboardRecord>(&value) {
+                match postcard::from_bytes::<ClipboardRecord>(&value) {
                     Ok(record) => out.push(record),
                     Err(e) => {
                         tracing::warn!(error = %e, "skipping record that failed to deserialize");
@@ -707,30 +707,29 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_backward_compat_old_category_fields() {
-        // Simulate a record stored with old `category` field and a
-        // corresponding time_index entry (as would exist after schema v3).
+    fn test_binary_serialization_round_trip() {
+        // Verify records survive a postcard serialization round-trip via the
+        // internal records tree.
         let repo = create_test_repo();
         let now = chrono::Local::now();
-        let old_json = serde_json::json!({
-            "id": 1000_u64,
-            "content": "legacy record",
-            "created_at": now,
-            "content_type": "Text",
-            "category": "Pinned"
-        });
+        let record = ClipboardRecord {
+            id: 1000_u64,
+            content: "binary record".to_string(),
+            created_at: now,
+            content_type: ContentType::Text,
+            pinned: false,
+        };
         let key = 1000_u64.to_be_bytes();
-        let value = serde_json::to_vec(&old_json).expect("failed to serialize");
+        let value = postcard::to_allocvec(&record).expect("failed to serialize");
         repo.records.insert(key, value).expect("failed to insert");
 
         // Insert matching time_index entry
         repo.time_index
             .insert_raw(now.timestamp_millis(), 1000, false, &ContentType::Text);
 
-        // get_recent should deserialize it with default pinned = false
         let records = repo.get_recent(10).expect("Failed to get recent");
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].content, "legacy record");
+        assert_eq!(records[0].content, "binary record");
         assert!(!records[0].pinned);
     }
 

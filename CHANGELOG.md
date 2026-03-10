@@ -4,13 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.1] - 2026-03-10
 
+### Attention
+
+This update includes a breaking change: the auto-deduplication feature will upgrade the database schema version, which will automatically clear all history records and recreate the database on startup. This change is irreversible, so please make sure to back up your data before upgrading!
+
+破坏性更新提示：自动去重功能将升级数据库模式版本，这将自动清除所有历史记录并在启动时重新创建数据库。此更改不可逆，请确保在升级前备份您的重要数据！
+
 ### 🚀 Features
+
 - Add prek configuration by @StudentWeis
 - Add hover preview settings and UI toggle by @StudentWeis
 - Enhance records list rendering with scrollbar by @StudentWeis
 - Add help panel with keyboard shortcuts and corresponding translations by @StudentWeis
+- Implement lightweight time index for efficient chronological queries by @StudentWeis
+- Migrate serialization from serde_json to postcard for ClipboardRecord
 
 ### 🚜 Refactor
+
 - Update async handling in RopyBoard for background tasks by @StudentWeis
 - Remove sysinfo dependency by @StudentWeis
 - Change filtered_records to use Arc by @StudentWeis
