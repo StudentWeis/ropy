@@ -13,6 +13,7 @@ use gpui_component::{
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputState},
+    scroll::{Scrollbar, ScrollbarShow},
     v_flex,
 };
 use regex::Regex;
@@ -415,15 +416,34 @@ impl RopyBoard {
     pub fn render_records_list(&self, context: &Context<'_, Self>) -> impl IntoElement {
         let records = self.filtered_records.clone();
         let list_state = self.list_state.clone();
+        let scrollbar_state = list_state.clone();
         let selected_index = self.selected_index;
         let show_preview = self.show_preview;
         let view = context.weak_entity();
-        list(list_state, move |index, window, cx| {
-            let record = &records[index];
-            let is_selected = index == selected_index;
-            render_list_item(index, record, is_selected, show_preview, &view, window, cx)
-        })
-        .w_full()
-        .flex_1()
+
+        div()
+            .relative()
+            .w_full()
+            .flex_1()
+            .child(
+                list(list_state, move |index, window, cx| {
+                    let record = &records[index];
+                    let is_selected = index == selected_index;
+                    render_list_item(index, record, is_selected, show_preview, &view, window, cx)
+                })
+                .size_full(),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right(px(-10.0))
+                    .bottom_0()
+                    .child(
+                        Scrollbar::vertical(&scrollbar_state)
+                            .scrollbar_show(ScrollbarShow::Scrolling),
+                    ),
+            )
     }
 }
