@@ -42,7 +42,7 @@ use crate::{
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
     pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    pub(crate) filtered_records: Vec<ClipboardRecord>, // The final shown records
+    pub(crate) filtered_records: Arc<Vec<ClipboardRecord>>, // The final shown records
     pub(crate) repository: Option<Arc<ClipboardRepository>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) _focus_out_subscription: Subscription,
@@ -197,7 +197,7 @@ impl RopyBoard {
             selected_index: 0,
             last_copy,
             list_state,
-            filtered_records: Vec::new(),
+            filtered_records: Arc::new(Vec::new()),
             copy_tx,
             show_settings: false,
             show_about: false,
@@ -546,7 +546,7 @@ impl Render for RopyBoard {
         let query = self.search_input.read(cx).value().to_string();
         let new_filtered_records = self.get_filtered_records(&query);
 
-        if new_filtered_records != self.filtered_records {
+        if new_filtered_records != *self.filtered_records {
             let old_len = self.filtered_records.len();
             let new_len = new_filtered_records.len();
 
@@ -557,7 +557,7 @@ impl Render for RopyBoard {
                 None
             };
 
-            self.filtered_records = new_filtered_records;
+            self.filtered_records = Arc::new(new_filtered_records);
 
             // Use splice to inform list state about the change instead of reset
             // This helps preserve scroll position better
