@@ -68,6 +68,7 @@ xz2 = "0.1"
 
 [build-dependencies]
 winres = "0.1"
+image = "0.25.9"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
