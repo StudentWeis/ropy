@@ -9,7 +9,7 @@ use std::{
 };
 
 // Re-export utilities for external use
-pub use actions::{Active, ConfirmSelection, DeleteRecord, Hide, Quit, SelectNext, SelectPrev};
+pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, SharedString,
     Subscription, Window,

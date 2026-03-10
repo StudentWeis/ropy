@@ -16,7 +16,7 @@ use crate::{
     clipboard::{self, ClipboardEvent, LastCopyState},
     config::{AppTheme, AutoStartManager, Settings},
     constants::APP_NAME,
-    gui::board::{ConfirmSelection, DeleteRecord, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
+    gui::board::{ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
@@ -291,7 +291,6 @@ pub fn launch_app() {
 fn bind_application_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Hide, None),
-        KeyBinding::new("q", Hide, None),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-q", Quit, None),
         #[cfg(target_os = "windows")]
@@ -299,11 +298,8 @@ fn bind_application_keys(cx: &mut App) {
         #[cfg(target_os = "linux")]
         KeyBinding::new("alt-f4", Quit, None),
         KeyBinding::new("up", SelectPrev, None),
-        KeyBinding::new("k", SelectPrev, None),
         KeyBinding::new("down", SelectNext, None),
-        KeyBinding::new("j", SelectNext, None),
         KeyBinding::new("enter", ConfirmSelection, None),
-        KeyBinding::new("d", DeleteRecord, None),
     ]);
 }
 
