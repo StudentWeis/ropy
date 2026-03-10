@@ -287,21 +287,34 @@ impl RopyBoard {
         }
     }
 
+    /// Filter records based on search query
+    fn filter_records_by_query(records: &[ClipboardRecord], query: &str) -> Vec<ClipboardRecord> {
+        if query.is_empty() {
+            return records.to_vec();
+        }
+
+        let query_lower = query.to_lowercase();
+        records
+            .iter()
+            .filter(|record| {
+                record.content_type == ContentType::Text
+                    && record.content.to_lowercase().contains(&query_lower)
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Get filtered records based on search query
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
-        let mut records = if query.is_empty() {
-            self.records
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone()
-        } else if let Some(ref repo) = self.repository {
-            // search() already sorts pinned first
-            return repo.search(query).unwrap_or_default();
-        } else {
-            return Vec::new();
-        };
-        ClipboardRepository::sort_pinned_first(&mut records);
-        records
+        let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+
+        let filtered = Self::filter_records_by_query(&records, query);
+
+        drop(records); // Release the lock early
+
+        let mut sorted_records = filtered;
+        ClipboardRepository::sort_pinned_first(&mut sorted_records);
+        sorted_records
     }
 
     /// Confirm selection: copy record to clipboard and hide.
@@ -623,5 +636,129 @@ impl Render for RopyBoard {
             .child(render_header(self, cx))
             .child(render_search_input(&self.search_input, cx))
             .child(self.render_records_list(cx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repository::{ClipboardRecord, models::ContentType};
+
+    #[test]
+    fn test_filter_records_by_query_empty_query() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "Image data".to_string(),
+                content_type: ContentType::Image,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(&records, "");
+        assert_eq!(result.len(), 3); // With empty query, all records should be returned
+        assert_eq!(result[0].content, "Hello");
+        assert_eq!(result[1].content, "World");
+        assert_eq!(result[2].content, "Image data");
+    }
+
+    #[test]
+    fn test_filter_records_by_query_with_matches() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "Goodbye World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "Image data".to_string(),
+                content_type: ContentType::Image,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(&records, "world");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].content, "Hello World");
+        assert_eq!(result[1].content, "Goodbye World");
+    }
+
+    #[test]
+    fn test_filter_records_by_query_case_insensitive() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "HELLO world".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(&records, "hello");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].content, "Hello World");
+        assert_eq!(result[1].content, "HELLO world");
+    }
+
+    #[test]
+    fn test_filter_records_by_query_no_matches() {
+        let records = vec![ClipboardRecord {
+            id: 1,
+            content: "Hello".to_string(),
+            content_type: ContentType::Text,
+            created_at: chrono::Local::now(),
+            pinned: false,
+        }];
+
+        let result = RopyBoard::filter_records_by_query(&records, "xyz");
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_records_by_query_non_text_content_type() {
+        let records = vec![ClipboardRecord {
+            id: 1,
+            content: "Image content".to_string(),
+            content_type: ContentType::Image,
+            created_at: chrono::Local::now(),
+            pinned: false,
+        }];
+
+        let result = RopyBoard::filter_records_by_query(&records, "image");
+        assert_eq!(result.len(), 0); // Image content should not match even if content contains the query
     }
 }

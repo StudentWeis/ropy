@@ -197,8 +197,6 @@ impl ClipboardRepository {
     }
 }
 
-// ── Query operations ──────────────────────────────────────────────
-
 impl ClipboardRepository {
     /// Get a record by ID.
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
@@ -220,33 +218,6 @@ impl ClipboardRepository {
     pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let selected_ids = self.time_index.select_recent_ids(limit)?;
         let mut records = self.load_records(&selected_ids);
-        Self::sort_pinned_first(&mut records);
-        Ok(records)
-    }
-
-    /// Search text records by keyword (case-insensitive).
-    ///
-    /// Uses the time index to skip non-text records.
-    pub fn search(&self, keyword: &str) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let keyword_lower = keyword.to_lowercase();
-        let text_ids = self.time_index.text_record_ids()?;
-
-        let mut records = Vec::new();
-        for id in text_ids {
-            let key = id.to_be_bytes();
-            if let Some(value) = self.get_raw(&key)? {
-                let record: ClipboardRecord = match postcard::from_bytes(&value) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "skipping record that failed to deserialize");
-                        continue;
-                    }
-                };
-                if record.content.to_lowercase().contains(&keyword_lower) {
-                    records.push(record);
-                }
-            }
-        }
         Self::sort_pinned_first(&mut records);
         Ok(records)
     }
@@ -452,28 +423,6 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_search() {
-        let repo = create_test_repo();
-
-        repo.save_text("Hello World".to_string())
-            .expect("Failed to save");
-        repo.save_text("Goodbye World".to_string())
-            .expect("Failed to save");
-        repo.save_text("Hello Rust".to_string())
-            .expect("Failed to save");
-
-        let results = repo.search("hello").expect("Failed to search");
-        assert_eq!(results.len(), 2);
-
-        let results = repo.search("world").expect("Failed to search");
-        assert_eq!(results.len(), 2);
-
-        let results = repo.search("rust").expect("Failed to search");
-        assert_eq!(results.len(), 1);
-    }
-
-    #[test]
-    #[allow(clippy::expect_used)]
     fn test_delete() {
         let repo = create_test_repo();
 
@@ -656,26 +605,6 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_pinned_search() {
-        let repo = create_test_repo();
-
-        repo.save_text("hello world".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let r2 = repo
-            .save_text("hello rust".to_string())
-            .expect("Failed to save");
-
-        repo.toggle_pin(r2.id).expect("Failed to toggle pin");
-
-        let results = repo.search("hello").expect("Failed to search");
-        assert_eq!(results.len(), 2);
-        // Pinned result appears first
-        assert_eq!(results[0].content, "hello rust");
-    }
-
-    #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_skips_pinned() {
         let repo = create_test_repo();
 
@@ -757,34 +686,5 @@ mod tests {
         assert_eq!(removed, 1);
         // Total count = 3 (all pinned), which is above keep_count
         assert_eq!(repo.count(), 3);
-    }
-
-    #[test]
-    #[allow(clippy::expect_used)]
-    fn test_search_skips_corrupt_records() {
-        let repo = create_test_repo();
-
-        // Insert a valid record (via save_text, which also inserts time_index)
-        repo.save_text("valid hello".to_string())
-            .expect("Failed to save");
-
-        // Insert corrupt data into records tree and a matching time_index entry
-        let corrupt_id = 9999_u64;
-        let corrupt_key = corrupt_id.to_be_bytes();
-        repo.records
-            .insert(corrupt_key, b"not valid json")
-            .expect("failed to insert corrupt");
-        repo.time_index
-            .insert_raw(0, corrupt_id, false, &ContentType::Text);
-
-        // Search should still return the valid record
-        let results = repo.search("hello").expect("search should not fail");
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].content, "valid hello");
-
-        // get_recent should also work
-        let recent = repo.get_recent(10).expect("get_recent should not fail");
-        assert_eq!(recent.len(), 1);
-        assert_eq!(recent[0].content, "valid hello");
     }
 }

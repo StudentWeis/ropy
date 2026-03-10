@@ -106,23 +106,6 @@ impl TimeIndex {
         Ok(pinned)
     }
 
-    /// Collect IDs of all text-type records (for keyword search filtering).
-    pub fn text_record_ids(&self) -> Result<Vec<u64>, RepositoryError> {
-        let mut ids = Vec::new();
-        for result in self.tree.iter().rev() {
-            let (k, v) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            if k.len() != 16 || v.len() < 2 {
-                continue;
-            }
-            if v[1] != ContentType::Text.as_tag() {
-                continue;
-            }
-            let id = u64::from_be_bytes(k[8..].try_into().unwrap_or_default());
-            ids.push(id);
-        }
-        Ok(ids)
-    }
-
     /// Collect up to `max` oldest unpinned entries for cleanup.
     ///
     /// Returns `(encoded_key, record_id)` pairs sorted oldest-first
