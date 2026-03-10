@@ -10,26 +10,25 @@ license = "MIT"
 
 [dependencies]
 clipboard-rs = "0.3.3"
-gpui = "0.2.2"
-gpui-component = "0.5.1"
+gpui = { version = "0.2.2", default-features = false }
+gpui-component = { version = "0.5.1", default-features = false }
 global-hotkey = "0.7"
 sled = "0.34"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
-chrono = { version = "0.4.44", features = ["serde"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock", "serde", "std"] }
 dirs = "6.0"
 thiserror = "2.0.18"
-config = "0.15"
+config = { version = "0.15", default-features = false, features = ["toml"] }
 toml = "1.0.6"
-image = "0.25.9"
+image = { version = "0.25.9", default-features = false, features = ["png"] }
 tray-icon = "0.21.3"
 dark-light = "2.0"
 auto-launch = "0.6.0"
-regex = "1.12.3"
+regex = { version = "1.12.3", default-features = false, features = ["perf", "std"] }
 raw-window-handle = "0.6"
 async-channel = "2.5.0"
 rust-embed = "8.11.0"
-smol = "2"
 seahash = "4"
 sha2 = "0.10"
 self-replace = "1"
@@ -41,9 +40,11 @@ tempfile = "3.26.0"
 tracing = "0.1.44"
 tracing-appender = "0.2"
 tracing-log = "0.2"
-tracing-subscriber = { version = "0.3.22", features = [
+tracing-subscriber = { version = "0.3.22", default-features = false, features = [
     "env-filter",
+    "fmt",
     "json",
+    "std",
     "time",
 ] }
 

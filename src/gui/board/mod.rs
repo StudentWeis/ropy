@@ -458,10 +458,24 @@ impl RopyBoard {
         .include_prerelease;
 
         cx.spawn(async move |this, cx| {
-            let result = smol::unblock(move || {
-                crate::updater::checker::check_for_update(include_prerelease)
-            })
-            .await;
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    // Use std::thread::spawn to run blocking operation
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let _handle = std::thread::spawn(move || {
+                        let update_result =
+                            crate::updater::checker::check_for_update(include_prerelease);
+                        let _ = tx.send(update_result);
+                    });
+
+                    rx.recv().unwrap_or_else(|_| {
+                        Err(crate::updater::errors::UpdateError::Network(
+                            "Update check failed".to_string(),
+                        ))
+                    })
+                })
+                .await;
 
             let _ = this.update(cx, |board, cx| {
                 match result {
@@ -492,13 +506,29 @@ impl RopyBoard {
         cx.notify();
 
         cx.spawn(async move |this, cx| {
-            let result = smol::unblock(move || {
-                crate::updater::downloader::download_and_install(&release, |_progress| {
-                    // Progress callback runs on blocking thread;
-                    // mid-download UI updates are skipped for simplicity.
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    // Use std::thread::spawn to run blocking operation
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let _handle = std::thread::spawn(move || {
+                        let update_result = crate::updater::downloader::download_and_install(
+                            &release,
+                            |_progress| {
+                                // Progress callback runs on blocking thread;
+                                // mid-download UI updates are skipped for simplicity.
+                            },
+                        );
+                        let _ = tx.send(update_result);
+                    });
+
+                    rx.recv().unwrap_or_else(|_| {
+                        Err(crate::updater::errors::UpdateError::Network(
+                            "Update installation failed".to_string(),
+                        ))
+                    })
                 })
-            })
-            .await;
+                .await;
 
             let _ = this.update(cx, |board, cx| {
                 match result {
