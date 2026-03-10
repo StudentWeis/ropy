@@ -74,4 +74,3 @@ Missing keys are reported at runtime by displaying `[Missing: <key>]` in the UI,
 - **Tests:** unit tests cover `Language::display_name`, `Language::all`, translation parsing, missing keys, switching languages, and fallback behaviour. Any new TOML file is automatically exercised by the `Language::all()` tests.
 
 Maintaining translations remains as easy as editing or adding TOML files; the rest of the system adapts without additional work.
-
