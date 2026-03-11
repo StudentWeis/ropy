@@ -451,13 +451,14 @@ impl RopyBoard {
         .storage
         .max_history_records;
 
-        let max_history = self
-            .settings_max_history_input
-            .read(cx)
-            .value()
-            .to_string()
-            .parse::<usize>()
-            .unwrap_or(current_max_history);
+        // Validate max_history input from the settings UI.
+        let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
+
+        let (max_history, is_max_history_invalid) =
+            match Self::parse_max_history_input(&max_history_input, current_max_history) {
+                Ok(v) => (v, false),
+                Err(()) => (current_max_history, true),
+            };
 
         let theme = match self.selected_theme {
             0 => crate::config::AppTheme::Light,
@@ -544,6 +545,16 @@ impl RopyBoard {
                     cx,
                 );
             }
+            if is_max_history_invalid {
+                let warn_msg = self.i18n.t("settings_max_history_invalid_warning");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("⚠  {warn_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
             if autostart_error.is_some() {
                 let warn_msg = self.i18n.t("settings_autostart_failed");
                 window.push_notification(
@@ -554,7 +565,7 @@ impl RopyBoard {
                     cx,
                 );
             }
-            if !is_hotkey_invalid && autostart_error.is_none() {
+            if !is_hotkey_invalid && autostart_error.is_none() && !is_max_history_invalid {
                 let ok_msg = self.i18n.t("settings_save_success");
                 window.push_notification(
                     Notification::new()
@@ -579,6 +590,24 @@ impl RopyBoard {
         let manager = crate::config::AutoStartManager::new(APP_NAME)?;
         manager.sync_state(self.autostart_enabled)?;
         Ok(())
+    }
+
+    // Validate max history input from settings UI.
+    // Returns Ok(parsed_value) when input is a valid usize within allowed range,
+    // or Err(()) when input is invalid (parse error or out of range).
+    fn parse_max_history_input(input: &str, current_max: usize) -> Result<usize, ()> {
+        const MIN: usize = 1;
+        const MAX: usize = 10_000;
+
+        let s = input.trim();
+        if s.is_empty() {
+            return Ok(current_max);
+        }
+
+        match s.parse::<usize>() {
+            Ok(v) if (MIN..=MAX).contains(&v) => Ok(v),
+            _ => Err(()),
+        }
     }
 
     /// Trigger a manual update check in the background
@@ -931,5 +960,35 @@ mod tests {
 
         let result = RopyBoard::filter_records_by_query(&records, "image");
         assert_eq!(result.len(), 0); // Image content should not match even if content contains the query
+    }
+
+    #[test]
+    fn test_parse_max_history_input_empty_uses_current() {
+        let current = 42usize;
+        let res = RopyBoard::parse_max_history_input("", current);
+        assert_eq!(res, Ok(current));
+    }
+
+    #[test]
+    fn test_parse_max_history_input_valid() {
+        let current = 10usize;
+        let res = RopyBoard::parse_max_history_input("100", current);
+        assert_eq!(res, Ok(100usize));
+    }
+
+    #[test]
+    fn test_parse_max_history_input_invalid_string() {
+        let current = 10usize;
+        let res = RopyBoard::parse_max_history_input("abc", current);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_parse_max_history_input_out_of_range() {
+        let current = 10usize;
+        // zero is below minimum
+        assert!(RopyBoard::parse_max_history_input("0", current).is_err());
+        // above maximum (10_000)
+        assert!(RopyBoard::parse_max_history_input("10001", current).is_err());
     }
 }
