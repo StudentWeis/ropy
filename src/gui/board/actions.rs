@@ -133,10 +133,10 @@ impl RopyBoard {
 
         // If the "p" key is pressed, toggle window pin
         if event.keystroke.key.as_str() == "p" {
-            self.pinned = !self.pinned;
-            #[cfg(not(target_os = "macos"))]
-            crate::gui::utils::set_always_on_top(window, self.pinned);
-            cx.notify();
+            if self.can_toggle_window_pin() {
+                self.toggle_window_pin(window);
+                cx.notify();
+            }
             return;
         }
 

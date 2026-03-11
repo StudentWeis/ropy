@@ -82,6 +82,7 @@ pub(super) fn format_clipboard_content(record: &ClipboardRecord) -> String {
 /// Render the header section with title and settings/clear buttons
 pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let is_pinned = board.pinned;
+    let show_pin_button = board.can_toggle_window_pin();
     let pin_tooltip = if is_pinned {
         board.i18n.t("unpin")
     } else {
@@ -106,27 +107,27 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(
-                    if is_pinned {
-                        Button::new("pin-button").primary()
-                    } else {
-                        Button::new("pin-button").ghost()
-                    }
-                    .icon(Icon::empty().path("icon/pin-to-top.svg"))
-                    .tooltip(pin_tooltip)
-                    .on_click(
-                        cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
-                            this.pinned = !this.pinned;
-                            #[cfg(not(target_os = "macos"))]
-                            crate::gui::utils::set_always_on_top(window, this.pinned);
-                            cx.notify();
-                        }),
+                .when(show_pin_button, |el| {
+                    el.child(
+                        if is_pinned {
+                            Button::new("pin-button").primary()
+                        } else {
+                            Button::new("pin-button").ghost()
+                        }
+                        .icon(Icon::empty().path("icon/pin-to-top.svg"))
+                        .tooltip(pin_tooltip)
+                        .on_click(cx.listener(
+                            |this, _event, #[allow(unused_variables)] window, cx| {
+                                this.toggle_window_pin(window);
+                                cx.notify();
+                            },
+                        ))
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                        ),
                     )
-                    .on_mouse_down(
-                        gpui::MouseButton::Left,
-                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
-                    ),
-                )
+                })
                 .child(
                     Button::new("help-button")
                         .ghost()

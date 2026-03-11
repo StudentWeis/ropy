@@ -1,3 +1,5 @@
+use std::sync::mpsc::Sender as CompletionSender;
+
 mod listener;
 mod utils;
 mod writer;
@@ -13,8 +15,44 @@ pub enum ClipboardEvent {
 }
 
 pub enum CopyRequest {
-    Text(String),
-    Image(String),
+    Text {
+        text: String,
+        completion: Option<CompletionSender<()>>,
+    },
+    Image {
+        path: String,
+        completion: Option<CompletionSender<()>>,
+    },
+}
+
+impl CopyRequest {
+    pub const fn text(text: String) -> Self {
+        Self::Text {
+            text,
+            completion: None,
+        }
+    }
+
+    pub const fn text_with_completion(text: String, completion: CompletionSender<()>) -> Self {
+        Self::Text {
+            text,
+            completion: Some(completion),
+        }
+    }
+
+    pub const fn image(path: String) -> Self {
+        Self::Image {
+            path,
+            completion: None,
+        }
+    }
+
+    pub const fn image_with_completion(path: String, completion: CompletionSender<()>) -> Self {
+        Self::Image {
+            path,
+            completion: Some(completion),
+        }
+    }
 }
 
 pub enum LastCopyState {

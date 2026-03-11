@@ -28,7 +28,7 @@ Some extension strategies can be applied:
 - Global hotkey to invoke the window.
 - Tray icon to manage exit and settings.
 - List historical records, support search, keyboard navigation, and selection.
-- After selection, write back to the clipboard and trigger paste operation.
+- After selection, write back to the clipboard, with an optional immediate paste mode.
 
 # Configuration
 
@@ -45,7 +45,7 @@ Some extension strategies can be applied:
 4. Notify the interaction interface to refresh the UI.
 5. Provide a global hotkey to invoke the interaction interface.
 5. In the interaction interface, users can search and select historical records.
-6. After selecting an entry, write back to the clipboard and trigger the paste operation.
+6. After selecting an entry, write back to the clipboard and optionally trigger the paste operation.
 7. Provide a configuration interface to allow users to customize settings.
 
 # Technology Stack

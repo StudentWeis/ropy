@@ -22,6 +22,8 @@ pub struct Settings {
     pub update: UpdateSettings,
     /// Preview configuration
     pub preview: PreviewSettings,
+    /// Confirm interaction configuration
+    pub confirm: ConfirmSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +43,26 @@ impl AppTheme {
             _ => self.clone(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfirmMode {
+    #[default]
+    CopyToClipboard,
+    PasteImmediately,
+}
+
+impl ConfirmMode {
+    pub const fn requires_clipboard_completion(self) -> bool {
+        matches!(self, Self::PasteImmediately)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConfirmSettings {
+    /// Behavior when confirming a record from the board
+    pub mode: ConfirmMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +136,7 @@ impl Default for Settings {
             language: Language::default(),
             update: UpdateSettings::default(),
             preview: PreviewSettings::default(),
+            confirm: ConfirmSettings::default(),
         }
     }
 }
@@ -184,6 +207,7 @@ mod tests {
     fn test_default_settings() {
         let settings = Settings::default();
         assert_eq!(settings.storage.max_history_records, 100);
+        assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
     }
 
     #[test]
@@ -205,5 +229,18 @@ mod tests {
         let system = AppTheme::System;
         let resolved = system.get_theme();
         assert!(matches!(resolved, AppTheme::Light | AppTheme::Dark));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_confirm_mode_serialization() {
+        let toml = toml::to_string(&ConfirmSettings {
+            mode: ConfirmMode::PasteImmediately,
+        })
+        .unwrap();
+        assert!(toml.contains("paste_immediately"));
+
+        let parsed: ConfirmSettings = toml::from_str(&toml).unwrap();
+        assert_eq!(parsed.mode, ConfirmMode::PasteImmediately);
     }
 }

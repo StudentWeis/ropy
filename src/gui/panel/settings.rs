@@ -67,6 +67,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let activation_key_row = render_activation_key_row(board, cx);
     let max_history_row = render_max_history_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
+    let confirm_mode_row = render_confirm_mode_row(board, cx);
     let open_log_row = render_open_log_row(board, cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let update_row = render_update_row(board, cx);
@@ -88,6 +89,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(max_history_row)
             .child(Divider::horizontal())
             .child(autostart_row)
+            .child(Divider::horizontal())
+            .child(confirm_mode_row)
             .child(Divider::horizontal())
             .child(hover_preview_row)
             .child(Divider::horizontal())
@@ -235,6 +238,45 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
     settings_row(board.i18n.t("settings_autostart"), toggle, cx)
 }
 
+fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mode_names = [
+        board.i18n.t("settings_confirm_mode_copy"),
+        board.i18n.t("settings_confirm_mode_paste"),
+    ];
+    let mode_buttons = h_flex()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded_md()
+        .overflow_hidden()
+        .children(mode_names.into_iter().enumerate().map(|(index, name)| {
+            let is_selected = matches!(
+                (index, board.confirm_mode),
+                (0, crate::config::ConfirmMode::CopyToClipboard)
+                    | (1, crate::config::ConfirmMode::PasteImmediately)
+            );
+            let mut btn = Button::new(("confirm-mode-button", index))
+                .small()
+                .label(name);
+            btn = if is_selected {
+                btn.primary()
+            } else {
+                btn.ghost()
+            };
+            btn.rounded_none()
+                .on_click(cx.listener(move |board, _, window, cx| {
+                    let mode = if index == 0 {
+                        crate::config::ConfirmMode::CopyToClipboard
+                    } else {
+                        crate::config::ConfirmMode::PasteImmediately
+                    };
+                    board.set_confirm_mode(mode, window);
+                    cx.notify();
+                }))
+        }));
+
+    settings_row(board.i18n.t("settings_confirm_mode"), mode_buttons, cx)
+}
+
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("hover-preview-toggle").small();
     btn = if board.hover_preview_enabled {
@@ -361,6 +403,7 @@ pub fn reset_settings_dialog(
     };
     board.autostart_enabled = settings_guard.autostart.enabled;
     board.auto_check_enabled = settings_guard.update.auto_check;
+    board.confirm_mode = settings_guard.confirm.mode;
     drop(settings_guard);
 
     // Reset the language select dropdown

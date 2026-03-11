@@ -21,11 +21,13 @@ pub fn start_clipboard_writer(async_app: &AsyncApp) -> async_channel::Sender<Cop
             };
             while let Ok(req) = rx.recv().await {
                 match req {
-                    CopyRequest::Text(text) => {
+                    CopyRequest::Text { text, completion } => {
                         set_text(&ctx, text);
+                        notify_completion(completion);
                     }
-                    CopyRequest::Image(path) => {
+                    CopyRequest::Image { path, completion } => {
                         set_image(&ctx, &path);
+                        notify_completion(completion);
                     }
                 }
             }
@@ -79,5 +81,11 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
                 tracing::warn!(error = %e, "failed to set image to clipboard");
             }
         }
+    }
+}
+
+fn notify_completion(completion: Option<std::sync::mpsc::Sender<()>>) {
+    if let Some(tx) = completion {
+        let _ = tx.send(());
     }
 }

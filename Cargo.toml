@@ -36,6 +36,7 @@ self-replace = "1"
 semver = "1"
 hex = "0.4"
 tempfile = "3.26.0"
+enigo = "0.4.2"
 
 # Logging / tracing
 tracing = "0.1.44"

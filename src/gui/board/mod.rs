@@ -5,7 +5,8 @@ mod render;
 // moved panels to gui::panel
 use std::{
     str::FromStr,
-    sync::{Arc, Mutex, PoisonError, RwLock},
+    sync::{Arc, Mutex, PoisonError, RwLock, mpsc},
+    time::Duration,
 };
 
 // Re-export utilities for external use
@@ -25,7 +26,7 @@ use render::{render_header, render_search_input};
 
 use crate::{
     clipboard::LastCopyState,
-    config::Settings,
+    config::{ConfirmMode, Settings},
     gui::{
         hide_window,
         panel::{
@@ -61,6 +62,7 @@ pub struct RopyBoard {
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) selected_theme: usize, // 0: Light, 1: Dark, 2: System
     pub(crate) autostart_enabled: bool,
+    pub(crate) confirm_mode: ConfirmMode,
     pub(crate) pinned: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
     // I18n
@@ -78,6 +80,40 @@ pub struct RopyBoard {
 }
 
 impl RopyBoard {
+    pub(crate) const fn window_pin_available(confirm_mode: ConfirmMode) -> bool {
+        matches!(confirm_mode, ConfirmMode::CopyToClipboard)
+    }
+
+    const fn resolve_window_pin_state(confirm_mode: ConfirmMode, pinned: bool) -> bool {
+        pinned && Self::window_pin_available(confirm_mode)
+    }
+
+    pub(crate) const fn can_toggle_window_pin(&self) -> bool {
+        Self::window_pin_available(self.confirm_mode)
+    }
+
+    #[allow(clippy::missing_const_for_fn)]
+    pub(crate) fn set_window_pinned(&mut self, _window: &Window, pinned: bool) {
+        self.pinned = Self::resolve_window_pin_state(self.confirm_mode, pinned);
+        #[cfg(not(target_os = "macos"))]
+        crate::gui::utils::set_always_on_top(_window, self.pinned);
+    }
+
+    pub(crate) fn toggle_window_pin(&mut self, window: &Window) {
+        if !self.can_toggle_window_pin() {
+            return;
+        }
+
+        self.set_window_pinned(window, !self.pinned);
+    }
+
+    pub(crate) fn set_confirm_mode(&mut self, confirm_mode: ConfirmMode, window: &Window) {
+        self.confirm_mode = confirm_mode;
+        if !Self::window_pin_available(confirm_mode) {
+            self.set_window_pinned(window, false);
+        }
+    }
+
     pub fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
         self.hotkey_tx = Some(tx);
     }
@@ -112,7 +148,7 @@ impl RopyBoard {
         // Measure all items initially so scrollbar thumb size is stable on first paint.
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.)).measure_all();
 
-        let (max_history_records, activation_key, theme_index, language) = {
+        let (max_history_records, activation_key, theme_index, language, confirm_mode) = {
             let settings_guard = match settings.read() {
                 Ok(g) => g,
                 Err(e) => e.into_inner(),
@@ -127,6 +163,7 @@ impl RopyBoard {
                 settings_guard.hotkey.activation_key.clone(),
                 theme_idx,
                 settings_guard.language.clone(),
+                settings_guard.confirm.mode,
             )
         };
         let autostart_enabled = match settings.read() {
@@ -207,6 +244,7 @@ impl RopyBoard {
             settings_max_history_input,
             selected_theme: theme_index,
             autostart_enabled,
+            confirm_mode,
             pinned: false,
             hotkey_tx: None,
             i18n,
@@ -219,17 +257,45 @@ impl RopyBoard {
         }
     }
 
-    /// Copy content to clipboard
-    fn copy_to_clipboard(&self, content: &str, content_type: &ContentType) {
+    /// Write confirmed content to the clipboard before the confirm action completes.
+    fn write_content_to_clipboard(&self, content: &str, content_type: &ContentType) -> bool {
+        let completion = self
+            .confirm_mode
+            .requires_clipboard_completion()
+            .then(mpsc::channel);
         let request = match content_type {
-            ContentType::Text => Some(crate::clipboard::CopyRequest::Text(content.to_string())),
-            ContentType::Image => Some(crate::clipboard::CopyRequest::Image(content.to_string())),
+            ContentType::Text => Some(match completion.as_ref() {
+                Some((tx, _)) => crate::clipboard::CopyRequest::text_with_completion(
+                    content.to_string(),
+                    tx.clone(),
+                ),
+                None => crate::clipboard::CopyRequest::text(content.to_string()),
+            }),
+            ContentType::Image => Some(match completion.as_ref() {
+                Some((tx, _)) => crate::clipboard::CopyRequest::image_with_completion(
+                    content.to_string(),
+                    tx.clone(),
+                ),
+                None => crate::clipboard::CopyRequest::image(content.to_string()),
+            }),
             ContentType::FilePath => todo!(),
         };
 
         if let Some(req) = request {
-            let _ = self.copy_tx.send_blocking(req);
+            if self.copy_tx.send_blocking(req).is_err() {
+                tracing::warn!("failed to send clipboard write request");
+                return false;
+            }
+            if let Some((_, rx)) = completion
+                && rx.recv_timeout(Duration::from_millis(500)).is_err()
+            {
+                tracing::warn!("timed out waiting for clipboard write completion");
+                return false;
+            }
+            return true;
         }
+
+        false
     }
 
     /// Clear clipboard history
@@ -328,9 +394,23 @@ impl RopyBoard {
                 return;
             }
         };
-        self.copy_to_clipboard(&content, &content_type);
-        if !self.pinned {
-            hide_window(window, cx, self.pinned);
+
+        if !self.write_content_to_clipboard(&content, &content_type) {
+            return;
+        }
+
+        match self.confirm_mode {
+            ConfirmMode::CopyToClipboard => {
+                if !self.pinned {
+                    hide_window(window, cx, self.pinned);
+                }
+            }
+            ConfirmMode::PasteImmediately => {
+                hide_window(window, cx, false);
+                if let Err(error) = crate::gui::paste::trigger_paste() {
+                    tracing::warn!(error = %error, "failed to trigger immediate paste");
+                }
+            }
         }
     }
 
@@ -399,6 +479,7 @@ impl RopyBoard {
             settings.language = language.clone();
             settings.update.auto_check = self.auto_check_enabled;
             settings.preview.hover_preview_enabled = self.hover_preview_enabled;
+            settings.confirm.mode = self.confirm_mode;
             if let Err(e) = settings.save() {
                 tracing::warn!(error = %e, "failed to save settings");
             }
@@ -643,6 +724,32 @@ impl Render for RopyBoard {
 mod tests {
     use super::*;
     use crate::repository::{ClipboardRecord, models::ContentType};
+
+    #[test]
+    fn test_window_pin_availability_depends_on_confirm_mode() {
+        assert!(RopyBoard::window_pin_available(
+            ConfirmMode::CopyToClipboard
+        ));
+        assert!(!RopyBoard::window_pin_available(
+            ConfirmMode::PasteImmediately,
+        ));
+    }
+
+    #[test]
+    fn test_resolve_window_pin_state_disables_pin_for_immediate_paste() {
+        assert!(RopyBoard::resolve_window_pin_state(
+            ConfirmMode::CopyToClipboard,
+            true,
+        ));
+        assert!(!RopyBoard::resolve_window_pin_state(
+            ConfirmMode::PasteImmediately,
+            true,
+        ));
+        assert!(!RopyBoard::resolve_window_pin_state(
+            ConfirmMode::PasteImmediately,
+            false,
+        ));
+    }
 
     #[test]
     fn test_filter_records_by_query_empty_query() {
