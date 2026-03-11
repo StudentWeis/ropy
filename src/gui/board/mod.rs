@@ -12,13 +12,15 @@ use std::{
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render, SharedString,
-    Subscription, Window,
-    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
+    AnyElement, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render,
+    SharedString, Subscription, Window,
+    prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
+    px,
 };
 use gpui_component::{
-    ActiveTheme, IndexPath,
+    ActiveTheme, IndexPath, WindowExt,
     input::InputState,
+    notification::Notification,
     select::{SelectEvent, SelectState},
     v_flex,
 };
@@ -414,6 +416,7 @@ impl RopyBoard {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let mut activation_key = self
             .settings_activation_key_input
@@ -467,6 +470,7 @@ impl RopyBoard {
             .cloned()
             .unwrap_or_default();
 
+        let mut save_disk_error: Option<String> = None;
         {
             let mut settings = match self.settings.write() {
                 Ok(g) => g,
@@ -482,6 +486,7 @@ impl RopyBoard {
             settings.confirm.mode = self.confirm_mode;
             if let Err(e) = settings.save() {
                 tracing::warn!(error = %e, "failed to save settings");
+                save_disk_error = Some(e.to_string());
             }
         }
 
@@ -502,7 +507,8 @@ impl RopyBoard {
         });
 
         // Sync auto-start state with system
-        if let Err(e) = self.sync_autostart_state() {
+        let autostart_error = self.sync_autostart_state().err();
+        if let Some(ref e) = autostart_error {
             tracing::warn!(error = ?e, "failed to sync auto-start state");
         }
 
@@ -515,15 +521,51 @@ impl RopyBoard {
             input.set_value("", window, cx);
         });
 
-        let hotkey_invalid_msg = self.i18n.t("settings_hotkey_invalid");
         self.settings_activation_key_input.update(cx, |input, cx| {
             input.set_placeholder(activation_key, window, cx);
-            if is_hotkey_invalid {
-                input.set_value(hotkey_invalid_msg, window, cx);
-            } else {
-                input.set_value("", window, cx);
-            }
+            input.set_value("", window, cx);
         });
+
+        // --- User notifications: auto width (content-driven), capped at 280px ---
+        if let Some(err_msg) = save_disk_error {
+            let msg = format!("✕  {}: {}", self.i18n.t("settings_save_failed"), err_msg);
+            window.push_notification(
+                Notification::new().message(msg).w_auto().max_w(px(280.0)),
+                cx,
+            );
+        } else {
+            if is_hotkey_invalid {
+                let warn_msg = self.i18n.t("settings_hotkey_invalid_warning");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("⚠  {warn_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
+            if autostart_error.is_some() {
+                let warn_msg = self.i18n.t("settings_autostart_failed");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("⚠  {warn_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
+            if !is_hotkey_invalid && autostart_error.is_none() {
+                let ok_msg = self.i18n.t("settings_save_success");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("✓  {ok_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
+        }
+
         cx.notify();
     }
 
@@ -642,7 +684,7 @@ impl RopyBoard {
 }
 
 impl Render for RopyBoard {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let base = v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
@@ -654,69 +696,91 @@ impl Render for RopyBoard {
             .px_4()
             .pb_4();
 
-        if self.show_settings {
-            return base.child(render_settings_content(self, cx));
-        }
+        let body: AnyElement = if self.show_settings {
+            base.child(render_settings_content(self, cx))
+                .into_any_element()
+        } else if self.show_about {
+            base.child(render_about_content(self, cx))
+                .into_any_element()
+        } else if self.show_help {
+            base.child(render_help_content(self, cx)).into_any_element()
+        } else {
+            // Render main clipboard view
+            let query = self.search_input.read(cx).value().to_string();
+            let new_filtered_records = self.get_filtered_records(&query);
 
-        if self.show_about {
-            return base.child(render_about_content(self, cx));
-        }
+            if new_filtered_records != *self.filtered_records {
+                let old_len = self.filtered_records.len();
+                let new_len = new_filtered_records.len();
 
-        if self.show_help {
-            return base.child(render_help_content(self, cx));
-        }
+                // If we're deleting a record, preserve the scroll position
+                let scroll_position = if self.deleting_record {
+                    Some(self.list_state.logical_scroll_top())
+                } else {
+                    None
+                };
 
-        // Render main clipboard view
-        let query = self.search_input.read(cx).value().to_string();
-        let new_filtered_records = self.get_filtered_records(&query);
+                self.filtered_records = Arc::new(new_filtered_records);
 
-        if new_filtered_records != *self.filtered_records {
-            let old_len = self.filtered_records.len();
-            let new_len = new_filtered_records.len();
+                // Use splice to inform list state about the change instead of reset
+                // This helps preserve scroll position better
+                if old_len > new_len && self.deleting_record {
+                    // A record was deleted - use splice to update just that range
+                    // We replace the entire range with the new count
+                    self.list_state.splice(0..old_len, new_len);
 
-            // If we're deleting a record, preserve the scroll position
-            let scroll_position = if self.deleting_record {
-                Some(self.list_state.logical_scroll_top())
-            } else {
-                None
-            };
+                    // Restore scroll position
+                    if let Some(scroll_pos) = scroll_position {
+                        self.list_state.scroll_to(scroll_pos);
+                    }
 
-            self.filtered_records = Arc::new(new_filtered_records);
-
-            // Use splice to inform list state about the change instead of reset
-            // This helps preserve scroll position better
-            if old_len > new_len && self.deleting_record {
-                // A record was deleted - use splice to update just that range
-                // We replace the entire range with the new count
-                self.list_state.splice(0..old_len, new_len);
-
-                // Restore scroll position
-                if let Some(scroll_pos) = scroll_position {
-                    self.list_state.scroll_to(scroll_pos);
+                    // Reset the flag
+                    self.deleting_record = false;
+                } else {
+                    // For other changes (like search), reset the list state
+                    self.list_state.reset(new_len);
                 }
-
-                // Reset the flag
-                self.deleting_record = false;
-            } else {
-                // For other changes (like search), reset the list state
-                self.list_state.reset(new_len);
             }
-        }
 
-        if self.selected_index >= self.filtered_records.len() && !self.filtered_records.is_empty() {
-            self.selected_index = self.filtered_records.len() - 1;
-        } else if self.filtered_records.is_empty() {
-            self.selected_index = 0;
-        }
+            if self.selected_index >= self.filtered_records.len()
+                && !self.filtered_records.is_empty()
+            {
+                self.selected_index = self.filtered_records.len() - 1;
+            } else if self.filtered_records.is_empty() {
+                self.selected_index = 0;
+            }
 
-        base.on_action(cx.listener(Self::on_select_prev))
-            .on_action(cx.listener(Self::on_select_next))
-            .on_action(cx.listener(Self::on_confirm_selection))
-            .on_action(cx.listener(Self::on_delete_record))
-            .on_key_down(cx.listener(Self::on_key_down))
-            .child(render_header(self, cx))
-            .child(render_search_input(&self.search_input, cx))
-            .child(self.render_records_list(cx))
+            base.on_action(cx.listener(Self::on_select_prev))
+                .on_action(cx.listener(Self::on_select_next))
+                .on_action(cx.listener(Self::on_confirm_selection))
+                .on_action(cx.listener(Self::on_delete_record))
+                .on_key_down(cx.listener(Self::on_key_down))
+                .child(render_header(self, cx))
+                .child(render_search_input(&self.search_input, cx))
+                .child(self.render_records_list(cx))
+                .into_any_element()
+        };
+
+        // Render each notification directly in a bottom-right column.
+        // This bypasses NotificationList (which hardcodes top_4/right_4) so we can
+        // freely control position, spacing, and opacity.
+        let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
+        let has_notifs = !notifs.is_empty();
+        gpui::div()
+            .relative()
+            .size_full()
+            .child(body)
+            .when(has_notifs, move |this| {
+                this.child(
+                    v_flex()
+                        .absolute()
+                        .bottom_4()
+                        .right_3()
+                        .gap_2()
+                        .opacity(0.9)
+                        .children(notifs),
+                )
+            })
     }
 }
 
