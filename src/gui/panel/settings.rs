@@ -1,5 +1,5 @@
 use gpui::{
-    Context, div,
+    Context, StatefulInteractiveElement, div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
@@ -9,7 +9,6 @@ use gpui_component::{
     divider::Divider,
     h_flex,
     input::Input,
-    scroll::ScrollableElement,
     select::Select,
     v_flex,
 };
@@ -76,7 +75,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     v_flex().size_full().child(header).child(
         v_flex()
             .id("settings-content")
-            .overflow_y_scrollbar()
+            .overflow_y_scroll()
+            .size_full()
             .flex_1()
             .px_4()
             .pb_4()
