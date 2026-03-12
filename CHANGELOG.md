@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-03-12
+
+### 🚀 Features
+- Add hotkey recording functionality by @StudentWeis
+- Add validation and warning for max history input in settings by @StudentWeis
+- Enhance settings panel layout with improved scrolling and size handling by @StudentWeis
+- Add notifications for settings save status by @StudentWeis
+- Add configurable confirm action modes for clipboard interactions by @StudentWeis
+- Enhance record filtering by search query in RopyBoard by @StudentWeis
+
+### 🐛 Bug Fixes
+- Remove vim key bindings in action to avoid serach error by @StudentWeis
+
 ## [0.3.1] - 2026-03-10
 
 ### Attention
