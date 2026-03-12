@@ -62,6 +62,10 @@ impl RopyBoard {
     }
 
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
+        if self.show_settings && self.hotkey_recording {
+            return;
+        }
+
         self.selected_index = 0;
         if self.show_settings {
             settings::reset_settings_dialog(self, window, cx);
@@ -75,6 +79,11 @@ impl RopyBoard {
     }
 
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
+        if self.show_settings && self.hotkey_recording {
+            self.cancel_hotkey_recording(window, cx);
+            return;
+        }
+
         if self.show_settings {
             settings::reset_settings_dialog(self, window, cx);
             return;

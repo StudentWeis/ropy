@@ -1,6 +1,7 @@
 mod app;
 mod board;
 mod hotkey;
+pub mod hotkey_record;
 mod panel;
 mod paste;
 mod tray;

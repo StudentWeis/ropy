@@ -12,8 +12,8 @@ use std::{
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AnyElement, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render,
-    SharedString, Subscription, Window,
+    AnyElement, AppContext, Context, Entity, FocusHandle, Focusable, ListAlignment, ListState,
+    Render, SharedString, Subscription, Window,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
@@ -30,7 +30,7 @@ use crate::{
     clipboard::LastCopyState,
     config::{ConfirmMode, Settings},
     gui::{
-        hide_window,
+        hide_window, hotkey_record,
         panel::{
             about::render_about_content, help::render_help_content,
             settings::render_settings_content,
@@ -60,6 +60,10 @@ pub struct RopyBoard {
     pub(crate) show_about: bool,
     pub(crate) show_help: bool,
     pub(crate) show_preview: bool,
+    pub(crate) hotkey_recording: bool,
+    pub(crate) hotkey_manual_editing: bool,
+    pub(crate) pending_hotkey: String,
+    pub(crate) hotkey_before_recording: String,
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) selected_theme: usize, // 0: Light, 1: Dark, 2: System
@@ -118,6 +122,97 @@ impl RopyBoard {
 
     pub fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
         self.hotkey_tx = Some(tx);
+    }
+
+    pub(crate) fn displayed_hotkey(&self) -> &str {
+        &self.pending_hotkey
+    }
+
+    pub(crate) fn start_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_before_recording = self.pending_hotkey.clone();
+        self.hotkey_recording = true;
+        self.hotkey_manual_editing = false;
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn enable_hotkey_manual_edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.hotkey_recording = false;
+        self.hotkey_manual_editing = true;
+        let pending_hotkey = self.pending_hotkey.clone();
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value(pending_hotkey, window, cx);
+        });
+        window.focus(&self.settings_activation_key_input.focus_handle(cx));
+        cx.notify();
+    }
+
+    pub(crate) fn clear_hotkey_candidate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_recording = false;
+        self.pending_hotkey.clear();
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn cancel_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_recording = false;
+        self.pending_hotkey
+            .clone_from(&self.hotkey_before_recording);
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn on_settings_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.hotkey_recording {
+            return;
+        }
+
+        if hotkey_record::is_cancel_key(&event.keystroke.key) {
+            self.cancel_hotkey_recording(window, cx);
+            return;
+        }
+
+        if hotkey_record::is_clear_key(&event.keystroke) {
+            self.clear_hotkey_candidate(window, cx);
+            return;
+        }
+
+        let Some(hotkey) = hotkey_record::keystroke_to_hotkey(&event.keystroke) else {
+            return;
+        };
+
+        self.hotkey_recording = false;
+        self.hotkey_manual_editing = false;
+        self.pending_hotkey = hotkey;
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
+        if self.hotkey_manual_editing {
+            self.settings_activation_key_input
+                .read(cx)
+                .value()
+                .trim()
+                .to_string()
+        } else {
+            self.pending_hotkey.trim().to_string()
+        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -186,8 +281,7 @@ impl RopyBoard {
         }
         .preview
         .hover_preview_enabled;
-        let settings_activation_key_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(activation_key.clone()));
+        let settings_activation_key_input = cx.new(|cx| InputState::new(window, cx));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
 
@@ -242,6 +336,10 @@ impl RopyBoard {
             show_about: false,
             show_help: false,
             show_preview: false,
+            hotkey_recording: false,
+            hotkey_manual_editing: false,
+            pending_hotkey: activation_key.clone(),
+            hotkey_before_recording: activation_key,
             settings_activation_key_input,
             settings_max_history_input,
             selected_theme: theme_index,
@@ -418,11 +516,8 @@ impl RopyBoard {
 
     #[allow(clippy::too_many_lines)]
     pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        let mut activation_key = self
-            .settings_activation_key_input
-            .read(cx)
-            .value()
-            .to_string();
+        self.hotkey_recording = false;
+        let mut activation_key = self.resolve_activation_key_input(cx);
 
         let mut is_hotkey_invalid = false;
         if activation_key.is_empty() {
@@ -442,6 +537,10 @@ impl RopyBoard {
             is_hotkey_invalid = true;
             activation_key = Settings::default().hotkey.activation_key;
         }
+
+        self.pending_hotkey.clone_from(&activation_key);
+        self.hotkey_before_recording.clone_from(&activation_key);
+        self.hotkey_manual_editing = false;
 
         // Get current max_history_records from settings as fallback
         let current_max_history = match self.settings.read() {
@@ -519,11 +618,6 @@ impl RopyBoard {
 
         self.settings_max_history_input.update(cx, |input, cx| {
             input.set_placeholder(max_history.to_string(), window, cx);
-            input.set_value("", window, cx);
-        });
-
-        self.settings_activation_key_input.update(cx, |input, cx| {
-            input.set_placeholder(activation_key, window, cx);
             input.set_value("", window, cx);
         });
 
@@ -726,7 +820,8 @@ impl Render for RopyBoard {
             .pb_4();
 
         let body: AnyElement = if self.show_settings {
-            base.child(render_settings_content(self, cx))
+            base.on_key_down(cx.listener(Self::on_settings_key_down))
+                .child(render_settings_content(self, cx))
                 .into_any_element()
         } else if self.show_about {
             base.child(render_about_content(self, cx))

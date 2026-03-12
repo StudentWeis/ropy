@@ -187,10 +187,38 @@ fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElem
 }
 
 fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut help_text = div()
+        .w(px(220.0))
+        .text_xs()
+        .line_height(gpui::relative(1.4))
+        .text_color(cx.theme().muted_foreground);
+
+    help_text = if board.hotkey_recording {
+        help_text.child(board.i18n.t("settings_hotkey_record_hint"))
+    } else if board.hotkey_manual_editing {
+        help_text.child(board.i18n.t("settings_hotkey_hint"))
+    } else {
+        help_text
+    };
+
     settings_row_top(
         board.i18n.t("settings_activation_key"),
         v_flex()
-            .gap_1()
+            .gap_2()
+            .items_end()
+            .child(render_hotkey_controls(board, cx))
+            .child(help_text),
+        cx,
+    )
+}
+
+fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let actions = render_hotkey_action_buttons(board, cx);
+
+    if board.hotkey_manual_editing {
+        v_flex()
+            .gap_2()
+            .w(px(220.0))
             .items_end()
             .child(
                 Input::new(&board.settings_activation_key_input)
@@ -198,18 +226,119 @@ fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
                     .border_1()
                     .border_color(cx.theme().border)
                     .rounded_md()
-                    .w(px(180.0))
+                    .w(px(220.0))
                     .px_3()
-                    .py_1(),
+                    .py_2(),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(board.i18n.t("settings_hotkey_hint")),
-            ),
-        cx,
-    )
+            .child(actions)
+    } else {
+        v_flex()
+            .gap_2()
+            .w(px(220.0))
+            .items_end()
+            .child(render_hotkey_display(board, cx))
+            .child(actions)
+    }
+}
+
+fn render_hotkey_display(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let hotkey_value: gpui::SharedString = if board.displayed_hotkey().is_empty() {
+        board.i18n.t("settings_hotkey_empty").into()
+    } else {
+        board.displayed_hotkey().to_string().into()
+    };
+
+    let border_color = if board.hotkey_recording {
+        cx.theme().foreground
+    } else {
+        cx.theme().border
+    };
+
+    let background_color = if board.hotkey_recording {
+        cx.theme().secondary
+    } else {
+        cx.theme().input
+    };
+
+    div()
+        .w(px(220.0))
+        .min_h(px(40.0))
+        .px_3()
+        .py_2()
+        .border_1()
+        .border_color(border_color)
+        .rounded_md()
+        .bg(background_color)
+        .text_sm()
+        .font_weight(if board.hotkey_recording {
+            gpui::FontWeight::MEDIUM
+        } else {
+            gpui::FontWeight::NORMAL
+        })
+        .text_color(if board.hotkey_recording {
+            cx.theme().foreground
+        } else {
+            cx.theme().secondary_foreground
+        })
+        .child(hotkey_value)
+}
+
+fn render_hotkey_action_buttons(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut record_button =
+        Button::new("hotkey-record-button")
+            .small()
+            .label(if board.hotkey_recording {
+                board.i18n.t("settings_hotkey_recording")
+            } else {
+                board.i18n.t("settings_hotkey_record")
+            });
+    record_button = if board.hotkey_recording {
+        record_button.primary()
+    } else {
+        record_button.ghost()
+    };
+    let record_button =
+        record_button
+            .rounded_none()
+            .flex_1()
+            .on_click(cx.listener(|board, _, window, cx| {
+                if board.hotkey_recording {
+                    board.cancel_hotkey_recording(window, cx);
+                } else {
+                    board.start_hotkey_recording(window, cx);
+                }
+            }));
+
+    let edit_button = Button::new("hotkey-edit-text-button")
+        .small()
+        .ghost()
+        .rounded_none()
+        .flex_1()
+        .label(board.i18n.t("settings_hotkey_edit_text"))
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.enable_hotkey_manual_edit(window, cx);
+        }));
+
+    let clear_button = Button::new("hotkey-clear-button")
+        .small()
+        .ghost()
+        .rounded_none()
+        .flex_1()
+        .label(board.i18n.t("settings_hotkey_clear"))
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.clear_hotkey_candidate(window, cx);
+        }));
+
+    h_flex()
+        .w(px(220.0))
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded_md()
+        .overflow_hidden()
+        .items_center()
+        .child(record_button)
+        .child(edit_button)
+        .child(clear_button)
 }
 
 fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -404,6 +533,10 @@ pub fn reset_settings_dialog(
     board.autostart_enabled = settings_guard.autostart.enabled;
     board.auto_check_enabled = settings_guard.update.auto_check;
     board.confirm_mode = settings_guard.confirm.mode;
+    board.pending_hotkey = settings_guard.hotkey.activation_key.clone();
+    board.hotkey_before_recording = settings_guard.hotkey.activation_key.clone();
+    board.hotkey_recording = false;
+    board.hotkey_manual_editing = false;
     drop(settings_guard);
 
     // Reset the language select dropdown
