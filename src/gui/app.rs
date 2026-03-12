@@ -20,6 +20,89 @@ use crate::{
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
+/// Consume clipboard events from the monitor, persist them to the repository,
+/// update the in-memory record list, and notify the GUI to refresh.
+///
+/// This is intentionally placed in `app.rs` rather than `clipboard/listener.rs`
+/// because it coordinates across three subsystems (clipboard, repository, GUI)
+/// and does not belong to the clipboard I/O layer alone.
+fn start_clipboard_event_handler(
+    clipboard_rx: async_channel::Receiver<ClipboardEvent>,
+    shared_records: std::sync::Arc<std::sync::Mutex<Vec<ClipboardRecord>>>,
+    repository: Option<std::sync::Arc<ClipboardRepository>>,
+    settings: std::sync::Arc<std::sync::RwLock<Settings>>,
+    async_app: AsyncApp,
+    window_handle: WindowHandle<Root>,
+) {
+    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
+    let bg_executor = async_app.background_executor().clone();
+    let fg_executor = async_app.foreground_executor().clone();
+
+    bg_executor
+        .spawn(async move {
+            while let Ok(event) = clipboard_rx.recv().await {
+                if let Some(ref repo) = repository {
+                    let result = match event {
+                        ClipboardEvent::Text(text) => repo.save_text(text),
+                        ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
+                    };
+
+                    match result {
+                        Ok(record) => {
+                            let (max_display, max_storage) = {
+                                let settings_guard = match settings.read() {
+                                    Ok(g) => g,
+                                    Err(e) => e.into_inner(),
+                                };
+                                (
+                                    settings_guard.storage.max_history_records,
+                                    settings_guard.storage.max_storage_records,
+                                )
+                            };
+                            {
+                                let mut guard = match shared_records.lock() {
+                                    Ok(g) => g,
+                                    Err(poisoned) => poisoned.into_inner(),
+                                };
+                                // Remove existing record with same id (dedup upsert)
+                                guard.retain(|r| r.id != record.id);
+                                guard.insert(0, record);
+                                // Truncate in-memory records to display limit
+                                if guard.len() > max_display {
+                                    guard.truncate(max_display);
+                                }
+                            }
+                            // Cleanup repository to storage limit
+                            if let Err(e) = repo.cleanup_old_records(max_storage) {
+                                tracing::warn!(error = %e, "failed to cleanup old clipboard records");
+                            }
+                            let _ = notify_tx.send(()).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "failed to save clipboard record");
+                        }
+                    }
+                }
+            }
+        })
+        .detach();
+
+    // Notify GUI to refresh clipboard history
+    fg_executor
+        .spawn(async move {
+            while (notify_rx.recv().await).is_ok() {
+                let _ = async_app.update(|cx| {
+                    window_handle
+                        .update(cx, |_, _, cx| {
+                            cx.notify();
+                        })
+                        .ok();
+                });
+            }
+        })
+        .detach();
+}
+
 #[cfg(target_os = "linux")]
 pub static X11: OnceLock<X11> = OnceLock::new();
 
@@ -240,7 +323,7 @@ pub fn launch_app() {
             copy_tx,
             is_silent,
         );
-        clipboard::start_clipboard_listener(
+        start_clipboard_event_handler(
             clipboard_rx,
             shared_records,
             repository,

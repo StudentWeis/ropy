@@ -1,21 +1,16 @@
 //! A simple clipboard change listener using event-driven watching.
 
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use async_channel::Sender;
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
     common::RustImage,
 };
-use gpui::{AsyncApp, WindowHandle};
-use gpui_component::Root;
+use gpui::AsyncApp;
 use image::DynamicImage;
 
 use super::{ClipboardEvent, LastCopyState};
-use crate::{
-    config::Settings,
-    repository::{ClipboardRecord, ClipboardRepository},
-};
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -106,82 +101,6 @@ pub fn start_clipboard_monitor(
             };
             watcher.add_handler(monitor);
             watcher.start_watch();
-        })
-        .detach();
-}
-
-pub fn start_clipboard_listener(
-    clipboard_rx: async_channel::Receiver<ClipboardEvent>,
-    shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    repository: Option<Arc<ClipboardRepository>>,
-    settings: Arc<RwLock<Settings>>,
-    async_app: AsyncApp,
-    window_handle: WindowHandle<Root>,
-) {
-    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
-    let bg_executor = async_app.background_executor().clone();
-    let fg_executor = async_app.foreground_executor().clone();
-
-    bg_executor
-        .spawn(async move {
-            while let Ok(event) = clipboard_rx.recv().await {
-                if let Some(ref repo) = repository {
-                    let result = match event {
-                        ClipboardEvent::Text(text) => repo.save_text(text),
-                        ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
-                    };
-
-                    match result {
-                        Ok(record) => {
-                            {
-                                let (max_display, max_storage) = {
-                                    let settings_guard = match settings.read() {
-                                        Ok(g) => g,
-                                        Err(e) => e.into_inner(),
-                                    };
-                                    (
-                                        settings_guard.storage.max_history_records,
-                                        settings_guard.storage.max_storage_records,
-                                    )
-                                };
-                                let mut guard = match shared_records.lock() {
-                                    Ok(g) => g,
-                                    Err(poisoned) => poisoned.into_inner(),
-                                };
-                                // Remove existing record with same id (dedup upsert)
-                                guard.retain(|r| r.id != record.id);
-                                guard.insert(0, record);
-                                // Truncate in-memory records to display limit
-                                if guard.len() > max_display {
-                                    guard.truncate(max_display);
-                                }
-                                drop(guard);
-                                // Cleanup repository to storage limit
-                                repo.cleanup_old_records(max_storage).ok();
-                            }
-                            let _ = notify_tx.send(()).await;
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "failed to save clipboard record");
-                        }
-                    }
-                }
-            }
-        })
-        .detach();
-
-    // Notify GUI to refresh clipboard history
-    fg_executor
-        .spawn(async move {
-            while (notify_rx.recv().await).is_ok() {
-                let _ = async_app.update(|cx| {
-                    window_handle
-                        .update(cx, |_, _, cx| {
-                            cx.notify();
-                        })
-                        .ok();
-                });
-            }
         })
         .detach();
 }
