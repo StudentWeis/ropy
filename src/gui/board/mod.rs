@@ -84,6 +84,8 @@ pub struct RopyBoard {
     pub(crate) auto_check_enabled: bool,
     /// Whether hover preview is enabled (mirrors settings)
     pub(crate) hover_preview_enabled: bool,
+    /// Whether the clear-all confirmation dialog is visible
+    pub(crate) show_clear_confirm: bool,
 }
 
 impl RopyBoard {
@@ -366,6 +368,7 @@ impl RopyBoard {
             update_status: UpdateStatus::Idle,
             auto_check_enabled,
             hover_preview_enabled,
+            show_clear_confirm: false,
         }
     }
 
@@ -970,10 +973,14 @@ impl Render for RopyBoard {
         // freely control position, spacing, and opacity.
         let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
         let has_notifs = !notifs.is_empty();
+        let show_clear_confirm = self.show_clear_confirm;
         gpui::div()
             .relative()
             .size_full()
             .child(body)
+            .when(show_clear_confirm, |this| {
+                this.child(render::render_clear_confirm_overlay(self, cx))
+            })
             .when(has_notifs, move |this| {
                 this.child(
                     v_flex()

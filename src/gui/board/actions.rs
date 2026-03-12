@@ -74,6 +74,7 @@ impl RopyBoard {
         self.show_settings = false;
         self.show_about = false;
         self.show_help = false;
+        self.show_clear_confirm = false;
         window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
         active_window(window, cx);
     }
@@ -86,6 +87,11 @@ impl RopyBoard {
 
         if self.show_settings {
             settings::reset_settings_dialog(self, window, cx);
+            return;
+        }
+        if self.show_clear_confirm {
+            self.show_clear_confirm = false;
+            cx.notify();
             return;
         }
         if self.show_about {
@@ -120,6 +126,11 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Block keyboard shortcuts while the clear-confirm dialog is open
+        if self.show_clear_confirm {
+            return;
+        }
+
         // If the search input is focused, ignore key presses
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)

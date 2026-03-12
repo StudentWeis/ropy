@@ -10,6 +10,10 @@ tray_quit = "Quit"
 # Main window
 search_placeholder = "Use / to search ... "
 clear_all = "Clear All"
+clear_confirm_title = "Clear All Records"
+clear_confirm_message = "This will permanently delete all saved clipboard records. This action cannot be undone."
+clear_confirm_cancel = "Cancel"
+clear_confirm_button = "Clear"
 pin = "Pin"
 unpin = "Unpin"
 

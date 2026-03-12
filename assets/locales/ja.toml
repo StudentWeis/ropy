@@ -11,6 +11,10 @@ tray_quit = "終了"
 # Main window
 search_placeholder = "/ で検索 ... "
 clear_all = "すべてクリア"
+clear_confirm_title = "すべての記録を消去"
+clear_confirm_message = "保存されたすべてのクリップボード記録が完全に削除されます。この操作は取り消せません。"
+clear_confirm_cancel = "キャンセル"
+clear_confirm_button = "消去"
 pin = "ピン留め"
 unpin = "ピン留め解除"
 
