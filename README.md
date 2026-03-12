@@ -18,8 +18,8 @@ English | <a href="doc/README/README_ZH.md">简体中文</a>
 </p>
 
 <p align="center">
-<img src="https://s2.loli.net/2026/01/04/8LNOkP3rwivYtxj.png" alt="Ropy Dark" width="40%">
-<img src="https://s2.loli.net/2026/01/04/IM83wFmDJ6QpKHO.png" alt="Ropy Light" width="40%">
+<img src="https://www.imgur.la/images/2026/03/13/pic_1773332541063.png" alt="Ropy Dark" width="40%">
+<img src="https://www.imgur.la/images/2026/03/13/pic_1773332561411.png" alt="Ropy Light" width="40%">
 </p>
 
 # Features
