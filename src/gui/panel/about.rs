@@ -1,5 +1,5 @@
 use gpui::{
-    Context, ImageSource, Resource, div, img,
+    Context, ImageSource, Resource, StatefulInteractiveElement, div, img,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
@@ -9,10 +9,7 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::{
-    constants::{ABOUT_BACK_ARROW, APP_NAME},
-    gui::board::RopyBoard,
-};
+use crate::{constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, updater::models::UpdateStatus};
 
 /// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -51,35 +48,35 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
 
     v_flex().size_full().child(header).child(
         v_flex()
+            .id("about-content")
+            .overflow_y_scroll()
             .flex_1()
             .items_center()
-            .justify_center()
-            .gap_4()
+            .gap_3()
+            // Logo
             .child(
                 img(ImageSource::Resource(Resource::Embedded("logo.png".into())))
-                    .w(px(100.0))
-                    .h(px(100.0))
+                    .w(px(80.0))
+                    .h(px(80.0))
                     .rounded_md(),
             )
-            .child(
-                div()
-                    .text_2xl()
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child(APP_NAME),
-            )
+            // Version text
             .child(
                 div()
                     .text_sm()
-                    .text_color(cx.theme().muted_foreground)
+                    .text_color(cx.theme().foreground)
+                    .font_weight(gpui::FontWeight::MEDIUM)
                     .child(format!("{} {}", board.i18n.t("about_version"), version)),
             )
+            // Update section
+            .child(render_update_section(board, cx))
+            // Description and GitHub footer
             .child(
                 div()
                     .px_8()
                     .text_center()
                     .text_sm()
-                    .text_color(cx.theme().foreground)
+                    .text_color(cx.theme().muted_foreground)
                     .child(board.i18n.t("about_description")),
             )
             .child(
@@ -91,4 +88,62 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     }),
             ),
     )
+}
+
+/// Render the update section with status and action button.
+fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let status_text: gpui::SharedString = match &board.update_status {
+        UpdateStatus::Idle => board.i18n.t("update_check_now").into(),
+        UpdateStatus::Checking => board.i18n.t("update_checking").into(),
+        UpdateStatus::Available(info) => {
+            format!("{}: v{}", board.i18n.t("update_available"), info.version).into()
+        }
+        UpdateStatus::UpToDate => board.i18n.t("update_up_to_date").into(),
+        UpdateStatus::Downloading(p) => {
+            format!("{} {:.0}%", board.i18n.t("update_downloading"), p * 100.0).into()
+        }
+        UpdateStatus::ReadyToRestart => board.i18n.t("update_restart").into(),
+        UpdateStatus::Error(msg) => format!("{}: {}", board.i18n.t("update_error"), msg).into(),
+    };
+    let status_color = match &board.update_status {
+        UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,
+        UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
+        _ => cx.theme().muted_foreground,
+    };
+
+    let action_button: Option<Button> = match &board.update_status {
+        UpdateStatus::Available(_) => Some(
+            Button::new("update-download-button")
+                .small()
+                .primary()
+                .label(board.i18n.t("update_download"))
+                .on_click(cx.listener(|board, _, _, cx| board.download_and_install_update(cx))),
+        ),
+        UpdateStatus::ReadyToRestart => Some(
+            Button::new("update-restart-button")
+                .small()
+                .primary()
+                .label(board.i18n.t("update_restart_button"))
+                .on_click(cx.listener(|_, _, _, cx| {
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new(exe).spawn();
+                    }
+                    cx.quit();
+                })),
+        ),
+        UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_) => Some(
+            Button::new("update-check-button")
+                .small()
+                .ghost()
+                .label(board.i18n.t("update_check_now"))
+                .on_click(cx.listener(|board, _, _, cx| board.check_for_update_async(cx))),
+        ),
+        _ => None,
+    };
+
+    h_flex()
+        .items_center()
+        .gap_2()
+        .child(div().text_xs().text_color(status_color).child(status_text))
+        .children(action_button)
 }

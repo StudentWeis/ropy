@@ -13,7 +13,7 @@ use gpui_component::{
     v_flex,
 };
 
-use crate::{gui::board::RopyBoard, i18n::Language, updater::models::UpdateStatus};
+use crate::{gui::board::RopyBoard, i18n::Language};
 
 /// Render a settings row with label centered against the control.
 fn settings_row<C: IntoElement>(
@@ -70,7 +70,6 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let confirm_mode_row = render_confirm_mode_row(board, cx);
     let open_log_row = render_open_log_row(board, cx);
     let auto_check_row = render_auto_check_row(board, cx);
-    let update_row = render_update_row(board, cx);
     let hover_preview_row = render_hover_preview_row(board, cx);
 
     v_flex().size_full().child(header).child(
@@ -99,9 +98,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(Divider::horizontal())
             .child(open_log_row)
             .child(Divider::horizontal())
-            .child(auto_check_row)
-            .child(Divider::horizontal())
-            .child(update_row),
+            .child(auto_check_row),
     )
 }
 
@@ -467,65 +464,6 @@ fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
         cx.notify();
     }));
     settings_row(board.i18n.t("update_auto_check"), toggle, cx)
-}
-
-fn render_update_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let version = crate::updater::checker::current_version();
-    let status_text: gpui::SharedString = match &board.update_status {
-        UpdateStatus::Idle => format!("v{version}").into(),
-        UpdateStatus::Checking => board.i18n.t("update_checking").into(),
-        UpdateStatus::Available(info) => {
-            format!("{}: v{}", board.i18n.t("update_available"), info.version).into()
-        }
-        UpdateStatus::UpToDate => board.i18n.t("update_up_to_date").into(),
-        UpdateStatus::Downloading(p) => {
-            format!("{} {:.0}%", board.i18n.t("update_downloading"), p * 100.0).into()
-        }
-        UpdateStatus::ReadyToRestart => board.i18n.t("update_restart").into(),
-        UpdateStatus::Error(msg) => format!("{}: {}", board.i18n.t("update_error"), msg).into(),
-    };
-    let status_color = match &board.update_status {
-        UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,
-        UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
-        _ => cx.theme().muted_foreground,
-    };
-
-    let action_button: Option<Button> = match &board.update_status {
-        UpdateStatus::Available(_) => Some(
-            Button::new("update-download-button")
-                .small()
-                .primary()
-                .label(board.i18n.t("update_download"))
-                .on_click(cx.listener(|board, _, _, cx| board.download_and_install_update(cx))),
-        ),
-        UpdateStatus::ReadyToRestart => Some(
-            Button::new("update-restart-button")
-                .small()
-                .primary()
-                .label(board.i18n.t("update_restart_button"))
-                .on_click(cx.listener(|_, _, _, cx| {
-                    if let Ok(exe) = std::env::current_exe() {
-                        let _ = std::process::Command::new(exe).spawn();
-                    }
-                    cx.quit();
-                })),
-        ),
-        UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_) => Some(
-            Button::new("update-check-button")
-                .small()
-                .ghost()
-                .label(board.i18n.t("update_check_now"))
-                .on_click(cx.listener(|board, _, _, cx| board.check_for_update_async(cx))),
-        ),
-        _ => None,
-    };
-
-    let mut right_col = v_flex().gap_1().items_end();
-    right_col = right_col.child(div().text_xs().text_color(status_color).child(status_text));
-    if let Some(btn) = action_button {
-        right_col = right_col.child(btn);
-    }
-    settings_row_top(board.i18n.t("update_title"), right_col, cx)
 }
 
 pub fn reset_settings_dialog(

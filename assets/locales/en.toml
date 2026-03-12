@@ -57,7 +57,6 @@ about_version = "Version"
 about_description = "A lightweight clipboard manager built with Rust and GPUI."
 
 # Update
-update_title = "Update"
 update_auto_check = "Auto-check for updates"
 update_check_now = "Check Now"
 update_checking = "Checking for updates..."

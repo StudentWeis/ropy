@@ -57,7 +57,6 @@ about_version = "版本"
 about_description = "使用 Rust 和 GPUI 构建的轻量级剪贴板管理器。"
 
 # 更新
-update_title = "更新"
 update_auto_check = "自动检查更新"
 update_check_now = "立即检查"
 update_checking = "正在检查更新..."

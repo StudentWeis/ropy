@@ -58,7 +58,6 @@ about_version = "バージョン"
 about_description = "RustとGPUIで構築された軽量クリップボードマネージャーです。"
 
 # アップデート
-update_title = "アップデート"
 update_auto_check = "アップデートを自動確認"
 update_check_now = "今すぐ確認"
 update_checking = "アップデートを確認中..."

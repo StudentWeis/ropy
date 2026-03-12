@@ -65,15 +65,6 @@ pub fn check_for_update(include_prerelease: bool) -> Result<Option<ReleaseInfo>,
     }))
 }
 
-/// Return the current running version string.
-pub const fn current_version() -> &'static str {
-    CURRENT_VERSION
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 /// Fetch the latest (non-prerelease by default) release from GitHub.
 fn fetch_latest_release(include_prerelease: bool) -> Result<GitHubRelease, UpdateError> {
     if include_prerelease {
