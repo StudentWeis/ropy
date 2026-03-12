@@ -134,12 +134,15 @@ pub fn start_clipboard_listener(
                     match result {
                         Ok(record) => {
                             {
-                                let max_history_records = {
+                                let (max_display, max_storage) = {
                                     let settings_guard = match settings.read() {
                                         Ok(g) => g,
                                         Err(e) => e.into_inner(),
                                     };
-                                    settings_guard.storage.max_history_records
+                                    (
+                                        settings_guard.storage.max_history_records,
+                                        settings_guard.storage.max_storage_records,
+                                    )
                                 };
                                 let mut guard = match shared_records.lock() {
                                     Ok(g) => g,
@@ -148,11 +151,13 @@ pub fn start_clipboard_listener(
                                 // Remove existing record with same id (dedup upsert)
                                 guard.retain(|r| r.id != record.id);
                                 guard.insert(0, record);
-                                if guard.len() > max_history_records {
-                                    guard.truncate(max_history_records);
-                                    drop(guard);
-                                    repo.cleanup_old_records(max_history_records).ok();
+                                // Truncate in-memory records to display limit
+                                if guard.len() > max_display {
+                                    guard.truncate(max_display);
                                 }
+                                drop(guard);
+                                // Cleanup repository to storage limit
+                                repo.cleanup_old_records(max_storage).ok();
                             }
                             let _ = notify_tx.send(()).await;
                         }

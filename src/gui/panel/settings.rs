@@ -65,6 +65,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let theme_row = render_theme_row(board, cx);
     let activation_key_row = render_activation_key_row(board, cx);
     let max_history_row = render_max_history_row(board, cx);
+    let max_storage_row = render_max_storage_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
     let confirm_mode_row = render_confirm_mode_row(board, cx);
     let open_log_row = render_open_log_row(board, cx);
@@ -87,6 +88,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(activation_key_row)
             .child(Divider::horizontal())
             .child(max_history_row)
+            .child(Divider::horizontal())
+            .child(max_storage_row)
             .child(Divider::horizontal())
             .child(autostart_row)
             .child(Divider::horizontal())
@@ -356,6 +359,21 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
     )
 }
 
+fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        board.i18n.t("settings_max_storage"),
+        Input::new(&board.settings_max_storage_input)
+            .appearance(false)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded_md()
+            .w(px(70.0))
+            .px_3()
+            .py_1(),
+        cx,
+    )
+}
+
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("autostart-toggle").small();
     btn = if board.autostart_enabled {
@@ -546,6 +564,9 @@ pub fn reset_settings_dialog(
 
     // Clear input fields
     board.settings_max_history_input.update(cx, |input, cx| {
+        input.set_value("", window, cx);
+    });
+    board.settings_max_storage_input.update(cx, |input, cx| {
         input.set_value("", window, cx);
     });
     board.settings_activation_key_input.update(cx, |input, cx| {

@@ -5,31 +5,94 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::Language;
 
+/// Default maximum number of records to display in the UI
+const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
+/// Default maximum number of records to store in the repository
+const DEFAULT_MAX_STORAGE_RECORDS: usize = 1000;
+/// Default interval for update checks (in hours)
+const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS: u64 = 24;
+
 /// Application settings structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
-    /// Hotkey configuration
     pub hotkey: HotkeySettings,
-    /// Storage configuration
     pub storage: StorageSettings,
-    /// Theme configuration
     pub theme: AppTheme,
-    /// Auto-start configuration
     pub autostart: AutoStartSettings,
-    /// Language configuration
     pub language: Language,
-    /// Update configuration
     pub update: UpdateSettings,
-    /// Preview configuration
     pub preview: PreviewSettings,
-    /// Confirm interaction configuration
     pub confirm: ConfirmSettings,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Settings {
+    /// Get the configuration directory path
+    pub fn config_dir() -> Result<PathBuf, ConfigError> {
+        dirs::config_dir()
+            .map(|dir| dir.join("ropy"))
+            .ok_or_else(|| ConfigError::NotFound("Config directory not found".to_string()))
+    }
+
+    /// Get the configuration file path
+    pub fn config_file() -> Result<PathBuf, ConfigError> {
+        Ok(Self::config_dir()?.join("config.toml"))
+    }
+
+    /// Load settings from configuration file and environment variables
+    pub fn load() -> Result<Self, ConfigError> {
+        let config_dir = Self::config_dir()?;
+        let config_file = config_dir.join("config");
+
+        // Create config directory if it doesn't exist
+        if !config_dir.exists() {
+            std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+        }
+
+        let mut builder = Config::builder()
+            // Start with default values
+            .add_source(Config::try_from(&Self::default())?);
+
+        // Add configuration from file (optional)
+        if let Some(path_str) = config_file.to_str() {
+            builder = builder.add_source(File::with_name(path_str).required(false));
+        } else {
+            tracing::warn!("config file path contains invalid UTF-8 characters");
+        }
+
+        let config = builder.build()?;
+        let mut settings: Self = config.try_deserialize()?;
+
+        // Validate and reset hotkey if invalid
+        settings.validate_hotkey();
+
+        Ok(settings)
+    }
+
+    /// Save settings to configuration file
+    pub fn save(&self) -> Result<(), ConfigError> {
+        let config_file = Self::config_file()?;
+        let toml_string =
+            toml::to_string_pretty(self).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+
+        std::fs::write(&config_file, toml_string).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+        Ok(())
+    }
+
+    /// Validate hotkey and reset to default if invalid
+    fn validate_hotkey(&mut self) {
+        if self.hotkey.activation_key.is_empty()
+            || global_hotkey::hotkey::HotKey::from_str(&self.hotkey.activation_key).is_err()
+        {
+            self.hotkey.activation_key = Self::default().hotkey.activation_key;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub enum AppTheme {
     Light,
     Dark,
+    #[default]
     System,
 }
 
@@ -71,13 +134,38 @@ pub struct HotkeySettings {
     pub activation_key: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageSettings {
-    /// Maximum number of records to keep in history
-    pub max_history_records: usize,
+impl Default for HotkeySettings {
+    fn default() -> Self {
+        Self {
+            #[cfg(target_os = "macos")]
+            activation_key: "control+shift+d".to_string(),
+            #[cfg(target_os = "windows")]
+            activation_key: "ctrl+shift+d".to_string(),
+            #[cfg(target_os = "linux")]
+            activation_key: "ctrl+shift+d".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageSettings {
+    /// Maximum number of records to display in the UI (1 - 10,000)
+    pub max_history_records: usize,
+    /// Maximum number of records to store in the repository (1 - 100,000)
+    /// Must be >= `max_history_records`
+    pub max_storage_records: usize,
+}
+
+impl Default for StorageSettings {
+    fn default() -> Self {
+        Self {
+            max_history_records: DEFAULT_MAX_HISTORY_RECORDS,
+            max_storage_records: DEFAULT_MAX_STORAGE_RECORDS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AutoStartSettings {
     /// Whether to enable auto-launch at system startup
     pub enabled: bool,
@@ -93,20 +181,20 @@ pub struct UpdateSettings {
     pub include_prerelease: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreviewSettings {
-    /// Whether to enable hover preview for clipboard items
-    pub hover_preview_enabled: bool,
-}
-
 impl Default for UpdateSettings {
     fn default() -> Self {
         Self {
             auto_check: true,
-            check_interval_hours: 24,
+            check_interval_hours: DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
             include_prerelease: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreviewSettings {
+    /// Whether to enable hover preview for clipboard items
+    pub hover_preview_enabled: bool,
 }
 
 impl Default for PreviewSettings {
@@ -117,88 +205,6 @@ impl Default for PreviewSettings {
     }
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            hotkey: HotkeySettings {
-                #[cfg(target_os = "macos")]
-                activation_key: "control+shift+d".to_string(),
-                #[cfg(target_os = "windows")]
-                activation_key: "ctrl+shift+d".to_string(),
-                #[cfg(target_os = "linux")]
-                activation_key: "ctrl+shift+d".to_string(),
-            },
-            storage: StorageSettings {
-                max_history_records: 100,
-            },
-            theme: AppTheme::System,
-            autostart: AutoStartSettings { enabled: false },
-            language: Language::default(),
-            update: UpdateSettings::default(),
-            preview: PreviewSettings::default(),
-            confirm: ConfirmSettings::default(),
-        }
-    }
-}
-
-impl Settings {
-    /// Get the configuration directory path
-    pub fn config_dir() -> Result<PathBuf, ConfigError> {
-        dirs::config_dir()
-            .map(|dir| dir.join("ropy"))
-            .ok_or_else(|| ConfigError::NotFound("Config directory not found".to_string()))
-    }
-
-    /// Get the configuration file path
-    pub fn config_file() -> Result<PathBuf, ConfigError> {
-        Ok(Self::config_dir()?.join("config.toml"))
-    }
-
-    /// Load settings from configuration file and environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        let config_dir = Self::config_dir()?;
-        let config_file = config_dir.join("config");
-
-        // Create config directory if it doesn't exist
-        if !config_dir.exists() {
-            std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
-        }
-
-        let mut builder = Config::builder()
-            // Start with default values
-            .add_source(Config::try_from(&Self::default())?);
-
-        // Add configuration from file (optional)
-        if let Some(path_str) = config_file.to_str() {
-            builder = builder.add_source(File::with_name(path_str).required(false));
-        } else {
-            tracing::warn!("config file path contains invalid UTF-8 characters");
-        }
-
-        let config = builder.build()?;
-        let mut settings: Self = config.try_deserialize()?;
-
-        // Ensure hotkey is not empty and valid
-        if settings.hotkey.activation_key.is_empty()
-            || global_hotkey::hotkey::HotKey::from_str(&settings.hotkey.activation_key).is_err()
-        {
-            settings.hotkey.activation_key = Self::default().hotkey.activation_key;
-        }
-
-        Ok(settings)
-    }
-
-    /// Save settings to configuration file
-    pub fn save(&self) -> Result<(), ConfigError> {
-        let config_file = Self::config_file()?;
-        let toml_string =
-            toml::to_string_pretty(self).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
-
-        std::fs::write(&config_file, toml_string).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +212,14 @@ mod tests {
     #[test]
     fn test_default_settings() {
         let settings = Settings::default();
-        assert_eq!(settings.storage.max_history_records, 100);
+        assert_eq!(
+            settings.storage.max_history_records,
+            DEFAULT_MAX_HISTORY_RECORDS
+        );
+        assert_eq!(
+            settings.storage.max_storage_records,
+            DEFAULT_MAX_STORAGE_RECORDS
+        );
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
     }
 

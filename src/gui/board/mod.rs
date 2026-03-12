@@ -66,6 +66,7 @@ pub struct RopyBoard {
     pub(crate) hotkey_before_recording: String,
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
+    pub(crate) settings_max_storage_input: Entity<InputState>,
     pub(crate) selected_theme: usize, // 0: Light, 1: Dark, 2: System
     pub(crate) autostart_enabled: bool,
     pub(crate) confirm_mode: ConfirmMode,
@@ -245,7 +246,14 @@ impl RopyBoard {
         // Measure all items initially so scrollbar thumb size is stable on first paint.
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.)).measure_all();
 
-        let (max_history_records, activation_key, theme_index, language, confirm_mode) = {
+        let (
+            max_history_records,
+            max_storage_records,
+            activation_key,
+            theme_index,
+            language,
+            confirm_mode,
+        ) = {
             let settings_guard = match settings.read() {
                 Ok(g) => g,
                 Err(e) => e.into_inner(),
@@ -257,6 +265,7 @@ impl RopyBoard {
             };
             (
                 settings_guard.storage.max_history_records,
+                settings_guard.storage.max_storage_records,
                 settings_guard.hotkey.activation_key.clone(),
                 theme_idx,
                 settings_guard.language.clone(),
@@ -284,6 +293,8 @@ impl RopyBoard {
         let settings_activation_key_input = cx.new(|cx| InputState::new(window, cx));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
+        let settings_max_storage_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
 
         // Initialize I18n with the language from settings
         let i18n = I18n::new(language.clone()).unwrap_or_default();
@@ -342,6 +353,7 @@ impl RopyBoard {
             hotkey_before_recording: activation_key,
             settings_activation_key_input,
             settings_max_history_input,
+            settings_max_storage_input,
             selected_theme: theme_index,
             autostart_enabled,
             confirm_mode,
@@ -542,13 +554,17 @@ impl RopyBoard {
         self.hotkey_before_recording.clone_from(&activation_key);
         self.hotkey_manual_editing = false;
 
-        // Get current max_history_records from settings as fallback
-        let current_max_history = match self.settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-        .storage
-        .max_history_records;
+        // Get current values from settings as fallback
+        let (current_max_history, current_max_storage) = {
+            let settings_guard = match self.settings.read() {
+                Ok(g) => g,
+                Err(e) => e.into_inner(),
+            };
+            (
+                settings_guard.storage.max_history_records,
+                settings_guard.storage.max_storage_records,
+            )
+        };
 
         // Validate max_history input from the settings UI.
         let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
@@ -558,6 +574,21 @@ impl RopyBoard {
                 Ok(v) => (v, false),
                 Err(()) => (current_max_history, true),
             };
+
+        // Validate max_storage input from the settings UI.
+        let max_storage_input = self.settings_max_storage_input.read(cx).value().to_string();
+
+        let (mut max_storage, is_max_storage_invalid) =
+            match Self::parse_max_storage_input(&max_storage_input, current_max_storage) {
+                Ok(v) => (v, false),
+                Err(()) => (current_max_storage, true),
+            };
+
+        // Ensure max_storage >= max_history
+        let is_max_storage_lt_history = max_storage < max_history;
+        if is_max_storage_lt_history {
+            max_storage = max_history;
+        }
 
         let theme = match self.selected_theme {
             0 => crate::config::AppTheme::Light,
@@ -578,6 +609,7 @@ impl RopyBoard {
             };
             settings.hotkey.activation_key.clone_from(&activation_key);
             settings.storage.max_history_records = max_history;
+            settings.storage.max_storage_records = max_storage;
             settings.theme = theme.clone();
             settings.autostart.enabled = self.autostart_enabled;
             settings.language = language.clone();
@@ -621,6 +653,11 @@ impl RopyBoard {
             input.set_value("", window, cx);
         });
 
+        self.settings_max_storage_input.update(cx, |input, cx| {
+            input.set_placeholder(max_storage.to_string(), window, cx);
+            input.set_value("", window, cx);
+        });
+
         // --- User notifications: auto width (content-driven), capped at 280px ---
         if let Some(err_msg) = save_disk_error {
             let msg = format!("✕  {}: {}", self.i18n.t("settings_save_failed"), err_msg);
@@ -649,6 +686,26 @@ impl RopyBoard {
                     cx,
                 );
             }
+            if is_max_storage_invalid {
+                let warn_msg = self.i18n.t("settings_max_storage_invalid_warning");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("⚠  {warn_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
+            if is_max_storage_lt_history {
+                let warn_msg = self.i18n.t("settings_max_storage_lt_history_warning");
+                window.push_notification(
+                    Notification::new()
+                        .message(format!("⚠  {warn_msg}"))
+                        .w_auto()
+                        .max_w(px(280.0)),
+                    cx,
+                );
+            }
             if autostart_error.is_some() {
                 let warn_msg = self.i18n.t("settings_autostart_failed");
                 window.push_notification(
@@ -659,7 +716,12 @@ impl RopyBoard {
                     cx,
                 );
             }
-            if !is_hotkey_invalid && autostart_error.is_none() && !is_max_history_invalid {
+            if !is_hotkey_invalid
+                && autostart_error.is_none()
+                && !is_max_history_invalid
+                && !is_max_storage_invalid
+                && !is_max_storage_lt_history
+            {
                 let ok_msg = self.i18n.t("settings_save_success");
                 window.push_notification(
                     Notification::new()
@@ -692,6 +754,24 @@ impl RopyBoard {
     fn parse_max_history_input(input: &str, current_max: usize) -> Result<usize, ()> {
         const MIN: usize = 1;
         const MAX: usize = 10_000;
+
+        let s = input.trim();
+        if s.is_empty() {
+            return Ok(current_max);
+        }
+
+        match s.parse::<usize>() {
+            Ok(v) if (MIN..=MAX).contains(&v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+
+    // Validate max storage input from settings UI.
+    // Returns Ok(parsed_value) when input is a valid usize within allowed range,
+    // or Err(()) when input is invalid (parse error or out of range).
+    fn parse_max_storage_input(input: &str, current_max: usize) -> Result<usize, ()> {
+        const MIN: usize = 1;
+        const MAX: usize = 100_000;
 
         let s = input.trim();
         if s.is_empty() {
