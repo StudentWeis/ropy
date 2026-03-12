@@ -68,7 +68,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let max_storage_row = render_max_storage_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
     let confirm_mode_row = render_confirm_mode_row(board, cx);
-    let open_log_row = render_open_log_row(board, cx);
+    let open_dirs_row = render_open_dirs_row(board, cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let hover_preview_row = render_hover_preview_row(board, cx);
 
@@ -96,9 +96,9 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(Divider::horizontal())
             .child(hover_preview_row)
             .child(Divider::horizontal())
-            .child(open_log_row)
+            .child(auto_check_row)
             .child(Divider::horizontal())
-            .child(auto_check_row),
+            .child(open_dirs_row),
     )
 }
 
@@ -435,8 +435,8 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
     settings_row(board.i18n.t("settings_hover_preview"), toggle, cx)
 }
 
-fn render_open_log_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let btn = Button::new("open-log-button")
+fn render_open_dirs_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let log_button = Button::new("open-log-button")
         .small()
         .ghost()
         .label(board.i18n.t("settings_open_log"))
@@ -449,7 +449,34 @@ fn render_open_log_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoE
             #[cfg(target_os = "linux")]
             let _ = std::process::Command::new("xdg-open").arg(&log_dir).spawn();
         }));
-    settings_row(board.i18n.t("settings_open_log"), btn, cx)
+
+    let config_button = Button::new("open-config-button")
+        .small()
+        .ghost()
+        .label(board.i18n.t("settings_open_config"))
+        .on_click(cx.listener(|_, _, _, _| {
+            if let Ok(config_dir) = crate::config::Settings::config_dir() {
+                #[cfg(target_os = "macos")]
+                let _ = std::process::Command::new("open").arg(&config_dir).spawn();
+                #[cfg(target_os = "windows")]
+                let _ = std::process::Command::new("explorer")
+                    .arg(&config_dir)
+                    .spawn();
+                #[cfg(target_os = "linux")]
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&config_dir)
+                    .spawn();
+            }
+        }));
+
+    h_flex()
+        .justify_end()
+        .items_center()
+        .w_full()
+        .py_3()
+        .gap_2()
+        .child(log_button)
+        .child(config_button)
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

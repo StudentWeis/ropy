@@ -48,7 +48,8 @@ settings_max_history_invalid_warning = "無効な履歴数です。リセット�
 settings_confirm_mode_copy = "クリップボードに戻すだけ"
 settings_confirm_mode_paste = "すぐ貼り付け"
 settings_hover_preview = "ホバー プレビュー"
-settings_open_log = "ログファイルを開く"
+settings_open_log = "ログディレクトリを開く"
+settings_open_config = "設定ディレクトリを開く"
 on = "オン"
 off = "オフ"
 
