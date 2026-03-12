@@ -441,7 +441,7 @@ fn render_open_dirs_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
         .ghost()
         .label(board.i18n.t("settings_open_log"))
         .on_click(cx.listener(|_, _, _, _| {
-            let log_dir = crate::logging::log_dir();
+            let log_dir = crate::utils::logging::log_dir();
             #[cfg(target_os = "macos")]
             let _ = std::process::Command::new("open").arg(&log_dir).spawn();
             #[cfg(target_os = "windows")]

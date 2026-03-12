@@ -10,16 +10,7 @@ use super::{
     models::{ClipboardRecord, ContentType},
     time_index::TimeIndex,
 };
-
-/// Compute a deterministic content hash using seahash.
-/// The content type is encoded as a prefix byte to avoid collisions
-/// between different types with the same content.
-fn content_hash(content: &str, content_type: &ContentType) -> u64 {
-    let type_tag = content_type.as_tag();
-    let mut data = vec![type_tag];
-    data.extend_from_slice(content.as_bytes());
-    seahash::hash(&data)
-}
+use crate::utils::content_hash;
 
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;

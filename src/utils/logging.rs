@@ -1,3 +1,7 @@
+//! Logging initialization utilities.
+//!
+//! Provides JSON logging with daily rolling files.
+
 use std::path::PathBuf;
 
 use tracing_subscriber::fmt;
