@@ -120,12 +120,6 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // If the "/" key is pressed, focus the search input
-        if event.keystroke.key.as_str() == "/" {
-            window.focus(&self.search_input.focus_handle(cx));
-            return;
-        }
-
         // If the search input is focused, ignore key presses
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)
@@ -133,49 +127,45 @@ impl RopyBoard {
             return;
         }
 
-        // If the space key is pressed, toggle preview
-        if event.keystroke.key.as_str() == "space" {
-            self.show_preview = !self.show_preview;
-            cx.notify();
-            return;
-        }
-
-        // If the "p" key is pressed, toggle window pin
-        if event.keystroke.key.as_str() == "p" {
-            if self.can_toggle_window_pin() {
-                self.toggle_window_pin(window);
+        match event.keystroke.key.as_str() {
+            "/" => {
+                window.focus(&self.search_input.focus_handle(cx));
+            }
+            "space" => {
+                self.show_preview = !self.show_preview;
                 cx.notify();
             }
-            return;
-        }
-
-        // Vim-style navigation: j = next, k = prev, d = delete
-        match event.keystroke.key.as_str() {
+            "p" => {
+                if self.can_toggle_window_pin() {
+                    self.toggle_window_pin(window);
+                    cx.notify();
+                }
+            }
             "j" => {
                 self.on_select_next(&SelectNext, window, cx);
-                return;
             }
             "k" => {
                 self.on_select_prev(&SelectPrev, window, cx);
-                return;
             }
             "d" => {
                 self.on_delete_record(&DeleteRecord, window, cx);
-                return;
+            }
+            "1" => {
+                self.confirm_record(window, cx, 0);
+            }
+            "2" => {
+                self.confirm_record(window, cx, 1);
+            }
+            "3" => {
+                self.confirm_record(window, cx, 2);
+            }
+            "4" => {
+                self.confirm_record(window, cx, 3);
+            }
+            "5" => {
+                self.confirm_record(window, cx, 4);
             }
             _ => {}
         }
-
-        // Map number keys to record selection
-        let key = &event.keystroke.key;
-        let index = match key.as_str() {
-            "1" => 0,
-            "2" => 1,
-            "3" => 2,
-            "4" => 3,
-            "5" => 4,
-            _ => return,
-        };
-        self.confirm_record(window, cx, index);
     }
 }

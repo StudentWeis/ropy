@@ -108,8 +108,6 @@ impl Drop for ClipboardRepository {
     }
 }
 
-// ── Save operations ───────────────────────────────────────────────
-
 impl ClipboardRepository {
     /// Save a clipboard record.
     ///
@@ -219,8 +217,6 @@ impl ClipboardRepository {
     }
 }
 
-// ── Mutation operations ───────────────────────────────────────────
-
 impl ClipboardRepository {
     /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
@@ -305,8 +301,6 @@ impl ClipboardRepository {
         Ok(removed)
     }
 }
-
-// ── Internal helpers ──────────────────────────────────────────────
 
 impl ClipboardRepository {
     /// Sort records with pinned items first, each group in descending time.

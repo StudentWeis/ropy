@@ -64,10 +64,6 @@ pub fn download_and_install(
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 /// Download `url` into `dest`, reporting progress via `on_progress`.
 ///
 /// Uses `curl` subprocess with piped stdout to stream the download and track

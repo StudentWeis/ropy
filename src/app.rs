@@ -42,47 +42,47 @@ fn start_clipboard_event_handler(
 
     bg_executor
         .spawn(async move {
-            while let Ok(event) = clipboard_rx.recv().await {
-                if let Some(ref repo) = repository {
-                    let result = match event {
-                        ClipboardEvent::Text(text) => repo.save_text(text),
-                        ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
-                    };
+            while let Ok(event) = clipboard_rx.recv().await
+                && let Some(ref repo) = repository
+            {
+                let result = match event {
+                    ClipboardEvent::Text(text) => repo.save_text(text),
+                    ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
+                };
 
-                    match result {
-                        Ok(record) => {
-                            let (max_display, max_storage) = {
-                                let settings_guard = match settings.read() {
-                                    Ok(g) => g,
-                                    Err(e) => e.into_inner(),
-                                };
-                                (
-                                    settings_guard.storage.max_history_records,
-                                    settings_guard.storage.max_storage_records,
-                                )
+                match result {
+                    Ok(record) => {
+                        let (max_display, max_storage) = {
+                            let settings_guard = match settings.read() {
+                                Ok(g) => g,
+                                Err(e) => e.into_inner(),
                             };
-                            {
-                                let mut guard = match shared_records.lock() {
-                                    Ok(g) => g,
-                                    Err(poisoned) => poisoned.into_inner(),
-                                };
-                                // Remove existing record with same id (dedup upsert)
-                                guard.retain(|r| r.id != record.id);
-                                guard.insert(0, record);
-                                // Truncate in-memory records to display limit
-                                if guard.len() > max_display {
-                                    guard.truncate(max_display);
-                                }
+                            (
+                                settings_guard.storage.max_history_records,
+                                settings_guard.storage.max_storage_records,
+                            )
+                        };
+                        {
+                            let mut guard = match shared_records.lock() {
+                                Ok(g) => g,
+                                Err(poisoned) => poisoned.into_inner(),
+                            };
+                            // Remove existing record with same id (dedup upsert)
+                            guard.retain(|r| r.id != record.id);
+                            guard.insert(0, record);
+                            // Truncate in-memory records to display limit
+                            if guard.len() > max_display {
+                                guard.truncate(max_display);
                             }
-                            // Cleanup repository to storage limit
-                            if let Err(e) = repo.cleanup_old_records(max_storage) {
-                                tracing::warn!(error = %e, "failed to cleanup old clipboard records");
-                            }
-                            let _ = notify_tx.send(()).await;
                         }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "failed to save clipboard record");
+                        // Cleanup repository to storage limit
+                        if let Err(e) = repo.cleanup_old_records(max_storage) {
+                            tracing::warn!(error = %e, "failed to cleanup old clipboard records");
                         }
+                        let _ = notify_tx.send(()).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "failed to save clipboard record");
                     }
                 }
             }
@@ -196,9 +196,7 @@ fn bind_application_keys(cx: &mut App) {
         KeyBinding::new("escape", Hide, None),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-q", Quit, None),
-        #[cfg(target_os = "windows")]
-        KeyBinding::new("alt-f4", Quit, None),
-        #[cfg(target_os = "linux")]
+        #[cfg(not(target_os = "macos"))]
         KeyBinding::new("alt-f4", Quit, None),
         KeyBinding::new("up", SelectPrev, None),
         KeyBinding::new("down", SelectNext, None),
