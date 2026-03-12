@@ -16,6 +16,8 @@ clear_confirm_cancel = "取消"
 clear_confirm_button = "清空"
 pin = "置顶"
 unpin = "取消置顶"
+filter_text = "筛选文本"
+filter_image = "筛选图片"
 
 # 设置
 settings_button = "设置"

@@ -17,6 +17,8 @@ clear_confirm_cancel = "キャンセル"
 clear_confirm_button = "消去"
 pin = "ピン留め"
 unpin = "ピン留め解除"
+filter_text = "テキストをフィルター"
+filter_image = "画像をフィルター"
 
 # Settings
 settings_button = "設定"

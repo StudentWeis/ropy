@@ -41,6 +41,18 @@ use crate::{
     updater::models::UpdateStatus,
 };
 
+/// Content type filter for the clipboard history view
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ContentFilter {
+    /// Show all content types
+    #[default]
+    All,
+    /// Show only text records
+    Text,
+    /// Show only image records
+    Image,
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -86,6 +98,8 @@ pub struct RopyBoard {
     pub(crate) hover_preview_enabled: bool,
     /// Whether the clear-all confirmation dialog is visible
     pub(crate) show_clear_confirm: bool,
+    /// Active content type filter
+    pub(crate) content_filter: ContentFilter,
 }
 
 impl RopyBoard {
@@ -369,6 +383,7 @@ impl RopyBoard {
             auto_check_enabled,
             hover_preview_enabled,
             show_clear_confirm: false,
+            content_filter: ContentFilter::default(),
         }
     }
 
@@ -468,28 +483,60 @@ impl RopyBoard {
         }
     }
 
-    /// Filter records based on search query
-    fn filter_records_by_query(records: &[ClipboardRecord], query: &str) -> Vec<ClipboardRecord> {
-        if query.is_empty() {
-            return records.to_vec();
+    /// Toggle the content type filter. Clicking the same filter again resets to All.
+    pub(crate) fn toggle_content_filter(&mut self, target: ContentFilter) {
+        if self.content_filter == target {
+            self.content_filter = ContentFilter::All;
+        } else {
+            self.content_filter = target;
         }
+    }
 
-        let query_lower = query.to_lowercase();
+    /// Filter records based on search query and content type filter
+    fn filter_records_by_query(
+        records: &[ClipboardRecord],
+        query: &str,
+        filter: ContentFilter,
+    ) -> Vec<ClipboardRecord> {
         records
             .iter()
             .filter(|record| {
+                // Apply content type filter
+                let passes_type_filter = match filter {
+                    ContentFilter::All => true,
+                    ContentFilter::Text => record.content_type == ContentType::Text,
+                    ContentFilter::Image => record.content_type == ContentType::Image,
+                };
+
+                if !passes_type_filter {
+                    return false;
+                }
+
+                // Image filter: ignore query entirely (images cannot be text-searched)
+                if filter == ContentFilter::Image {
+                    return true;
+                }
+
+                // Text/All filter: apply text search on text records
+                if query.is_empty() {
+                    return true;
+                }
+
                 record.content_type == ContentType::Text
-                    && record.content.to_lowercase().contains(&query_lower)
+                    && record
+                        .content
+                        .to_lowercase()
+                        .contains(&query.to_lowercase())
             })
             .cloned()
             .collect()
     }
 
-    /// Get filtered records based on search query
+    /// Get filtered records based on search query and content type filter
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
         let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
 
-        let filtered = Self::filter_records_by_query(&records, query);
+        let filtered = Self::filter_records_by_query(&records, query, self.content_filter);
 
         drop(records); // Release the lock early
 
@@ -963,7 +1010,7 @@ impl Render for RopyBoard {
                 .on_action(cx.listener(Self::on_delete_record))
                 .on_key_down(cx.listener(Self::on_key_down))
                 .child(render_header(self, cx))
-                .child(render_search_input(&self.search_input, cx))
+                .child(render_search_input(self, cx))
                 .child(self.render_records_list(cx))
                 .into_any_element()
         };
@@ -1000,6 +1047,33 @@ mod tests {
     use super::*;
     use crate::repository::{ClipboardRecord, models::ContentType};
 
+    /// Helper: build a mixed set of test records (2 text + 1 image)
+    fn mixed_records() -> Vec<ClipboardRecord> {
+        vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "Goodbye World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "image_data".to_string(),
+                content_type: ContentType::Image,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ]
+    }
+
     #[test]
     fn test_window_pin_availability_depends_on_confirm_mode() {
         assert!(RopyBoard::window_pin_available(
@@ -1026,73 +1100,26 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_filter_records_by_query_empty_query() {
-        let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: "Image data".to_string(),
-                content_type: ContentType::Image,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-        ];
+    // --- ContentFilter::All (default) tests ---
 
-        let result = RopyBoard::filter_records_by_query(&records, "");
-        assert_eq!(result.len(), 3); // With empty query, all records should be returned
-        assert_eq!(result[0].content, "Hello");
-        assert_eq!(result[1].content, "World");
-        assert_eq!(result[2].content, "Image data");
+    #[test]
+    fn test_filter_all_no_query_returns_everything() {
+        let records = mixed_records();
+        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::All);
+        assert_eq!(result.len(), 3);
     }
 
     #[test]
-    fn test_filter_records_by_query_with_matches() {
-        let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "Goodbye World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: "Image data".to_string(),
-                content_type: ContentType::Image,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-        ];
-
-        let result = RopyBoard::filter_records_by_query(&records, "world");
+    fn test_filter_all_with_query_matches_text_only() {
+        let records = mixed_records();
+        let result = RopyBoard::filter_records_by_query(&records, "world", ContentFilter::All);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].content, "Hello World");
         assert_eq!(result[1].content, "Goodbye World");
     }
 
     #[test]
-    fn test_filter_records_by_query_case_insensitive() {
+    fn test_filter_all_with_query_case_insensitive() {
         let records = vec![
             ClipboardRecord {
                 id: 1,
@@ -1110,14 +1137,12 @@ mod tests {
             },
         ];
 
-        let result = RopyBoard::filter_records_by_query(&records, "hello");
+        let result = RopyBoard::filter_records_by_query(&records, "hello", ContentFilter::All);
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].content, "Hello World");
-        assert_eq!(result[1].content, "HELLO world");
     }
 
     #[test]
-    fn test_filter_records_by_query_no_matches() {
+    fn test_filter_all_with_query_no_matches() {
         let records = vec![ClipboardRecord {
             id: 1,
             content: "Hello".to_string(),
@@ -1126,12 +1151,12 @@ mod tests {
             pinned: false,
         }];
 
-        let result = RopyBoard::filter_records_by_query(&records, "xyz");
+        let result = RopyBoard::filter_records_by_query(&records, "xyz", ContentFilter::All);
         assert_eq!(result.len(), 0);
     }
 
     #[test]
-    fn test_filter_records_by_query_non_text_content_type() {
+    fn test_filter_all_with_query_excludes_image() {
         let records = vec![ClipboardRecord {
             id: 1,
             content: "Image content".to_string(),
@@ -1140,9 +1165,89 @@ mod tests {
             pinned: false,
         }];
 
-        let result = RopyBoard::filter_records_by_query(&records, "image");
-        assert_eq!(result.len(), 0); // Image content should not match even if content contains the query
+        let result = RopyBoard::filter_records_by_query(&records, "image", ContentFilter::All);
+        assert_eq!(result.len(), 0);
     }
+
+    // --- ContentFilter::Text tests ---
+
+    #[test]
+    fn test_filter_text_no_query_returns_text_only() {
+        let records = mixed_records();
+        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::Text);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|r| r.content_type == ContentType::Text));
+    }
+
+    #[test]
+    fn test_filter_text_with_query_matches_within_text() {
+        let records = mixed_records();
+        let result = RopyBoard::filter_records_by_query(&records, "hello", ContentFilter::Text);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "Hello World");
+    }
+
+    // --- ContentFilter::Image tests ---
+
+    #[test]
+    fn test_filter_image_no_query_returns_images_only() {
+        let records = mixed_records();
+        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::Image);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content_type, ContentType::Image);
+    }
+
+    #[test]
+    fn test_filter_image_with_query_ignores_query() {
+        let records = mixed_records();
+        // Even with a query, image filter should return all images (query ignored)
+        let result =
+            RopyBoard::filter_records_by_query(&records, "nonexistent", ContentFilter::Image);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content_type, ContentType::Image);
+    }
+
+    // --- Toggle tests ---
+
+    #[test]
+    fn test_toggle_content_filter() {
+        // Toggling the same filter twice returns to All
+        let mut filter = ContentFilter::All;
+
+        // Simulate toggle to Text
+        filter = if filter == ContentFilter::Text {
+            ContentFilter::All
+        } else {
+            ContentFilter::Text
+        };
+        assert_eq!(filter, ContentFilter::Text);
+
+        // Simulate toggle Text again → back to All
+        filter = if filter == ContentFilter::Text {
+            ContentFilter::All
+        } else {
+            ContentFilter::Text
+        };
+        assert_eq!(filter, ContentFilter::All);
+
+        // Simulate toggle to Image
+        filter = if filter == ContentFilter::Image {
+            ContentFilter::All
+        } else {
+            ContentFilter::Image
+        };
+        assert_eq!(filter, ContentFilter::Image);
+
+        // Simulate toggle to Text while Image is active → switches to Text
+        filter = if filter == ContentFilter::Text {
+            ContentFilter::All
+        } else {
+            ContentFilter::Text
+        };
+        assert_eq!(filter, ContentFilter::Text);
+    }
+
+    // --- Existing parse tests (unchanged) ---
 
     #[test]
     fn test_parse_max_history_input_empty_uses_current() {

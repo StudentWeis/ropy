@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::OnceLock};
 
 use gpui::{
-    Context, Entity, anchored, deferred, div, img, list,
+    Context, anchored, deferred, div, img, list,
     prelude::{
         FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
         Styled,
@@ -12,7 +12,7 @@ use gpui_component::{
     ActiveTheme, Icon, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
-    input::{Input, InputState},
+    input::Input,
     scroll::{Scrollbar, ScrollbarShow},
     v_flex,
 };
@@ -247,20 +247,66 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
         )
 }
 
-/// Render the search input section
+/// Render the search input section with content type filter buttons
 pub(super) fn render_search_input(
-    search_input: &Entity<InputState>,
+    board: &RopyBoard,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
-    v_flex().w_full().mb_4().child(
-        Input::new(search_input)
-            .appearance(false)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .px_3()
-            .py_2(),
-    )
+    use super::ContentFilter;
+
+    let is_text_active = board.content_filter == ContentFilter::Text;
+    let is_image_active = board.content_filter == ContentFilter::Image;
+
+    let text_filter_tooltip = board.i18n.t("filter_text");
+    let image_filter_tooltip = board.i18n.t("filter_image");
+
+    let text_button = if is_text_active {
+        Button::new("filter-text-btn").primary()
+    } else {
+        Button::new("filter-text-btn").ghost()
+    };
+
+    let image_button = if is_image_active {
+        Button::new("filter-image-btn").primary()
+    } else {
+        Button::new("filter-image-btn").ghost()
+    };
+
+    h_flex()
+        .w_full()
+        .mb_4()
+        .gap_2()
+        .child(
+            div().flex_1().min_w_0().child(
+                Input::new(&board.search_input)
+                    .appearance(false)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_md()
+                    .px_3()
+                    .py_2(),
+            ),
+        )
+        .child(
+            text_button
+                .icon(Icon::empty().path("icon/filter-text.svg"))
+                .tooltip(text_filter_tooltip)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Text);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        )
+        .child(
+            image_button
+                .icon(Icon::empty().path("icon/filter-image.svg"))
+                .tooltip(image_filter_tooltip)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Image);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        )
 }
 
 fn render_image_record(record: &ClipboardRecord) -> gpui::AnyElement {

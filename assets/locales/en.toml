@@ -16,6 +16,8 @@ clear_confirm_cancel = "Cancel"
 clear_confirm_button = "Clear"
 pin = "Pin"
 unpin = "Unpin"
+filter_text = "Filter text"
+filter_image = "Filter images"
 
 # Settings
 settings_button = "Settings"
