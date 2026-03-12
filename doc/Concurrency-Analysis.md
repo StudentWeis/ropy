@@ -6,17 +6,19 @@ This document details the threading model and message passing architecture of th
 
 The application primarily uses GPUI's async executors for event handling and background processing, minimizing the use of dedicated OS threads.
 
-| Entity                 | Executor   | Responsibility                                    |
-| :--------------------- | :--------- | :------------------------------------------------ |
-| **Main App**           | Foreground | Runs the GPUI event loop, handles UI rendering.   |
-| **Hotkey Listener**    | Foreground | Polls global hotkey events.                       |
-| **Tray Handler**       | Foreground | Polls system tray menu events.                    |
-| **Clipboard Watcher**  | Background | Runs `clipboard-rs` watcher (blocking operation). |
-| **Image Processor**    | Background | Processes and saves images from clipboard.        |
-| **Clipboard Listener** | Background | Receives clipboard events and updates repository. |
-| **Clipboard Writer**   | Background | Handles requests to write to system clipboard.    |
+| Entity                      | Executor   | Responsibility                                    | Module              |
+| :-------------------------- | :--------- | :------------------------------------------------ | :------------------ |
+| **Main App**                | Foreground | Runs the GPUI event loop, handles UI rendering.   | `gui`               |
+| **Hotkey Listener**         | Foreground | Polls global hotkey events.                       | `gui::hotkey`       |
+| **Tray Handler**            | Foreground | Polls system tray menu events.                    | `gui::tray`         |
+| **Clipboard Watcher**       | Background | Runs `clipboard-rs` watcher (blocking operation). | `clipboard`         |
+| **Image Processor**         | Background | Processes and saves images from clipboard.        | `clipboard`         |
+| **Clipboard Event Handler** | Background | Receives clipboard events and updates repository. | `app`               |
+| **Clipboard Writer**        | Background | Handles requests to write to system clipboard.    | `clipboard`         |
 
 > **Note**: Most "background" operations are implemented as async tasks running on the GPUI Background Executor (a thread pool), rather than spawning new OS threads for each component.
+>
+> The top-level `app` module (`src/app.rs`) is responsible for orchestrating all subsystems: it initializes the clipboard monitor, repository, GUI window, hotkey listener, and tray handler, and wires them together via async channels. The `gui` module focuses solely on rendering and window management.
 
 # Message Passing
 
@@ -29,8 +31,8 @@ The application relies on channels (`async_channel`) for communication between t
 - **Path 2 (Image)**:
   1. Sends `DynamicImage` via `image_tx` (async_channel) to the **Image Processor Task**.
   2. **Image Processor Task** saves the image and sends `ClipboardEvent::Image` via `clipboard_tx` to the **Clipboard Listener Task**.
-- **Handling**: The **Clipboard Listener Task** receives `ClipboardEvent`, updates the `Repository`, and updates the `SharedRecords`.
-- **UI Notification**: After updating the records, the **Clipboard Listener Task** sends a signal through a notification channel to a foreground task, which then calls `cx.notify()` on the `WindowHandle` to refresh the UI.
+- **Handling**: The **Clipboard Event Handler** (defined in `app.rs`) receives `ClipboardEvent`, updates the `Repository`, and updates the `SharedRecords`.
+- **UI Notification**: After updating the records, the **Clipboard Event Handler** sends a signal through a notification channel to a foreground task, which then calls `cx.notify()` on the `WindowHandle` to refresh the UI.
 
 ## 2. Hotkey Flow
 
@@ -64,7 +66,7 @@ graph TD
     subgraph "GPUI Runtime (Background Pool)"
         CW[Clipboard Watcher Task]
         IP[Image Processor Task]
-        CL[Clipboard Listener Task]
+        CL[Clipboard Event Handler]
         CWr[Clipboard Writer Task]
     end
 
@@ -100,7 +102,7 @@ sequenceDiagram
     participant Sys as System Clipboard
     participant CW as Clipboard Watcher
     participant IP as Image Processor (Task)
-    participant CL as Clipboard Listener (Task)
+    participant CL as Clipboard Event Handler (app.rs)
     participant Repo as Repository
     participant Shared as Shared Records
     participant Main as Main App (UI)

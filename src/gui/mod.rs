@@ -1,14 +1,17 @@
-mod app;
-mod board;
-mod hotkey;
+pub mod app;
+pub mod board;
+pub mod hotkey;
 pub mod hotkey_record;
 mod panel;
 mod paste;
-mod tray;
-mod utils;
+pub mod tray;
+pub mod utils;
 
 #[cfg(target_os = "linux")]
-mod x11;
+pub mod x11;
 
-pub use app::launch_app;
+pub use app::{Assets, create_window};
+pub use tray::start_tray_handler;
+#[cfg(target_os = "macos")]
+pub use utils::set_activation_policy_accessory;
 pub use utils::{active_window, hide_window};

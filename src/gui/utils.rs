@@ -27,7 +27,7 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     cx.hide();
 
     #[cfg(target_os = "linux")]
-    if let Some(x11) = crate::gui::app::X11.get() {
+    if let Some(x11) = crate::app::X11_INSTANCE.get() {
         if let Err(e) = x11.hide_window() {
             tracing::warn!(error = %e, "failed to hide window");
         }
@@ -52,7 +52,7 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     cx.activate(true);
 
     #[cfg(target_os = "linux")]
-    if let Some(x11) = crate::gui::app::X11.get() {
+    if let Some(x11) = crate::app::X11_INSTANCE.get() {
         if let Err(e) = x11.display_and_activate_window() {
             tracing::warn!(error = %e, "failed to activate window");
         }
@@ -80,7 +80,7 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
 
     #[cfg(target_os = "linux")]
     {
-        if let Some(x11) = crate::gui::app::X11.get() {
+        if let Some(x11) = crate::app::X11_INSTANCE.get() {
             if let Err(e) = x11.set_always_on_top(pinned) {
                 tracing::warn!(error = %e, "failed to set always on top");
             }

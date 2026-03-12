@@ -49,8 +49,7 @@ max_storage_records = 5000   # 后台存储 5000 条
 | 文件 | 修改内容 |
 |------|----------|
 | `src/config/settings.rs` | 在 `StorageSettings` 中添加 `max_storage_records` 字段 |
-| `src/clipboard/listener.rs` | 使用 `max_storage_records` 作为 `cleanup_old_records` 的参数 |
-| `src/gui/app.rs` | `load_initial_records` 继续使用 `max_history_records` |
+| `src/app.rs` | `start_clipboard_event_handler` 使用 `max_storage_records` 作为 `cleanup_old_records` 的参数；`load_initial_records` 继续使用 `max_history_records` |
 | `src/gui/panel/settings.rs` | 添加 `max_storage_records` 的输入框 UI |
 | `src/gui/board/mod.rs` | 添加 `settings_max_storage_input` 字段和验证逻辑 |
 | `assets/locales/zh-CN.toml` | 添加 `settings_max_storage` 翻译 |
@@ -59,7 +58,7 @@ max_storage_records = 5000   # 后台存储 5000 条
 
 ## 四、关键逻辑变化
 
-### 4.1 存储清理逻辑 (`listener.rs`)
+### 4.1 存储清理逻辑 (`app.rs`)
 
 **现有逻辑（单一配置）：**
 
@@ -80,7 +79,7 @@ guard.truncate(max_display);
 repo.cleanup_old_records(max_storage_records).ok();
 ```
 
-### 4.2 应用启动时加载 (`app.rs`)
+### 4.2 应用启动时加载 (`app.rs` — `load_initial_records`)
 
 保持不变，继续使用 `max_history_records` 加载初始记录：
 

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app;
 mod clipboard;
 mod config;
 mod constants;
@@ -18,5 +19,5 @@ fn main() {
         return;
     }
 
-    gui::launch_app();
+    app::launch();
 }
