@@ -22,7 +22,7 @@ dirs = "6.0"
 thiserror = "2.0.18"
 config = { version = "0.15", default-features = false, features = ["toml"] }
 toml = "1.0.6"
-image = { version = "0.25.9", default-features = false, features = ["png"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 tray-icon = "0.21.3"
 dark-light = "2.0"
 auto-launch = "0.6.0"
@@ -35,8 +35,8 @@ sha2 = "0.10"
 self-replace = "1"
 semver = "1"
 hex = "0.4"
-tempfile = "3.26.0"
-enigo = "0.4.2"
+tempfile = "3.27.0"
+enigo = "0.6.1"
 
 # Logging / tracing
 tracing = "0.1.44"
@@ -92,6 +92,8 @@ derive_partial_eq_without_eq = "allow"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+
 
 [package.metadata.bundle]
 name = "Ropy"
