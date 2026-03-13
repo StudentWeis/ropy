@@ -18,20 +18,20 @@
 </p>
 
 <p align="center">
-<img src="https://s2.loli.net/2026/01/04/8LNOkP3rwivYtxj.png" alt="Ropy Dark" width="40%">
-<img src="https://s2.loli.net/2026/01/04/IM83wFmDJ6QpKHO.png" alt="Ropy Light" width="40%">
+<img src="https://www.imgur.la/images/2026/03/13/pic_1773332541063.png" alt="Ropy Dark" width="40%">
+<img src="https://www.imgur.la/images/2026/03/13/pic_1773332561411.png" alt="Ropy Light" width="40%">
 </p>
 
-# 特性
+## 特性
 
 - 跨平台支持：Windows、macOS 和 Linux(X11)。
 - 使用 Zed 的 GPUI 构建的原生 GUI 应用。
 - 易于使用、轻量且快速。
 - 搜索/置顶/预览/自动启动/快捷键/自动更新/记录置顶。
 
-# 安装
+## 安装
 
-## 预编译二进制文件
+### 预编译二进制文件
 
 您可以从 [Releases](https://github.com/StudentWeis/ropy/releases) 页面下载最新的预编译二进制文件。
 
@@ -44,62 +44,41 @@ xattr -rc /Applications/Ropy.app
 sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
 
-## 从源码构建
+### 从源码构建
 
-确保您已安装 Rust。您可以使用 [rustup](https://rustup.rs/) 安装 Rust。
-
-1. 克隆仓库：
+确保您已安装 Rust（通过 `rustup`）。然后：
 
 ```bash
 git clone https://github.com/StudentWeis/ropy.git
 cd ropy
-```
-
-2. 构建项目：
-
-```bash
 cargo build --release
-```
-
-3. 运行应用：
-
-```bash
 ./target/release/ropy
 ```
 
-# 使用
+## 使用
 
-- 启动应用程序，它将开始监控您的剪贴板。
-- 使用可配置的全局快捷键或托盘图标访问剪贴板历史记录。
-- 点击任意记录或使用 <kbd>1/2/3/4/5</kbd> 或 <kbd>Enter</kbd> 选择记录。
- - 使用 <kbd>Space</kbd> 预览记录内容而不粘贴。
-- 使用搜索栏筛选剪贴板记录。
-- 置顶 Ropy 窗口以使其始终保持在最上层。
- - 固定剪贴记录以防在历史记录超出限制时被移除。
+- 启动 Ropy 开始记录剪贴板历史。
+- 使用全局快捷键或托盘图标打开历史窗口。
+- 点击记录或按数字键（`1`-`5`）或 `Enter` 进行粘贴。
+- 按 `Space` 预览条目而不粘贴。
+- 使用搜索栏按内容筛选记录。
+- 置顶条目以防止在达到历史限制时被清理。
 
-# TODO
+## 局限性（无计划支持）
 
-- 导入和导出剪贴板历史
-- 支持 html/RTF 内容类型
-- 提供安装包和分发渠道
-- 主页、文档和用户社区
+- 系统剪贴板不会暴露复制条目的原始应用程序来源。
+- 插件/扩展系统：目前没有计划 —— Ropy 专注于简洁和小体积。
+- 云同步：目前不支持。
+- 命令行模式：Ropy 主要设计为 GUI 应用程序。
 
-# NOT TODO
-
-- 不支持获取复制时的应用来源（系统剪贴板未提供此字段，需要 Hack 才能获取）。
-- 不支持插件扩展功能（目前无计划支持插件机制，Ropy 旨在保持轻量和简单）。
-- 不支持剪贴板内容的在线同步（目前不考虑云同步功能）。
-- 不支持命令行操作（Ropy 主要面向 GUI 用户，不提供命令行接口）。
-- 不支持保存全部完整剪贴板历史（有些管理历史记录的策略，如删除重复条目）。
-
-# 致谢
+## 致谢
 
 - 灵感来自其他剪贴板管理器，如 Ditto、Maccy 和 CopyQ。
-- 感谢 Rust 社区的支持和库。
+- 感谢 Rust 社区以及 Ropy 使用的所有上游项目。
 - 系统剪贴板 API：[clipboard-rs](https://github.com/ChurchTao/clipboard-rs)
 - GUI 库：[Zed's gpui](https://github.com/zed-industries/zed/tree/main/crates/gpui)
 - GUI 组件：[gpui-component](https://github.com/longbridge/gpui-component)
 - 全局快捷键：[global-hotkey](https://github.com/tauri-apps/global-hotkey)
-- 托盘图标：[tray-icon](https://github.com/tauri-apps/tray-icon)
-- 数据库：[sled](https://github.com/spacejam/sled)
+- 托盘图标辅助：[tray-icon](https://github.com/tauri-apps/tray-icon)
+- 嵌入式数据库：[sled](https://github.com/spacejam/sled)
 - 配置管理：[config-rs](https://github.com/rust-cli/config-rs)

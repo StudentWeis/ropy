@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""
+Assets icon file checker.
+
+Checks two things:
+  1. Whether every icon file in assets is actually referenced in the Rust source.
+  2. Whether every icon reference in source code exists in the assets directory.
+
+Supported icon formats: svg, png, ico, icns, jpg, jpeg, webp, gif, bmp
+
+Usage:
+    python3 script/check_icons.py [--root <project-root>]
+
+Exit code is non-zero when any issue is found.
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+ICON_EXTENSIONS = {".svg", ".png", ".ico", ".icns", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def collect_asset_icons(assets_dir: Path) -> set[str]:
+    """Return a set of all icon file paths (relative to assets dir) found in assets."""
+    icons: set[str] = set()
+    if not assets_dir.exists():
+        return icons
+
+    for ext in ICON_EXTENSIONS:
+        for icon_path in assets_dir.rglob(f"*{ext}"):
+            # Skip locale files directory
+            if "locales" in icon_path.parts:
+                continue
+            # Get relative path from assets dir
+            rel_path = icon_path.relative_to(assets_dir)
+            # Use forward slashes for consistency
+            icons.add(str(rel_path).replace("\\", "/"))
+    return icons
+
+
+def collect_referenced_icons(src_root: Path) -> set[str]:
+    """Return the set of icon paths referenced anywhere under *src_root*.
+
+    Recognises these patterns:
+      * Assets::get("path")
+      * Assets::get("path").ok_or(...)
+      * .get("path")  (where context suggests it's asset-related)
+      * include_str!("path") or include_bytes!("path")
+      * .icon(Icon::empty().path("path")) or .path("path")
+    """
+    # Pattern for Assets::get("path")
+    assets_get_pattern = re.compile(r'Assets::get\(\s*"([^"]+)"\s*\)')
+    # Pattern for include_str! and include_bytes!
+    include_pattern = re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')
+    # Pattern for .path("...") method calls (used in icon loading)
+    path_pattern = re.compile(r'\.path\(\s*"([^"]+)"\s*\)')
+
+    referenced: set[str] = set()
+
+    for rs_file in src_root.rglob("*.rs"):
+        text = rs_file.read_text(encoding="utf-8")
+
+        # Match Assets::get("path")
+        for m in assets_get_pattern.finditer(text):
+            referenced.add(m.group(1))
+
+        # Match include_str! and include_bytes!
+        for m in include_pattern.finditer(text):
+            path = m.group(1)
+            # Only consider paths that look like icon files
+            if any(path.lower().endswith(ext) for ext in ICON_EXTENSIONS):
+                referenced.add(path)
+
+        # Match .path("...") calls
+        for m in path_pattern.finditer(text):
+            path = m.group(1)
+            # Only consider paths that look like icon files
+            if any(path.lower().endswith(ext) for ext in ICON_EXTENSIONS):
+                referenced.add(path)
+
+    return referenced
+
+
+# ---------------------------------------------------------------------------
+# Checks
+# ---------------------------------------------------------------------------
+
+
+def check_unused_icons(asset_icons: set[str], referenced_icons: set[str]) -> list[str]:
+    """Return icons that exist in assets but are never referenced in source."""
+    return sorted([icon for icon in asset_icons if icon not in referenced_icons])
+
+
+def check_missing_icons(asset_icons: set[str], referenced_icons: set[str]) -> list[str]:
+    """Return icons that are referenced in source but don't exist in assets."""
+    return sorted([icon for icon in referenced_icons if icon not in asset_icons])
+
+
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
+
+_RED = "\033[31m"
+_YELLOW = "\033[33m"
+_GREEN = "\033[32m"
+_BOLD = "\033[1m"
+_RESET = "\033[0m"
+
+
+def _color(text: str, code: str) -> str:
+    return f"{code}{text}{_RESET}"
+
+
+def print_section(title: str) -> None:
+    print(f"\n{_BOLD}{title}{_RESET}")
+    print("─" * len(title))
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        default=".",
+        help="Project root directory (default: current directory)",
+    )
+    args = parser.parse_args()
+
+    root = Path(args.root).resolve()
+    assets_dir = root / "assets"
+    src_dir = root / "src"
+
+    # Sanity checks
+    if not assets_dir.is_dir():
+        print(_color(f"ERROR: assets directory not found: {assets_dir}", _RED))
+        return 1
+    if not src_dir.is_dir():
+        print(_color(f"ERROR: source directory not found: {src_dir}", _RED))
+        return 1
+
+    asset_icons = collect_asset_icons(assets_dir)
+    referenced_icons = collect_referenced_icons(src_dir)
+
+    issues = 0  # count of problem categories
+
+    # ------------------------------------------------------------------
+    # Check 1 – unused icons in assets
+    # ------------------------------------------------------------------
+    print_section("Check 1 · Icons in assets not referenced in source code")
+    unused = check_unused_icons(asset_icons, referenced_icons)
+    if unused:
+        issues += 1
+        for icon in unused:
+            print(f"  {_color('UNUSED', _YELLOW)}  {icon}")
+    else:
+        print(f"  {_color('OK', _GREEN)}  All {len(asset_icons)} icons are referenced.")
+
+    # ------------------------------------------------------------------
+    # Check 2 – missing icons (referenced but not in assets)
+    # ------------------------------------------------------------------
+    print_section("Check 2 · Icons referenced in source but missing from assets")
+    missing = check_missing_icons(asset_icons, referenced_icons)
+    if missing:
+        issues += 1
+        for icon in missing:
+            print(f"  {_color('MISSING', _RED)}  {icon}")
+    else:
+        print(f"  {_color('OK', _GREEN)}  All referenced icons exist in assets.")
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+    print()
+    print(f"  Total icons in assets: {len(asset_icons)}")
+    print(f"  Total icons referenced: {len(referenced_icons)}")
+
+    if issues:
+        print()
+        print(_color(f"✗  {issues} issue(s) found.", _RED + _BOLD))
+        return 1
+    else:
+        print()
+        print(_color("✓  All checks passed.", _GREEN + _BOLD))
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
