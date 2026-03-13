@@ -1,5 +1,6 @@
 mod actions;
 mod preview;
+mod records_list;
 mod render;
 
 // moved panels to gui::panel
