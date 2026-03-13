@@ -6,34 +6,32 @@
 <a href="https://github.com/studentweis/ropy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 <a href="https://github.com/studentweis/ropy/releases"><img src="https://img.shields.io/github/v/release/studentweis/ropy" alt="Release"></a>
 <a href="https://rust-lang.org"><img src="https://img.shields.io/badge/language-Rust-orange" alt="Language"></a>
-</br>
+<br>
 <a href="https://github.com/studentweis/ropy"><img src="https://img.shields.io/github/stars/studentweis/ropy?style=social" alt="Stars"></a>
 <a href="https://github.com/studentweis/ropy/issues"><img src="https://img.shields.io/github/issues/studentweis/ropy" alt="Issues"></a>
 </p>
 
-<p align="center">A cross-platform native clipboard manager in pure Rust.</p>
+<p align="center">Cross-platform, lightweight clipboard manager written in Rust.</p>
 
-<p align="center">
-English | <a href="doc/README/README_ZH.md">简体中文</a>
-</p>
+<p align="center">English | <a href="doc/README/README_ZH.md">简体中文</a></p>
 
 <p align="center">
 <img src="https://www.imgur.la/images/2026/03/13/pic_1773332541063.png" alt="Ropy Dark" width="40%">
 <img src="https://www.imgur.la/images/2026/03/13/pic_1773332561411.png" alt="Ropy Light" width="40%">
 </p>
 
-# Features
+## Features
 
 - Cross-platform: Windows, macOS & Linux(X11).
 - Native GUI application built with Zed's GPUI.
 - Easy-to-use, lightweight and fast.
 - Search/Pin/Preview/Autostart/Shortcuts/Autoupdate/Record-Pin.
 
-# Installation
+## Installation
 
-## Pre-built Binaries
+### Pre-built Binaries
 
-You can download the latest pre-built binaries from the [Releases](https://github.com/StudentWeis/ropy/releases) page.
+Download the latest binaries from the [Releases](https://github.com/StudentWeis/ropy/releases) page.
 
 ### macOS
 
@@ -44,62 +42,42 @@ xattr -rc /Applications/Ropy.app
 sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
 
-## Building from Source
+### Build from source
 
-Make sure you have Rust installed. You can install Rust using [rustup](https://rustup.rs).
-
-1. Clone the repository:
+Ensure you have Rust installed (via `rustup`). Then:
 
 ```bash
 git clone https://github.com/StudentWeis/ropy.git
 cd ropy
-```
-
-2. Build the project:
-
-```bash
 cargo build --release
-```
-
-3. Run the application:
-
-```bash
 ./target/release/ropy
 ```
 
-# Usage
+## Usage
 
-- Launch the application, and it will start monitoring your clipboard.
-- Use the configurable global hotkey or tray icon to access the clipboard history.
-- Click on any record or use <kbd>1/2/3/4/5</kbd> or <kbd>Enter</kbd> to select a record.
-- Use <kbd>Space</kbd> to preview the content of a record without pasting.
-- Use the search bar to filter clipboard records.
-- Pin the Ropy window to keep it always on top.
-- Pin the clipboard records to prevent them from being removed when the history limit is exceeded.
+- Launch Ropy to start recording clipboard history.
+- Use the global hotkey or the tray icon to open the history window.
+- Click a record or press numeric keys (`1`-`5`) or `Enter` to paste.
+- Press `Space` to preview an entry without pasting.
+- Use the search bar to filter records by content.
+- Pin entries to keep them from being pruned when the history limit is reached.
 
-# TODO
+## Limitations (Not planned)
 
-- Import and export clipboard history
-- Support for html/RTF content type
-- Provide installation packages and distribution channels
-- Homepage, documentation and user community
+- The system clipboard does not expose the original application source for copied items.
+- Plugin/extension system: no current plans — Ropy focuses on simplicity and small footprint.
+- Cloud sync: not supported at this time.
+- Command-line mode: Ropy is designed primarily as a GUI application.
 
-# NOT TODO
+## Acknowledgements
 
-- Does not support obtaining the application source when copying (the system clipboard does not provide this field, requires Hack to obtain).
-- Does not support plugin extension functionality (currently no plans to support plugin mechanism, Ropy aims to remain lightweight and simple).
-- Does not support online synchronization of clipboard content (currently not considering cloud sync functionality).
-- Does not support command-line operations (Ropy is mainly for GUI users, does not provide a command-line interface).
-- Does not support total save of clipboard history (with strategies for managing large histories such as pruning repeat entries).
+- Inspired by clipboard managers such as Ditto, Maccy and CopyQ.
+- Thanks to the Rust community and all upstream projects used by Ropy:
 
-# Acknowledgements
-
-- Inspired by other clipboard managers like Ditto, Maccy & CopyQ.
-- Thanks to the Rust community for their support and libraries.
 - System Clipboard API: [clipboard-rs](https://github.com/ChurchTao/clipboard-rs)
-- GUI Library: [Zed's gpui](https://github.com/zed-industries/zed/tree/main/crates/gpui)
-- GUI Components: [gpui-component](https://github.com/longbridge/gpui-component)
-- Global Hotkey: [global-hotkey](https://github.com/tauri-apps/global-hotkey)
-- Tray Icon: [tray-icon](https://github.com/tauri-apps/tray-icon)
-- Database: [sled](https://github.com/spacejam/sled)
-- Configuration Management: [config-rs](https://github.com/rust-cli/config-rs)
+- GUI library: [Zed's gpui](https://github.com/zed-industries/zed/tree/main/crates/gpui)
+- GUI components: [gpui-component](https://github.com/longbridge/gpui-component)
+- Global hotkey: [global-hotkey](https://github.com/tauri-apps/global-hotkey)
+- Tray icon helper: [tray-icon](https://github.com/tauri-apps/tray-icon)
+- Embedded DB: [sled](https://github.com/spacejam/sled)
+- Configuration: [config-rs](https://github.com/rust-cli/config-rs)

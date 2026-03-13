@@ -394,15 +394,15 @@ fn render_list_item(
 
     let preview_data = (content_type.clone(), record_content);
 
+    let selected_bg = cx.theme().accent;
+    let normal_bg = cx.theme().secondary;
+    let hover_border_color = cx.theme().foreground;
+
     let mut item = div().pb_2().relative().child(
         v_flex()
             .w_full()
             .p_3()
-            .bg(if is_selected {
-                cx.theme().accent
-            } else {
-                cx.theme().secondary
-            })
+            .bg(if is_selected { selected_bg } else { normal_bg })
             .rounded_md()
             .border_1()
             .border_color(if is_selected {
@@ -410,7 +410,17 @@ fn render_list_item(
             } else {
                 cx.theme().border
             })
-            .hover(|style| style.bg(cx.theme().accent).border_color(cx.theme().accent))
+            // Hover style: add a distinct border frame around the card.
+            // When keyboard-selected, the accent background is preserved;
+            // when not selected, a lighter background is used instead.
+            .hover(move |style| {
+                let style = style.border_2().border_color(hover_border_color);
+                if is_selected {
+                    style.bg(selected_bg)
+                } else {
+                    style
+                }
+            })
             .id(("record", index))
             .child(
                 h_flex()
