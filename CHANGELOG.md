@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2026-03-13
+
+### 🚀 Features
+- Add content type filter for clipboard history with toggle buttons by @StudentWeis
+- Add confirmation dialog for clear all button by @StudentWeis
+- Update settings to open log and config directories by @StudentWeis
+- Separate max storage and display records settings by @StudentWeis
+
+### 🚜 Refactor
+- Simplify clipboard event handling and key binding logic by @StudentWeis
+- Extract app orchestration from gui into top-level app module by @StudentWeis
+- Move clipboard event handler from listener.rs to gui/app.rs by @StudentWeis
+- Reorganize logging and content hash utilities by @StudentWeis
+- Remove update section from settings panel to about panel by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Update image links for Ropy Dark and Light in README by @StudentWeis
+- Update dependencies for image, tempfile, and enigo packages by @StudentWeis
+
 ## [0.3.2] - 2026-03-12
 
 ### 🚀 Features
