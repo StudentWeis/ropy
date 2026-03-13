@@ -103,7 +103,18 @@ fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
             format!("{} {:.0}%", board.i18n.t("update_downloading"), p * 100.0).into()
         }
         UpdateStatus::ReadyToRestart => board.i18n.t("update_restart").into(),
-        UpdateStatus::Error(msg) => format!("{}: {}", board.i18n.t("update_error"), msg).into(),
+        UpdateStatus::Error(msg) => {
+            // Map technical error messages to user-friendly descriptions
+            let friendly_msg = if msg.contains("curl")
+                || msg.contains("SSL")
+                || msg.contains("HTTP request failed")
+            {
+                board.i18n.t("update_error_network")
+            } else {
+                board.i18n.t("update_error")
+            };
+            friendly_msg.into()
+        }
     };
     let status_color = match &board.update_status {
         UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,

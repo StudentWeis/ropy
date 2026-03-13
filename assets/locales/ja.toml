@@ -74,7 +74,8 @@ update_download = "ダウンロードしてインストール"
 update_downloading = "ダウンロード中..."
 update_restart = "アップデートがインストールされました。再起動してください。"
 update_restart_button = "今すぐ再起動"
-update_error = "アップデートの確認に失敗しました"
+update_error = "アップデート確認に失敗しました"
+update_error_network = "ネットワーク接続に失敗しました。ネットワーク設定を確認してください"
 
 # ヘルプ / キーボードショートカット
 help_title = "キーボードショートカット"
