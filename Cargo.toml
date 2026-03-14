@@ -93,8 +93,6 @@ derive_partial_eq_without_eq = "allow"
 inherits = "release"
 lto = "thin"
 
-
-
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"

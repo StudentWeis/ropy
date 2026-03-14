@@ -1,2 +1,3 @@
 date,commit,binary,size_bytes,gzip_bytes,delta_bytes,delta_gzip
 2026-03-13T15:40:38Z,23030ed,target/release/ropy,27043472,10262065,,
+2026-03-14T08:08:17Z,9b47465,target/release/ropy,27432016,10334765,388544,72700

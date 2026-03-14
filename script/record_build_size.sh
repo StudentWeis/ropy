@@ -6,6 +6,8 @@ set -euo pipefail
 #   script/record_build_size.sh [path/to/binary ...]
 # If no binary args are provided, defaults to target/release/ropy
 
+cargo build --release
+
 CSV_FILE="doc/build_sizes.csv"
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
