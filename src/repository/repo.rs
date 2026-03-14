@@ -672,4 +672,496 @@ mod tests {
         // Total count = 3 (all pinned), which is above keep_count
         assert_eq!(repo.count(), 3);
     }
+
+    // ── Boundary and Edge Case Tests ──────────────────────────────
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_by_id_nonexistent() {
+        let repo = create_test_repo();
+
+        // Query for a non-existent ID should return Ok(None)
+        let result = repo.get_by_id(999_999_999).expect("Failed to get by id");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_by_id_zero() {
+        let repo = create_test_repo();
+
+        // Query for ID 0 (edge case)
+        let result = repo.get_by_id(0).expect("Failed to get by id");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_by_id_u64_max() {
+        let repo = create_test_repo();
+
+        // Query for max u64 value
+        let result = repo.get_by_id(u64::MAX).expect("Failed to get by id");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_recent_zero_limit() {
+        let repo = create_test_repo();
+
+        repo.save_text("Test".to_string()).expect("Failed to save");
+
+        // With limit 0, should return empty (except pinned records)
+        let result = repo.get_recent(0).expect("Failed to get recent");
+        // Pinned records always appear, so this tests unpinned behavior
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_recent_large_limit() {
+        let repo = create_test_repo();
+
+        // Save only 3 records but request 1000
+        for i in 1..=3 {
+            repo.save_text(format!("Record {i}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let result = repo.get_recent(1000).expect("Failed to get recent");
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_recent_empty_repo() {
+        let repo = create_test_repo();
+
+        let result = repo.get_recent(10).expect("Failed to get recent");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_count_empty() {
+        let repo = create_test_repo();
+
+        assert_eq!(repo.count(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_old_records_zero_keep() {
+        let repo = create_test_repo();
+
+        repo.save_text("Test".to_string()).expect("Failed to save");
+
+        // keep_count = 0 should remove all unpinned records
+        let removed = repo.cleanup_old_records(0).expect("Failed to clean up");
+        assert_eq!(removed, 1);
+        assert_eq!(repo.count(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_old_records_greater_than_total() {
+        let repo = create_test_repo();
+
+        repo.save_text("Test".to_string()).expect("Failed to save");
+
+        // keep_count > total should remove nothing
+        let removed = repo.cleanup_old_records(100).expect("Failed to clean up");
+        assert_eq!(removed, 0);
+        assert_eq!(repo.count(), 1);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_old_records_equal_to_total() {
+        let repo = create_test_repo();
+
+        repo.save_text("Test".to_string()).expect("Failed to save");
+
+        // keep_count == total should remove nothing
+        let removed = repo.cleanup_old_records(1).expect("Failed to clean up");
+        assert_eq!(removed, 0);
+        assert_eq!(repo.count(), 1);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_toggle_pin_nonexistent() {
+        let repo = create_test_repo();
+
+        // Toggling pin on non-existent record should return error
+        let result = repo.toggle_pin(999_999_999);
+        assert!(result.is_err());
+
+        // Verify it's the expected error type
+        let err_msg = format!("{}", result.expect_err("Should be error"));
+        assert!(err_msg.contains("record not found"));
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_delete_nonexistent() {
+        let repo = create_test_repo();
+
+        // Deleting non-existent record should return Ok(false)
+        let result = repo.delete(999_999_999).expect("Failed to delete");
+        assert!(!result);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_empty_content() {
+        let repo = create_test_repo();
+
+        // Empty string is valid content
+        let record = repo.save_text(String::new()).expect("Failed to save");
+        assert_eq!(record.content, "");
+
+        // Should be retrievable
+        let retrieved = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("Not found");
+        assert_eq!(retrieved.content, "");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_very_long_content() {
+        let repo = create_test_repo();
+
+        // Content with 100KB of text
+        let long_content = "x".repeat(100_000);
+        let record = repo
+            .save_text(long_content.clone())
+            .expect("Failed to save");
+
+        let retrieved = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("Not found");
+        assert_eq!(retrieved.content.len(), 100_000);
+        assert_eq!(retrieved.content, long_content);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_unicode_content() {
+        let repo = create_test_repo();
+
+        // Various Unicode content
+        let contents = vec![
+            "Hello 世界 🌍",
+            "مرحبا بالعالم",
+            "🎉🎊🎁",
+            "日本語テキスト",
+            "Special chars: <>&\"'",
+        ];
+
+        for content in contents {
+            let record = repo.save_text(content.to_string()).expect("Failed to save");
+            let retrieved = repo
+                .get_by_id(record.id)
+                .expect("Failed to get")
+                .expect("Not found");
+            assert_eq!(retrieved.content, content);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_different_content_types() {
+        let repo = create_test_repo();
+
+        // Save text
+        let text_record = repo
+            .save("text content".to_string(), ContentType::Text)
+            .expect("Failed to save text");
+        assert_eq!(text_record.content_type, ContentType::Text);
+
+        // Save filepath
+        let path_record = repo
+            .save("/path/to/file".to_string(), ContentType::FilePath)
+            .expect("Failed to save path");
+        assert_eq!(path_record.content_type, ContentType::FilePath);
+
+        // Verify both are stored
+        assert_eq!(repo.count(), 2);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_image_from_path_basic() {
+        let repo = create_test_repo();
+
+        // Save an image reference
+        let path = "/tmp/test_image.png".to_string();
+        let hash = 12345_u64;
+
+        let record = repo
+            .save_image_from_path(path.clone(), hash)
+            .expect("Failed to save image");
+
+        assert_eq!(record.content, path);
+        assert_eq!(record.content_type, ContentType::Image);
+        assert_eq!(record.id, hash);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_image_from_path_dedup() {
+        let repo = create_test_repo();
+
+        let path1 = "/tmp/image1.png".to_string();
+        let path2 = "/tmp/image2.png".to_string();
+        let hash = 12345_u64;
+
+        // Save first image
+        let r1 = repo
+            .save_image_from_path(path1, hash)
+            .expect("Failed to save first");
+
+        thread::sleep(Duration::from_millis(10));
+
+        // Save same hash with different path (should dedup)
+        let r2 = repo
+            .save_image_from_path(path2, hash)
+            .expect("Failed to save second");
+
+        // Same ID due to same hash
+        assert_eq!(r1.id, r2.id);
+        // Only one record
+        assert_eq!(repo.count(), 1);
+        // Timestamp updated
+        assert!(r2.created_at > r1.created_at);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_clear_empty_repo() {
+        let repo = create_test_repo();
+
+        // Clearing empty repo should not error
+        repo.clear().expect("Failed to clear empty repo");
+        assert_eq!(repo.count(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_multiple_operations_sequence() {
+        let repo = create_test_repo();
+
+        // Save multiple records
+        let r1 = repo.save_text("First".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let r2 = repo
+            .save_text("Second".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let _r3 = repo.save_text("Third".to_string()).expect("Failed to save");
+
+        assert_eq!(repo.count(), 3);
+
+        // Pin the first record
+        repo.toggle_pin(r1.id).expect("Failed to pin");
+
+        // Delete the second
+        let deleted = repo.delete(r2.id).expect("Failed to delete");
+        assert!(deleted);
+        assert_eq!(repo.count(), 2);
+
+        // Verify remaining records
+        let recent = repo.get_recent(10).expect("Failed to get recent");
+        assert_eq!(recent.len(), 2);
+        // Pinned first, then third (most recent unpinned)
+        assert_eq!(recent[0].content, "First");
+        assert_eq!(recent[1].content, "Third");
+
+        // Clear all
+        repo.clear().expect("Failed to clear");
+        assert_eq!(repo.count(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_sort_pinned_first_empty() {
+        let mut records: Vec<ClipboardRecord> = vec![];
+        ClipboardRepository::sort_pinned_first(&mut records);
+        assert!(records.is_empty());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_sort_pinned_first_single() {
+        let now = chrono::Local::now();
+        let mut records = vec![ClipboardRecord {
+            id: 1,
+            content: "only".to_string(),
+            created_at: now,
+            content_type: ContentType::Text,
+            pinned: false,
+        }];
+
+        ClipboardRepository::sort_pinned_first(&mut records);
+        assert_eq!(records.len(), 1);
+        assert!(!records[0].pinned);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_sort_pinned_first_all_same_pinned_state() {
+        let now = chrono::Local::now();
+        let mut records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "oldest".to_string(),
+                created_at: now - chrono::Duration::seconds(2),
+                content_type: ContentType::Text,
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "middle".to_string(),
+                created_at: now - chrono::Duration::seconds(1),
+                content_type: ContentType::Text,
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "newest".to_string(),
+                created_at: now,
+                content_type: ContentType::Text,
+                pinned: false,
+            },
+        ];
+
+        ClipboardRepository::sort_pinned_first(&mut records);
+
+        // Should be sorted by time descending (newest first)
+        assert_eq!(records[0].content, "newest");
+        assert_eq!(records[1].content, "middle");
+        assert_eq!(records[2].content, "oldest");
+    }
+
+    // ── Error Handling Tests ──────────────────────────────────────
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_concurrent_save_and_delete() {
+        let repo = create_test_repo();
+        let repo = std::sync::Arc::new(repo);
+        let mut handles = vec![];
+
+        // Spawn threads that save records
+        for i in 0..10 {
+            let r = repo.clone();
+            let handle = std::thread::spawn(move || {
+                r.save_text(format!("thread {i}")).expect("Failed to save")
+            });
+            handles.push(handle);
+        }
+
+        let mut ids = vec![];
+        for handle in handles {
+            let record = handle.join().expect("Thread panicked");
+            ids.push(record.id);
+        }
+
+        assert_eq!(repo.count(), 10);
+
+        // Now delete half of them concurrently
+        let repo2 = repo.clone();
+        let ids_to_delete = ids[..5].to_vec();
+        let handle = std::thread::spawn(move || {
+            for id in ids_to_delete {
+                repo2.delete(id).expect("Failed to delete");
+            }
+        });
+
+        handle.join().expect("Delete thread panicked");
+        assert_eq!(repo.count(), 5);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_after_clear() {
+        let repo = create_test_repo();
+
+        repo.save_text("Before clear".to_string())
+            .expect("Failed to save");
+        repo.clear().expect("Failed to clear");
+
+        // Should be able to save after clear
+        let record = repo
+            .save_text("After clear".to_string())
+            .expect("Failed to save after clear");
+        assert_eq!(repo.count(), 1);
+        assert_eq!(record.content, "After clear");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_double_toggle_pin() {
+        let repo = create_test_repo();
+
+        let record = repo.save_text("Test".to_string()).expect("Failed to save");
+        assert!(!record.pinned);
+
+        // Toggle on
+        repo.toggle_pin(record.id).expect("Failed to toggle");
+        let pinned = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("Should exist");
+        assert!(pinned.pinned);
+
+        // Toggle off
+        repo.toggle_pin(record.id).expect("Failed to toggle");
+        let unpinned = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("Should exist");
+        assert!(!unpinned.pinned);
+
+        // Toggle on again
+        repo.toggle_pin(record.id).expect("Failed to toggle");
+        let pinned_again = repo
+            .get_by_id(record.id)
+            .expect("Failed to get")
+            .expect("Should exist");
+        assert!(pinned_again.pinned);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_recent_with_pinned_and_limit() {
+        let repo = create_test_repo();
+
+        // Create 5 unpinned records
+        for i in 1..=5 {
+            repo.save_text(format!("Unpinned {i}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // Pin the oldest one (first saved)
+        let recent = repo.get_recent(5).expect("Failed to get");
+        let oldest_id = recent[4].id; // Last in the list is oldest
+        repo.toggle_pin(oldest_id).expect("Failed to pin");
+
+        // Get recent with limit 3
+        let recent_limited = repo.get_recent(3).expect("Failed to get");
+
+        // Should include the pinned one plus 2 most recent unpinned
+        assert_eq!(recent_limited.len(), 3);
+        // First should be the pinned one
+        assert!(recent_limited[0].pinned);
+        assert_eq!(recent_limited[0].id, oldest_id);
+    }
 }

@@ -3,6 +3,7 @@ name = "ropy"
 version = "0.3.3"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
+authors = ["Student Wei <studentweis@gmail.com>"]
 repository = "https://github.com/StudentWeis/ropy"
 keywords = ["clipboard", "gpui", "productivity"]
 categories = ["productivity"]
