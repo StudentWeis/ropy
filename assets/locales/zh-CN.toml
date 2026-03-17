@@ -21,7 +21,7 @@ filter_image = "筛选图片"
 
 # 设置
 settings_button = "设置"
-settings_title = "Ropy 设置"
+settings_title = "设置"
 settings_cancel = "取消"
 settings_save = "保存"
 
@@ -59,7 +59,7 @@ on = "开启"
 off = "关闭"
 
 # 关于
-about_title = "关于 Ropy"
+about_title = "关于"
 about_version = "版本"
 about_description = "使用 Rust 和 GPUI 构建的轻量级剪贴板管理器。"
 

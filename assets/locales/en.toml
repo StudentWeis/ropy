@@ -21,7 +21,7 @@ filter_image = "Filter images"
 
 # Settings
 settings_button = "Settings"
-settings_title = "Ropy Settings"
+settings_title = "Settings"
 settings_cancel = "Cancel"
 settings_save = "Save"
 
@@ -59,7 +59,7 @@ on = "ON"
 off = "OFF"
 
 # About
-about_title = "About Ropy"
+about_title = "About"
 about_version = "Version"
 about_description = "A lightweight clipboard manager built with Rust and GPUI."
 

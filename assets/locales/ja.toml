@@ -22,7 +22,7 @@ filter_image = "画像をフィルター"
 
 # Settings
 settings_button = "設定"
-settings_title = "Ropy 設定"
+settings_title = "設定"
 settings_cancel = "キャンセル"
 settings_save = "保存"
 
@@ -60,7 +60,7 @@ on = "オン"
 off = "オフ"
 
 # About
-about_title = "Ropy について"
+about_title = "について"
 about_version = "バージョン"
 about_description = "RustとGPUIで構築された軽量クリップボードマネージャーです。"
 
