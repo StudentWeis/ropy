@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2026-03-17
+
+### 🚀 Features
+
+- Add user-friendly network error message for update failures by @StudentWeis
+- Enhance list item rendering with improved hover and selection styles by @StudentWeis
+
+### 💼 Other
+
+- Add script to record build sizes and append to CSV by @StudentWeis
+- Remove issue templates from repository by @StudentWeis
+- Update dependencies and CI configurations for improved stability by @StudentWeis
+- Add icon file checker script by @StudentWeis
+
+### 🚜 Refactor
+
+- Add records list module and refactor clipboard rendering logic by @StudentWeis
+
+### 🧪 Testing
+
+- Add comprehensive tests for repository and time index functionality by @StudentWeis
+
 ## [0.3.3] - 2026-03-13
 
 ### 🚀 Features
