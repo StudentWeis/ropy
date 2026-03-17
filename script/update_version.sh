@@ -1,10 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # Check if a version argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <new_version>"
-    echo "Example: $0 0.1.2"
-    exit 1
+	echo "Usage: $0 <new_version>"
+	echo "Example: $0 0.1.2"
+	exit 1
 fi
 
 NEW_VERSION=$1
@@ -12,8 +13,8 @@ CARGO_TOML="Cargo.toml"
 
 # Check if Cargo.toml exists
 if [ ! -f "$CARGO_TOML" ]; then
-    echo "Error: $CARGO_TOML file not found"
-    exit 1
+	echo "Error: $CARGO_TOML file not found"
+	exit 1
 fi
 
 echo "Updating version to: $NEW_VERSION ..."
@@ -29,5 +30,23 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\")
 git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 
 dist plan
+
+# Confirm before push git tag
+while true; do
+	read -r -p "Run 'cargo release --execute'? [Y/n] " REPLY
+	REPLY=${REPLY:-Y}
+	case "$REPLY" in
+	[Yy]*)
+		git tag "$NEW_VERSION"
+		git push --tags
+		break
+		;;
+	[Nn]*)
+		echo "Release aborted by user."
+		exit 0
+		;;
+	*) echo "Please answer Y or n." ;;
+	esac
+done
 
 echo "Update completed!"
