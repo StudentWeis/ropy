@@ -112,7 +112,10 @@ impl RopyBoard {
             return;
         }
         hide_window(window, cx, self.pinned);
-        self.pinned = false;
+        if self.pinned {
+            self.pinned = false;
+            cx.notify();
+        }
     }
 
     #[allow(clippy::unused_self)]
