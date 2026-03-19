@@ -293,8 +293,6 @@ impl RopyBoard {
                 }
             });
 
-        let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Use / to search ... "));
         // Measure all items initially so scrollbar thumb size is stable on first paint.
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.)).measure_all();
 
@@ -382,6 +380,9 @@ impl RopyBoard {
             },
         )
         .detach();
+
+        let search_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder(i18n.t("search_placeholder")));
 
         Self {
             records,
