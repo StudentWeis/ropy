@@ -18,6 +18,11 @@ pin = "Pin"
 unpin = "Unpin"
 filter_text = "Filter text"
 filter_image = "Filter images"
+search_case_sensitive = "Case-sensitive"
+search_match_mode = "Match mode"
+search_match_contains = "Contains"
+search_match_whole_word = "Whole word"
+search_match_exact = "Exact"
 
 # Settings
 settings_button = "Settings"

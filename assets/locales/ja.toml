@@ -19,6 +19,11 @@ pin = "ピン留め"
 unpin = "ピン留め解除"
 filter_text = "テキストをフィルター"
 filter_image = "画像をフィルター"
+search_case_sensitive = "大文字と小文字を区別"
+search_match_mode = "一致モード"
+search_match_contains = "部分一致"
+search_match_whole_word = "単語一致"
+search_match_exact = "完全一致"
 
 # Settings
 settings_button = "設定"

@@ -14,7 +14,7 @@ use gpui_component::{
     v_flex,
 };
 
-use super::RopyBoard;
+use super::{RopyBoard, SearchMatchMode};
 use crate::constants::APP_NAME;
 
 /// Create the "Clear" button element
@@ -28,6 +28,77 @@ pub(super) fn create_clear_button(
         .tooltip(board.i18n.t("clear_all"))
         .on_click(cx.listener(|this, _, _, cx| {
             this.show_clear_confirm = true;
+            cx.notify();
+        }))
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+}
+
+fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
+    let is_active = board.search_options.case_sensitive;
+    let button = if is_active {
+        Button::new("search-case-sensitive-btn").primary()
+    } else {
+        Button::new("search-case-sensitive-btn").ghost()
+    };
+
+    let button = if is_active {
+        button
+    } else {
+        button.opacity(0.6)
+    };
+
+    button
+        .small()
+        .min_h(px(24.0))
+        .px_1()
+        .py_0()
+        .rounded_none()
+        .label("Aa")
+        .tooltip(board.i18n.t("search_case_sensitive"))
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.toggle_case_sensitive_search();
+            cx.notify();
+        }))
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+}
+
+fn create_search_match_mode_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
+    let match_mode = board.search_options.match_mode;
+    let match_mode_label = match match_mode {
+        SearchMatchMode::Contains => board.i18n.t("search_match_contains"),
+        SearchMatchMode::WholeWord => board.i18n.t("search_match_whole_word"),
+        SearchMatchMode::Exact => board.i18n.t("search_match_exact"),
+    };
+    let tooltip = format!(
+        "{}: {}",
+        board.i18n.t("search_match_mode"),
+        match_mode_label
+    );
+
+    let is_active = !matches!(match_mode, SearchMatchMode::Contains);
+    let button = match match_mode {
+        SearchMatchMode::Contains => Button::new("search-match-mode-btn").ghost(),
+        SearchMatchMode::WholeWord | SearchMatchMode::Exact => {
+            Button::new("search-match-mode-btn").primary()
+        }
+    };
+
+    let button = if is_active {
+        button
+    } else {
+        button.opacity(0.6)
+    };
+
+    button
+        .small()
+        .min_h(px(24.0))
+        .px_1()
+        .py_0()
+        .rounded_none()
+        .label(match_mode.short_label())
+        .tooltip(tooltip)
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.cycle_search_match_mode();
             cx.notify();
         }))
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -209,7 +280,6 @@ pub(super) fn render_search_input(
 
     let is_text_active = board.content_filter == ContentFilter::Text;
     let is_image_active = board.content_filter == ContentFilter::Image;
-
     let text_filter_tooltip = board.i18n.t("filter_text");
     let image_filter_tooltip = board.i18n.t("filter_image");
 
@@ -230,15 +300,35 @@ pub(super) fn render_search_input(
         .mb_4()
         .gap_2()
         .child(
-            div().flex_1().min_w_0().child(
-                Input::new(&board.search_input)
-                    .appearance(false)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .px_3()
-                    .py_2(),
-            ),
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .items_center()
+                .gap_0p5()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded_md()
+                .px_1()
+                .py_1()
+                .child(
+                    div().flex_1().min_w_0().child(
+                        Input::new(&board.search_input)
+                            .appearance(false)
+                            .px_1()
+                            .py_1(),
+                    ),
+                )
+                .child(div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45))
+                .child(
+                    h_flex()
+                        .items_center()
+                        .bg(cx.theme().background)
+                        .overflow_hidden()
+                        .rounded_md()
+                        .child(create_case_sensitive_button(board, cx))
+                        .child(div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45))
+                        .child(create_search_match_mode_button(board, cx)),
+                ),
         )
         .child(
             text_button

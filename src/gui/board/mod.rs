@@ -5,6 +5,7 @@ mod render;
 
 // moved panels to gui::panel
 use std::{
+    borrow::Cow,
     str::FromStr,
     sync::{Arc, Mutex, PoisonError, RwLock, mpsc},
     time::Duration,
@@ -54,6 +55,38 @@ pub enum ContentFilter {
     Image,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchMatchMode {
+    #[default]
+    Contains,
+    WholeWord,
+    Exact,
+}
+
+impl SearchMatchMode {
+    pub(crate) const fn next(self) -> Self {
+        match self {
+            Self::Contains => Self::WholeWord,
+            Self::WholeWord => Self::Exact,
+            Self::Exact => Self::Contains,
+        }
+    }
+
+    pub(crate) const fn short_label(self) -> &'static str {
+        match self {
+            Self::Contains => ".*",
+            Self::WholeWord => "W",
+            Self::Exact => "=",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SearchOptions {
+    pub(crate) match_mode: SearchMatchMode,
+    pub(crate) case_sensitive: bool,
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -101,6 +134,8 @@ pub struct RopyBoard {
     pub(crate) show_clear_confirm: bool,
     /// Active content type filter
     pub(crate) content_filter: ContentFilter,
+    /// Active text search options
+    pub(crate) search_options: SearchOptions,
 }
 
 impl RopyBoard {
@@ -385,6 +420,7 @@ impl RopyBoard {
             hover_preview_enabled,
             show_clear_confirm: false,
             content_filter: ContentFilter::default(),
+            search_options: SearchOptions::default(),
         }
     }
 
@@ -493,11 +529,62 @@ impl RopyBoard {
         }
     }
 
+    pub(crate) const fn toggle_case_sensitive_search(&mut self) {
+        self.search_options.case_sensitive = !self.search_options.case_sensitive;
+    }
+
+    pub(crate) const fn cycle_search_match_mode(&mut self) {
+        self.search_options.match_mode = self.search_options.match_mode.next();
+    }
+
+    fn is_token_char(ch: char) -> bool {
+        ch.is_alphanumeric() || ch == '_'
+    }
+
+    fn has_word_boundaries(content: &str, start: usize, end: usize) -> bool {
+        let previous = content[..start].chars().next_back();
+        let next = content[end..].chars().next();
+
+        let has_left_boundary = previous.is_none_or(|ch| !Self::is_token_char(ch));
+        let has_right_boundary = next.is_none_or(|ch| !Self::is_token_char(ch));
+
+        has_left_boundary && has_right_boundary
+    }
+
+    fn normalized_text(text: &str, case_sensitive: bool) -> Cow<'_, str> {
+        if case_sensitive {
+            Cow::Borrowed(text)
+        } else {
+            Cow::Owned(text.to_lowercase())
+        }
+    }
+
+    fn text_matches_query(content: &str, query: &str, options: SearchOptions) -> bool {
+        if query.is_empty() {
+            return true;
+        }
+
+        let normalized_content = Self::normalized_text(content, options.case_sensitive);
+        let normalized_query = Self::normalized_text(query, options.case_sensitive);
+
+        match options.match_mode {
+            SearchMatchMode::Contains => normalized_content.contains(normalized_query.as_ref()),
+            SearchMatchMode::WholeWord => normalized_content
+                .match_indices(normalized_query.as_ref())
+                .any(|(start, matched)| {
+                    let end = start + matched.len();
+                    Self::has_word_boundaries(normalized_content.as_ref(), start, end)
+                }),
+            SearchMatchMode::Exact => normalized_content == normalized_query,
+        }
+    }
+
     /// Filter records based on search query and content type filter
     fn filter_records_by_query(
         records: &[ClipboardRecord],
         query: &str,
         filter: ContentFilter,
+        options: SearchOptions,
     ) -> Vec<ClipboardRecord> {
         records
             .iter()
@@ -524,10 +611,7 @@ impl RopyBoard {
                 }
 
                 record.content_type == ContentType::Text
-                    && record
-                        .content
-                        .to_lowercase()
-                        .contains(&query.to_lowercase())
+                    && Self::text_matches_query(&record.content, query, options)
             })
             .cloned()
             .collect()
@@ -537,7 +621,12 @@ impl RopyBoard {
     fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
         let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
 
-        let filtered = Self::filter_records_by_query(&records, query, self.content_filter);
+        let filtered = Self::filter_records_by_query(
+            &records,
+            query,
+            self.content_filter,
+            self.search_options,
+        );
 
         drop(records); // Release the lock early
 
@@ -1106,21 +1195,31 @@ mod tests {
     #[test]
     fn test_filter_all_no_query_returns_everything() {
         let records = mixed_records();
-        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::All);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::All,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 3);
     }
 
     #[test]
     fn test_filter_all_with_query_matches_text_only() {
         let records = mixed_records();
-        let result = RopyBoard::filter_records_by_query(&records, "world", ContentFilter::All);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "world",
+            ContentFilter::All,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].content, "Hello World");
         assert_eq!(result[1].content, "Goodbye World");
     }
 
     #[test]
-    fn test_filter_all_with_query_case_insensitive() {
+    fn test_search_contains_case_insensitive_matches_all_variants() {
         let records = vec![
             ClipboardRecord {
                 id: 1,
@@ -1138,8 +1237,220 @@ mod tests {
             },
         ];
 
-        let result = RopyBoard::filter_records_by_query(&records, "hello", ContentFilter::All);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::All,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_search_contains_case_sensitive_matches_only_same_case() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "hello world".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "Hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::Contains,
+                case_sensitive: true,
+            },
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "Hello World");
+    }
+
+    #[test]
+    fn test_search_whole_word_case_insensitive_matches_token_boundaries() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Say hello world".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "say HELLO again".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "shelloworld".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::WholeWord,
+                case_sensitive: false,
+            },
+        );
+
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_search_whole_word_case_sensitive_rejects_case_mismatch() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "say Hello again".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "say hello again".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "Hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::WholeWord,
+                case_sensitive: true,
+            },
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "say Hello again");
+    }
+
+    #[test]
+    fn test_search_whole_word_partial_token_returns_no_match() {
+        let records = vec![ClipboardRecord {
+            id: 1,
+            content: "hello_world hello2".to_string(),
+            content_type: ContentType::Text,
+            created_at: chrono::Local::now(),
+            pinned: false,
+        }];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::WholeWord,
+                case_sensitive: false,
+            },
+        );
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_search_exact_case_insensitive_matches_full_content() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "HELLO".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::Exact,
+                case_sensitive: false,
+            },
+        );
+
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_search_exact_case_sensitive_matches_only_strict_equal_content() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "hello".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 3,
+                content: " hello ".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::All,
+            SearchOptions {
+                match_mode: SearchMatchMode::Exact,
+                case_sensitive: true,
+            },
+        );
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "hello");
     }
 
     #[test]
@@ -1152,7 +1463,12 @@ mod tests {
             pinned: false,
         }];
 
-        let result = RopyBoard::filter_records_by_query(&records, "xyz", ContentFilter::All);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "xyz",
+            ContentFilter::All,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 0);
     }
 
@@ -1166,7 +1482,12 @@ mod tests {
             pinned: false,
         }];
 
-        let result = RopyBoard::filter_records_by_query(&records, "image", ContentFilter::All);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "image",
+            ContentFilter::All,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 0);
     }
 
@@ -1175,7 +1496,12 @@ mod tests {
     #[test]
     fn test_filter_text_no_query_returns_text_only() {
         let records = mixed_records();
-        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::Text);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Text,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 2);
         assert!(result.iter().all(|r| r.content_type == ContentType::Text));
     }
@@ -1183,7 +1509,12 @@ mod tests {
     #[test]
     fn test_filter_text_with_query_matches_within_text() {
         let records = mixed_records();
-        let result = RopyBoard::filter_records_by_query(&records, "hello", ContentFilter::Text);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::Text,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "Hello World");
     }
@@ -1193,19 +1524,39 @@ mod tests {
     #[test]
     fn test_filter_image_no_query_returns_images_only() {
         let records = mixed_records();
-        let result = RopyBoard::filter_records_by_query(&records, "", ContentFilter::Image);
+        let result = RopyBoard::filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Image,
+            SearchOptions::default(),
+        );
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content_type, ContentType::Image);
     }
 
     #[test]
-    fn test_filter_image_with_query_ignores_query() {
+    fn test_filter_image_with_query_ignores_query_for_all_search_modes() {
         let records = mixed_records();
-        // Even with a query, image filter should return all images (query ignored)
-        let result =
-            RopyBoard::filter_records_by_query(&records, "nonexistent", ContentFilter::Image);
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content_type, ContentType::Image);
+        for options in [
+            SearchOptions::default(),
+            SearchOptions {
+                match_mode: SearchMatchMode::WholeWord,
+                case_sensitive: false,
+            },
+            SearchOptions {
+                match_mode: SearchMatchMode::Exact,
+                case_sensitive: true,
+            },
+        ] {
+            let result = RopyBoard::filter_records_by_query(
+                &records,
+                "nonexistent",
+                ContentFilter::Image,
+                options,
+            );
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].content_type, ContentType::Image);
+        }
     }
 
     // --- Toggle tests ---
@@ -1246,6 +1597,13 @@ mod tests {
             ContentFilter::Text
         };
         assert_eq!(filter, ContentFilter::Text);
+    }
+
+    #[test]
+    fn test_search_match_mode_next_cycles_all_modes() {
+        assert_eq!(SearchMatchMode::Contains.next(), SearchMatchMode::WholeWord);
+        assert_eq!(SearchMatchMode::WholeWord.next(), SearchMatchMode::Exact);
+        assert_eq!(SearchMatchMode::Exact.next(), SearchMatchMode::Contains);
     }
 
     // --- Existing parse tests (unchanged) ---
