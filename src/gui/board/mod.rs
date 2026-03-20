@@ -289,6 +289,8 @@ impl RopyBoard {
                 // (Select dropdowns, overlays) steal focus and would cause the window
                 // to disappear and become un-reopenable.
                 if !this.pinned && !this.show_settings {
+                    // Clear search input when hiding the window
+                    this.clear_search(window, cx);
                     hide_window(window, cx, this.pinned);
                 }
             });

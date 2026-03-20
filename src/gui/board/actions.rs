@@ -2,6 +2,17 @@ use gpui::{Context, Focusable, Window};
 
 use crate::gui::{active_window, board::RopyBoard, hide_window, panel::settings};
 
+impl RopyBoard {
+    /// Clear the search input content and blur it
+    pub(crate) fn clear_search(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        // Blur the search input to remove focus
+        window.focus(&self.focus_handle);
+    }
+}
+
 gpui::actions!(
     board,
     [
@@ -111,6 +122,8 @@ impl RopyBoard {
             window.focus(&self.focus_handle);
             return;
         }
+        // Clear search input when hiding the window
+        self.clear_search(window, cx);
         hide_window(window, cx, self.pinned);
         if self.pinned {
             self.pinned = false;
