@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5] - 2026-03-20
+
+### 🚀 Features
+
+- Update tray icon handling and improve menu translation logic by @StudentWeis
+- Add clear_search method to reset search input and blur focus when hiding the window by @StudentWeis
+- Implement advanced search options with case sensitivity and match modes by @StudentWeis
+
+### 🐛 Bug Fixes
+
+- Ensure notify window when unpin by @StudentWeis
+- Update search input placeholder to use internationalization by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+
+- Simplify some titles in English, Japanese, and Chinese translations by @StudentWeis
+- Add pre-commit hooks and scripts for code checks and version updates by @StudentWeis
+
 ## [0.3.4] - 2026-03-17
 
 ### 🚀 Features
