@@ -29,10 +29,6 @@ This module intentionally lives outside `gui` so that the GUI module can focus s
 - Write text and images back to the clipboard through a dedicated background task (`writer.rs`).
 - Deduplication logic: Consecutive identical content (text or image by hash) is not recorded repeatedly.
 
-Some extension strategies can be applied:
-
-- Sensitive filtering: Detect if the content comes from password managers (such as 1Password/Bitwarden), and if so, ignore it to protect privacy.
-
 # Repository (Storage)
 
 - Persist clipboard history records using [sled](https://github.com/spacejam/sled) as the embedded database.

@@ -136,6 +136,8 @@ pub struct RopyBoard {
     pub(crate) content_filter: ContentFilter,
     /// Active text search options
     pub(crate) search_options: SearchOptions,
+    /// System tray icon handle for menu updates on language change
+    pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
 }
 
 impl RopyBoard {
@@ -175,6 +177,20 @@ impl RopyBoard {
 
     pub fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
         self.hotkey_tx = Some(tx);
+    }
+
+    pub fn set_tray_icon(&mut self, tray_icon: Option<tray_icon::TrayIcon>) {
+        self.tray_icon = tray_icon;
+    }
+
+    /// Rebuild the tray menu with current i18n translations.
+    fn update_tray_menu(&self) {
+        if let Some(ref tray) = self.tray_icon {
+            match crate::gui::tray::build_tray_menu(&self.i18n) {
+                Ok(menu) => tray.set_menu(Some(Box::new(menu))),
+                Err(e) => tracing::warn!(error = %e, "failed to rebuild tray menu"),
+            }
+        }
     }
 
     pub(crate) fn displayed_hotkey(&self) -> &str {
@@ -349,7 +365,10 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
 
         // Initialize I18n with the language from settings
-        let i18n = I18n::new(language.clone()).unwrap_or_default();
+        let i18n = I18n::new(language.clone()).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, language = %language.code(), "failed to load i18n for board; falling back to default");
+            I18n::default()
+        });
         let selected_language = Language::all()
             .iter()
             .position(|lang| lang == &language)
@@ -424,6 +443,7 @@ impl RopyBoard {
             show_clear_confirm: false,
             content_filter: ContentFilter::default(),
             search_options: SearchOptions::default(),
+            tray_icon: None,
         }
     }
 
@@ -774,6 +794,9 @@ impl RopyBoard {
         if let Err(e) = self.i18n.set_language(language) {
             tracing::warn!(error = ?e, "failed to set language");
         }
+
+        // Update tray menu with new language
+        self.update_tray_menu();
 
         // Update search placeholder with new language
         let search_placeholder = self.i18n.t("search_placeholder");

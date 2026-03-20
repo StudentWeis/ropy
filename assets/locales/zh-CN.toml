@@ -66,7 +66,7 @@ off = "关闭"
 # 关于
 about_title = "关于"
 about_version = "版本"
-about_description = "使用 Rust 和 GPUI 构建的轻量级剪贴板管理器。"
+about_description = "使用 Rust 和 GPUI 构建的轻量剪贴板管理器。"
 
 # 更新
 update_auto_check = "自动检查更新"

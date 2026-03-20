@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, RwLock, mpsc, mpsc::Sender},
+    sync::{mpsc, mpsc::Sender},
     time::Duration,
 };
 
@@ -10,28 +10,28 @@ use tray_icon::{
     menu::{Menu, MenuId, MenuItem},
 };
 
-use crate::{config::Settings, constants::APP_NAME, i18n::I18n};
+use crate::{constants::APP_NAME, i18n::I18n};
 
-/// Initialize and return the tray icon
-pub fn init_tray(
-    settings: &Arc<RwLock<Settings>>,
-) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
-    let language = match settings.read() {
-        Ok(g) => g,
-        Err(e) => e.into_inner(),
-    }
-    .language
-    .clone();
-    let i18n = I18n::new(language).unwrap_or_default();
+/// Fixed menu IDs so event handlers remain valid after menu rebuilds.
+const TRAY_SHOW_ID: &str = "tray_show";
+const TRAY_QUIT_ID: &str = "tray_quit";
 
-    // Create menu items
-    let show_item = MenuItem::new(i18n.t("tray_show"), true, None);
-    let quit_item = MenuItem::new(i18n.t("tray_quit"), true, None);
+/// Build a tray menu with translated labels.
+pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
+    let show_item = MenuItem::with_id(TRAY_SHOW_ID, i18n.t("tray_show"), true, None);
+    let quit_item = MenuItem::with_id(TRAY_QUIT_ID, i18n.t("tray_quit"), true, None);
 
-    // Create menu
     let tray_menu = Menu::new();
     tray_menu.append(&show_item)?;
     tray_menu.append(&quit_item)?;
+    Ok(tray_menu)
+}
+
+/// Initialize and return the tray icon
+pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
+    let tray_menu = build_tray_menu(i18n)?;
+    let show_id = MenuId::new(TRAY_SHOW_ID);
+    let quit_id = MenuId::new(TRAY_QUIT_ID);
 
     let icon = create_icon()?;
 
@@ -43,7 +43,7 @@ pub fn init_tray(
         .with_menu_on_left_click(false)
         .build()?;
 
-    Ok((tray, show_item.id().clone(), quit_item.id().clone()))
+    Ok((tray, show_id, quit_id))
 }
 
 /// Create a simple icon for the tray
@@ -62,10 +62,10 @@ pub enum TrayEvent {
 }
 
 pub fn start_tray_handler(
-    settings: &Arc<RwLock<Settings>>,
+    i18n: &I18n,
     async_app: AsyncApp,
     window_handle: WindowHandle<Root>,
-) {
+) -> Option<TrayIcon> {
     let (tx, rx) = mpsc::channel();
 
     let fg_executor = async_app.foreground_executor().clone();
@@ -73,19 +73,25 @@ pub fn start_tray_handler(
     let bg_executor_clone = bg_executor.clone();
 
     #[cfg(not(target_os = "linux"))]
-    start_tray_handler_inner(settings, tx, &bg_executor_clone);
+    let tray = start_tray_handler_inner(i18n, tx, &bg_executor_clone);
 
     #[cfg(target_os = "linux")]
-    {
-        let settings = settings.clone();
+    let tray = {
+        let i18n = i18n.clone();
+        // On Linux, tray must be initialized on the GTK thread.
+        // We cannot return the TrayIcon from the spawned task, so we
+        // leak it there and return None to the caller.
         bg_executor
             .spawn(async move {
                 gtk::init().expect("Failed to init gtk modules");
-                start_tray_handler_inner(&settings, tx, &bg_executor_clone);
+                if let Some(tray) = start_tray_handler_inner(&i18n, tx, &bg_executor_clone) {
+                    Box::leak(Box::new(tray));
+                }
                 gtk::main();
             })
             .detach();
-    }
+        None
+    };
 
     fg_executor
         .spawn(async move {
@@ -109,19 +115,19 @@ pub fn start_tray_handler(
             }
         })
         .detach();
+
+    tray
 }
 
 /// Start the system tray handler
 pub fn start_tray_handler_inner(
-    settings: &Arc<RwLock<Settings>>,
+    i18n: &I18n,
     tx: Sender<TrayEvent>,
     bg_executor: &BackgroundExecutor,
-) {
-    match init_tray(settings) {
+) -> Option<TrayIcon> {
+    match init_tray(i18n) {
         Ok((tray, show_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
-            // Keep tray icon alive for the lifetime of the application
-            Box::leak(Box::new(tray));
 
             let bg_executor_clone = bg_executor.clone();
 
@@ -151,9 +157,12 @@ pub fn start_tray_handler_inner(
                     }
                 })
                 .detach();
+
+            Some(tray)
         }
         Err(e) => {
             tracing::error!(error = %e, "failed to initialize tray icon");
+            None
         }
     }
 }

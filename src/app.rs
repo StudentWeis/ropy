@@ -288,12 +288,19 @@ pub fn launch() {
                             board.check_for_update_async(cx);
                         });
                     }
+
+                    board.update(cx, |board, _| {
+                        let tray = crate::gui::start_tray_handler(
+                            &board.i18n,
+                            async_app.clone(),
+                            window_handle,
+                        );
+                        board.set_tray_icon(tray);
+                    });
                 } else {
                     tracing::error!("failed to downcast root view to RopyBoard");
                 }
             });
-
-            crate::gui::start_tray_handler(&settings, async_app, window_handle);
 
             if !is_silent {
                 cx.activate(true);
