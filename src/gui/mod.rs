@@ -1,7 +1,6 @@
 pub mod app;
 pub mod board;
 pub mod hotkey;
-pub mod hotkey_record;
 mod panel;
 mod paste;
 pub mod tray;

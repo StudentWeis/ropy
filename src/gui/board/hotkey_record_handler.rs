@@ -1,9 +1,13 @@
 use std::str::FromStr;
 
 use global_hotkey::hotkey::HotKey;
-use gpui::{Keystroke, Modifiers};
+use gpui::{Context, Focusable, Keystroke, Modifiers, Window};
 
-pub fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
+use super::RopyBoard;
+
+// --- Hotkey recording utilities (merged from gui/hotkey_record.rs) ---
+
+fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
     if !has_supported_modifier(keystroke.modifiers) {
         return None;
     }
@@ -42,11 +46,11 @@ pub fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
     Some(parts.join("+"))
 }
 
-pub fn is_cancel_key(key: &str) -> bool {
+fn is_cancel_key(key: &str) -> bool {
     matches!(key.trim().to_ascii_lowercase().as_str(), "escape" | "esc")
 }
 
-pub fn is_clear_key(keystroke: &Keystroke) -> bool {
+fn is_clear_key(keystroke: &Keystroke) -> bool {
     !has_supported_modifier(keystroke.modifiers)
         && matches!(
             keystroke.key.trim().to_ascii_lowercase().as_str(),
@@ -143,6 +147,89 @@ fn is_modifier_key(key: &str) -> bool {
     )
 }
 
+// --- RopyBoard hotkey recording methods ---
+
+impl RopyBoard {
+    pub(crate) fn displayed_hotkey(&self) -> &str {
+        &self.pending_hotkey
+    }
+
+    pub(crate) fn start_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_before_recording = self.pending_hotkey.clone();
+        self.hotkey_recording = true;
+        self.hotkey_manual_editing = false;
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn enable_hotkey_manual_edit(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.hotkey_recording = false;
+        self.hotkey_manual_editing = true;
+        let pending_hotkey = self.pending_hotkey.clone();
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value(pending_hotkey, window, cx);
+        });
+        window.focus(&self.settings_activation_key_input.focus_handle(cx));
+        cx.notify();
+    }
+
+    pub(crate) fn clear_hotkey_candidate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_recording = false;
+        self.pending_hotkey.clear();
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn cancel_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hotkey_recording = false;
+        self.pending_hotkey
+            .clone_from(&self.hotkey_before_recording);
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+
+    pub(crate) fn on_settings_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.hotkey_recording {
+            return;
+        }
+
+        if is_cancel_key(&event.keystroke.key) {
+            self.cancel_hotkey_recording(window, cx);
+            return;
+        }
+
+        if is_clear_key(&event.keystroke) {
+            self.clear_hotkey_candidate(window, cx);
+            return;
+        }
+
+        let Some(hotkey) = keystroke_to_hotkey(&event.keystroke) else {
+            return;
+        };
+
+        self.hotkey_recording = false;
+        self.hotkey_manual_editing = false;
+        self.pending_hotkey = hotkey;
+        window.focus(&self.focus_handle);
+        cx.notify();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn modifier_only_keystroke_is_rejected() {
+    fn test_keystroke_to_hotkey_modifier_only_returns_none() {
         let mut modifiers = Modifiers::none();
         modifiers.control = true;
 
@@ -164,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn clear_key_requires_no_modifiers() {
+    fn test_is_clear_key_requires_no_modifiers() {
         let mut modifiers = Modifiers::none();
         modifiers.control = true;
 
@@ -173,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn escape_variants_cancel_recording() {
+    fn test_is_cancel_key_escape_variants_returns_true() {
         assert!(is_cancel_key("escape"));
         assert!(is_cancel_key("esc"));
         assert!(!is_cancel_key("enter"));
@@ -181,7 +268,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::unwrap_used)]
-    fn control_shift_letter_round_trips_to_global_hotkey() {
+    fn test_keystroke_to_hotkey_control_shift_letter_round_trips() {
         let mut modifiers = Modifiers::none();
         modifiers.control = true;
         modifiers.shift = true;
@@ -193,7 +280,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     #[allow(clippy::unwrap_used)]
-    fn command_shift_letter_round_trips_to_global_hotkey() {
+    fn test_keystroke_to_hotkey_command_shift_letter_round_trips() {
         let mut modifiers = Modifiers::none();
         modifiers.platform = true;
         modifiers.shift = true;
