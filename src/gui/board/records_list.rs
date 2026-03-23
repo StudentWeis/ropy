@@ -249,7 +249,7 @@ fn render_record_actions(
                     .on_click(move |_event, _window, cx| {
                         view_pin
                             .update(cx, |this, cx| {
-                                this.toggle_record_pin(record_id);
+                                this.toggle_record_pin(record_id, cx);
                                 cx.notify();
                             })
                             .ok();
@@ -263,7 +263,7 @@ fn render_record_actions(
                     .on_click(move |_event, _window, cx| {
                         view_delete
                             .update(cx, |this, cx| {
-                                this.delete_record(record_id);
+                                this.delete_record(record_id, cx);
                                 cx.notify();
                             })
                             .ok();

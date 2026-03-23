@@ -61,7 +61,7 @@ impl RopyBoard {
     ) {
         if let Some(record) = self.filtered_records.get(self.selected_index) {
             let id = record.id;
-            self.delete_record(id);
+            self.delete_record(id, cx);
             // Clamp selected_index after deletion
             if self.selected_index > 0
                 && self.selected_index >= self.filtered_records.len().saturating_sub(1)

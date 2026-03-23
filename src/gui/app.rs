@@ -17,7 +17,7 @@ use crate::{
     clipboard::LastCopyState,
     config::{AppTheme, Settings},
     gui::board::RopyBoard,
-    repository::{ClipboardRecord, ClipboardRepository},
+    repository::ClipboardRecord,
 };
 
 #[derive(RustEmbed)]
@@ -40,7 +40,6 @@ impl AssetSource for Assets {
 pub fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    repository: Option<Arc<ClipboardRepository>>,
     last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     is_silent: bool,
@@ -59,9 +58,7 @@ pub fn create_window(
             let app_theme = Settings::read(cx, |s| s.theme.get_theme());
             set_app_theme(window, cx, &app_theme);
 
-            let view = cx.new(|cx| {
-                RopyBoard::new(shared_records, repository, last_copy, copy_tx, window, cx)
-            });
+            let view = cx.new(|cx| RopyBoard::new(shared_records, last_copy, copy_tx, window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         },
     )

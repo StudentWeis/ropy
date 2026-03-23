@@ -77,7 +77,7 @@ pub(super) fn render_clear_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl 
                                 .danger()
                                 .label(confirm_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.clear_history();
+                                    this.clear_history(cx);
                                     this.clear_last_copy_state();
                                     this.show_clear_confirm = false;
                                     cx.notify();

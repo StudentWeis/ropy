@@ -18,7 +18,7 @@ use crate::{
     constants::APP_NAME,
     gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository},
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
 };
 
 #[cfg(target_os = "linux")]
@@ -32,12 +32,14 @@ pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 fn start_clipboard_event_handler(
     clipboard_rx: async_channel::Receiver<ClipboardEvent>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    repository: Option<Arc<ClipboardRepository>>,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
     let (notify_tx, notify_rx) = async_channel::unbounded::<ClipboardRecord>();
-    let bg_repository = repository.clone();
+
+    // Clone the Arc before moving into the background task, since GPUI
+    // globals are not accessible from background threads.
+    let bg_repository = GlobalRepository::global(cx).cloned();
 
     cx.background_spawn(async move {
         while let Ok(event) = clipboard_rx.recv().await
@@ -80,11 +82,13 @@ fn start_clipboard_event_handler(
                     }
                 }
 
-                if let Some(ref repo) = repository
-                    && let Err(e) = repo.cleanup_old_records(max_storage)
-                {
-                    tracing::warn!(error = %e, "failed to cleanup old clipboard records");
-                }
+                GlobalRepository::read(cx, |repo| {
+                    if let Some(repo) = repo
+                        && let Err(e) = repo.cleanup_old_records(max_storage)
+                    {
+                        tracing::warn!(error = %e, "failed to cleanup old clipboard records");
+                    }
+                });
 
                 window_handle
                     .update(cx, |_, _, cx| {
@@ -223,6 +227,10 @@ pub fn launch() {
             let repository = initialize_repository();
             let initial_records =
                 load_initial_records(repository.as_ref(), settings.storage.max_history_records);
+
+            // Register repository as GPUI Global for app-wide access
+            cx.set_global(GlobalRepository::new(repository));
+
             let shared_records = Arc::new(Mutex::new(initial_records));
             let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
             let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
@@ -231,18 +239,11 @@ pub fn launch() {
             let window_handle = crate::gui::create_window(
                 cx,
                 shared_records.clone(),
-                repository.clone(),
                 last_copy,
                 copy_tx,
                 is_silent,
             );
-            start_clipboard_event_handler(
-                clipboard_rx,
-                shared_records,
-                repository,
-                window_handle,
-                cx,
-            );
+            start_clipboard_event_handler(clipboard_rx, shared_records, window_handle, cx);
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
             // Initialize tray from the global I18n, then pass handles to the board.

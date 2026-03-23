@@ -41,7 +41,7 @@ use crate::{
         },
     },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, ClipboardRepository, models::ContentType},
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
     updater::models::UpdateStatus,
 };
 
@@ -50,7 +50,6 @@ use crate::{
 pub struct RopyBoard {
     pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
     pub(crate) filtered_records: Arc<Vec<ClipboardRecord>>, // The final shown records
-    pub(crate) repository: Option<Arc<ClipboardRepository>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) _focus_out_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
@@ -151,7 +150,6 @@ impl RopyBoard {
     #[allow(clippy::too_many_lines)]
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
-        repository: Option<Arc<ClipboardRepository>>,
         last_copy: Arc<Mutex<LastCopyState>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
@@ -250,7 +248,6 @@ impl RopyBoard {
 
         Self {
             records,
-            repository,
             focus_handle,
             _focus_out_subscription: focus_out_subscription,
             search_input,
@@ -330,15 +327,17 @@ impl RopyBoard {
     }
 
     /// Clear clipboard history
-    pub(crate) fn clear_history(&self) {
-        if let Some(ref repo) = self.repository {
-            if let Err(e) = repo.clear() {
-                tracing::warn!(error = %e, "failed to clear clipboard history");
-            } else {
-                let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-                guard.clear();
+    pub(crate) fn clear_history(&self, cx: &Context<Self>) {
+        GlobalRepository::read(cx, |repo| {
+            if let Some(repo) = repo {
+                if let Err(e) = repo.clear() {
+                    tracing::warn!(error = %e, "failed to clear clipboard history");
+                } else {
+                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                    guard.clear();
+                }
             }
-        }
+        });
     }
 
     /// Clear last copy state
@@ -354,34 +353,38 @@ impl RopyBoard {
     }
 
     /// Delete a single record by ID
-    pub fn delete_record(&mut self, id: u64) {
-        if let Some(ref repo) = self.repository {
-            if let Err(e) = repo.delete(id) {
-                tracing::warn!(error = %e, "failed to delete clipboard record");
-            } else {
-                self.records
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .retain(|record| record.id != id);
-                // Mark that we're in a delete operation to preserve scroll position
-                self.deleting_record = true;
+    pub fn delete_record(&mut self, id: u64, cx: &Context<Self>) {
+        GlobalRepository::read(cx, |repo| {
+            if let Some(repo) = repo {
+                if let Err(e) = repo.delete(id) {
+                    tracing::warn!(error = %e, "failed to delete clipboard record");
+                } else {
+                    self.records
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .retain(|record| record.id != id);
+                    // Mark that we're in a delete operation to preserve scroll position
+                    self.deleting_record = true;
+                }
             }
-        }
+        });
     }
 
     /// Toggle pin state of a record
-    pub fn toggle_record_pin(&self, id: u64) {
-        let Some(ref repo) = self.repository else {
-            return;
-        };
-        if let Err(e) = repo.toggle_pin(id) {
-            tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
-            return;
-        }
-        let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
-            record.pinned = !record.pinned;
-        }
+    pub fn toggle_record_pin(&self, id: u64, cx: &Context<Self>) {
+        GlobalRepository::read(cx, |repo| {
+            let Some(repo) = repo else {
+                return;
+            };
+            if let Err(e) = repo.toggle_pin(id) {
+                tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
+                return;
+            }
+            let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
+                record.pinned = !record.pinned;
+            }
+        });
     }
 
     /// Toggle the content type filter. Clicking the same filter again resets to All.
