@@ -7,7 +7,7 @@ use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
     common::RustImage,
 };
-use gpui::AsyncApp;
+use gpui::{App, AppContext as _};
 use image::DynamicImage;
 
 use super::{ClipboardEvent, LastCopyState};
@@ -71,36 +71,33 @@ impl ClipboardHandler for ClipboardMonitor {
 /// Spawn a clipboard listener thread that watches for clipboard changes.
 pub fn start_clipboard_monitor(
     tx: Sender<ClipboardEvent>,
-    async_app: &AsyncApp,
+    cx: &App,
     last_copy: Arc<Mutex<LastCopyState>>,
 ) {
     let (image_tx, image_rx) = async_channel::unbounded::<(DynamicImage, u64)>();
     let Some(monitor) = ClipboardMonitor::new(tx.clone(), image_tx, last_copy) else {
         return;
     };
-    let executor = async_app.background_executor();
 
-    executor
-        .spawn(async move {
-            while let Ok((image, hash)) = image_rx.recv().await {
-                if let Some(path) = super::save_image(&image) {
-                    let _ = tx.send_blocking(ClipboardEvent::Image(path, hash));
-                }
+    cx.background_spawn(async move {
+        while let Ok((image, hash)) = image_rx.recv().await {
+            if let Some(path) = super::save_image(&image) {
+                let _ = tx.send_blocking(ClipboardEvent::Image(path, hash));
             }
-        })
-        .detach();
+        }
+    })
+    .detach();
 
-    executor
-        .spawn(async move {
-            let mut watcher = match ClipboardWatcherContext::new() {
-                Ok(w) => w,
-                Err(e) => {
-                    tracing::error!(error = %e, "failed to create clipboard watcher");
-                    return;
-                }
-            };
-            watcher.add_handler(monitor);
-            watcher.start_watch();
-        })
-        .detach();
+    cx.background_spawn(async move {
+        let mut watcher = match ClipboardWatcherContext::new() {
+            Ok(w) => w,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create clipboard watcher");
+                return;
+            }
+        };
+        watcher.add_handler(monitor);
+        watcher.start_watch();
+    })
+    .detach();
 }

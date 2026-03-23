@@ -4,7 +4,7 @@ This document details the threading model and message passing architecture of th
 
 # Thread Model
 
-The application primarily uses GPUI's async executors for event handling and background processing, minimizing the use of dedicated OS threads.
+The application primarily uses GPUI's async runtime (`cx.spawn()` / `cx.background_spawn()`) for event handling and background processing, minimizing the use of dedicated OS threads. All subsystems are initialized directly from the `App` context (`&mut App`), avoiding manual executor extraction.
 
 | Entity                      | Executor   | Responsibility                                    | Module              |
 | :-------------------------- | :--------- | :------------------------------------------------ | :------------------ |
@@ -16,9 +16,9 @@ The application primarily uses GPUI's async executors for event handling and bac
 | **Clipboard Event Handler** | Background | Receives clipboard events and updates repository. | `app`               |
 | **Clipboard Writer**        | Background | Handles requests to write to system clipboard.    | `clipboard`         |
 
-> **Note**: Most "background" operations are implemented as async tasks running on the GPUI Background Executor (a thread pool), rather than spawning new OS threads for each component.
+> **Note**: Most "background" operations are implemented as async tasks spawned via `cx.background_spawn()` (running on a GPUI thread pool), rather than spawning new OS threads for each component. Foreground tasks use `cx.spawn()`, which provides an `AsyncApp` handle for UI updates.
 >
-> The top-level `app` module (`src/app.rs`) is responsible for orchestrating all subsystems: it initializes the clipboard monitor, repository, GUI window, hotkey listener, and tray handler, and wires them together via async channels. The `gui` module focuses solely on rendering and window management.
+> The top-level `app` module (`src/app.rs`) is responsible for orchestrating all subsystems: it initializes the clipboard monitor, repository, GUI window, hotkey listener, and tray handler, and wires them together via async channels. All subsystem startup functions receive `&mut App` directly, using `cx.spawn()` and `cx.background_spawn()` instead of manually extracting executors. The `gui` module focuses solely on rendering and window management.
 
 # Message Passing
 
@@ -37,15 +37,15 @@ The application relies on channels (`async_channel`) for communication between t
 ## 2. Hotkey Flow
 
 - **Source**: `GlobalHotKeyEvent` receiver.
-- **Mechanism**: A task on the **Foreground Executor** (Main Thread) polls the receiver.
-- **Handling**: When a hotkey is detected, the task directly dispatches an `Active` action to the window via `async_app.update`.
+- **Mechanism**: A foreground task spawned via `cx.spawn()` polls the receiver. The `AsyncApp` handle is provided as a closure parameter.
+- **Handling**: When a hotkey is detected, the task dispatches an `Active` action to the window via `async_app.update`.
 
 ## 3. Tray Flow
 
 - **Source**: `TrayIcon` menu events.
 - **Path**: `tray_icon::menu::MenuEvent::receiver()`.
-- **Mechanism**: A task on the **Foreground Executor** (Main Thread) polls the receiver.
-- **Handling**: The **Tray Handler Task** either shows the window or quits the app based on the event ID.
+- **Mechanism**: A foreground task spawned via `cx.spawn()` polls the receiver. The `AsyncApp` handle is provided as a closure parameter.
+- **Handling**: The **Tray Handler Task** either shows the window or quits the app via `async_app.update` based on the event ID.
 
 ## 4. Copy/Paste Flow
 

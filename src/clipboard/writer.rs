@@ -1,38 +1,36 @@
 use clipboard_rs::{Clipboard, ClipboardContext};
-use gpui::AsyncApp;
+use gpui::{App, AppContext as _};
 use image::ImageReader;
 
 use super::CopyRequest;
 
 /// Start a background task to handle clipboard write requests.
 /// This avoids creating a new `ClipboardContext` and spawning a new task for each write.
-pub fn start_clipboard_writer(async_app: &AsyncApp) -> async_channel::Sender<CopyRequest> {
+pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
     let (tx, rx) = async_channel::unbounded();
-    let executor = async_app.background_executor();
 
-    executor
-        .spawn(async move {
-            let ctx = match ClipboardContext::new() {
-                Ok(ctx) => ctx,
-                Err(e) => {
-                    tracing::error!(error = %e, "failed to create clipboard output context");
-                    return;
+    cx.background_spawn(async move {
+        let ctx = match ClipboardContext::new() {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to create clipboard output context");
+                return;
+            }
+        };
+        while let Ok(req) = rx.recv().await {
+            match req {
+                CopyRequest::Text { text, completion } => {
+                    set_text(&ctx, text);
+                    notify_completion(completion);
                 }
-            };
-            while let Ok(req) = rx.recv().await {
-                match req {
-                    CopyRequest::Text { text, completion } => {
-                        set_text(&ctx, text);
-                        notify_completion(completion);
-                    }
-                    CopyRequest::Image { path, completion } => {
-                        set_image(&ctx, &path);
-                        notify_completion(completion);
-                    }
+                CopyRequest::Image { path, completion } => {
+                    set_image(&ctx, &path);
+                    notify_completion(completion);
                 }
             }
-        })
-        .detach();
+        }
+    })
+    .detach();
     tx
 }
 

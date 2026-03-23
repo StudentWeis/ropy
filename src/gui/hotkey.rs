@@ -1,52 +1,52 @@
 use std::time::Duration;
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
-use gpui::{BackgroundExecutor, ForegroundExecutor};
+use gpui::{App, AsyncApp};
 
-/// Start a global hotkey listener in a background task with a custom callback.
+/// Start a global hotkey listener in a foreground task with a custom callback.
 ///
 /// Registers the configured hotkey and invokes the provided callback when the hotkey is pressed.
+/// The callback receives an `&AsyncApp` so callers can update the UI without creating their own.
 /// Returns a sender to update the hotkey string dynamically.
 pub fn start_hotkey_listener<F>(
     initial_hotkey: String,
-    fg_executor: &ForegroundExecutor,
-    bg_executor: BackgroundExecutor,
+    cx: &App,
     on_hotkey: F,
 ) -> async_channel::Sender<String>
 where
-    F: Fn() + 'static,
+    F: Fn(&AsyncApp) + 'static,
 {
     let (tx, rx) = async_channel::unbounded::<String>();
-    fg_executor
-        .spawn(async move {
-            let mut current_hotkey = initial_hotkey;
-            let mut manage_handle = register_hotkey(&current_hotkey);
-            let receiver = GlobalHotKeyEvent::receiver();
-            loop {
-                // Check for hotkey updates
-                let mut updated = false;
-                while let Ok(new_hotkey) = rx.try_recv() {
-                    current_hotkey = new_hotkey;
-                    updated = true;
-                }
-
-                if updated {
-                    drop(manage_handle);
-                    manage_handle = register_hotkey(&current_hotkey);
-                }
-
-                // Poll for hotkey events
-                if let Ok(event) = receiver.try_recv()
-                    && event.state() == HotKeyState::Pressed
-                {
-                    on_hotkey();
-                }
-
-                // Small sleep to avoid busy waiting
-                bg_executor.timer(Duration::from_millis(50)).await;
+    cx.spawn(async move |async_app| {
+        let bg_executor = async_app.background_executor().clone();
+        let mut current_hotkey = initial_hotkey;
+        let mut manage_handle = register_hotkey(&current_hotkey);
+        let receiver = GlobalHotKeyEvent::receiver();
+        loop {
+            // Check for hotkey updates
+            let mut updated = false;
+            while let Ok(new_hotkey) = rx.try_recv() {
+                current_hotkey = new_hotkey;
+                updated = true;
             }
-        })
-        .detach();
+
+            if updated {
+                drop(manage_handle);
+                manage_handle = register_hotkey(&current_hotkey);
+            }
+
+            // Poll for hotkey events
+            if let Ok(event) = receiver.try_recv()
+                && event.state() == HotKeyState::Pressed
+            {
+                on_hotkey(async_app);
+            }
+
+            // Small sleep to avoid busy waiting
+            bg_executor.timer(Duration::from_millis(50)).await;
+        }
+    })
+    .detach();
     tx
 }
 

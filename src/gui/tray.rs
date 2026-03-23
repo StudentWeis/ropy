@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use gpui::{AsyncApp, BackgroundExecutor, WindowHandle};
+use gpui::{App, BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -63,58 +63,56 @@ pub enum TrayEvent {
 
 pub fn start_tray_handler(
     i18n: &I18n,
-    async_app: AsyncApp,
+    cx: &App,
     window_handle: WindowHandle<Root>,
 ) -> Option<TrayIcon> {
     let (tx, rx) = mpsc::channel();
 
-    let fg_executor = async_app.foreground_executor().clone();
-    let bg_executor = async_app.background_executor().clone();
-    let bg_executor_clone = bg_executor.clone();
+    let bg_executor = cx.background_executor().clone();
 
     #[cfg(not(target_os = "linux"))]
-    let tray = start_tray_handler_inner(i18n, tx, &bg_executor_clone);
+    let tray = start_tray_handler_inner(i18n, tx, &bg_executor);
 
     #[cfg(target_os = "linux")]
     let tray = {
         let i18n = i18n.clone();
+        let bg_executor_clone = bg_executor.clone();
         // On Linux, tray must be initialized on the GTK thread.
         // We cannot return the TrayIcon from the spawned task, so we
         // leak it there and return None to the caller.
-        bg_executor
-            .spawn(async move {
-                gtk::init().expect("Failed to init gtk modules");
-                if let Some(tray) = start_tray_handler_inner(&i18n, tx, &bg_executor_clone) {
-                    Box::leak(Box::new(tray));
-                }
-                gtk::main();
-            })
-            .detach();
+        cx.background_spawn(async move {
+            gtk::init().expect("Failed to init gtk modules");
+            if let Some(tray) = start_tray_handler_inner(&i18n, tx, &bg_executor_clone) {
+                Box::leak(Box::new(tray));
+            }
+            gtk::main();
+        })
+        .detach();
         None
     };
 
-    fg_executor
-        .spawn(async move {
-            loop {
-                while let Ok(event) = rx.try_recv() {
-                    match event {
-                        TrayEvent::Show => {
-                            let _ = async_app.update(move |cx| {
-                                crate::gui::tray::send_active_action(window_handle, cx);
-                            });
-                        }
-                        TrayEvent::Quit => {
-                            let _ = async_app.update(move |cx| {
-                                cx.quit();
-                            });
-                        }
+    cx.spawn(async move |async_app: &mut gpui::AsyncApp| {
+        let bg_executor = async_app.background_executor().clone();
+        loop {
+            while let Ok(event) = rx.try_recv() {
+                match event {
+                    TrayEvent::Show => {
+                        let _ = async_app.update(move |cx| {
+                            crate::gui::tray::send_active_action(window_handle, cx);
+                        });
+                    }
+                    TrayEvent::Quit => {
+                        let _ = async_app.update(move |cx: &mut gpui::App| {
+                            cx.quit();
+                        });
                     }
                 }
-
-                bg_executor.timer(Duration::from_millis(100)).await;
             }
-        })
-        .detach();
+
+            bg_executor.timer(Duration::from_millis(100)).await;
+        }
+    })
+    .detach();
 
     tray
 }

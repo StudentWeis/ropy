@@ -29,11 +29,10 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\")
 # 3. Update CHANGELOG.md using git cliff
 git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 
+# 4. Confirm before push git tag
 dist plan
-
-# Confirm before push git tag
 while true; do
-	read -r -p "Run 'cargo release --execute'? [Y/n] " REPLY
+	read -r -p "Run 'git tag & git push --tags'? [Y/n] " REPLY
 	REPLY=${REPLY:-Y}
 	case "$REPLY" in
 	[Yy]*)
