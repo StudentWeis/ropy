@@ -12,11 +12,11 @@ use super::{errors::UpdateError, models::ReleaseInfo};
 /// Download the release asset, verify its checksum, extract the binary, and
 /// replace the running executable.
 ///
-/// `on_progress` is called with values between 0.0 and 1.0 during the download
-/// phase so the UI can display a progress indicator.
+/// `progress_tx` is an `async_channel` sender that reports download progress
+/// (values between 0.0 and 1.0) to the UI thread.
 pub fn download_and_install(
     release: &ReleaseInfo,
-    on_progress: impl Fn(f32),
+    progress_tx: &async_channel::Sender<f32>,
 ) -> Result<(), UpdateError> {
     let tmp_dir = tempfile::tempdir().map_err(UpdateError::Io)?;
     let asset_name = release
@@ -27,12 +27,12 @@ pub fn download_and_install(
     let asset_path = tmp_dir.path().join(asset_name);
 
     // 1. Download the archive
-    tracing::info!(url = %release.download_url, "downloading update asset");
+    tracing::info!(url = %release.download_url, dest = %asset_path.display(), size = release.asset_size, "downloading update asset");
     download_file(
         &release.download_url,
         &asset_path,
         release.asset_size,
-        &on_progress,
+        progress_tx,
     )?;
 
     // 2. Verify checksum (if available)
@@ -64,7 +64,7 @@ pub fn download_and_install(
     Ok(())
 }
 
-/// Download `url` into `dest`, reporting progress via `on_progress`.
+/// Download `url` into `dest`, reporting progress via `progress_tx`.
 ///
 /// Uses `curl` subprocess with piped stdout to stream the download and track
 /// progress, avoiding macOS firewall restrictions on raw sockets.
@@ -72,7 +72,7 @@ fn download_file(
     url: &str,
     dest: &Path,
     total_size: u64,
-    on_progress: &impl Fn(f32),
+    progress_tx: &async_channel::Sender<f32>,
 ) -> Result<(), UpdateError> {
     use std::process::{Command, Stdio};
 
@@ -116,7 +116,8 @@ fn download_file(
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(UpdateError::Io)?;
         downloaded += n as u64;
         if total_size > 0 {
-            on_progress(downloaded as f32 / total_size as f32);
+            let progress = downloaded as f32 / total_size as f32;
+            let _ = progress_tx.send_blocking(progress);
         }
     }
 
@@ -131,7 +132,7 @@ fn download_file(
         )));
     }
 
-    on_progress(1.0);
+    let _ = progress_tx.send_blocking(1.0);
     Ok(())
 }
 
@@ -295,7 +296,6 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     fn test_find_binary_in_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        // Create a fake binary
         let bin_path = tmp.path().join("ropy");
         std::fs::write(&bin_path, b"fake").unwrap();
 
@@ -324,5 +324,30 @@ mod tests {
 
         let result = find_binary_in_dir(tmp.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::float_cmp)]
+    fn test_progress_channel_send_blocking_delivers_values() {
+        let (sender, receiver) = async_channel::unbounded::<f32>();
+
+        sender.send_blocking(0.25).unwrap();
+        sender.send_blocking(0.5).unwrap();
+        sender.send_blocking(1.0).unwrap();
+
+        assert_eq!(receiver.try_recv().unwrap(), 0.25);
+        assert_eq!(receiver.try_recv().unwrap(), 0.5);
+        assert_eq!(receiver.try_recv().unwrap(), 1.0);
+    }
+
+    #[test]
+    fn test_progress_channel_drop_sender_closes_receiver() {
+        let (sender, receiver) = async_channel::unbounded::<f32>();
+
+        drop(sender);
+
+        assert!(receiver.try_recv().is_err());
+        assert!(receiver.is_closed());
     }
 }

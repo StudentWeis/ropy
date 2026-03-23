@@ -11,7 +11,7 @@
 <a href="https://github.com/studentweis/ropy/issues"><img src="https://img.shields.io/github/issues/studentweis/ropy" alt="Issues"></a>
 </p>
 
-<p align="center">Cross-platform, lightweight clipboard manager written in Rust.</p>
+<p align="center">Cross-platform, lightweight clipboard manager written in Rust and GPUI.</p>
 
 <p align="center">English | <a href="doc/README/README_ZH.md">简体中文</a></p>
 
@@ -22,8 +22,8 @@
 
 ## Features
 
-- Cross-platform: Windows, macOS & Linux(X11).
 - Native GUI application built with Zed's GPUI.
+- Cross-platform: Windows, macOS & Linux(X11).
 - Easy-to-use, lightweight and fast.
 - Search/Pin/Preview/Autostart/Shortcuts/Autoupdate/Record-Pin.
 
