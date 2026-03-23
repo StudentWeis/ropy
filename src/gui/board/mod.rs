@@ -9,7 +9,7 @@ mod settings_handler;
 mod updater_ui;
 
 use std::{
-    sync::{Arc, Mutex, PoisonError, RwLock, mpsc},
+    sync::{Arc, Mutex, PoisonError, mpsc},
     time::Duration,
 };
 
@@ -58,8 +58,6 @@ pub struct RopyBoard {
     pub(crate) selected_index: usize,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
-    // Settings
-    pub(crate) settings: Arc<RwLock<Settings>>,
     pub(crate) show_settings: bool,
     pub(crate) show_about: bool,
     pub(crate) show_help: bool,
@@ -155,7 +153,6 @@ impl RopyBoard {
     pub fn new(
         records: Arc<Mutex<Vec<ClipboardRecord>>>,
         repository: Option<Arc<ClipboardRepository>>,
-        settings: Arc<RwLock<Settings>>,
         last_copy: Arc<Mutex<LastCopyState>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
@@ -181,6 +178,7 @@ impl RopyBoard {
         // Measure all items initially so scrollbar thumb size is stable on first paint.
         let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.)).measure_all();
 
+        // Read initial values from GPUI Global settings
         let (
             max_history_records,
             max_storage_records,
@@ -188,43 +186,27 @@ impl RopyBoard {
             theme_index,
             language,
             confirm_mode,
-        ) = {
-            let settings_guard = match settings.read() {
-                Ok(g) => g,
-                Err(e) => e.into_inner(),
-            };
-            let theme_idx = match settings_guard.theme {
+            autostart_enabled,
+            auto_check_enabled,
+            hover_preview_enabled,
+        ) = Settings::read(cx, |s| {
+            let theme_idx = match s.theme {
                 crate::config::AppTheme::Light => 0,
                 crate::config::AppTheme::Dark => 1,
                 crate::config::AppTheme::System => 2,
             };
             (
-                settings_guard.storage.max_history_records,
-                settings_guard.storage.max_storage_records,
-                settings_guard.hotkey.activation_key.clone(),
+                s.storage.max_history_records,
+                s.storage.max_storage_records,
+                s.hotkey.activation_key.clone(),
                 theme_idx,
-                settings_guard.language.clone(),
-                settings_guard.confirm.mode,
+                s.language.clone(),
+                s.confirm.mode,
+                s.autostart.enabled,
+                s.update.auto_check,
+                s.preview.hover_preview_enabled,
             )
-        };
-        let autostart_enabled = match settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-        .autostart
-        .enabled;
-        let auto_check_enabled = match settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-        .update
-        .auto_check;
-        let hover_preview_enabled = match settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-        .preview
-        .hover_preview_enabled;
+        });
         let settings_activation_key_input = cx.new(|cx| InputState::new(window, cx));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
@@ -275,7 +257,6 @@ impl RopyBoard {
         Self {
             records,
             repository,
-            settings,
             focus_handle,
             _focus_out_subscription: focus_out_subscription,
             search_input,

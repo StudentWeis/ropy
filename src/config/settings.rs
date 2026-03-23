@@ -1,6 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
+use gpui::{App, BorrowAppContext, Global, ReadGlobal};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::Language;
@@ -202,6 +203,34 @@ impl Default for PreviewSettings {
         Self {
             hover_preview_enabled: true,
         }
+    }
+}
+
+impl Global for Settings {}
+
+impl Settings {
+    /// Read a value from the global settings via a closure.
+    pub fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
+        reader(Self::global(cx))
+    }
+
+    /// Update the global settings in place and persist to disk.
+    #[allow(dead_code)]
+    pub fn update_global(cx: &mut App, updater: impl FnOnce(&mut Self)) {
+        cx.update_global::<Self, _>(|settings, _cx| {
+            updater(settings);
+            if let Err(e) = settings.save() {
+                tracing::warn!(error = %e, "failed to persist settings to disk");
+            }
+        });
+    }
+
+    /// Update the global settings without auto-saving to disk.
+    #[allow(dead_code)]
+    pub fn update_global_without_save(cx: &mut App, updater: impl FnOnce(&mut Self)) {
+        cx.update_global::<Self, _>(|settings, _cx| {
+            updater(settings);
+        });
     }
 }
 

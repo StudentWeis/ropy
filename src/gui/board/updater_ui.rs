@@ -1,7 +1,7 @@
 use gpui::Context;
 
 use super::RopyBoard;
-use crate::updater::models::UpdateStatus;
+use crate::{config::Settings, updater::models::UpdateStatus};
 
 impl RopyBoard {
     /// Trigger a manual update check in the background
@@ -9,12 +9,7 @@ impl RopyBoard {
         self.update_status = UpdateStatus::Checking;
         cx.notify();
 
-        let include_prerelease = match self.settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        }
-        .update
-        .include_prerelease;
+        let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);
 
         cx.spawn(async move |this, cx| {
             let result = cx

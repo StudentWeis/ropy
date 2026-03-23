@@ -498,29 +498,36 @@ pub fn reset_settings_dialog(
     window: &mut gpui::Window,
     cx: &mut Context<'_, RopyBoard>,
 ) {
-    // Reset selections to persisted values
-    let settings_guard = match board.settings.read() {
-        Ok(g) => g,
-        Err(e) => e.into_inner(),
-    };
-    let lang_idx = Language::all()
-        .iter()
-        .position(|lang| lang == &settings_guard.language)
-        .unwrap_or(0);
+    // Reset selections to persisted values from GPUI Global
+    let (lang_idx, theme_idx, autostart, auto_check, confirm_mode, activation_key) =
+        crate::config::Settings::read(cx, |s| {
+            let lang = Language::all()
+                .iter()
+                .position(|lang| lang == &s.language)
+                .unwrap_or(0);
+            let theme = match s.theme {
+                crate::config::AppTheme::Light => 0,
+                crate::config::AppTheme::Dark => 1,
+                crate::config::AppTheme::System => 2,
+            };
+            (
+                lang,
+                theme,
+                s.autostart.enabled,
+                s.update.auto_check,
+                s.confirm.mode,
+                s.hotkey.activation_key.clone(),
+            )
+        });
     board.selected_language = lang_idx;
-    board.selected_theme = match settings_guard.theme {
-        crate::config::AppTheme::Light => 0,
-        crate::config::AppTheme::Dark => 1,
-        crate::config::AppTheme::System => 2,
-    };
-    board.autostart_enabled = settings_guard.autostart.enabled;
-    board.auto_check_enabled = settings_guard.update.auto_check;
-    board.confirm_mode = settings_guard.confirm.mode;
-    board.pending_hotkey = settings_guard.hotkey.activation_key.clone();
-    board.hotkey_before_recording = settings_guard.hotkey.activation_key.clone();
+    board.selected_theme = theme_idx;
+    board.autostart_enabled = autostart;
+    board.auto_check_enabled = auto_check;
+    board.confirm_mode = confirm_mode;
+    board.pending_hotkey.clone_from(&activation_key);
+    board.hotkey_before_recording = activation_key;
     board.hotkey_recording = false;
     board.hotkey_manual_editing = false;
-    drop(settings_guard);
 
     // Reset the language select dropdown
     board.language_select.update(cx, |state, cx| {

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "gpui-async": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "ff7da0807cf3f35a3e666bf84fdaf8458c34fe734798fdb84a4bdead6b3413a3"
+    },
+    "gpui-global": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "85bf74485f9c8d174e0e01f3a95149301023a4ecb71ac8879e216dd710106c29"
+    }
+  }
+}

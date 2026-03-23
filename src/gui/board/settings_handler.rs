@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use gpui::{Context, Window, prelude::Styled, px};
+use gpui::{BorrowAppContext, Context, Window, prelude::Styled, px};
 use gpui_component::{WindowExt, notification::Notification};
 
 use super::RopyBoard;
@@ -26,18 +26,12 @@ impl RopyBoard {
 
         let mut is_hotkey_invalid = false;
         if activation_key.is_empty() {
-            activation_key.clone_from(
-                &match self.settings.read() {
-                    Ok(g) => g,
-                    Err(e) => e.into_inner(),
-                }
-                .hotkey
-                .activation_key,
-            );
-            // If current setting is also empty (should not happen with load fix), use default
-            if activation_key.is_empty() {
-                activation_key = Settings::default().hotkey.activation_key;
-            }
+            let current_key = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+            activation_key = if current_key.is_empty() {
+                Settings::default().hotkey.activation_key
+            } else {
+                current_key
+            };
         } else if global_hotkey::hotkey::HotKey::from_str(&activation_key).is_err() {
             is_hotkey_invalid = true;
             activation_key = Settings::default().hotkey.activation_key;
@@ -47,17 +41,10 @@ impl RopyBoard {
         self.hotkey_before_recording.clone_from(&activation_key);
         self.hotkey_manual_editing = false;
 
-        // Get current values from settings as fallback
-        let (current_max_history, current_max_storage) = {
-            let settings_guard = match self.settings.read() {
-                Ok(g) => g,
-                Err(e) => e.into_inner(),
-            };
-            (
-                settings_guard.storage.max_history_records,
-                settings_guard.storage.max_storage_records,
-            )
-        };
+        // Get current values from GPUI Global settings as fallback
+        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
+            (s.storage.max_history_records, s.storage.max_storage_records)
+        });
 
         // Validate max_history input from the settings UI.
         let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
@@ -94,26 +81,33 @@ impl RopyBoard {
             .cloned()
             .unwrap_or_default();
 
-        let mut save_disk_error: Option<String> = None;
-        {
-            let mut settings = match self.settings.write() {
-                Ok(g) => g,
-                Err(e) => e.into_inner(),
-            };
-            settings.hotkey.activation_key.clone_from(&activation_key);
-            settings.storage.max_history_records = max_history;
-            settings.storage.max_storage_records = max_storage;
-            settings.theme = theme.clone();
-            settings.autostart.enabled = self.autostart_enabled;
-            settings.language = language.clone();
-            settings.update.auto_check = self.auto_check_enabled;
-            settings.preview.hover_preview_enabled = self.hover_preview_enabled;
-            settings.confirm.mode = self.confirm_mode;
-            if let Err(e) = settings.save() {
-                tracing::warn!(error = %e, "failed to save settings");
-                save_disk_error = Some(e.to_string());
-            }
-        }
+        // Update GPUI Global settings (auto-persists to disk)
+        let autostart_enabled = self.autostart_enabled;
+        let auto_check_enabled = self.auto_check_enabled;
+        let hover_preview_enabled = self.hover_preview_enabled;
+        let confirm_mode = self.confirm_mode;
+        let save_disk_error: Option<String> = {
+            let activation_key_ref = activation_key.clone();
+            let theme_ref = theme.clone();
+            let language_ref = language.clone();
+            let mut disk_error = None;
+            cx.update_global::<Settings, _>(|s, _cx| {
+                s.hotkey.activation_key.clone_from(&activation_key_ref);
+                s.storage.max_history_records = max_history;
+                s.storage.max_storage_records = max_storage;
+                s.theme = theme_ref;
+                s.autostart.enabled = autostart_enabled;
+                s.language = language_ref;
+                s.update.auto_check = auto_check_enabled;
+                s.preview.hover_preview_enabled = hover_preview_enabled;
+                s.confirm.mode = confirm_mode;
+                if let Err(e) = s.save() {
+                    tracing::warn!(error = %e, "failed to save settings");
+                    disk_error = Some(format!("{e}"));
+                }
+            });
+            disk_error
+        };
 
         // Update hotkey if sender is available
         if let Some(tx) = &self.hotkey_tx {

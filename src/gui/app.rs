@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Cow,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use gpui::{
@@ -41,7 +41,6 @@ pub fn create_window(
     cx: &mut App,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
-    settings: Arc<RwLock<Settings>>,
     last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     is_silent: bool,
@@ -57,24 +56,11 @@ pub fn create_window(
         },
         |window, cx| {
             // Apply the application theme based on settings
-            let app_theme = &match settings.read() {
-                Ok(g) => g,
-                Err(e) => e.into_inner(),
-            }
-            .theme
-            .get_theme();
-            set_app_theme(window, cx, app_theme);
+            let app_theme = Settings::read(cx, |s| s.theme.get_theme());
+            set_app_theme(window, cx, &app_theme);
 
             let view = cx.new(|cx| {
-                RopyBoard::new(
-                    shared_records,
-                    repository,
-                    settings,
-                    last_copy,
-                    copy_tx,
-                    window,
-                    cx,
-                )
+                RopyBoard::new(shared_records, repository, last_copy, copy_tx, window, cx)
             });
             cx.new(|cx| Root::new(view, window, cx))
         },

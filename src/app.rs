@@ -5,7 +5,7 @@
 //! subsystems.  It intentionally lives outside `gui` so that the GUI module
 //! can focus solely on rendering.
 
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use gpui::{App, AsyncApp, KeyBinding, WindowHandle};
 use gpui_component::Root;
@@ -32,18 +32,18 @@ fn start_clipboard_event_handler(
     clipboard_rx: async_channel::Receiver<ClipboardEvent>,
     shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
     repository: Option<Arc<ClipboardRepository>>,
-    settings: Arc<RwLock<Settings>>,
     async_app: AsyncApp,
     window_handle: WindowHandle<Root>,
 ) {
-    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
+    let (notify_tx, notify_rx) = async_channel::unbounded::<ClipboardRecord>();
     let bg_executor = async_app.background_executor().clone();
     let fg_executor = async_app.foreground_executor().clone();
+    let bg_repository = repository.clone();
 
     bg_executor
         .spawn(async move {
             while let Ok(event) = clipboard_rx.recv().await
-                && let Some(ref repo) = repository
+                && let Some(ref repo) = bg_repository
             {
                 let result = match event {
                     ClipboardEvent::Text(text) => repo.save_text(text),
@@ -52,34 +52,7 @@ fn start_clipboard_event_handler(
 
                 match result {
                     Ok(record) => {
-                        let (max_display, max_storage) = {
-                            let settings_guard = match settings.read() {
-                                Ok(g) => g,
-                                Err(e) => e.into_inner(),
-                            };
-                            (
-                                settings_guard.storage.max_history_records,
-                                settings_guard.storage.max_storage_records,
-                            )
-                        };
-                        {
-                            let mut guard = match shared_records.lock() {
-                                Ok(g) => g,
-                                Err(poisoned) => poisoned.into_inner(),
-                            };
-                            // Remove existing record with same id (dedup upsert)
-                            guard.retain(|r| r.id != record.id);
-                            guard.insert(0, record);
-                            // Truncate in-memory records to display limit
-                            if guard.len() > max_display {
-                                guard.truncate(max_display);
-                            }
-                        }
-                        // Cleanup repository to storage limit
-                        if let Err(e) = repo.cleanup_old_records(max_storage) {
-                            tracing::warn!(error = %e, "failed to cleanup old clipboard records");
-                        }
-                        let _ = notify_tx.send(()).await;
+                        let _ = notify_tx.send(record).await;
                     }
                     Err(e) => {
                         tracing::warn!(error = %e, "failed to save clipboard record");
@@ -89,11 +62,33 @@ fn start_clipboard_event_handler(
         })
         .detach();
 
-    // Notify GUI to refresh clipboard history
+    // Process saved records on the foreground thread where GPUI globals are accessible.
     fg_executor
         .spawn(async move {
-            while (notify_rx.recv().await).is_ok() {
+            while let Ok(record) = notify_rx.recv().await {
                 let _ = async_app.update(|cx| {
+                    let (max_display, max_storage) = Settings::read(cx, |s| {
+                        (s.storage.max_history_records, s.storage.max_storage_records)
+                    });
+
+                    {
+                        let mut guard = match shared_records.lock() {
+                            Ok(g) => g,
+                            Err(poisoned) => poisoned.into_inner(),
+                        };
+                        guard.retain(|r| r.id != record.id);
+                        guard.insert(0, record);
+                        if guard.len() > max_display {
+                            guard.truncate(max_display);
+                        }
+                    }
+
+                    if let Some(ref repo) = repository {
+                        if let Err(e) = repo.cleanup_old_records(max_storage) {
+                            tracing::warn!(error = %e, "failed to cleanup old clipboard records");
+                        }
+                    }
+
                     window_handle
                         .update(cx, |_, _, cx| {
                             cx.notify();
@@ -120,29 +115,15 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
 
 fn load_initial_records(
     repository: Option<&Arc<ClipboardRepository>>,
-    settings: &Arc<RwLock<Settings>>,
+    max_history_records: usize,
 ) -> Vec<ClipboardRecord> {
-    let max_records = {
-        let settings_guard = match settings.read() {
-            Ok(g) => g,
-            Err(e) => e.into_inner(),
-        };
-        settings_guard.storage.max_history_records
-    };
     repository
-        .and_then(|repo| repo.get_recent(max_records).ok())
+        .and_then(|repo| repo.get_recent(max_history_records).ok())
         .unwrap_or_default()
 }
 
 /// Synchronize auto-start state with system on application launch
-fn sync_autostart_on_launch(settings: &Arc<RwLock<Settings>>) {
-    let autostart_enabled = match settings.read() {
-        Ok(g) => g,
-        Err(e) => e.into_inner(),
-    }
-    .autostart
-    .enabled;
-
+fn sync_autostart_on_launch(autostart_enabled: bool) {
     match AutoStartManager::new(APP_NAME) {
         Ok(manager) => {
             if let Err(e) = manager.sync_state(autostart_enabled) {
@@ -169,17 +150,10 @@ fn start_clipboard_monitor(
 fn setup_hotkey_listener(
     window_handle: WindowHandle<Root>,
     async_app: AsyncApp,
-    settings: &Arc<RwLock<Settings>>,
+    hotkey_str: String,
 ) -> async_channel::Sender<String> {
     let fg_executor = async_app.foreground_executor().clone();
     let bg_executor = async_app.background_executor().clone();
-    let hotkey_str = match settings.read() {
-        Ok(g) => g,
-        Err(e) => e.into_inner(),
-    }
-    .hotkey
-    .activation_key
-    .clone();
     crate::gui::hotkey::start_hotkey_listener(hotkey_str, &fg_executor, bg_executor, move || {
         let _ = async_app.update(move |cx| {
             window_handle
@@ -204,11 +178,11 @@ fn bind_application_keys(cx: &mut App) {
     ]);
 }
 
-fn load_settings() -> Arc<RwLock<Settings>> {
+fn load_settings() -> Settings {
     match Settings::load() {
         Ok(s) => {
             tracing::info!("settings loaded successfully");
-            Arc::new(RwLock::new(s))
+            s
         }
         Err(e) => {
             tracing::warn!(error = %e, "failed to load settings; using defaults");
@@ -216,7 +190,7 @@ fn load_settings() -> Arc<RwLock<Settings>> {
             default_settings.save().unwrap_or_else(|err| {
                 tracing::error!(error = %err, "failed to save default settings");
             });
-            Arc::new(RwLock::new(default_settings))
+            default_settings
         }
     }
 }
@@ -241,21 +215,25 @@ pub fn launch() {
 
             let settings = load_settings();
 
+            // Register settings as GPUI Global for app-wide access
+            cx.set_global(settings.clone());
+
             // Sync auto-start state on application launch
-            sync_autostart_on_launch(&settings);
+            sync_autostart_on_launch(settings.autostart.enabled);
 
             let repository = initialize_repository();
-            let initial_records = load_initial_records(repository.as_ref(), &settings);
+            let initial_records =
+                load_initial_records(repository.as_ref(), settings.storage.max_history_records);
             let shared_records = Arc::new(Mutex::new(initial_records));
             let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
             let async_app = cx.to_async();
             let clipboard_rx = start_clipboard_monitor(&async_app, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(&async_app);
+
             let window_handle = crate::gui::create_window(
                 cx,
                 shared_records.clone(),
                 repository.clone(),
-                settings.clone(),
                 last_copy,
                 copy_tx,
                 is_silent,
@@ -264,26 +242,21 @@ pub fn launch() {
                 clipboard_rx,
                 shared_records,
                 repository,
-                settings.clone(),
                 async_app.clone(),
                 window_handle,
             );
-            let hotkey_tx = setup_hotkey_listener(window_handle, async_app.clone(), &settings);
+            let hotkey_tx = setup_hotkey_listener(
+                window_handle,
+                async_app.clone(),
+                settings.hotkey.activation_key.clone(),
+            );
             let _ = window_handle.update(cx, |root, _, cx| {
                 if let Ok(board) = root.view().clone().downcast::<RopyBoard>() {
                     board.update(cx, |board, _| {
                         board.set_hotkey_tx(hotkey_tx);
                     });
 
-                    // Trigger auto-update check on startup if enabled
-                    let auto_check = match settings.read() {
-                        Ok(g) => g,
-                        Err(e) => e.into_inner(),
-                    }
-                    .update
-                    .auto_check;
-
-                    if auto_check {
+                    if settings.update.auto_check {
                         board.update(cx, |board, cx| {
                             board.check_for_update_async(cx);
                         });
