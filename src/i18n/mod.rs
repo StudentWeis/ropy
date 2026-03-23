@@ -77,6 +77,14 @@ impl I18n {
     pub fn translate(cx: &App, key: &str) -> String {
         Self::global(cx).t(key)
     }
+
+    /// Get a reference to the global I18n instance.
+    pub fn load_i18n(language: Language) -> Self {
+        Self::new(language).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "failed to load i18n; falling back to default");
+            Self::default()
+        })
+    }
 }
 
 impl Default for I18n {

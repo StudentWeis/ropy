@@ -210,17 +210,12 @@ pub fn launch() {
             // Bind global application keys
             bind_application_keys(cx);
 
-            let settings = load_settings();
-
             // Register settings as GPUI Global for app-wide access
+            let settings = load_settings();
             cx.set_global(settings.clone());
 
             // Register I18n as GPUI Global for app-wide access
-            let i18n = I18n::new(settings.language.clone()).unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "failed to load i18n; falling back to default");
-                I18n::default()
-            });
-            cx.set_global(i18n);
+            cx.set_global(I18n::load_i18n(settings.language.clone()));
 
             // Sync auto-start state on application launch
             sync_autostart_on_launch(settings.autostart.enabled);
