@@ -10,5 +10,8 @@
 /// Name presented to the user in tooltips, window titles, about panel, etc.
 pub const APP_NAME: &str = "Ropy";
 
+/// CLI argument for silent/auto-start mode (no window shown on startup)
+pub const SILENT_ARG: &str = "--silent";
+
 /// Arrow used for the "back" button in the about panel.
 pub const ABOUT_BACK_ARROW: &str = "←";

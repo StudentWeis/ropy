@@ -195,7 +195,7 @@ fn load_settings() -> Settings {
 /// Entry point: initialize all subsystems and launch the application.
 pub fn launch() {
     let args: Vec<String> = std::env::args().collect();
-    let is_silent = args.iter().any(|arg| arg == "--silent");
+    let is_silent = args.iter().any(|arg| arg == crate::constants::SILENT_ARG);
 
     gpui::Application::new()
         .with_assets(crate::gui::Assets)
@@ -268,10 +268,6 @@ pub fn launch() {
                 }
             } else {
                 tracing::error!("failed to downcast root view to RopyBoard");
-            }
-
-            if !is_silent {
-                cx.activate(true);
             }
 
             // Initialize X11 control

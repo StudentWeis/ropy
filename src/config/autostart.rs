@@ -37,7 +37,7 @@ impl AutoStartManager {
         let auto_launch = AutoLaunchBuilder::new()
             .set_app_name(app_name)
             .set_app_path(&app_path)
-            .set_args(&["--silent"])
+            .set_args(&[crate::constants::SILENT_ARG])
             .build()
             .map_err(|e| {
                 AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
