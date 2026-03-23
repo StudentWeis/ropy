@@ -50,15 +50,14 @@ def collect_used_keys(src_root: Path) -> set[str]:
     """Return the set of i18n keys referenced anywhere under *src_root*.
 
     Recognises these call patterns:
+      * I18n::translate(cx, "key")
       * i18n.t("key")
-      * self.i18n.t("key")
-      * board.i18n.t("key")
       * translations.get("key")
       * any_field_key: "key"  (struct field ending with ``_key``, used for
                                indirect i18n lookups like ``i18n.t(row.label_key)``)
     """
-    # Direct .t() / .get() call patterns
-    direct_pattern = re.compile(r'\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
+    # Direct I18n::translate / .t() / .get() call patterns
+    direct_pattern = re.compile(r'I18n::translate\(\s*\w+\s*,\s*"([^"]+)"\s*\)|\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
     # Struct field whose name ends with ``_key`` assigned a string literal,
     # e.g. ``label_key: "help_search"``
     field_key_pattern = re.compile(r'\b\w+_key\s*:\s*"([^"]+)"')
@@ -66,7 +65,7 @@ def collect_used_keys(src_root: Path) -> set[str]:
     for rs_file in src_root.rglob("*.rs"):
         text = rs_file.read_text(encoding="utf-8")
         for m in direct_pattern.finditer(text):
-            key = m.group(1) or m.group(2)
+            key = m.group(1) or m.group(2) or m.group(3)
             used.add(key)
         for m in field_key_pattern.finditer(text):
             used.add(m.group(1))

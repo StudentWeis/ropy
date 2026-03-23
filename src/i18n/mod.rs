@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use gpui::{App, Global, ReadGlobal};
 use language::LocaleAssets;
 
 mod error;
@@ -11,11 +12,16 @@ pub use language::Language;
 pub use translations::Translations;
 
 /// I18n manager for handling translations.
+///
+/// Registered as a GPUI [`Global`] so translations are accessible from any
+/// context via [`I18n::global`] or [`I18n::translate`].
 #[derive(Debug, Clone)]
 pub struct I18n {
     current_language: Language,
     translations: Translations,
 }
+
+impl Global for I18n {}
 
 impl I18n {
     /// Create a new `I18n` instance for the given language.
@@ -60,9 +66,16 @@ impl I18n {
         Ok(())
     }
 
-    /// Get a translated string by key.
+    /// Get a translated string by key (instance method).
     pub fn t(&self, key: &str) -> String {
         self.translations.get(key)
+    }
+
+    // ── Global convenience API ────────────────────────────────────
+
+    /// Get a translated string from the global I18n.
+    pub fn translate(cx: &App, key: &str) -> String {
+        Self::global(cx).t(key)
     }
 }
 

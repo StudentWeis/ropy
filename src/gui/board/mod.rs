@@ -16,8 +16,8 @@ use std::{
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AnyElement, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render,
-    SharedString, Subscription, Window,
+    AnyElement, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ReadGlobal,
+    Render, SharedString, Subscription, Window,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
 use gpui_component::{
@@ -74,8 +74,6 @@ pub struct RopyBoard {
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) pinned: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
-    // I18n
-    pub(crate) i18n: I18n,
     pub(crate) selected_language: usize, // Index into Language::all()
     pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
     /// Track if we're in a delete operation to preserve scroll position
@@ -140,9 +138,10 @@ impl RopyBoard {
     }
 
     /// Rebuild the tray menu with current i18n translations.
-    pub(crate) fn update_tray_menu(&self) {
+    pub(crate) fn update_tray_menu(&self, cx: &Context<Self>) {
         if let Some(ref tray) = self.tray_icon {
-            match crate::gui::tray::build_tray_menu(&self.i18n) {
+            let i18n = I18n::global(cx);
+            match crate::gui::tray::build_tray_menu(i18n) {
                 Ok(menu) => tray.set_menu(Some(Box::new(menu))),
                 Err(e) => tracing::warn!(error = %e, "failed to rebuild tray menu"),
             }
@@ -213,11 +212,6 @@ impl RopyBoard {
         let settings_max_storage_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
 
-        // Initialize I18n with the language from settings
-        let i18n = I18n::new(language.clone()).unwrap_or_else(|e| {
-            tracing::warn!(error = %e, language = %language.code(), "failed to load i18n for board; falling back to default");
-            I18n::default()
-        });
         let selected_language = Language::all()
             .iter()
             .position(|lang| lang == &language)
@@ -251,8 +245,8 @@ impl RopyBoard {
         )
         .detach();
 
-        let search_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(i18n.t("search_placeholder")));
+        let search_placeholder = I18n::translate(cx, "search_placeholder");
+        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(search_placeholder));
 
         Self {
             records,
@@ -281,7 +275,6 @@ impl RopyBoard {
             confirm_mode,
             pinned: false,
             hotkey_tx: None,
-            i18n,
             selected_language,
             language_select,
             deleting_record: false,
@@ -544,7 +537,7 @@ impl Render for RopyBoard {
             .size_full()
             .child(body)
             .when(show_clear_confirm, |this| {
-                this.child(clear_confirm::render_clear_confirm_overlay(self, cx))
+                this.child(clear_confirm::render_clear_confirm_overlay(cx))
             })
             .when(has_notifs, move |this| {
                 this.child(

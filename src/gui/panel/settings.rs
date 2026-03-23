@@ -13,7 +13,10 @@ use gpui_component::{
     v_flex,
 };
 
-use crate::{gui::board::RopyBoard, i18n::Language};
+use crate::{
+    gui::board::RopyBoard,
+    i18n::{I18n, Language},
+};
 
 /// Render a settings row with label centered against the control.
 fn settings_row<C: IntoElement>(
@@ -60,7 +63,7 @@ fn settings_row_top<C: IntoElement>(
 
 /// Render the settings panel content — all items at the same level, left-right layout.
 pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let header = render_settings_header(board, cx);
+    let header = render_settings_header(cx);
     let language_row = render_language_row(board, cx);
     let theme_row = render_theme_row(board, cx);
     let activation_key_row = render_activation_key_row(board, cx);
@@ -68,7 +71,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let max_storage_row = render_max_storage_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
     let confirm_mode_row = render_confirm_mode_row(board, cx);
-    let open_dirs_row = render_open_dirs_row(board, cx);
+    let open_dirs_row = render_open_dirs_row(cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let hover_preview_row = render_hover_preview_row(board, cx);
 
@@ -102,7 +105,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     )
 }
 
-fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = h_flex()
         .justify_between()
         .items_center()
@@ -116,7 +119,7 @@ fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
             Button::new("cancel-button")
                 .small()
                 .ghost()
-                .label(board.i18n.t("settings_cancel"))
+                .label(I18n::translate(cx, "settings_cancel"))
                 .on_click(cx.listener(|board, _click_event, window, cx| {
                     reset_settings_dialog(board, window, cx);
                 }))
@@ -127,12 +130,12 @@ fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("settings_title")),
+                .child(I18n::translate(cx, "settings_title")),
         )
         .child(
             Button::new("save-button")
                 .small()
-                .label(board.i18n.t("settings_save"))
+                .label(I18n::translate(cx, "settings_save"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_settings(cx, window);
                 }))
@@ -149,7 +152,7 @@ fn render_settings_header(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 
 fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     settings_row(
-        board.i18n.t("settings_language"),
+        I18n::translate(cx, "settings_language"),
         div()
             .flex_shrink_0()
             .child(Select::new(&board.language_select).small().w(px(140.0))),
@@ -159,9 +162,9 @@ fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoE
 
 fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let theme_names = [
-        board.i18n.t("settings_theme_light"),
-        board.i18n.t("settings_theme_dark"),
-        board.i18n.t("settings_theme_system"),
+        I18n::translate(cx, "settings_theme_light"),
+        I18n::translate(cx, "settings_theme_dark"),
+        I18n::translate(cx, "settings_theme_system"),
     ];
     // Wrap in a border-grouped container to give a segmented-control look
     let theme_buttons = h_flex()
@@ -183,7 +186,7 @@ fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElem
                     cx.notify();
                 }))
         }));
-    settings_row(board.i18n.t("settings_theme"), theme_buttons, cx)
+    settings_row(I18n::translate(cx, "settings_theme"), theme_buttons, cx)
 }
 
 fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -194,15 +197,15 @@ fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
         .text_color(cx.theme().muted_foreground);
 
     help_text = if board.hotkey_recording {
-        help_text.child(board.i18n.t("settings_hotkey_record_hint"))
+        help_text.child(I18n::translate(cx, "settings_hotkey_record_hint"))
     } else if board.hotkey_manual_editing {
-        help_text.child(board.i18n.t("settings_hotkey_hint"))
+        help_text.child(I18n::translate(cx, "settings_hotkey_hint"))
     } else {
         help_text
     };
 
     settings_row_top(
-        board.i18n.t("settings_activation_key"),
+        I18n::translate(cx, "settings_activation_key"),
         v_flex()
             .gap_2()
             .items_end()
@@ -243,7 +246,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 
 fn render_hotkey_display(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let hotkey_value: gpui::SharedString = if board.displayed_hotkey().is_empty() {
-        board.i18n.t("settings_hotkey_empty").into()
+        I18n::translate(cx, "settings_hotkey_empty").into()
     } else {
         board.displayed_hotkey().to_string().into()
     };
@@ -288,9 +291,9 @@ fn render_hotkey_action_buttons(board: &RopyBoard, cx: &Context<RopyBoard>) -> i
         Button::new("hotkey-record-button")
             .small()
             .label(if board.hotkey_recording {
-                board.i18n.t("settings_hotkey_recording")
+                I18n::translate(cx, "settings_hotkey_recording")
             } else {
-                board.i18n.t("settings_hotkey_record")
+                I18n::translate(cx, "settings_hotkey_record")
             });
     record_button = if board.hotkey_recording {
         record_button.primary()
@@ -314,7 +317,7 @@ fn render_hotkey_action_buttons(board: &RopyBoard, cx: &Context<RopyBoard>) -> i
         .ghost()
         .rounded_none()
         .flex_1()
-        .label(board.i18n.t("settings_hotkey_edit_text"))
+        .label(I18n::translate(cx, "settings_hotkey_edit_text"))
         .on_click(cx.listener(|board, _, window, cx| {
             board.enable_hotkey_manual_edit(window, cx);
         }));
@@ -324,7 +327,7 @@ fn render_hotkey_action_buttons(board: &RopyBoard, cx: &Context<RopyBoard>) -> i
         .ghost()
         .rounded_none()
         .flex_1()
-        .label(board.i18n.t("settings_hotkey_clear"))
+        .label(I18n::translate(cx, "settings_hotkey_clear"))
         .on_click(cx.listener(|board, _, window, cx| {
             board.clear_hotkey_candidate(window, cx);
         }));
@@ -343,7 +346,7 @@ fn render_hotkey_action_buttons(board: &RopyBoard, cx: &Context<RopyBoard>) -> i
 
 fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     settings_row(
-        board.i18n.t("settings_max_history"),
+        I18n::translate(cx, "settings_max_history"),
         Input::new(&board.settings_max_history_input)
             .appearance(false)
             .border_1()
@@ -358,7 +361,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 
 fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     settings_row(
-        board.i18n.t("settings_max_storage"),
+        I18n::translate(cx, "settings_max_storage"),
         Input::new(&board.settings_max_storage_input)
             .appearance(false)
             .border_1()
@@ -374,18 +377,18 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("autostart-toggle").small();
     btn = if board.autostart_enabled {
-        btn.primary().label(board.i18n.t("on"))
+        btn.primary().label(I18n::translate(cx, "on"))
     } else {
-        btn.ghost().label(board.i18n.t("off"))
+        btn.ghost().label(I18n::translate(cx, "off"))
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
-    settings_row(board.i18n.t("settings_autostart"), toggle, cx)
+    settings_row(I18n::translate(cx, "settings_autostart"), toggle, cx)
 }
 
 fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mode_names = [
-        board.i18n.t("settings_confirm_mode_copy"),
-        board.i18n.t("settings_confirm_mode_paste"),
+        I18n::translate(cx, "settings_confirm_mode_copy"),
+        I18n::translate(cx, "settings_confirm_mode_paste"),
     ];
     let mode_buttons = h_flex()
         .border_1()
@@ -418,28 +421,32 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 }))
         }));
 
-    settings_row(board.i18n.t("settings_confirm_mode"), mode_buttons, cx)
+    settings_row(
+        I18n::translate(cx, "settings_confirm_mode"),
+        mode_buttons,
+        cx,
+    )
 }
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("hover-preview-toggle").small();
     btn = if board.hover_preview_enabled {
-        btn.primary().label(board.i18n.t("on"))
+        btn.primary().label(I18n::translate(cx, "on"))
     } else {
-        btn.ghost().label(board.i18n.t("off"))
+        btn.ghost().label(I18n::translate(cx, "off"))
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
         board.hover_preview_enabled = !board.hover_preview_enabled;
         cx.notify();
     }));
-    settings_row(board.i18n.t("settings_hover_preview"), toggle, cx)
+    settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
 }
 
-fn render_open_dirs_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
     let log_button = Button::new("open-log-button")
         .small()
         .ghost()
-        .label(board.i18n.t("settings_open_log"))
+        .label(I18n::translate(cx, "settings_open_log"))
         .on_click(cx.listener(|_, _, _, _| {
             let log_dir = crate::utils::logging::log_dir();
             #[cfg(target_os = "macos")]
@@ -453,7 +460,7 @@ fn render_open_dirs_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
     let config_button = Button::new("open-config-button")
         .small()
         .ghost()
-        .label(board.i18n.t("settings_open_config"))
+        .label(I18n::translate(cx, "settings_open_config"))
         .on_click(cx.listener(|_, _, _, _| {
             if let Ok(config_dir) = crate::config::Settings::config_dir() {
                 #[cfg(target_os = "macos")]
@@ -482,15 +489,15 @@ fn render_open_dirs_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut btn = Button::new("auto-check-toggle").small();
     btn = if board.auto_check_enabled {
-        btn.primary().label(board.i18n.t("on"))
+        btn.primary().label(I18n::translate(cx, "on"))
     } else {
-        btn.ghost().label(board.i18n.t("off"))
+        btn.ghost().label(I18n::translate(cx, "off"))
     };
     let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
         board.auto_check_enabled = !board.auto_check_enabled;
         cx.notify();
     }));
-    settings_row(board.i18n.t("update_auto_check"), toggle, cx)
+    settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
 
 pub fn reset_settings_dialog(

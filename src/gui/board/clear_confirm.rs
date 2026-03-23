@@ -10,16 +10,14 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
+use crate::i18n::I18n;
 
 /// Render the clear-all confirmation overlay (backdrop + centered dialog card)
-pub(super) fn render_clear_confirm_overlay(
-    board: &RopyBoard,
-    cx: &Context<'_, RopyBoard>,
-) -> impl IntoElement {
-    let title = board.i18n.t("clear_confirm_title");
-    let message = board.i18n.t("clear_confirm_message");
-    let cancel_label = board.i18n.t("clear_confirm_cancel");
-    let confirm_label = board.i18n.t("clear_confirm_button");
+pub(super) fn render_clear_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let title = I18n::translate(cx, "clear_confirm_title");
+    let message = I18n::translate(cx, "clear_confirm_message");
+    let cancel_label = I18n::translate(cx, "clear_confirm_cancel");
+    let confirm_label = I18n::translate(cx, "clear_confirm_button");
 
     div()
         .absolute()

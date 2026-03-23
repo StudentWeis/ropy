@@ -13,7 +13,10 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
-use crate::repository::{ClipboardRecord, models::ContentType};
+use crate::{
+    i18n::I18n,
+    repository::{ClipboardRecord, models::ContentType},
+};
 
 /// Content type filter for the clipboard history view
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -160,7 +163,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
         .py_0()
         .rounded_none()
         .label("Aa")
-        .tooltip(board.i18n.t("search_case_sensitive"))
+        .tooltip(I18n::translate(cx, "search_case_sensitive"))
         .on_click(cx.listener(|this, _, _, cx| {
             this.toggle_case_sensitive_search();
             cx.notify();
@@ -171,13 +174,13 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
 fn create_search_match_mode_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
     let match_mode = board.search_options.match_mode;
     let match_mode_label = match match_mode {
-        SearchMatchMode::Contains => board.i18n.t("search_match_contains"),
-        SearchMatchMode::WholeWord => board.i18n.t("search_match_whole_word"),
-        SearchMatchMode::Exact => board.i18n.t("search_match_exact"),
+        SearchMatchMode::Contains => I18n::translate(cx, "search_match_contains"),
+        SearchMatchMode::WholeWord => I18n::translate(cx, "search_match_whole_word"),
+        SearchMatchMode::Exact => I18n::translate(cx, "search_match_exact"),
     };
     let tooltip = format!(
         "{}: {}",
-        board.i18n.t("search_match_mode"),
+        I18n::translate(cx, "search_match_mode"),
         match_mode_label
     );
 
@@ -217,8 +220,8 @@ pub(super) fn render_search_input(
 ) -> impl IntoElement {
     let is_text_active = board.content_filter == ContentFilter::Text;
     let is_image_active = board.content_filter == ContentFilter::Image;
-    let text_filter_tooltip = board.i18n.t("filter_text");
-    let image_filter_tooltip = board.i18n.t("filter_image");
+    let text_filter_tooltip = I18n::translate(cx, "filter_text");
+    let image_filter_tooltip = I18n::translate(cx, "filter_image");
 
     let text_button = if is_text_active {
         Button::new("filter-text-btn").primary()

@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use gpui::{App, AppContext, KeyBinding, WindowHandle};
+use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 #[cfg(target_os = "linux")]
 use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
@@ -17,6 +17,7 @@ use crate::{
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
     gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
+    i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
@@ -214,6 +215,13 @@ pub fn launch() {
             // Register settings as GPUI Global for app-wide access
             cx.set_global(settings.clone());
 
+            // Register I18n as GPUI Global for app-wide access
+            let i18n = I18n::new(settings.language.clone()).unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "failed to load i18n; falling back to default");
+                I18n::default()
+            });
+            cx.set_global(i18n);
+
             // Sync auto-start state on application launch
             sync_autostart_on_launch(settings.autostart.enabled);
 
@@ -242,7 +250,9 @@ pub fn launch() {
             );
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
-            // Extract i18n from board, initialize tray at App level, then pass it back.
+            // Initialize tray from the global I18n, then pass handles to the board.
+            let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
+
             let board_view = window_handle
                 .update(cx, |root, _, _cx| {
                     root.view().clone().downcast::<RopyBoard>().ok()
@@ -251,9 +261,6 @@ pub fn launch() {
                 .flatten();
 
             if let Some(board) = &board_view {
-                let i18n = board.read(cx).i18n.clone();
-                let tray = crate::gui::start_tray_handler(&i18n, cx, window_handle);
-
                 board.update(cx, |board, _| {
                     board.set_hotkey_tx(hotkey_tx);
                     board.set_tray_icon(tray);

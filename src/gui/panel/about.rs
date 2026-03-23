@@ -9,7 +9,9 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::{constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, updater::models::UpdateStatus};
+use crate::{
+    constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, i18n::I18n, updater::models::UpdateStatus,
+};
 
 /// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -37,7 +39,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("about_title")),
+                .child(I18n::translate(cx, "about_title")),
         )
         .child(div().w(px(55.)));
 
@@ -66,7 +68,11 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .text_sm()
                     .text_color(cx.theme().foreground)
                     .font_weight(gpui::FontWeight::MEDIUM)
-                    .child(format!("{} {}", board.i18n.t("about_version"), version)),
+                    .child(format!(
+                        "{} {}",
+                        I18n::translate(cx, "about_version"),
+                        version
+                    )),
             )
             // Update section
             .child(render_update_section(board, cx))
@@ -77,7 +83,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .text_center()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child(board.i18n.t("about_description")),
+                    .child(I18n::translate(cx, "about_description")),
             )
             .child(
                 Button::new("github-button")
@@ -93,25 +99,31 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
 /// Render the update section with status and action button.
 fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let status_text: gpui::SharedString = match &board.update_status {
-        UpdateStatus::Idle => board.i18n.t("update_check_now").into(),
-        UpdateStatus::Checking => board.i18n.t("update_checking").into(),
-        UpdateStatus::Available(info) => {
-            format!("{}: v{}", board.i18n.t("update_available"), info.version).into()
-        }
-        UpdateStatus::UpToDate => board.i18n.t("update_up_to_date").into(),
-        UpdateStatus::Downloading(p) => {
-            format!("{} {:.0}%", board.i18n.t("update_downloading"), p * 100.0).into()
-        }
-        UpdateStatus::ReadyToRestart => board.i18n.t("update_restart").into(),
+        UpdateStatus::Idle => I18n::translate(cx, "update_check_now").into(),
+        UpdateStatus::Checking => I18n::translate(cx, "update_checking").into(),
+        UpdateStatus::Available(info) => format!(
+            "{}: v{}",
+            I18n::translate(cx, "update_available"),
+            info.version
+        )
+        .into(),
+        UpdateStatus::UpToDate => I18n::translate(cx, "update_up_to_date").into(),
+        UpdateStatus::Downloading(p) => format!(
+            "{} {:.0}%",
+            I18n::translate(cx, "update_downloading"),
+            p * 100.0
+        )
+        .into(),
+        UpdateStatus::ReadyToRestart => I18n::translate(cx, "update_restart").into(),
         UpdateStatus::Error(msg) => {
             // Map technical error messages to user-friendly descriptions
             let friendly_msg = if msg.contains("curl")
                 || msg.contains("SSL")
                 || msg.contains("HTTP request failed")
             {
-                board.i18n.t("update_error_network")
+                I18n::translate(cx, "update_error_network")
             } else {
-                board.i18n.t("update_error")
+                I18n::translate(cx, "update_error")
             };
             friendly_msg.into()
         }
@@ -127,14 +139,14 @@ fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
             Button::new("update-download-button")
                 .small()
                 .primary()
-                .label(board.i18n.t("update_download"))
+                .label(I18n::translate(cx, "update_download"))
                 .on_click(cx.listener(|board, _, _, cx| board.download_and_install_update(cx))),
         ),
         UpdateStatus::ReadyToRestart => Some(
             Button::new("update-restart-button")
                 .small()
                 .primary()
-                .label(board.i18n.t("update_restart_button"))
+                .label(I18n::translate(cx, "update_restart_button"))
                 .on_click(cx.listener(|_, _, _, cx| {
                     if let Ok(exe) = std::env::current_exe() {
                         let _ = std::process::Command::new(exe).spawn();
@@ -146,7 +158,7 @@ fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
             Button::new("update-check-button")
                 .small()
                 .ghost()
-                .label(board.i18n.t("update_check_now"))
+                .label(I18n::translate(cx, "update_check_now"))
                 .on_click(cx.listener(|board, _, _, cx| board.check_for_update_async(cx))),
         ),
         _ => None,

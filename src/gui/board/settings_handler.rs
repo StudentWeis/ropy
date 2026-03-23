@@ -4,7 +4,10 @@ use gpui::{BorrowAppContext, Context, Window, prelude::Styled, px};
 use gpui_component::{WindowExt, notification::Notification};
 
 use super::RopyBoard;
-use crate::{config::Settings, i18n::Language};
+use crate::{
+    config::Settings,
+    i18n::{I18n, Language},
+};
 
 impl RopyBoard {
     pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
@@ -114,16 +117,18 @@ impl RopyBoard {
             let _ = tx.try_send(activation_key.clone());
         }
 
-        // Apply the new language
-        if let Err(e) = self.i18n.set_language(language) {
-            tracing::warn!(error = ?e, "failed to set language");
-        }
+        // Apply the new language via Global
+        cx.update_global::<I18n, _>(|i18n: &mut I18n, _cx| {
+            if let Err(e) = i18n.set_language(language) {
+                tracing::warn!(error = ?e, "failed to set language");
+            }
+        });
 
         // Update tray menu with new language
-        self.update_tray_menu();
+        self.update_tray_menu(cx);
 
         // Update search placeholder with new language
-        let search_placeholder = self.i18n.t("search_placeholder");
+        let search_placeholder = I18n::translate(cx, "search_placeholder");
         self.search_input.update(cx, |input, cx| {
             input.set_placeholder(search_placeholder, window, cx);
         });
@@ -150,14 +155,18 @@ impl RopyBoard {
 
         // --- User notifications: auto width (content-driven), capped at 280px ---
         if let Some(err_msg) = save_disk_error {
-            let msg = format!("✕  {}: {}", self.i18n.t("settings_save_failed"), err_msg);
+            let msg = format!(
+                "✕  {}: {}",
+                I18n::translate(cx, "settings_save_failed"),
+                err_msg
+            );
             window.push_notification(
                 Notification::new().message(msg).w_auto().max_w(px(280.0)),
                 cx,
             );
         } else {
             if is_hotkey_invalid {
-                let warn_msg = self.i18n.t("settings_hotkey_invalid_warning");
+                let warn_msg = I18n::translate(cx, "settings_hotkey_invalid_warning");
                 window.push_notification(
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
@@ -167,7 +176,7 @@ impl RopyBoard {
                 );
             }
             if is_max_history_invalid {
-                let warn_msg = self.i18n.t("settings_max_history_invalid_warning");
+                let warn_msg = I18n::translate(cx, "settings_max_history_invalid_warning");
                 window.push_notification(
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
@@ -177,7 +186,7 @@ impl RopyBoard {
                 );
             }
             if is_max_storage_invalid {
-                let warn_msg = self.i18n.t("settings_max_storage_invalid_warning");
+                let warn_msg = I18n::translate(cx, "settings_max_storage_invalid_warning");
                 window.push_notification(
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
@@ -187,7 +196,7 @@ impl RopyBoard {
                 );
             }
             if is_max_storage_lt_history {
-                let warn_msg = self.i18n.t("settings_max_storage_lt_history_warning");
+                let warn_msg = I18n::translate(cx, "settings_max_storage_lt_history_warning");
                 window.push_notification(
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
@@ -197,7 +206,7 @@ impl RopyBoard {
                 );
             }
             if autostart_error.is_some() {
-                let warn_msg = self.i18n.t("settings_autostart_failed");
+                let warn_msg = I18n::translate(cx, "settings_autostart_failed");
                 window.push_notification(
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
@@ -212,7 +221,7 @@ impl RopyBoard {
                 && !is_max_storage_invalid
                 && !is_max_storage_lt_history
             {
-                let ok_msg = self.i18n.t("settings_save_success");
+                let ok_msg = I18n::translate(cx, "settings_save_success");
                 window.push_notification(
                     Notification::new()
                         .message(format!("✓  {ok_msg}"))

@@ -9,7 +9,7 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::{constants::ABOUT_BACK_ARROW, gui::board::RopyBoard};
+use crate::{constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, i18n::I18n};
 
 /// A single row in the shortcuts table
 struct ShortcutRow {
@@ -81,7 +81,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
-                .child(board.i18n.t("help_title")),
+                .child(I18n::translate(cx, "help_title")),
         )
         // Spacer to keep the title centered
         .child(div().w(px(55.)));
@@ -106,7 +106,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 .text_sm()
                 .font_weight(gpui::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
-                .child(board.i18n.t("help_key")),
+                .child(I18n::translate(cx, "help_key")),
         )
         .child(
             div()
@@ -114,7 +114,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 .text_sm()
                 .font_weight(gpui::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
-                .child(board.i18n.t("help_action")),
+                .child(I18n::translate(cx, "help_action")),
         );
 
     // Build shortcut rows
@@ -128,11 +128,11 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 // Concat the two individual translated strings
                 format!(
                     "{} / {}",
-                    board.i18n.t("help_nav_up"),
-                    board.i18n.t("help_nav_down")
+                    I18n::translate(cx, "help_nav_up"),
+                    I18n::translate(cx, "help_nav_down")
                 )
             } else {
-                board.i18n.t(row.label_key)
+                I18n::translate(cx, row.label_key)
             };
 
             let row_bg = if i % 2 == 0 {
