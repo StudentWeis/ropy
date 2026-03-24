@@ -116,62 +116,63 @@ pub(super) fn filter_records_by_query(
         .collect()
 }
 
-fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
-    let is_active = board.search_options.case_sensitive;
+fn create_search_option_button(
+    element_id: impl Into<gpui::ElementId>,
+    label: impl Into<gpui::SharedString>,
+    is_active: bool,
+    tooltip: impl Into<gpui::SharedString>,
+    cx: &gpui::App,
+) -> Button {
+    let id = element_id.into();
     let button = if is_active {
-        Button::new("search-case-sensitive-btn").primary()
+        let accent = cx.theme().accent;
+        let variant = gpui_component::button::ButtonCustomVariant::new(cx)
+            .color(accent)
+            .foreground(cx.theme().accent_foreground)
+            .hover(accent)
+            .active(accent);
+        Button::new(id).custom(variant)
     } else {
-        Button::new("search-case-sensitive-btn").ghost()
-    };
-
-    let button = if is_active {
-        button
-    } else {
-        button.opacity(0.6)
+        Button::new(id).ghost().opacity(0.6)
     };
 
     button
-        .small()
-        .min_h(px(24.0))
-        .px_1()
-        .py_0()
-        .rounded_none()
-        .label("Aa")
-        .tooltip(I18n::translate(cx, "search_case_sensitive"))
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.toggle_case_sensitive_search();
-            cx.notify();
-        }))
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .xsmall()
+        .compact()
+        .rounded(px(4.0))
+        .text_xs()
+        .label(label)
+        .tooltip(tooltip)
+}
+
+fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
+    create_search_option_button(
+        "search-case-sensitive-btn",
+        "Aa",
+        board.search_options.case_sensitive,
+        I18n::translate(cx, "search_case_sensitive"),
+        cx,
+    )
+    .on_click(cx.listener(|this, _, _, cx| {
+        this.toggle_case_sensitive_search();
+        cx.notify();
+    }))
+    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
 fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
-    let is_active = board.search_options.whole_word;
-    let button = if is_active {
-        Button::new("search-whole-word-btn").primary()
-    } else {
-        Button::new("search-whole-word-btn").ghost()
-    };
-
-    let button = if is_active {
-        button
-    } else {
-        button.opacity(0.6)
-    };
-
-    button
-        .small()
-        .min_h(px(24.0))
-        .px_1()
-        .py_0()
-        .rounded_none()
-        .label("W")
-        .tooltip(I18n::translate(cx, "search_match_whole_word"))
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.toggle_whole_word_search();
-            cx.notify();
-        }))
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    create_search_option_button(
+        "search-whole-word-btn",
+        "W",
+        board.search_options.whole_word,
+        I18n::translate(cx, "search_match_whole_word"),
+        cx,
+    )
+    .on_click(cx.listener(|this, _, _, cx| {
+        this.toggle_whole_word_search();
+        cx.notify();
+    }))
+    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
 /// Render the search input section with content type filter buttons
@@ -223,9 +224,7 @@ pub(super) fn render_search_input(
                 .child(
                     h_flex()
                         .items_center()
-                        .bg(cx.theme().background)
-                        .overflow_hidden()
-                        .rounded_md()
+                        .gap(px(2.0))
                         .child(create_case_sensitive_button(board, cx))
                         .child(create_whole_word_button(board, cx)),
                 ),

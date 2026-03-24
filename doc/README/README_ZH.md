@@ -6,12 +6,12 @@
 <a href="https://github.com/studentweis/ropy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 <a href="https://github.com/studentweis/ropy/releases"><img src="https://img.shields.io/github/v/release/studentweis/ropy" alt="Release"></a>
 <a href="https://rust-lang.org"><img src="https://img.shields.io/badge/language-Rust-orange" alt="Language"></a>
-</br>
+<br>
 <a href="https://github.com/studentweis/ropy"><img src="https://img.shields.io/github/stars/studentweis/ropy?style=social" alt="Stars"></a>
 <a href="https://github.com/studentweis/ropy/issues"><img src="https://img.shields.io/github/issues/studentweis/ropy" alt="Issues"></a>
 </p>
 
-<p align="center">一个使用纯 Rust 编写的跨平台原生剪贴板管理器。</p>
+<p align="center">使用 Rust 和 GPUI 编写的跨平台原生剪贴板管理器。</p>
 
 <p align="center">
 <a href="../../README.md">English</a> | 简体中文
@@ -24,8 +24,8 @@
 
 ## 特性
 
-- 跨平台支持：Windows、macOS 和 Linux(X11)。
 - 使用 Zed 的 GPUI 构建的原生 GUI 应用。
+- 跨平台支持：Windows、macOS 和 Linux(X11)。
 - 易于使用、轻量且快速。
 - 搜索/置顶/预览/自动启动/快捷键/自动更新/记录置顶。
 
@@ -67,7 +67,7 @@ cargo build --release
 ## 局限性（无计划支持）
 
 - 系统剪贴板不会暴露复制条目的原始应用程序来源。
-- 插件/扩展系统：目前没有计划 —— Ropy 专注于简洁和小体积。
+- 插件/扩展系统：目前没有计划。Ropy 专注于简洁和小体积。
 - 云同步：目前不支持。
 - 命令行模式：Ropy 主要设计为 GUI 应用程序。
 

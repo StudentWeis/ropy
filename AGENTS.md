@@ -1,17 +1,22 @@
-开发相关：
+## Total
 
-- 注释应该是通用的、规范的、简洁的。
-- 遵循 TDD（测试驱动开发）的思路，优先编写测试，再编写实现代码。
-- 使用 context7 查询库文档。
-- 最好使用 thiserror 来定义错误类型。
-- 最好使用 gpui-component 来添加新的组件。
-- 使用 script/precheck.sh 来检查代码质量和格式。
+- Think in terms of first principles.
+- Write code following the principles of Clean Code.
+- Follow the TDD (Test-Driven Development) approach, prioritizing writing tests that fail first, then writing implementation code that passes.
 
-测试相关：
+## Development
 
-- 如使用 unwrap() 和 expect()，需添加 #[allow(clippy::unwrap_used)]、#[allow(clippy::expect_used)] 来避免 clippy 警告。
-- 使用 tempfile 库创建临时文件。
-- 使用 rstest 进行参数化测试。
-- 单测统一使用 `test_<对象>_<场景>_<预期>` 命名模式。
+- Use thiserror to define error types.
+- Use gpui-component to add new UI components.
+- Use scripts/precheck.sh to check code quality and format.
 
-@RTK.md
+## Tests
+
+- Use tempfile to create temporary files.
+- Use rstest to perform parameterized tests.
+- Use appropriate macros to avoid clippy warnings in test functions.
+- Test functions should follow the `test_<object>_<scenario>_<expected>` naming pattern.
+
+## Others
+
+- Use the [rtk](./RTK.md) prefix when executing Shell commands.
