@@ -9,7 +9,7 @@ The ropy project adopts a dual-layer storage architecture to manage clipboard re
 ### Persistent Storage Layer (Database)
 
 - **Storage Engine**: Uses `sled` embedded key-value database
-- **Data Structure**: 
+- **Data Structure**:
   - Primarily stored in the `clipboard_records` tree
   - Uses content hash as key to achieve automatic deduplication
   - Each record contains: ID, content, creation time, content type, pinned status
