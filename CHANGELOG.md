@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-03-24
+
+### 🚀 Features
+
+- Enhance update process with progress reporting and add RTK documentation by @StudentWeis
+- Implement GPUI global state for I18n and update translation access by @StudentWeis
+- Use global instead of Arc<Rwlock<Setting>> by @StudentWeis
+
+### 🚜 Refactor
+
+- Streamline search button creation and improve button styling by @StudentWeis
+- Simplify search functionality by removing match modes and implementing whole word search by @StudentWeis
+- Implement GlobalRepository for shared clipboard access across components by @StudentWeis
+- Streamline I18n loading and registration in application launch by @StudentWeis
+- Replace AsyncApp with App context in clipboard and GUI modules by @StudentWeis
+- Organized the components in the board module by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+
+- Add more pre-commit checks and rename script dir by @StudentWeis
+- Remove ai doc and clean the code by @StudentWeis
+
 ## [0.3.5] - 2026-03-20
 
 ### 🚀 Features
