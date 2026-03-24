@@ -3,7 +3,7 @@ set -euo pipefail
 
 # record_build_size.sh
 # Usage:
-#   script/record_build_size.sh [path/to/binary ...]
+#   scripts/record_build_size.sh [path/to/binary ...]
 # If no binary args are provided, defaults to target/release/ropy
 
 rtk cargo build --release

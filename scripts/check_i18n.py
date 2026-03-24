@@ -8,7 +8,7 @@ Checks two things:
      (no missing keys, no extra keys).
 
 Usage:
-    python3 script/check_i18n.py [--root <project-root>]
+    python3 scripts/check_i18n.py [--root <project-root>]
 
 Exit code is non-zero when any issue is found.
 """

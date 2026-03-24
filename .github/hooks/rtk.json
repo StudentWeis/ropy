@@ -3,7 +3,7 @@
 		"PreToolUse": [
 			{
 				"type": "command",
-				"command": "./script/hooks/rtk-rewrite.sh"
+				"command": "./scripts/hooks/rtk-rewrite.sh"
 			}
 		]
 	}

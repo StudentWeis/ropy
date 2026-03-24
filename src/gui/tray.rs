@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use gpui::{App, BackgroundExecutor, WindowHandle};
+use gpui::{App, AppContext, BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,

@@ -9,7 +9,7 @@ Checks two things:
 Supported icon formats: svg, png, ico, icns, jpg, jpeg, webp, gif, bmp
 
 Usage:
-    python3 script/check_icons.py [--root <project-root>]
+    python3 scripts/check_icons.py [--root <project-root>]
 
 Exit code is non-zero when any issue is found.
 """
