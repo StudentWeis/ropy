@@ -145,58 +145,64 @@ def main() -> int:
     used_keys = collect_used_keys(src_dir)
 
     issues = 0  # count of problem categories
+    verbose = False  # only print details when issues found
+
+    # Collect all check results first
+    check_results = []
 
     # ------------------------------------------------------------------
     # Check 1 – unused keys in template
     # ------------------------------------------------------------------
-    print_section("Check 1 · Keys in en.toml not referenced in source code")
     unused = check_unused_keys(template_keys, used_keys)
     if unused:
         issues += 1
-        for k in unused:
-            print(f"  {_color('UNUSED', _YELLOW)}  {k}")
-    else:
-        print(f"  {_color('OK', _GREEN)}  All {len(template_keys)} keys are used.")
+        verbose = True
+        check_results.append(("Check 1 · Keys in en.toml not referenced in source code", "unused", unused))
 
     # ------------------------------------------------------------------
     # Check 2 – key parity across locales
     # ------------------------------------------------------------------
-    print_section("Check 2 · Key parity between en.toml and other locales")
     other_locales = sorted(
         p for p in locales_dir.glob("*.toml") if p.name != "en.toml"
     )
 
-    if not other_locales:
-        print("  No other locale files found.")
-    else:
-        locale_issues = False
+    locale_issues_list = []
+    if other_locales:
         for locale_path in other_locales:
             missing, extra = check_locale_consistency(template_keys, locale_path)
             if missing or extra:
                 issues += 1
-                locale_issues = True
+                verbose = True
                 rel = locale_path.relative_to(root)
+                locale_issues_list.append((rel, missing, extra))
+
+    # ------------------------------------------------------------------
+    # Output (verbose only when issues found)
+    # ------------------------------------------------------------------
+    if verbose:
+        # Print Check 1 details
+        if unused:
+            print_section("Check 1 · Keys in en.toml not referenced in source code")
+            for k in unused:
+                print(f"  {_color('UNUSED', _YELLOW)}  {k}")
+
+        # Print Check 2 details
+        if locale_issues_list:
+            print_section("Check 2 · Key parity between en.toml and other locales")
+            for rel, missing, extra in locale_issues_list:
                 print(f"\n  {_BOLD}{rel}{_RESET}")
                 for k in missing:
                     print(f"    {_color('MISSING', _RED)}  {k}")
                 for k in extra:
                     print(f"    {_color('EXTRA  ', _YELLOW)}  {k}")
-            else:
-                rel = locale_path.relative_to(root)
-                print(f"  {_color('OK', _GREEN)}  {rel.name}  ({len(template_keys)} keys match)")
 
-        if not locale_issues:
-            print(f"\n  {_color('OK', _GREEN)}  All locale files match the template.")
-
-    # ------------------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------------------
-    print()
-    if issues:
+        print()
         print(_color(f"✗  {issues} issue(s) found.", _RED + _BOLD))
         return 1
     else:
-        print(_color("✓  All checks passed.", _GREEN + _BOLD))
+        # Simple summary when everything is OK
+        num_locales = len(other_locales)
+        print(_color(f"✓ i18n: {len(template_keys)} keys, {num_locales} locale(s), all OK", _GREEN + _BOLD))
         return 0
 
 

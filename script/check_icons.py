@@ -152,45 +152,47 @@ def main() -> int:
     referenced_icons = collect_referenced_icons(src_dir)
 
     issues = 0  # count of problem categories
+    verbose = False  # only print details when issues found
 
     # ------------------------------------------------------------------
     # Check 1 – unused icons in assets
     # ------------------------------------------------------------------
-    print_section("Check 1 · Icons in assets not referenced in source code")
     unused = check_unused_icons(asset_icons, referenced_icons)
     if unused:
         issues += 1
-        for icon in unused:
-            print(f"  {_color('UNUSED', _YELLOW)}  {icon}")
-    else:
-        print(f"  {_color('OK', _GREEN)}  All {len(asset_icons)} icons are referenced.")
+        verbose = True
 
     # ------------------------------------------------------------------
     # Check 2 – missing icons (referenced but not in assets)
     # ------------------------------------------------------------------
-    print_section("Check 2 · Icons referenced in source but missing from assets")
     missing = check_missing_icons(asset_icons, referenced_icons)
     if missing:
         issues += 1
-        for icon in missing:
-            print(f"  {_color('MISSING', _RED)}  {icon}")
-    else:
-        print(f"  {_color('OK', _GREEN)}  All referenced icons exist in assets.")
+        verbose = True
 
     # ------------------------------------------------------------------
-    # Summary
+    # Output (verbose only when issues found)
     # ------------------------------------------------------------------
-    print()
-    print(f"  Total icons in assets: {len(asset_icons)}")
-    print(f"  Total icons referenced: {len(referenced_icons)}")
+    if verbose:
+        if unused:
+            print_section("Check 1 · Icons in assets not referenced in source code")
+            for icon in unused:
+                print(f"  {_color('UNUSED', _YELLOW)}  {icon}")
 
-    if issues:
+        if missing:
+            print_section("Check 2 · Icons referenced in source but missing from assets")
+            for icon in missing:
+                print(f"  {_color('MISSING', _RED)}  {icon}")
+
+        print()
+        print(f"  Total icons in assets: {len(asset_icons)}")
+        print(f"  Total icons referenced: {len(referenced_icons)}")
         print()
         print(_color(f"✗  {issues} issue(s) found.", _RED + _BOLD))
         return 1
     else:
-        print()
-        print(_color("✓  All checks passed.", _GREEN + _BOLD))
+        # Simple summary when everything is OK
+        print(_color(f"✓ icons: {len(asset_icons)} in assets, {len(referenced_icons)} referenced, all OK", _GREEN + _BOLD))
         return 0
 
 

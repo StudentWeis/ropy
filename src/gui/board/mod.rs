@@ -400,8 +400,8 @@ impl RopyBoard {
         self.search_options.case_sensitive = !self.search_options.case_sensitive;
     }
 
-    pub(crate) const fn cycle_search_match_mode(&mut self) {
-        self.search_options.match_mode = self.search_options.match_mode.next();
+    pub(crate) const fn toggle_whole_word_search(&mut self) {
+        self.search_options.whole_word = !self.search_options.whole_word;
     }
 
     /// Get filtered records based on search query and content type filter

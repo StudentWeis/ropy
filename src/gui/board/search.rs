@@ -31,35 +31,9 @@ pub enum ContentFilter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SearchMatchMode {
-    #[default]
-    Contains,
-    WholeWord,
-    Exact,
-}
-
-impl SearchMatchMode {
-    pub(crate) const fn next(self) -> Self {
-        match self {
-            Self::Contains => Self::WholeWord,
-            Self::WholeWord => Self::Exact,
-            Self::Exact => Self::Contains,
-        }
-    }
-
-    pub(crate) const fn short_label(self) -> &'static str {
-        match self {
-            Self::Contains => ".*",
-            Self::WholeWord => "W",
-            Self::Exact => "=",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SearchOptions {
-    pub(crate) match_mode: SearchMatchMode,
     pub(crate) case_sensitive: bool,
+    pub(crate) whole_word: bool,
 }
 
 fn is_token_char(ch: char) -> bool {
@@ -92,15 +66,15 @@ pub(super) fn text_matches_query(content: &str, query: &str, options: SearchOpti
     let normalized_content = normalized_text(content, options.case_sensitive);
     let normalized_query = normalized_text(query, options.case_sensitive);
 
-    match options.match_mode {
-        SearchMatchMode::Contains => normalized_content.contains(normalized_query.as_ref()),
-        SearchMatchMode::WholeWord => normalized_content
+    if options.whole_word {
+        normalized_content
             .match_indices(normalized_query.as_ref())
             .any(|(start, matched)| {
                 let end = start + matched.len();
                 has_word_boundaries(normalized_content.as_ref(), start, end)
-            }),
-        SearchMatchMode::Exact => normalized_content == normalized_query,
+            })
+    } else {
+        normalized_content.contains(normalized_query.as_ref())
     }
 }
 
@@ -171,25 +145,12 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
-fn create_search_match_mode_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
-    let match_mode = board.search_options.match_mode;
-    let match_mode_label = match match_mode {
-        SearchMatchMode::Contains => I18n::translate(cx, "search_match_contains"),
-        SearchMatchMode::WholeWord => I18n::translate(cx, "search_match_whole_word"),
-        SearchMatchMode::Exact => I18n::translate(cx, "search_match_exact"),
-    };
-    let tooltip = format!(
-        "{}: {}",
-        I18n::translate(cx, "search_match_mode"),
-        match_mode_label
-    );
-
-    let is_active = !matches!(match_mode, SearchMatchMode::Contains);
-    let button = match match_mode {
-        SearchMatchMode::Contains => Button::new("search-match-mode-btn").ghost(),
-        SearchMatchMode::WholeWord | SearchMatchMode::Exact => {
-            Button::new("search-match-mode-btn").primary()
-        }
+fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
+    let is_active = board.search_options.whole_word;
+    let button = if is_active {
+        Button::new("search-whole-word-btn").primary()
+    } else {
+        Button::new("search-whole-word-btn").ghost()
     };
 
     let button = if is_active {
@@ -204,10 +165,10 @@ fn create_search_match_mode_button(board: &RopyBoard, cx: &Context<'_, RopyBoard
         .px_1()
         .py_0()
         .rounded_none()
-        .label(match_mode.short_label())
-        .tooltip(tooltip)
+        .label("W")
+        .tooltip(I18n::translate(cx, "search_match_whole_word"))
         .on_click(cx.listener(|this, _, _, cx| {
-            this.cycle_search_match_mode();
+            this.toggle_whole_word_search();
             cx.notify();
         }))
         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -266,8 +227,7 @@ pub(super) fn render_search_input(
                         .overflow_hidden()
                         .rounded_md()
                         .child(create_case_sensitive_button(board, cx))
-                        .child(div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45))
-                        .child(create_search_match_mode_button(board, cx)),
+                        .child(create_whole_word_button(board, cx)),
                 ),
         )
         .child(
@@ -400,8 +360,8 @@ mod tests {
             "Hello",
             ContentFilter::All,
             SearchOptions {
-                match_mode: SearchMatchMode::Contains,
                 case_sensitive: true,
+                whole_word: false,
             },
         );
 
@@ -440,8 +400,8 @@ mod tests {
             "hello",
             ContentFilter::All,
             SearchOptions {
-                match_mode: SearchMatchMode::WholeWord,
                 case_sensitive: false,
+                whole_word: true,
             },
         );
 
@@ -472,8 +432,8 @@ mod tests {
             "Hello",
             ContentFilter::All,
             SearchOptions {
-                match_mode: SearchMatchMode::WholeWord,
                 case_sensitive: true,
+                whole_word: true,
             },
         );
 
@@ -496,91 +456,12 @@ mod tests {
             "hello",
             ContentFilter::All,
             SearchOptions {
-                match_mode: SearchMatchMode::WholeWord,
                 case_sensitive: false,
+                whole_word: true,
             },
         );
 
         assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_search_exact_case_insensitive_matches_full_content() {
-        let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "HELLO".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-        ];
-
-        let result = filter_records_by_query(
-            &records,
-            "hello",
-            ContentFilter::All,
-            SearchOptions {
-                match_mode: SearchMatchMode::Exact,
-                case_sensitive: false,
-            },
-        );
-
-        assert_eq!(result.len(), 2);
-    }
-
-    #[test]
-    fn test_search_exact_case_sensitive_matches_only_strict_equal_content() {
-        let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "hello".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: " hello ".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-            },
-        ];
-
-        let result = filter_records_by_query(
-            &records,
-            "hello",
-            ContentFilter::All,
-            SearchOptions {
-                match_mode: SearchMatchMode::Exact,
-                case_sensitive: true,
-            },
-        );
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content, "hello");
     }
 
     #[test]
@@ -662,12 +543,8 @@ mod tests {
         for options in [
             SearchOptions::default(),
             SearchOptions {
-                match_mode: SearchMatchMode::WholeWord,
                 case_sensitive: false,
-            },
-            SearchOptions {
-                match_mode: SearchMatchMode::Exact,
-                case_sensitive: true,
+                whole_word: true,
             },
         ] {
             let result =
@@ -675,14 +552,5 @@ mod tests {
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].content_type, ContentType::Image);
         }
-    }
-
-    // --- Toggle tests ---
-
-    #[test]
-    fn test_search_match_mode_next_cycles_all_modes() {
-        assert_eq!(SearchMatchMode::Contains.next(), SearchMatchMode::WholeWord);
-        assert_eq!(SearchMatchMode::WholeWord.next(), SearchMatchMode::Exact);
-        assert_eq!(SearchMatchMode::Exact.next(), SearchMatchMode::Contains);
     }
 }
