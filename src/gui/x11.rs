@@ -36,7 +36,9 @@ impl X11 {
         let mut window_id = None;
 
         for window in windows {
-            let pids = Self::get_value32(&conn, window, net_wm_pid)?;
+            let Ok(pids) = Self::get_value32(&conn, window, net_wm_pid) else {
+                continue;
+            };
 
             if pids.contains(&std::process::id()) {
                 window_id = Some(window);
