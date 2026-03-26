@@ -9,6 +9,7 @@ mod settings_handler;
 mod updater_ui;
 
 use std::{
+    collections::HashSet,
     sync::{Arc, Mutex, PoisonError, mpsc},
     time::Duration,
 };
@@ -16,8 +17,8 @@ use std::{
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AnyElement, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ReadGlobal,
-    Render, SharedString, Subscription, Window,
+    AnyElement, App, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState,
+    ReadGlobal, Render, SharedString, Subscription, Window,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
 use gpui_component::{
@@ -50,6 +51,7 @@ use crate::{
 pub struct RopyBoard {
     pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
     pub(crate) filtered_records: Arc<Vec<ClipboardRecord>>, // The final shown records
+    pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) _focus_out_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
@@ -134,6 +136,14 @@ impl RopyBoard {
 
     pub fn set_tray_icon(&mut self, tray_icon: Option<tray_icon::TrayIcon>) {
         self.tray_icon = tray_icon;
+    }
+
+    fn load_favorite_ids(cx: &App) -> HashSet<u64> {
+        GlobalRepository::read(cx, |repo| {
+            repo.and_then(|repo| repo.favorite_ids().ok())
+                .map(|ids| ids.into_iter().collect())
+                .unwrap_or_default()
+        })
     }
 
     /// Rebuild the tray menu with current i18n translations.
@@ -245,6 +255,7 @@ impl RopyBoard {
 
         let search_placeholder = I18n::translate(cx, "search_placeholder");
         let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(search_placeholder));
+        let favorite_ids = Arc::new(Self::load_favorite_ids(cx));
 
         Self {
             records,
@@ -255,6 +266,7 @@ impl RopyBoard {
             last_copy,
             list_state,
             filtered_records: Arc::new(Vec::new()),
+            favorite_ids,
             copy_tx,
             show_settings: false,
             show_about: false,
@@ -327,14 +339,17 @@ impl RopyBoard {
     }
 
     /// Clear clipboard history
-    pub(crate) fn clear_history(&self, cx: &Context<Self>) {
+    pub(crate) fn clear_history(&mut self, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
                 if let Err(e) = repo.clear() {
                     tracing::warn!(error = %e, "failed to clear clipboard history");
                 } else {
-                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-                    guard.clear();
+                    {
+                        let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                        guard.clear();
+                    }
+                    self.favorite_ids = Arc::new(HashSet::new());
                 }
             }
         });
@@ -363,8 +378,34 @@ impl RopyBoard {
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .retain(|record| record.id != id);
+                    let mut favorite_ids = (*self.favorite_ids).clone();
+                    favorite_ids.remove(&id);
+                    self.favorite_ids = Arc::new(favorite_ids);
                     // Mark that we're in a delete operation to preserve scroll position
                     self.deleting_record = true;
+                }
+            }
+        });
+    }
+
+    /// Toggle favorite state of a record.
+    pub fn toggle_record_favorite(&mut self, id: u64, cx: &Context<Self>) {
+        GlobalRepository::read(cx, |repo| {
+            let Some(repo) = repo else {
+                return;
+            };
+            match repo.toggle_favorite(id) {
+                Ok(is_favorite) => {
+                    let mut favorite_ids = (*self.favorite_ids).clone();
+                    if is_favorite {
+                        favorite_ids.insert(id);
+                    } else {
+                        favorite_ids.remove(&id);
+                    }
+                    self.favorite_ids = Arc::new(favorite_ids);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to toggle favorite on clipboard record");
                 }
             }
         });
@@ -405,13 +446,17 @@ impl RopyBoard {
     }
 
     /// Get filtered records based on search query and content type filter
-    fn get_filtered_records(&self, query: &str) -> Vec<ClipboardRecord> {
-        let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-
-        let filtered =
-            filter_records_by_query(&records, query, self.content_filter, self.search_options);
-
-        drop(records); // Release the lock early
+    fn get_filtered_records(&self, query: &str, _cx: &Context<Self>) -> Vec<ClipboardRecord> {
+        let filtered = {
+            let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+            filter_records_by_query(
+                &records,
+                query,
+                self.content_filter,
+                self.search_options,
+                &self.favorite_ids,
+            )
+        };
 
         let mut sorted_records = filtered;
         ClipboardRepository::sort_pinned_first(&mut sorted_records);
@@ -475,7 +520,7 @@ impl Render for RopyBoard {
         } else {
             // Render main clipboard view
             let query = self.search_input.read(cx).value().to_string();
-            let new_filtered_records = self.get_filtered_records(&query);
+            let new_filtered_records = self.get_filtered_records(&query, cx);
 
             if new_filtered_records != *self.filtered_records {
                 let old_len = self.filtered_records.len();

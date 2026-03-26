@@ -19,6 +19,7 @@ pub struct ClipboardRepository {
     db: Db,
     records: sled::Tree,
     time_index: TimeIndex,
+    favorites: sled::Tree,
     images_dir: PathBuf,
 }
 
@@ -47,12 +48,18 @@ impl ClipboardRepository {
             db.open_tree("time_index")
                 .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?,
         );
+        let favorites = db
+            .open_tree("favorites")
+            .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
 
         if Self::needs_schema_migration(&meta)? {
             records
                 .clear()
                 .map_err(|e| RepositoryError::Delete(e.to_string()))?;
             time_index.clear()?;
+            favorites
+                .clear()
+                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
             if images_dir.exists() {
                 fs::remove_dir_all(&images_dir).ok();
             }
@@ -66,6 +73,7 @@ impl ClipboardRepository {
             db,
             records,
             time_index,
+            favorites,
             images_dir,
         })
     }
@@ -218,6 +226,81 @@ impl ClipboardRepository {
 }
 
 impl ClipboardRepository {
+    /// Return all favorite record IDs.
+    pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
+        let mut ids = Vec::new();
+
+        for entry in &self.favorites {
+            let (key, _) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
+            let Some(id) = Self::decode_u64_key(&key) else {
+                continue;
+            };
+            ids.push(id);
+        }
+
+        ids.sort_unstable();
+        Ok(ids)
+    }
+
+    /// Return whether a record is currently favorited.
+    pub fn is_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
+        self.favorites
+            .get(id.to_be_bytes())
+            .map(|value| value.is_some())
+            .map_err(|e| RepositoryError::Query(e.to_string()))
+    }
+
+    /// Toggle the favorite state of a record.
+    ///
+    /// Returns the new favorite state after the operation.
+    pub fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
+        if self.get_by_id(id)?.is_none() {
+            return Err(RepositoryError::Query("record not found".to_string()));
+        }
+
+        let key = id.to_be_bytes();
+        if self
+            .favorites
+            .get(key)
+            .map_err(|e| RepositoryError::Query(e.to_string()))?
+            .is_some()
+        {
+            self.favorites
+                .remove(key)
+                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+            return Ok(false);
+        }
+
+        let favorited_at = Local::now().timestamp_millis().to_be_bytes();
+        self.favorites
+            .insert(key, favorited_at.as_slice())
+            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+        Ok(true)
+    }
+
+    /// Get all favorite records ordered by favorited time descending.
+    #[allow(dead_code)]
+    pub fn get_favorites(&self) -> Result<Vec<ClipboardRecord>, RepositoryError> {
+        let mut favorites = Vec::new();
+
+        for entry in &self.favorites {
+            let (key, value) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
+            let Some(id) = Self::decode_u64_key(&key) else {
+                continue;
+            };
+            let Some(favorited_at) = Self::decode_i64_value(&value) else {
+                continue;
+            };
+            favorites.push((favorited_at, id));
+        }
+
+        favorites.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+        let ids = favorites.into_iter().map(|(_, id)| id).collect::<Vec<_>>();
+        Ok(self.load_records(&ids))
+    }
+}
+
+impl ClipboardRepository {
     /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
@@ -251,6 +334,7 @@ impl ClipboardRepository {
             .records
             .remove(key)
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.remove_favorite(id)?;
 
         if let Some(rec) = record {
             self.time_index
@@ -265,6 +349,9 @@ impl ClipboardRepository {
             .clear()
             .map_err(|e| RepositoryError::Delete(e.to_string()))?;
         self.time_index.clear()?;
+        self.favorites
+            .clear()
+            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
         if self.images_dir.exists() {
             fs::remove_dir_all(&self.images_dir).ok();
         }
@@ -280,10 +367,17 @@ impl ClipboardRepository {
             return Ok(0);
         }
 
-        let candidates = self.time_index.oldest_unpinned(total - keep_count)?;
+        let candidates = self.time_index.oldest_unpinned(total)?;
         let mut removed = 0;
 
         for (ti_key, id) in candidates {
+            if total.saturating_sub(removed) <= keep_count {
+                break;
+            }
+            if self.is_favorite(id)? {
+                continue;
+            }
+
             let rec_key = id.to_be_bytes();
             // Delete associated image files if this is an image record
             if let Some(value) = self.get_raw(&rec_key)?
@@ -351,6 +445,24 @@ impl ClipboardRepository {
         let _ = fs::remove_file(path);
         let thumb_path = path.replace(".png", "_thumb.png");
         let _ = fs::remove_file(thumb_path);
+    }
+
+    fn remove_favorite(&self, id: u64) -> Result<(), RepositoryError> {
+        self.favorites
+            .remove(id.to_be_bytes())
+            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        Ok(())
+    }
+
+    fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
+        let key: [u8; 8] = bytes.try_into().ok()?;
+        Some(u64::from_be_bytes(key))
+    }
+
+    #[allow(dead_code)]
+    fn decode_i64_value(bytes: &[u8]) -> Option<i64> {
+        let value: [u8; 8] = bytes.try_into().ok()?;
+        Some(i64::from_be_bytes(value))
     }
 }
 
@@ -671,6 +783,136 @@ mod tests {
         assert_eq!(removed, 1);
         // Total count = 3 (all pinned), which is above keep_count
         assert_eq!(repo.count(), 3);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_favorite_toggle_record_updates_membership() {
+        let repo = create_test_repo();
+        let record = repo
+            .save_text("Favorite me".to_string())
+            .expect("Failed to save");
+
+        assert!(
+            !repo
+                .is_favorite(record.id)
+                .expect("Failed to query favorite")
+        );
+
+        let is_favorite = repo
+            .toggle_favorite(record.id)
+            .expect("Failed to add favorite");
+        assert!(is_favorite);
+        assert!(
+            repo.is_favorite(record.id)
+                .expect("Failed to query favorite")
+        );
+
+        let favorite_ids = repo.favorite_ids().expect("Failed to load favorite ids");
+        assert_eq!(favorite_ids, vec![record.id]);
+
+        let is_favorite = repo
+            .toggle_favorite(record.id)
+            .expect("Failed to remove favorite");
+        assert!(!is_favorite);
+        assert!(
+            !repo
+                .is_favorite(record.id)
+                .expect("Failed to query favorite")
+        );
+        assert!(
+            repo.get_favorites()
+                .expect("Failed to load favorites")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_favorite_get_favorites_returns_records_by_favorited_time() {
+        let repo = create_test_repo();
+
+        let first = repo.save_text("First".to_string()).expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let second = repo
+            .save_text("Second".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let third = repo.save_text("Third".to_string()).expect("Failed to save");
+
+        repo.toggle_favorite(second.id)
+            .expect("Failed to favorite second");
+        thread::sleep(Duration::from_millis(10));
+        repo.toggle_favorite(first.id)
+            .expect("Failed to favorite first");
+        thread::sleep(Duration::from_millis(10));
+        repo.toggle_favorite(third.id)
+            .expect("Failed to favorite third");
+
+        let favorites = repo.get_favorites().expect("Failed to load favorites");
+        let favorite_contents: Vec<_> = favorites
+            .iter()
+            .map(|record| record.content.as_str())
+            .collect();
+
+        assert_eq!(favorite_contents, vec!["Third", "First", "Second"]);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_cleanup_old_records_favorited_record_keeps_record() {
+        let repo = create_test_repo();
+
+        let favorite = repo
+            .save_text("Old favorite".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        for index in 2..=6 {
+            repo.save_text(format!("Record {index}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        repo.toggle_favorite(favorite.id)
+            .expect("Failed to favorite record");
+
+        let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
+        assert_eq!(removed, 3);
+        assert_eq!(repo.count(), 3);
+        assert!(
+            repo.get_by_id(favorite.id)
+                .expect("Failed to get by id")
+                .is_some()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_delete_favorite_record_removes_membership() {
+        let repo = create_test_repo();
+        let record = repo
+            .save_text("Favorite delete".to_string())
+            .expect("Failed to save");
+
+        repo.toggle_favorite(record.id)
+            .expect("Failed to favorite record");
+        assert!(
+            repo.is_favorite(record.id)
+                .expect("Failed to query favorite")
+        );
+
+        let deleted = repo.delete(record.id).expect("Failed to delete");
+        assert!(deleted);
+        assert!(
+            !repo
+                .is_favorite(record.id)
+                .expect("Failed to query favorite")
+        );
+        assert!(
+            repo.favorite_ids()
+                .expect("Failed to load favorite ids")
+                .is_empty()
+        );
     }
 
     // ── Boundary and Edge Case Tests ──────────────────────────────

@@ -2,10 +2,7 @@ use std::{path::PathBuf, sync::OnceLock};
 
 use gpui::{
     AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img, list,
-    prelude::{
-        FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
-        Styled,
-    },
+    prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
 use gpui_component::{
@@ -152,9 +149,11 @@ impl ItemStyle {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 struct RenderContext<'a> {
     index: usize,
     record: &'a ClipboardRecord,
+    is_favorite: bool,
     is_selected: bool,
     show_preview: bool,
     hover_preview_enabled: bool,
@@ -206,9 +205,6 @@ fn render_record_meta(index: usize, record: &ClipboardRecord, cx: &App) -> gpui:
         .items_center()
         .gap_1()
         .mt_1()
-        .when(record.pinned, |el: gpui::Div| {
-            el.child(div().text_xs().child("📌"))
-        })
         .child(
             div()
                 .text_xs()
@@ -230,46 +226,72 @@ fn render_record_meta(index: usize, record: &ClipboardRecord, cx: &App) -> gpui:
 fn render_record_actions(
     index: usize,
     record_id: u64,
+    is_favorite: bool,
     is_pinned: bool,
+    view_favorite: gpui::WeakEntity<RopyBoard>,
     view_pin: gpui::WeakEntity<RopyBoard>,
     view_delete: gpui::WeakEntity<RopyBoard>,
 ) -> gpui::Div {
-    h_flex().gap_1().child(
-        v_flex()
-            .gap_1()
-            .items_center()
-            .child({
-                let button = if is_pinned {
-                    Button::new(("pin-btn", index)).xsmall().primary()
-                } else {
-                    Button::new(("pin-btn", index)).xsmall().ghost()
-                };
-                button
-                    .icon(Icon::empty().path("icon/record-pin.svg"))
-                    .on_click(move |_event, _window, cx| {
-                        view_pin
+    v_flex()
+        .items_end()
+        .gap(px(2.0))
+        .child(
+            h_flex()
+                .gap(px(2.0))
+                .items_center()
+                .child({
+                    let button = if is_favorite {
+                        Button::new(("favorite-btn", index))
+                            .xsmall()
+                            .primary()
+                            .label("★")
+                    } else {
+                        Button::new(("favorite-btn", index))
+                            .xsmall()
+                            .ghost()
+                            .label("☆")
+                    };
+                    button.on_click(move |_event, _window, cx| {
+                        view_favorite
                             .update(cx, |this, cx| {
-                                this.toggle_record_pin(record_id, cx);
+                                this.toggle_record_favorite(record_id, cx);
                                 cx.notify();
                             })
                             .ok();
                     })
-            })
-            .child(
-                Button::new(("delete-btn", index))
-                    .xsmall()
-                    .ghost()
-                    .label("×")
-                    .on_click(move |_event, _window, cx| {
-                        view_delete
-                            .update(cx, |this, cx| {
-                                this.delete_record(record_id, cx);
-                                cx.notify();
-                            })
-                            .ok();
-                    }),
-            ),
-    )
+                })
+                .child({
+                    let button = if is_pinned {
+                        Button::new(("pin-btn", index)).xsmall().primary()
+                    } else {
+                        Button::new(("pin-btn", index)).xsmall().ghost()
+                    };
+                    button
+                        .icon(Icon::empty().path("icon/record-pin.svg"))
+                        .on_click(move |_event, _window, cx| {
+                            view_pin
+                                .update(cx, |this, cx| {
+                                    this.toggle_record_pin(record_id, cx);
+                                    cx.notify();
+                                })
+                                .ok();
+                        })
+                }),
+        )
+        .child(
+            Button::new(("delete-btn", index))
+                .xsmall()
+                .ghost()
+                .label("×")
+                .on_click(move |_event, _window, cx| {
+                    view_delete
+                        .update(cx, |this, cx| {
+                            this.delete_record(record_id, cx);
+                            cx.notify();
+                        })
+                        .ok();
+                }),
+        )
 }
 
 fn render_selected_preview(
@@ -291,6 +313,7 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
     let preview_data = PreviewData::new(ctx.record);
     let styles = ItemStyle::from_app(cx);
     let view_click = ctx.view.clone();
+    let view_favorite = ctx.view.clone();
     let view_pin = ctx.view.clone();
     let view_delete = ctx.view.clone();
     let record_id = ctx.record.id;
@@ -329,7 +352,9 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
                     .child(render_record_actions(
                         ctx.index,
                         record_id,
+                        ctx.is_favorite,
                         ctx.record.pinned,
+                        view_favorite,
                         view_pin,
                         view_delete,
                     )),
@@ -346,6 +371,7 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
 impl RopyBoard {
     pub fn render_records_list(&self, context: &Context<'_, Self>) -> impl IntoElement {
         let records = self.filtered_records.clone();
+        let favorite_ids = self.favorite_ids.clone();
         let list_state = self.list_state.clone();
         let scrollbar_state = list_state.clone();
         let selected_index = self.selected_index;
@@ -363,6 +389,7 @@ impl RopyBoard {
                         &RenderContext {
                             index,
                             record: &records[index],
+                            is_favorite: favorite_ids.contains(&records[index].id),
                             is_selected: index == selected_index,
                             show_preview,
                             hover_preview_enabled,

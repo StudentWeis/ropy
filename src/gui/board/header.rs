@@ -41,11 +41,13 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
 
     header
         .child(
-            gpui::div()
-                .text_lg()
-                .text_color(cx.theme().foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(APP_NAME),
+            h_flex().items_center().gap_2().child(
+                gpui::div()
+                    .text_lg()
+                    .text_color(cx.theme().foreground)
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .child(APP_NAME),
+            ),
         )
         .child(
             h_flex()

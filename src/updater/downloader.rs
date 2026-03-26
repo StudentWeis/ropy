@@ -175,10 +175,7 @@ fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateEr
         .unwrap_or("")
         .to_lowercase();
 
-    let mut hasher = Sha256::new();
-    let mut file = std::fs::File::open(asset_path)?;
-    std::io::copy(&mut file, &mut hasher)?;
-    let actual_hex = hex::encode(hasher.finalize());
+    let actual_hex = compute_sha256_hex(asset_path)?;
 
     if actual_hex != expected_hex {
         return Err(UpdateError::ChecksumMismatch {
@@ -187,6 +184,22 @@ fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateEr
         });
     }
     Ok(())
+}
+
+fn compute_sha256_hex(asset_path: &Path) -> Result<String, UpdateError> {
+    let mut hasher = Sha256::new();
+    let mut file = std::fs::File::open(asset_path)?;
+    let mut buffer = [0_u8; 8 * 1024];
+
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// Extract the `ropy` (or `ropy.exe`) binary from the archive and return its
@@ -324,6 +337,21 @@ mod tests {
 
         let result = find_binary_in_dir(tmp.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_compute_sha256_hex_reads_file_content_expected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let asset_path = tmp.path().join("asset.bin");
+        std::fs::write(&asset_path, b"ropy checksum fixture").unwrap();
+
+        let actual = compute_sha256_hex(&asset_path).unwrap();
+
+        assert_eq!(
+            actual,
+            "e480cb6fb62b8a6be76827b9e23059e7e82730289a575088f2ce14956806b865"
+        );
     }
 
     #[test]

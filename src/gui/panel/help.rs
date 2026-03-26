@@ -47,6 +47,10 @@ const SHORTCUTS: &[ShortcutRow] = &[
         label_key: "help_delete",
     },
     ShortcutRow {
+        key: "F",
+        label_key: "help_favorite",
+    },
+    ShortcutRow {
         key: "P",
         label_key: "help_pin",
     },

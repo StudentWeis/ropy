@@ -3,7 +3,9 @@ use std::{
     time::Duration,
 };
 
-use gpui::{App, AppContext, BackgroundExecutor, WindowHandle};
+#[cfg(target_os = "linux")]
+use gpui::AppContext;
+use gpui::{App, BackgroundExecutor, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -168,7 +170,7 @@ pub fn start_tray_handler_inner(
 /// Send the active action to the main window
 pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
     window_handle
-        .update(cx, |_, window, cx| {
+        .update(cx, |_, window: &mut gpui::Window, cx| {
             window.dispatch_action(Box::new(crate::gui::board::Active), cx);
         })
         .ok();

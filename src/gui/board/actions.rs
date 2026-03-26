@@ -177,6 +177,12 @@ impl RopyBoard {
             "d" => {
                 self.on_delete_record(&DeleteRecord, window, cx);
             }
+            "f" => {
+                if let Some(record) = self.filtered_records.get(self.selected_index) {
+                    self.toggle_record_favorite(record.id, cx);
+                    cx.notify();
+                }
+            }
             "1" => {
                 self.confirm_record(window, cx, 0);
             }

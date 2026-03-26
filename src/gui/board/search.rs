@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use gpui::{
     Context, div,
@@ -28,6 +28,8 @@ pub enum ContentFilter {
     Text,
     /// Show only image records
     Image,
+    /// Show only favorited records
+    Favorites,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,6 +86,7 @@ pub(super) fn filter_records_by_query(
     query: &str,
     filter: ContentFilter,
     options: SearchOptions,
+    favorite_ids: &HashSet<u64>,
 ) -> Vec<ClipboardRecord> {
     records
         .iter()
@@ -93,18 +96,19 @@ pub(super) fn filter_records_by_query(
                 ContentFilter::All => true,
                 ContentFilter::Text => record.content_type == ContentType::Text,
                 ContentFilter::Image => record.content_type == ContentType::Image,
+                ContentFilter::Favorites => favorite_ids.contains(&record.id),
             };
 
             if !passes_type_filter {
                 return false;
             }
 
-            // Image filter: ignore query entirely (images cannot be text-searched)
+            // Image-only filter: ignore query entirely (images cannot be text-searched)
             if filter == ContentFilter::Image {
                 return true;
             }
 
-            // Text/All filter: apply text search on text records
+            // Text/All/Favorites filter: apply text search on text records
             if query.is_empty() {
                 return true;
             }
@@ -182,8 +186,10 @@ pub(super) fn render_search_input(
 ) -> impl IntoElement {
     let is_text_active = board.content_filter == ContentFilter::Text;
     let is_image_active = board.content_filter == ContentFilter::Image;
+    let is_favorites_active = board.content_filter == ContentFilter::Favorites;
     let text_filter_tooltip = I18n::translate(cx, "filter_text");
     let image_filter_tooltip = I18n::translate(cx, "filter_image");
+    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
 
     let text_button = if is_text_active {
         Button::new("filter-text-btn").primary()
@@ -195,6 +201,12 @@ pub(super) fn render_search_input(
         Button::new("filter-image-btn").primary()
     } else {
         Button::new("filter-image-btn").ghost()
+    };
+
+    let favorites_button = if is_favorites_active {
+        Button::new("filter-favorites-btn").primary()
+    } else {
+        Button::new("filter-favorites-btn").ghost()
     };
 
     h_flex()
@@ -230,24 +242,46 @@ pub(super) fn render_search_input(
                 ),
         )
         .child(
-            text_button
-                .icon(Icon::empty().path("icon/filter-text.svg"))
-                .tooltip(text_filter_tooltip)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.toggle_content_filter(ContentFilter::Text);
-                    cx.notify();
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-        )
-        .child(
-            image_button
-                .icon(Icon::empty().path("icon/filter-image.svg"))
-                .tooltip(image_filter_tooltip)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.toggle_content_filter(ContentFilter::Image);
-                    cx.notify();
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            h_flex()
+                .items_center()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded(px(16.0))
+                .p(px(2.0))
+                .gap(px(1.0))
+                .child(
+                    text_button
+                        .icon(Icon::empty().path("icon/filter-text.svg"))
+                        .tooltip(text_filter_tooltip)
+                        .rounded(px(14.0))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_content_filter(ContentFilter::Text);
+                            cx.notify();
+                        }))
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                )
+                .child(
+                    image_button
+                        .icon(Icon::empty().path("icon/filter-image.svg"))
+                        .tooltip(image_filter_tooltip)
+                        .rounded(px(14.0))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_content_filter(ContentFilter::Image);
+                            cx.notify();
+                        }))
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                )
+                .child(
+                    favorites_button
+                        .icon(Icon::empty().path("icon/filter-star.svg"))
+                        .tooltip(favorites_filter_tooltip)
+                        .rounded(px(14.0))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_content_filter(ContentFilter::Favorites);
+                            cx.notify();
+                        }))
+                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                ),
         )
 }
 
@@ -255,6 +289,10 @@ pub(super) fn render_search_input(
 mod tests {
     use super::*;
     use crate::repository::{ClipboardRecord, models::ContentType};
+
+    fn empty_favorites() -> HashSet<u64> {
+        HashSet::new()
+    }
 
     /// Helper: build a mixed set of test records (2 text + 1 image)
     fn mixed_records() -> Vec<ClipboardRecord> {
@@ -288,8 +326,13 @@ mod tests {
     #[test]
     fn test_filter_all_no_query_returns_everything() {
         let records = mixed_records();
-        let result =
-            filter_records_by_query(&records, "", ContentFilter::All, SearchOptions::default());
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::All,
+            SearchOptions::default(),
+            &empty_favorites(),
+        );
         assert_eq!(result.len(), 3);
     }
 
@@ -301,6 +344,7 @@ mod tests {
             "world",
             ContentFilter::All,
             SearchOptions::default(),
+            &empty_favorites(),
         );
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].content, "Hello World");
@@ -331,6 +375,7 @@ mod tests {
             "hello",
             ContentFilter::All,
             SearchOptions::default(),
+            &empty_favorites(),
         );
         assert_eq!(result.len(), 2);
     }
@@ -362,6 +407,7 @@ mod tests {
                 case_sensitive: true,
                 whole_word: false,
             },
+            &empty_favorites(),
         );
 
         assert_eq!(result.len(), 1);
@@ -402,6 +448,7 @@ mod tests {
                 case_sensitive: false,
                 whole_word: true,
             },
+            &empty_favorites(),
         );
 
         assert_eq!(result.len(), 2);
@@ -434,6 +481,7 @@ mod tests {
                 case_sensitive: true,
                 whole_word: true,
             },
+            &empty_favorites(),
         );
 
         assert_eq!(result.len(), 1);
@@ -458,6 +506,7 @@ mod tests {
                 case_sensitive: false,
                 whole_word: true,
             },
+            &empty_favorites(),
         );
 
         assert!(result.is_empty());
@@ -478,6 +527,7 @@ mod tests {
             "xyz",
             ContentFilter::All,
             SearchOptions::default(),
+            &empty_favorites(),
         );
         assert_eq!(result.len(), 0);
     }
@@ -497,6 +547,7 @@ mod tests {
             "image",
             ContentFilter::All,
             SearchOptions::default(),
+            &empty_favorites(),
         );
         assert_eq!(result.len(), 0);
     }
@@ -506,8 +557,13 @@ mod tests {
     #[test]
     fn test_filter_text_no_query_returns_text_only() {
         let records = mixed_records();
-        let result =
-            filter_records_by_query(&records, "", ContentFilter::Text, SearchOptions::default());
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Text,
+            SearchOptions::default(),
+            &empty_favorites(),
+        );
         assert_eq!(result.len(), 2);
         assert!(result.iter().all(|r| r.content_type == ContentType::Text));
     }
@@ -520,6 +576,7 @@ mod tests {
             "hello",
             ContentFilter::Text,
             SearchOptions::default(),
+            &empty_favorites(),
         );
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "Hello World");
@@ -530,8 +587,13 @@ mod tests {
     #[test]
     fn test_filter_image_no_query_returns_images_only() {
         let records = mixed_records();
-        let result =
-            filter_records_by_query(&records, "", ContentFilter::Image, SearchOptions::default());
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Image,
+            SearchOptions::default(),
+            &empty_favorites(),
+        );
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content_type, ContentType::Image);
     }
@@ -539,6 +601,7 @@ mod tests {
     #[test]
     fn test_filter_image_with_query_ignores_query_for_all_search_modes() {
         let records = mixed_records();
+        let no_favorites = empty_favorites();
         for options in [
             SearchOptions::default(),
             SearchOptions {
@@ -546,10 +609,61 @@ mod tests {
                 whole_word: true,
             },
         ] {
-            let result =
-                filter_records_by_query(&records, "nonexistent", ContentFilter::Image, options);
+            let result = filter_records_by_query(
+                &records,
+                "nonexistent",
+                ContentFilter::Image,
+                options,
+                &no_favorites,
+            );
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].content_type, ContentType::Image);
         }
+    }
+
+    // --- ContentFilter::Favorites tests ---
+
+    #[test]
+    fn test_filter_favorites_no_query_returns_favorited_only() {
+        let records = mixed_records();
+        let favorites: HashSet<u64> = [1, 3].into_iter().collect();
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Favorites,
+            SearchOptions::default(),
+            &favorites,
+        );
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].id, 1);
+        assert_eq!(result[1].id, 3);
+    }
+
+    #[test]
+    fn test_filter_favorites_with_query_searches_text_favorites() {
+        let records = mixed_records();
+        let favorites: HashSet<u64> = [1, 2].into_iter().collect();
+        let result = filter_records_by_query(
+            &records,
+            "hello",
+            ContentFilter::Favorites,
+            SearchOptions::default(),
+            &favorites,
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "Hello World");
+    }
+
+    #[test]
+    fn test_filter_favorites_empty_set_returns_nothing() {
+        let records = mixed_records();
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Favorites,
+            SearchOptions::default(),
+            &empty_favorites(),
+        );
+        assert!(result.is_empty());
     }
 }
