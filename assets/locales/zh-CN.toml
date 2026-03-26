@@ -57,8 +57,6 @@ settings_confirm_mode_paste = "立即粘贴"
 settings_hover_preview = "悬停预览"
 settings_open_log = "打开日志目录"
 settings_open_config = "打开配置目录"
-on = "开启"
-off = "关闭"
 
 # 关于
 about_title = "关于"

@@ -10,6 +10,7 @@ use gpui_component::{
     h_flex,
     input::Input,
     select::Select,
+    switch::Switch,
     v_flex,
 };
 
@@ -375,13 +376,12 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 }
 
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let mut btn = Button::new("autostart-toggle").small();
-    btn = if board.autostart_enabled {
-        btn.primary().label(I18n::translate(cx, "on"))
-    } else {
-        btn.ghost().label(I18n::translate(cx, "off"))
-    };
-    let toggle = btn.on_click(cx.listener(|board, _, _, cx| board.toggle_autostart(cx)));
+    let entity = cx.entity();
+    let toggle = Switch::new("autostart-toggle")
+        .checked(board.autostart_enabled)
+        .on_click(move |_, _window, cx| {
+            entity.update(cx, super::super::board::RopyBoard::toggle_autostart);
+        });
     settings_row(I18n::translate(cx, "settings_autostart"), toggle, cx)
 }
 
@@ -429,16 +429,15 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
 }
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let mut btn = Button::new("hover-preview-toggle").small();
-    btn = if board.hover_preview_enabled {
-        btn.primary().label(I18n::translate(cx, "on"))
-    } else {
-        btn.ghost().label(I18n::translate(cx, "off"))
-    };
-    let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
-        board.hover_preview_enabled = !board.hover_preview_enabled;
-        cx.notify();
-    }));
+    let entity = cx.entity();
+    let toggle = Switch::new("hover-preview-toggle")
+        .checked(board.hover_preview_enabled)
+        .on_click(move |_, _window, cx| {
+            entity.update(cx, |board, cx| {
+                board.hover_preview_enabled = !board.hover_preview_enabled;
+                cx.notify();
+            });
+        });
     settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
 }
 
@@ -487,16 +486,15 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let mut btn = Button::new("auto-check-toggle").small();
-    btn = if board.auto_check_enabled {
-        btn.primary().label(I18n::translate(cx, "on"))
-    } else {
-        btn.ghost().label(I18n::translate(cx, "off"))
-    };
-    let toggle = btn.on_click(cx.listener(|board, _, _, cx| {
-        board.auto_check_enabled = !board.auto_check_enabled;
-        cx.notify();
-    }));
+    let entity = cx.entity();
+    let toggle = Switch::new("auto-check-toggle")
+        .checked(board.auto_check_enabled)
+        .on_click(move |_, _window, cx| {
+            entity.update(cx, |board, cx| {
+                board.auto_check_enabled = !board.auto_check_enabled;
+                cx.notify();
+            });
+        });
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
 

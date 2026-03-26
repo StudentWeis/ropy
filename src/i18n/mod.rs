@@ -124,14 +124,10 @@ mod tests {
         let content = r#"
             show = "Show"
             quit = "Quit"
-            on = "ON"
-            off = "OFF"
         "#;
         let translations = Translations::from_toml(content).unwrap();
         assert_eq!(translations.get("show"), "Show");
         assert_eq!(translations.get("quit"), "Quit");
-        assert_eq!(translations.get("on"), "ON");
-        assert_eq!(translations.get("off"), "OFF");
     }
 
     #[test]
@@ -142,7 +138,6 @@ mod tests {
         "#;
         let translations = Translations::from_toml(content).unwrap();
         assert_eq!(translations.get("missing_key"), "[Missing: missing_key]");
-        assert_eq!(translations.get("on"), "[Missing: on]");
     }
 
     #[test]

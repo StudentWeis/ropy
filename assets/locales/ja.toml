@@ -58,8 +58,6 @@ settings_confirm_mode_paste = "すぐ貼り付け"
 settings_hover_preview = "ホバー プレビュー"
 settings_open_log = "ログディレクトリを開く"
 settings_open_config = "設定ディレクトリを開く"
-on = "オン"
-off = "オフ"
 
 # About
 about_title = "について"
