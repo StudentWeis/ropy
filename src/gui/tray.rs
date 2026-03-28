@@ -17,6 +17,7 @@ use crate::{constants::APP_NAME, i18n::I18n};
 /// Fixed menu IDs so event handlers remain valid after menu rebuilds.
 const TRAY_SHOW_ID: &str = "tray_show";
 const TRAY_QUIT_ID: &str = "tray_quit";
+const TRAY_ICON_SIZE: u32 = 32;
 
 /// Build a tray menu with translated labels.
 pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
@@ -51,11 +52,32 @@ pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std:
 /// Create a simple icon for the tray
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
     let asset = super::app::Assets::get("logo.png").ok_or("Failed to find embedded logo.png")?;
-    let img = image::load_from_memory(&asset.data)?;
-    let rgba = img.to_rgba8().into_raw();
-    let width = img.width();
-    let height = img.height();
+    let (rgba, width, height) = load_tray_icon_rgba(&asset.data)?;
     Icon::from_rgba(rgba, width, height).map_err(|e| format!("Failed to create icon: {e:?}").into())
+}
+
+fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::ImageError> {
+    let img = image::load_from_memory(bytes)?;
+    let resized = img
+        .resize(
+            TRAY_ICON_SIZE,
+            TRAY_ICON_SIZE,
+            image::imageops::FilterType::Lanczos3,
+        )
+        .to_rgba8();
+
+    if resized.width() == TRAY_ICON_SIZE && resized.height() == TRAY_ICON_SIZE {
+        return Ok((resized.into_raw(), TRAY_ICON_SIZE, TRAY_ICON_SIZE));
+    }
+
+    let width = resized.width();
+    let height = resized.height();
+    let mut canvas = image::RgbaImage::new(TRAY_ICON_SIZE, TRAY_ICON_SIZE);
+    let offset_x = i64::from((TRAY_ICON_SIZE - width) / 2);
+    let offset_y = i64::from((TRAY_ICON_SIZE - height) / 2);
+    image::imageops::overlay(&mut canvas, &resized, offset_x, offset_y);
+
+    Ok((canvas.into_raw(), TRAY_ICON_SIZE, TRAY_ICON_SIZE))
 }
 
 pub enum TrayEvent {
@@ -179,6 +201,24 @@ pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_load_tray_icon_rgba_resizes_to_fixed_square() {
+        let Some(asset) = crate::gui::app::Assets::get("logo.png") else {
+            panic!("embedded logo.png should exist");
+        };
+
+        let result = load_tray_icon_rgba(&asset.data);
+
+        assert!(result.is_ok());
+
+        let Ok((rgba, width, height)) = result else {
+            unreachable!();
+        };
+
+        assert_eq!((width, height), (TRAY_ICON_SIZE, TRAY_ICON_SIZE));
+        assert_eq!(rgba.len(), (width * height * 4) as usize);
+    }
 
     #[test]
     fn test_icon_creation() {
