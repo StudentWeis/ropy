@@ -89,6 +89,13 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 derive_partial_eq_without_eq = "allow"
 
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+incremental = false
+panic = "abort"
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"

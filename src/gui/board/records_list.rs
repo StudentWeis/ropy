@@ -369,8 +369,10 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
 }
 
 impl RopyBoard {
+    #[allow(clippy::significant_drop_tightening)]
     pub fn render_records_list(&self, context: &Context<'_, Self>) -> impl IntoElement {
-        let records = self.filtered_records.clone();
+        let filtered_record_indices = self.filtered_record_indices.clone();
+        let records = self.records.clone();
         let favorite_ids = self.favorite_ids.clone();
         let list_state = self.list_state.clone();
         let scrollbar_state = list_state.clone();
@@ -385,19 +387,31 @@ impl RopyBoard {
             .flex_1()
             .child(
                 list(list_state, move |index, window, cx| {
-                    render_list_item(
-                        &RenderContext {
-                            index,
-                            record: &records[index],
-                            is_favorite: favorite_ids.contains(&records[index].id),
-                            is_selected: index == selected_index,
-                            show_preview,
-                            hover_preview_enabled,
-                            view: &view,
-                        },
-                        window,
-                        cx,
-                    )
+                    let Some(record_index) = filtered_record_indices.get(index).copied() else {
+                        return div().into_any_element();
+                    };
+                    {
+                        let guard = records
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let Some(record) = guard.get(record_index) else {
+                            return div().into_any_element();
+                        };
+
+                        render_list_item(
+                            &RenderContext {
+                                index,
+                                record,
+                                is_favorite: favorite_ids.contains(&record.id),
+                                is_selected: index == selected_index,
+                                show_preview,
+                                hover_preview_enabled,
+                                view: &view,
+                            },
+                            window,
+                            cx,
+                        )
+                    }
                 })
                 .size_full(),
             )

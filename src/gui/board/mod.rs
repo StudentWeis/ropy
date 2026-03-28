@@ -42,7 +42,7 @@ use crate::{
         },
     },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
+    repository::{ClipboardRecord, GlobalRepository, models::ContentType},
     updater::models::UpdateStatus,
 };
 
@@ -50,7 +50,7 @@ use crate::{
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
     pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
-    pub(crate) filtered_records: Arc<Vec<ClipboardRecord>>, // The final shown records
+    pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) _focus_out_subscription: Subscription,
@@ -265,7 +265,7 @@ impl RopyBoard {
             selected_index: 0,
             last_copy,
             list_state,
-            filtered_records: Arc::new(Vec::new()),
+            filtered_record_indices: Arc::new(Vec::new()),
             favorite_ids,
             copy_tx,
             show_settings: false,
@@ -446,8 +446,8 @@ impl RopyBoard {
     }
 
     /// Get filtered records based on search query and content type filter
-    fn get_filtered_records(&self, query: &str, _cx: &Context<Self>) -> Vec<ClipboardRecord> {
-        let filtered = {
+    fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
+        let mut filtered_indices = {
             let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
             filter_records_by_query(
                 &records,
@@ -458,9 +458,40 @@ impl RopyBoard {
             )
         };
 
-        let mut sorted_records = filtered;
-        ClipboardRepository::sort_pinned_first(&mut sorted_records);
-        sorted_records
+        {
+            let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+            filtered_indices.sort_unstable_by(|left_index, right_index| {
+                let left = records.get(*left_index);
+                let right = records.get(*right_index);
+
+                match (left, right) {
+                    (Some(left), Some(right)) => match (left.pinned, right.pinned) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => right.created_at.cmp(&left.created_at),
+                    },
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => left_index.cmp(right_index),
+                }
+            });
+        }
+
+        filtered_indices
+    }
+
+    pub(crate) fn filtered_record_len(&self) -> usize {
+        self.filtered_record_indices.len()
+    }
+
+    pub(crate) fn filtered_record_index_at(&self, index: usize) -> Option<usize> {
+        self.filtered_record_indices.get(index).copied()
+    }
+
+    pub(crate) fn filtered_record_id_at(&self, index: usize) -> Option<u64> {
+        let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+        let record_index = self.filtered_record_index_at(index)?;
+        records.get(record_index).map(|record| record.id)
     }
 
     /// Confirm selection: copy record to clipboard and hide.
@@ -468,11 +499,21 @@ impl RopyBoard {
     /// repository layer handles deduplication via content hash upsert.
     pub(crate) fn confirm_record(&self, window: &mut Window, cx: &Context<Self>, index: usize) {
         let (content, content_type) = {
-            if let Some(record) = self.filtered_records.get(index) {
-                (record.content.clone(), record.content_type.clone())
-            } else {
+            let Some(record_index) = self.filtered_record_index_at(index) else {
                 return;
-            }
+            };
+            let record = {
+                let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                records.get(record_index).cloned()
+            };
+            let Some(record) = record else {
+                tracing::warn!(
+                    index = record_index,
+                    "failed to resolve filtered record from cache"
+                );
+                return;
+            };
+            (record.content, record.content_type)
         };
 
         if !self.write_content_to_clipboard(&content, &content_type) {
@@ -520,11 +561,11 @@ impl Render for RopyBoard {
         } else {
             // Render main clipboard view
             let query = self.search_input.read(cx).value().to_string();
-            let new_filtered_records = self.get_filtered_records(&query, cx);
+            let new_filtered_record_indices = self.get_filtered_record_indices(&query);
 
-            if new_filtered_records != *self.filtered_records {
-                let old_len = self.filtered_records.len();
-                let new_len = new_filtered_records.len();
+            if new_filtered_record_indices != *self.filtered_record_indices {
+                let old_len = self.filtered_record_indices.len();
+                let new_len = new_filtered_record_indices.len();
 
                 // If we're deleting a record, preserve the scroll position
                 let scroll_position = if self.deleting_record {
@@ -533,7 +574,7 @@ impl Render for RopyBoard {
                     None
                 };
 
-                self.filtered_records = Arc::new(new_filtered_records);
+                self.filtered_record_indices = Arc::new(new_filtered_record_indices);
 
                 // Use splice to inform list state about the change instead of reset
                 // This helps preserve scroll position better
@@ -555,11 +596,11 @@ impl Render for RopyBoard {
                 }
             }
 
-            if self.selected_index >= self.filtered_records.len()
-                && !self.filtered_records.is_empty()
+            if self.selected_index >= self.filtered_record_indices.len()
+                && !self.filtered_record_indices.is_empty()
             {
-                self.selected_index = self.filtered_records.len() - 1;
-            } else if self.filtered_records.is_empty() {
+                self.selected_index = self.filtered_record_indices.len() - 1;
+            } else if self.filtered_record_indices.is_empty() {
                 self.selected_index = 0;
             }
 

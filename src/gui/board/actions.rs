@@ -36,7 +36,7 @@ impl RopyBoard {
     }
 
     pub fn on_select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
-        let count = self.filtered_records.len();
+        let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
             self.list_state.scroll_to_reveal_item(self.selected_index);
@@ -59,12 +59,11 @@ impl RopyBoard {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(record) = self.filtered_records.get(self.selected_index) {
-            let id = record.id;
+        if let Some(id) = self.filtered_record_id_at(self.selected_index) {
             self.delete_record(id, cx);
             // Clamp selected_index after deletion
             if self.selected_index > 0
-                && self.selected_index >= self.filtered_records.len().saturating_sub(1)
+                && self.selected_index >= self.filtered_record_len().saturating_sub(1)
             {
                 self.selected_index -= 1;
             }
@@ -178,8 +177,8 @@ impl RopyBoard {
                 self.on_delete_record(&DeleteRecord, window, cx);
             }
             "f" => {
-                if let Some(record) = self.filtered_records.get(self.selected_index) {
-                    self.toggle_record_favorite(record.id, cx);
+                if let Some(id) = self.filtered_record_id_at(self.selected_index) {
+                    self.toggle_record_favorite(id, cx);
                     cx.notify();
                 }
             }

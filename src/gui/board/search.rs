@@ -87,10 +87,11 @@ pub(super) fn filter_records_by_query(
     filter: ContentFilter,
     options: SearchOptions,
     favorite_ids: &HashSet<u64>,
-) -> Vec<ClipboardRecord> {
+) -> Vec<usize> {
     records
         .iter()
-        .filter(|record| {
+        .enumerate()
+        .filter(|(_, record)| {
             // Apply content type filter
             let passes_type_filter = match filter {
                 ContentFilter::All => true,
@@ -116,7 +117,7 @@ pub(super) fn filter_records_by_query(
             record.content_type == ContentType::Text
                 && text_matches_query(&record.content, query, options)
         })
-        .cloned()
+        .map(|(index, _)| index)
         .collect()
 }
 
@@ -333,7 +334,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 3);
+        assert_eq!(result, vec![0, 1, 2]);
     }
 
     #[test]
@@ -346,9 +347,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].content, "Hello World");
-        assert_eq!(result[1].content, "Goodbye World");
+        assert_eq!(result, vec![0, 1]);
     }
 
     #[test]
@@ -377,7 +376,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 2);
+        assert_eq!(result, vec![0, 1]);
     }
 
     #[test]
@@ -410,8 +409,7 @@ mod tests {
             &empty_favorites(),
         );
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content, "Hello World");
+        assert_eq!(result, vec![0]);
     }
 
     #[test]
@@ -451,7 +449,7 @@ mod tests {
             &empty_favorites(),
         );
 
-        assert_eq!(result.len(), 2);
+        assert_eq!(result, vec![0, 1]);
     }
 
     #[test]
@@ -484,8 +482,7 @@ mod tests {
             &empty_favorites(),
         );
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content, "say Hello again");
+        assert_eq!(result, vec![0]);
     }
 
     #[test]
@@ -529,7 +526,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 0);
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -549,7 +546,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 0);
+        assert!(result.is_empty());
     }
 
     // --- ContentFilter::Text tests ---
@@ -564,8 +561,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 2);
-        assert!(result.iter().all(|r| r.content_type == ContentType::Text));
+        assert_eq!(result, vec![0, 1]);
     }
 
     #[test]
@@ -578,8 +574,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content, "Hello World");
+        assert_eq!(result, vec![0]);
     }
 
     // --- ContentFilter::Image tests ---
@@ -594,8 +589,7 @@ mod tests {
             SearchOptions::default(),
             &empty_favorites(),
         );
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content_type, ContentType::Image);
+        assert_eq!(result, vec![2]);
     }
 
     #[test]
@@ -616,8 +610,7 @@ mod tests {
                 options,
                 &no_favorites,
             );
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].content_type, ContentType::Image);
+            assert_eq!(result, vec![2]);
         }
     }
 
@@ -634,9 +627,7 @@ mod tests {
             SearchOptions::default(),
             &favorites,
         );
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].id, 1);
-        assert_eq!(result[1].id, 3);
+        assert_eq!(result, vec![0, 2]);
     }
 
     #[test]
@@ -650,8 +641,7 @@ mod tests {
             SearchOptions::default(),
             &favorites,
         );
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].content, "Hello World");
+        assert_eq!(result, vec![0]);
     }
 
     #[test]
