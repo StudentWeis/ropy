@@ -15,6 +15,16 @@ use crate::utils::content_hash;
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;
 
+/// Maximum page cache size for the sled database (16 MB).
+///
+/// sled defaults to 1 GB, which is far too large for a clipboard manager.
+/// 32 MB provides ample room for typical workloads while keeping the memory
+/// footprint reasonable.
+const DB_CACHE_CAPACITY: u64 = 8 * 1024 * 1024;
+
+/// Interval at which sled flushes dirty pages to disk (in milliseconds).
+const DB_FLUSH_INTERVAL_MS: u64 = 1000;
+
 pub struct ClipboardRepository {
     db: Db,
     records: sled::Tree,
@@ -36,7 +46,12 @@ impl ClipboardRepository {
 
     /// Initialize repository with explicit paths (used by tests).
     pub fn init(db_path: &PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
-        let db = sled::open(db_path).map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
+        let db = sled::Config::new()
+            .path(db_path)
+            .cache_capacity(DB_CACHE_CAPACITY)
+            .flush_every_ms(Some(DB_FLUSH_INTERVAL_MS))
+            .open()
+            .map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
 
         let meta = db
             .open_tree("meta")
