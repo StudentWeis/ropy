@@ -17,8 +17,8 @@ use std::{
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
 use gpui::{
-    AnyElement, App, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState,
-    ReadGlobal, Render, SharedString, Subscription, Window,
+    AnyElement, App, AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Render,
+    SharedString, Subscription, Window,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
 use gpui_component::{
@@ -91,8 +91,6 @@ pub struct RopyBoard {
     pub(crate) content_filter: ContentFilter,
     /// Active text search options
     pub(crate) search_options: SearchOptions,
-    /// System tray icon handle for menu updates on language change
-    pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
 }
 
 impl RopyBoard {
@@ -134,10 +132,6 @@ impl RopyBoard {
         self.hotkey_tx = Some(tx);
     }
 
-    pub fn set_tray_icon(&mut self, tray_icon: Option<tray_icon::TrayIcon>) {
-        self.tray_icon = tray_icon;
-    }
-
     fn load_favorite_ids(cx: &App) -> HashSet<u64> {
         GlobalRepository::read(cx, |repo| {
             repo.and_then(|repo| repo.favorite_ids().ok())
@@ -147,14 +141,8 @@ impl RopyBoard {
     }
 
     /// Rebuild the tray menu with current i18n translations.
-    pub(crate) fn update_tray_menu(&self, cx: &Context<Self>) {
-        if let Some(ref tray) = self.tray_icon {
-            let i18n = I18n::global(cx);
-            match crate::gui::tray::build_tray_menu(i18n) {
-                Ok(menu) => tray.set_menu(Some(Box::new(menu))),
-                Err(e) => tracing::warn!(error = %e, "failed to rebuild tray menu"),
-            }
-        }
+    pub(crate) fn update_tray_menu(cx: &Context<Self>) {
+        crate::gui::tray::TrayState::refresh_menu(cx);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -293,7 +281,6 @@ impl RopyBoard {
             show_clear_confirm: false,
             content_filter: ContentFilter::default(),
             search_options: SearchOptions::default(),
-            tray_icon: None,
         }
     }
 

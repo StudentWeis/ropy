@@ -5,7 +5,7 @@ use std::{
 
 #[cfg(target_os = "linux")]
 use gpui::AppContext;
-use gpui::{App, BackgroundExecutor, WindowHandle};
+use gpui::{App, BackgroundExecutor, BorrowAppContext, Global, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -18,6 +18,51 @@ use crate::{constants::APP_NAME, i18n::I18n};
 const TRAY_SHOW_ID: &str = "tray_show";
 const TRAY_QUIT_ID: &str = "tray_quit";
 const TRAY_ICON_SIZE: u32 = 32;
+
+#[derive(Default)]
+pub struct TrayState {
+    tray_icon: Option<TrayIcon>,
+}
+
+impl Global for TrayState {}
+
+impl TrayState {
+    pub fn register(cx: &mut App) {
+        cx.set_global(Self::default());
+    }
+
+    fn replace(&mut self, tray_icon: Option<TrayIcon>) {
+        self.tray_icon = tray_icon;
+    }
+
+    fn rebuild_menu(&self, i18n: &I18n) -> Result<bool, Box<dyn std::error::Error>> {
+        let Some(tray) = self.tray_icon.as_ref() else {
+            return Ok(false);
+        };
+
+        let menu = build_tray_menu(i18n)?;
+        tray.set_menu(Some(Box::new(menu)));
+        Ok(true)
+    }
+
+    /// Install the platform tray handle into the global state.
+    ///
+    /// On Linux, tray initialization happens on the GTK thread and the icon is
+    /// intentionally leaked there, so this remains `None` and menu refreshes are
+    /// a no-op.
+    pub fn install(cx: &mut App, tray_icon: Option<TrayIcon>) {
+        cx.update_global::<Self, _>(|state: &mut Self, _cx| {
+            state.replace(tray_icon);
+        });
+    }
+
+    pub fn refresh_menu(cx: &App) {
+        let i18n = I18n::global(cx);
+        if let Err(e) = Self::global(cx).rebuild_menu(i18n) {
+            tracing::warn!(error = %e, "failed to rebuild tray menu");
+        }
+    }
+}
 
 /// Build a tray menu with translated labels.
 pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
@@ -201,6 +246,24 @@ pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tray_state_default_has_no_icon() {
+        let tray_state = TrayState::default();
+
+        assert!(tray_state.tray_icon.is_none());
+    }
+
+    #[test]
+    fn test_tray_state_rebuild_menu_without_icon_is_noop() {
+        let tray_state = TrayState::default();
+        let i18n = I18n::default();
+
+        let result = tray_state.rebuild_menu(&i18n);
+
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(false));
+    }
 
     #[test]
     fn test_load_tray_icon_rgba_resizes_to_fixed_square() {

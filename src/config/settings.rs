@@ -9,7 +9,7 @@ use crate::i18n::Language;
 /// Default maximum number of records to display in the UI
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 /// Default maximum number of records to store in the repository
-const DEFAULT_MAX_STORAGE_RECORDS: usize = 1000;
+const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
 /// Default interval for update checks (in hours)
 const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS: u64 = 24;
 

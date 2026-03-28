@@ -221,6 +221,9 @@ pub fn launch() {
             // Register I18n as GPUI Global for app-wide access
             cx.set_global(I18n::load_i18n(settings.language.clone()));
 
+            // Register tray state as GPUI Global for app-wide access
+            crate::gui::tray::TrayState::register(cx);
+
             // Sync auto-start state on application launch
             sync_autostart_on_launch(settings.autostart.enabled);
 
@@ -246,8 +249,9 @@ pub fn launch() {
             start_clipboard_event_handler(clipboard_rx, shared_records, window_handle, cx);
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
-            // Initialize tray from the global I18n, then pass handles to the board.
+            // Initialize tray from the global I18n, then store the handle in global tray state.
             let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
+            crate::gui::tray::TrayState::install(cx, tray);
 
             let board_view = window_handle
                 .update(cx, |root, _, _cx| {
@@ -259,7 +263,6 @@ pub fn launch() {
             if let Some(board) = &board_view {
                 board.update(cx, |board, _| {
                     board.set_hotkey_tx(hotkey_tx);
-                    board.set_tray_icon(tray);
                 });
 
                 if settings.update.auto_check {

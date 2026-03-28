@@ -125,7 +125,7 @@ impl RopyBoard {
         });
 
         // Update tray menu with new language
-        self.update_tray_menu(cx);
+        Self::update_tray_menu(cx);
 
         // Update search placeholder with new language
         let search_placeholder = I18n::translate(cx, "search_placeholder");
