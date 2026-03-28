@@ -22,10 +22,14 @@
 
 ## Features
 
-- Native GUI application built with Zed's GPUI.
-- Cross-platform: Windows, macOS & Linux(X11).
-- Easy-to-use, lightweight and fast.
-- Search/Pin/Preview/Autostart/Shortcuts/Autoupdate/Record-Pin.
+- Native desktop application built with Zed's GPUI.
+- Cross-platform support for Windows, macOS, and Linux (X11).
+- Tracks text and image clipboard history with content-based deduplication.
+- Search the loaded history with case-sensitive and whole-word options.
+- Favorite and pin records; automatic cleanup preserves pinned and favorited items.
+- Preview text and images with a configurable hover delay.
+- Configurable global hotkey, theme, language, autostart, and confirm mode.
+- System tray integration plus in-app update check, download, and install flow.
 
 ## Installation
 
@@ -57,10 +61,11 @@ cargo build --release
 
 - Launch Ropy to start recording clipboard history.
 - Use the global hotkey or the tray icon to open the history window.
-- Click a record or press numeric keys (`1`-`5`) or `Enter` to paste.
-- Press `Space` to preview an entry without pasting.
-- Use the search bar to filter records by content.
-- Pin entries to keep them from being pruned when the history limit is reached.
+- Press `/` to focus search, then refine results with case-sensitive, whole-word, and type filters.
+- Use `Up`/`Down` or `J`/`K` to move through items, and `Enter` or `1`-`5` to confirm a selection.
+- Press `Space` to toggle preview, `F` to favorite the selected record, and `Delete` or `D` to remove it.
+- Use row actions to pin records so they are excluded from storage cleanup.
+- Choose between `copy_to_clipboard` and `paste_immediately` confirm modes in Settings.
 
 ## Limitations (Not planned)
 
