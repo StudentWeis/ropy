@@ -170,8 +170,9 @@ impl RopyBoard {
                 }
             });
 
-        // Measure all items initially so scrollbar thumb size is stable on first paint.
-        let list_state = ListState::new(0, ListAlignment::Top, gpui::px(100.)).measure_all();
+        // Render a bit beyond the viewport to reduce scroll-time pop-in while
+        // keeping GPUI's lazy list measurement behavior.
+        let list_state = ListState::new(0, ListAlignment::Top, gpui::px(160.));
 
         // Read initial values from GPUI Global settings
         let (
