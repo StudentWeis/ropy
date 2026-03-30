@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-03-30
+
+### 🚀 Features
+- Add favorite functionality and improve UI elements by @StudentWeis
+
+### 🐛 Bug Fixes
+- Fix panic with message: "Failed to get reply" ... by @eatradish
+
+### 🚜 Refactor
+- Adjust list state measurement to improve scroll performance by @StudentWeis
+- Add global tray state registration and adjust storage limit defaults by @StudentWeis
+- Reduce the logo.png file size and enhance tray icon loading functionality by @StudentWeis
+- Optimize record filtering and improve rendering logic by @StudentWeis
+- Reduce size of image thumbnail by @StudentWeis
+- Refuce sled memory cache and add memory profiling script by @StudentWeis
+- Improve settings panel rendering logic by @StudentWeis
+
+### 📚 Documentation
+- Update README and Architecture docs by @StudentWeis
+- Add doc of RTF support by @StudentWeis
+
 ## [0.3.6] - 2026-03-24
 
 ### 🚀 Features
