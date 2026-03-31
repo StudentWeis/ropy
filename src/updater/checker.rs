@@ -100,39 +100,11 @@ fn parse_version(tag: &str) -> Result<Version, UpdateError> {
 /// Uses an external `curl` subprocess to avoid macOS firewall / code-signing
 /// restrictions on raw sockets from unsigned `.app` bundles.
 fn http_get(url: &str) -> Result<String, UpdateError> {
-    let output = std::process::Command::new("curl")
-        .args([
-            "-sSL",
-            "--fail",
-            "-H",
-            &format!("User-Agent: ropy/{}", env!("CARGO_PKG_VERSION")),
-            "-H",
-            "Accept: application/vnd.github.v3+json",
-            "--connect-timeout",
-            "15",
-            "--max-time",
-            "30",
-            url,
-        ])
-        .output()
-        .map_err(|e| {
-            tracing::error!(url = %url, error = %e, "failed to launch curl");
-            UpdateError::Network(format!("failed to launch curl: {e}"))
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        tracing::error!(url = %url, status = %output.status, stderr = %stderr, "curl request failed");
-        return Err(UpdateError::Network(format!(
-            "HTTP request failed (exit {}): {stderr}",
-            output.status
-        )));
-    }
-
-    String::from_utf8(output.stdout).map_err(|e| {
-        tracing::error!(url = %url, error = %e, "response body is not valid UTF-8");
-        UpdateError::Network(format!("invalid UTF-8 in response: {e}"))
-    })
+    super::http::CurlCommandBuilder::new(url)
+        .header("Accept: application/vnd.github.v3+json")
+        .connect_timeout(15)
+        .max_time(30)
+        .execute_to_string()
 }
 
 #[cfg(test)]

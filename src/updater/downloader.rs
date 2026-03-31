@@ -74,20 +74,14 @@ fn download_file(
     total_size: u64,
     progress_tx: &async_channel::Sender<f32>,
 ) -> Result<(), UpdateError> {
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
 
-    let mut child = Command::new("curl")
-        .args([
-            "-sSL",
-            "--fail",
-            "-H",
-            &format!("User-Agent: ropy/{}", env!("CARGO_PKG_VERSION")),
-            "--connect-timeout",
-            "30",
-            "--max-time",
-            "600",
-            url,
-        ])
+    let mut curl_command = super::http::CurlCommandBuilder::new(url)
+        .connect_timeout(30)
+        .max_time(600)
+        .into_command();
+
+    let mut child = curl_command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -138,35 +132,10 @@ fn download_file(
 
 /// Download the `.sha256` file and verify the asset against it.
 fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateError> {
-    let output = std::process::Command::new("curl")
-        .args([
-            "-sSL",
-            "--fail",
-            "-H",
-            &format!("User-Agent: ropy/{}", env!("CARGO_PKG_VERSION")),
-            "--connect-timeout",
-            "15",
-            "--max-time",
-            "30",
-            checksum_url,
-        ])
-        .output()
-        .map_err(|e| {
-            tracing::error!(url = %checksum_url, error = %e, "failed to launch curl for checksum");
-            UpdateError::Network(format!("failed to launch curl: {e}"))
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        tracing::error!(url = %checksum_url, status = %output.status, stderr = %stderr, "curl checksum request failed");
-        return Err(UpdateError::Network(format!(
-            "checksum download failed (exit {}): {stderr}",
-            output.status
-        )));
-    }
-
-    let checksum_body = String::from_utf8(output.stdout)
-        .map_err(|e| UpdateError::Network(format!("invalid UTF-8 in checksum response: {e}")))?;
+    let checksum_body = super::http::CurlCommandBuilder::new(checksum_url)
+        .connect_timeout(15)
+        .max_time(30)
+        .execute_to_string()?;
 
     // The checksum file format from cargo-dist is:  "<hex>  <filename>\n"
     let expected_hex = checksum_body

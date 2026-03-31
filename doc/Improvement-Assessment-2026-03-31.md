@@ -110,15 +110,6 @@ let mut guard = match shared_records.lock() {
 - Recommendation:
   - Extract a generic `spawn_event_forwarder<T>` helper that accepts a receiver and a mapping closure.
 
-### 8. Duplicated HTTP request logic in updater
-
-**Priority:** Low
-
-`src/updater/checker.rs` and `src/updater/downloader.rs` both construct `curl` commands with similar argument patterns.
-
-- Recommendation:
-  - Extract a shared `curl_command_builder` utility.
-
 ### 9. Time index upsert does not scale
 
 **Priority:** Low (at current defaults)
@@ -294,28 +285,3 @@ The orchestration layer (`src/app.rs`) is well-separated from GUI rendering and 
 ### 6. Strict Clippy configuration
 
 The project enables `clippy::pedantic` and `clippy::nursery` lints, which catches many subtle issues at compile time.
-
-## Suggested Implementation Order
-
-1. Add a CI workflow (`ci.yml`) that runs tests and clippy on PRs.
-2. Add unit tests for `repository`, `clipboard`, and `config` modules.
-3. Remove the `todo!()` in `set_app_theme` (replace with `unreachable!()` or resolve recursively).
-4. Implement or gracefully handle `ContentType::FilePath` in the confirm flow.
-5. Replace silent error discards with logged warnings.
-6. Extract the lock-poisoning helper.
-7. Switch `records` from `Mutex` to `RwLock` and merge the double-lock in `get_filtered_record_indices`.
-8. Consolidate magic values into `src/constants.rs`.
-9. Add `// SAFETY:` comments to all `unsafe` blocks.
-10. Add `max_log_files` to the daily rolling appender.
-11. Extract the event forwarder and curl builder helpers.
-12. Begin decomposing `RopyBoard` into smaller structs.
-13. Cache `Language::display_name()` results.
-14. Use content hash for image filenames; extract `thumb_path_for()` helper.
-15. Optimize time index upsert if storage limits are raised.
-16. Benchmark release profile alternatives.
-17. Evaluate `sled` replacement when a mature alternative stabilizes.
-
-## Notes
-
-- This assessment was performed as a read-only review.
-- Findings from `doc/Optimization-Assessment-2026-03-30.md` are referenced where applicable to avoid duplication.
