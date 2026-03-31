@@ -1,11 +1,8 @@
-use std::{
-    sync::{mpsc, mpsc::Sender},
-    time::Duration,
-};
+use std::thread;
 
 #[cfg(target_os = "linux")]
 use gpui::AppContext;
-use gpui::{App, BackgroundExecutor, BorrowAppContext, Global, ReadGlobal, WindowHandle};
+use gpui::{App, BorrowAppContext, Global, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -125,6 +122,7 @@ fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::Image
     Ok((canvas.into_raw(), TRAY_ICON_SIZE, TRAY_ICON_SIZE))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayEvent {
     Show,
     Quit,
@@ -135,23 +133,23 @@ pub fn start_tray_handler(
     cx: &App,
     window_handle: WindowHandle<Root>,
 ) -> Option<TrayIcon> {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = async_channel::unbounded();
 
+    #[cfg(target_os = "linux")]
     let bg_executor = cx.background_executor().clone();
 
     #[cfg(not(target_os = "linux"))]
-    let tray = start_tray_handler_inner(i18n, tx, &bg_executor);
+    let tray = start_tray_handler_inner(i18n, tx);
 
     #[cfg(target_os = "linux")]
     let tray = {
         let i18n = i18n.clone();
-        let bg_executor_clone = bg_executor.clone();
         // On Linux, tray must be initialized on the GTK thread.
         // We cannot return the TrayIcon from the spawned task, so we
         // leak it there and return None to the caller.
         cx.background_spawn(async move {
             gtk::init().expect("Failed to init gtk modules");
-            if let Some(tray) = start_tray_handler_inner(&i18n, tx, &bg_executor_clone) {
+            if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
                 Box::leak(Box::new(tray));
             }
             gtk::main();
@@ -161,24 +159,19 @@ pub fn start_tray_handler(
     };
 
     cx.spawn(async move |async_app: &mut gpui::AsyncApp| {
-        let bg_executor = async_app.background_executor().clone();
-        loop {
-            while let Ok(event) = rx.try_recv() {
-                match event {
-                    TrayEvent::Show => {
-                        let _ = async_app.update(move |cx| {
-                            crate::gui::tray::send_active_action(window_handle, cx);
-                        });
-                    }
-                    TrayEvent::Quit => {
-                        let _ = async_app.update(move |cx: &mut gpui::App| {
-                            cx.quit();
-                        });
-                    }
+        while let Ok(event) = rx.recv().await {
+            match event {
+                TrayEvent::Show => {
+                    let _ = async_app.update(move |cx| {
+                        crate::gui::tray::send_active_action(window_handle, cx);
+                    });
+                }
+                TrayEvent::Quit => {
+                    let _ = async_app.update(move |cx: &mut gpui::App| {
+                        cx.quit();
+                    });
                 }
             }
-
-            bg_executor.timer(Duration::from_millis(100)).await;
         }
     })
     .detach();
@@ -189,41 +182,15 @@ pub fn start_tray_handler(
 /// Start the system tray handler
 pub fn start_tray_handler_inner(
     i18n: &I18n,
-    tx: Sender<TrayEvent>,
-    bg_executor: &BackgroundExecutor,
+    tx: async_channel::Sender<TrayEvent>,
 ) -> Option<TrayIcon> {
     match init_tray(i18n) {
         Ok((tray, show_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
 
-            let bg_executor_clone = bg_executor.clone();
-
-            bg_executor
-                .spawn(async move {
-                    let menu_channel = tray_icon::menu::MenuEvent::receiver();
-                    let tray_channel = TrayIconEvent::receiver();
-
-                    loop {
-                        while let Ok(event) = menu_channel.try_recv() {
-                            if event.id == show_id {
-                                let _ = tx.send(TrayEvent::Show);
-                            } else if event.id == quit_id {
-                                let _ = tx.send(TrayEvent::Quit);
-                            }
-                        }
-
-                        while let Ok(event) = tray_channel.try_recv() {
-                            if let TrayIconEvent::Click { button, .. } = event
-                                && button == tray_icon::MouseButton::Left
-                            {
-                                let _ = tx.send(TrayEvent::Show);
-                            }
-                        }
-
-                        bg_executor_clone.timer(Duration::from_millis(100)).await;
-                    }
-                })
-                .detach();
+            spawn_tray_menu_event_forwarder(tx.clone(), show_id, quit_id);
+            #[cfg(not(target_os = "linux"))]
+            spawn_tray_icon_event_forwarder(tx);
 
             Some(tray)
         }
@@ -243,8 +210,81 @@ pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App)
         .ok();
 }
 
+fn spawn_tray_menu_event_forwarder(
+    tx: async_channel::Sender<TrayEvent>,
+    show_id: MenuId,
+    quit_id: MenuId,
+) {
+    let receiver = tray_icon::menu::MenuEvent::receiver().clone();
+    let spawn_result = thread::Builder::new()
+        .name("tray-menu-event-forwarder".to_string())
+        .spawn(move || {
+            while let Ok(event) = receiver.recv() {
+                let Some(tray_event) = tray_event_from_menu_event(&event, &show_id, &quit_id)
+                else {
+                    continue;
+                };
+
+                if tx.send_blocking(tray_event).is_err() {
+                    break;
+                }
+            }
+        });
+
+    if let Err(err) = spawn_result {
+        tracing::error!(error = %err, "failed to spawn tray menu event forwarder");
+    }
+}
+
+fn spawn_tray_icon_event_forwarder(tx: async_channel::Sender<TrayEvent>) {
+    let receiver = TrayIconEvent::receiver().clone();
+    let spawn_result = thread::Builder::new()
+        .name("tray-icon-event-forwarder".to_string())
+        .spawn(move || {
+            while let Ok(event) = receiver.recv() {
+                let Some(tray_event) = tray_event_from_icon_event(&event) else {
+                    continue;
+                };
+
+                if tx.send_blocking(tray_event).is_err() {
+                    break;
+                }
+            }
+        });
+
+    if let Err(err) = spawn_result {
+        tracing::error!(error = %err, "failed to spawn tray icon event forwarder");
+    }
+}
+
+fn tray_event_from_menu_event(
+    event: &tray_icon::menu::MenuEvent,
+    show_id: &MenuId,
+    quit_id: &MenuId,
+) -> Option<TrayEvent> {
+    if event.id == *show_id {
+        Some(TrayEvent::Show)
+    } else if event.id == *quit_id {
+        Some(TrayEvent::Quit)
+    } else {
+        None
+    }
+}
+
+fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
+    if let TrayIconEvent::Click { button, .. } = event
+        && *button == tray_icon::MouseButton::Left
+    {
+        Some(TrayEvent::Show)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     #[test]
@@ -287,5 +327,70 @@ mod tests {
     fn test_icon_creation() {
         let icon = create_icon();
         assert!(icon.is_ok());
+    }
+
+    #[rstest]
+    #[case(TRAY_SHOW_ID, Some(TrayEvent::Show))]
+    #[case(TRAY_QUIT_ID, Some(TrayEvent::Quit))]
+    #[case("other", None)]
+    fn test_tray_event_from_menu_event_matches_menu_id(
+        #[case] event_id: &str,
+        #[case] expected: Option<TrayEvent>,
+    ) {
+        let show_id = MenuId::new(TRAY_SHOW_ID);
+        let quit_id = MenuId::new(TRAY_QUIT_ID);
+        let event = tray_icon::menu::MenuEvent {
+            id: MenuId::new(event_id),
+        };
+
+        let result = tray_event_from_menu_event(&event, &show_id, &quit_id);
+
+        assert!(matches!(
+            (result, expected),
+            (Some(TrayEvent::Show), Some(TrayEvent::Show))
+                | (Some(TrayEvent::Quit), Some(TrayEvent::Quit))
+                | (None, None)
+        ));
+    }
+
+    #[rstest]
+    #[case(
+        TrayIconEvent::Click {
+            id: tray_icon::TrayIconId::new("tray"),
+            position: tray_icon::dpi::PhysicalPosition::new(0.0, 0.0),
+            rect: tray_icon::Rect::default(),
+            button: tray_icon::MouseButton::Left,
+            button_state: tray_icon::MouseButtonState::Up,
+        },
+        Some(TrayEvent::Show)
+    )]
+    #[case(
+        TrayIconEvent::Click {
+            id: tray_icon::TrayIconId::new("tray"),
+            position: tray_icon::dpi::PhysicalPosition::new(0.0, 0.0),
+            rect: tray_icon::Rect::default(),
+            button: tray_icon::MouseButton::Right,
+            button_state: tray_icon::MouseButtonState::Up,
+        },
+        None
+    )]
+    #[case(
+        TrayIconEvent::Enter {
+            id: tray_icon::TrayIconId::new("tray"),
+            position: tray_icon::dpi::PhysicalPosition::new(0.0, 0.0),
+            rect: tray_icon::Rect::default(),
+        },
+        None
+    )]
+    fn test_tray_event_from_icon_event_filters_supported_actions(
+        #[case] event: TrayIconEvent,
+        #[case] expected: Option<TrayEvent>,
+    ) {
+        let result = tray_event_from_icon_event(&event);
+
+        assert!(matches!(
+            (result, expected),
+            (Some(TrayEvent::Show), Some(TrayEvent::Show)) | (None, None)
+        ));
     }
 }

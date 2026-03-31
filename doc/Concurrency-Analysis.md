@@ -12,7 +12,8 @@ The application primarily uses GPUI's async runtime (`cx.spawn()` / `cx.backgrou
 | **Hotkey Listener**         | Foreground | Receives bridged hotkey messages and updates UI. | `gui::hotkey`       |
 | **Hotkey Event Forwarder**  | OS Thread  | Blocks on `GlobalHotKeyEvent::receiver()`.       | `gui::hotkey`       |
 | **Hotkey Update Forwarder** | OS Thread  | Blocks on hotkey update channel messages.        | `gui::hotkey`       |
-| **Tray Handler**            | Foreground | Polls system tray menu events.                    | `gui::tray`         |
+| **Tray Handler**            | Foreground | Consumes forwarded tray actions and updates UI.   | `gui::tray`         |
+| **Tray Event Forwarders**   | OS Thread  | Blocks on tray/menu receivers and bridges events. | `gui::tray`         |
 | **Clipboard Watcher**       | Background | Runs `clipboard-rs` watcher (blocking operation). | `clipboard`         |
 | **Image Processor**         | Background | Processes and saves images from clipboard.        | `clipboard`         |
 | **Clipboard Event Handler** | Background | Receives clipboard events and updates repository. | `app`               |
@@ -47,10 +48,12 @@ The application relies on channels (`async_channel`) for communication between t
 
 ## 3. Tray Flow
 
-- **Source**: `TrayIcon` menu events.
-- **Path**: `tray_icon::menu::MenuEvent::receiver()`.
-- **Mechanism**: A foreground task spawned via `cx.spawn()` polls the receiver. The `AsyncApp` handle is provided as a closure parameter.
-- **Handling**: The **Tray Handler Task** either shows the window or quits the app via `async_app.update` based on the event ID.
+- **Source**: `TrayIcon` menu events and tray click events.
+- **Path**:
+  1. Dedicated forwarder threads block on `tray_icon::menu::MenuEvent::receiver()` and `TrayIconEvent::receiver()`.
+  2. Supported events are converted into internal tray actions and sent through an `async_channel`.
+- **Mechanism**: A foreground task spawned via `cx.spawn()` awaits the unified tray action stream. The `AsyncApp` handle is provided as a closure parameter.
+- **Handling**: The **Tray Handler Task** either shows the window or quits the app via `async_app.update`.
 
 ## 4. Copy/Paste Flow
 
