@@ -4,7 +4,7 @@ use config::{Config, ConfigError, File};
 use gpui::{App, Global, ReadGlobal};
 use serde::{Deserialize, Serialize};
 
-use crate::i18n::Language;
+use crate::{gui::theme::ThemeId, i18n::Language};
 
 /// Default maximum number of records to display in the UI
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
@@ -16,7 +16,7 @@ const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
 pub struct Settings {
     pub hotkey: HotkeySettings,
     pub storage: StorageSettings,
-    pub theme: AppTheme,
+    pub theme: ThemeId,
     pub autostart: AutoStartSettings,
     pub language: Language,
     pub update: UpdateSettings,
@@ -83,26 +83,6 @@ impl Settings {
             || global_hotkey::hotkey::HotKey::from_str(&self.hotkey.activation_key).is_err()
         {
             self.hotkey.activation_key = Self::default().hotkey.activation_key;
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub enum AppTheme {
-    Light,
-    Dark,
-    #[default]
-    System,
-}
-
-impl AppTheme {
-    pub fn get_theme(&self) -> Self {
-        match self {
-            Self::System => match dark_light::detect().unwrap_or(dark_light::Mode::Light) {
-                dark_light::Mode::Dark => Self::Dark,
-                _ => Self::Light,
-            },
-            _ => self.clone(),
         }
     }
 }
@@ -238,17 +218,10 @@ mod tests {
     }
 
     #[test]
-    fn test_app_theme() {
-        let light = AppTheme::Light;
-        assert!(matches!(light.get_theme(), AppTheme::Light));
+    fn test_theme_id_default() {
+        let theme = ThemeId::default();
 
-        let dark = AppTheme::Dark;
-        assert!(matches!(dark.get_theme(), AppTheme::Dark));
-
-        // System theme should return either Light or Dark
-        let system = AppTheme::System;
-        let resolved = system.get_theme();
-        assert!(matches!(resolved, AppTheme::Light | AppTheme::Dark));
+        assert_eq!(theme.code(), "ropy-light");
     }
 
     #[test]
@@ -276,7 +249,7 @@ mod tests {
         let mut settings = Settings::default();
         settings.storage.max_history_records = 50;
         settings.storage.max_storage_records = 500;
-        settings.theme = AppTheme::Dark;
+        settings.theme = ThemeId::new("ropy-dark");
         settings.autostart.enabled = true;
         settings.language = Language::new("zh-CN");
         settings.update.auto_check = false;
@@ -295,7 +268,7 @@ mod tests {
         // Verify all fields match
         assert_eq!(loaded.storage.max_history_records, 50);
         assert_eq!(loaded.storage.max_storage_records, 500);
-        assert!(matches!(loaded.theme, AppTheme::Dark));
+        assert_eq!(loaded.theme.code(), "ropy-dark");
         assert!(loaded.autostart.enabled);
         assert_eq!(loaded.language.code(), "zh-CN");
         assert!(!loaded.update.auto_check);
@@ -404,7 +377,7 @@ mod tests {
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
         assert!(settings.update.auto_check);
         assert!(!settings.hotkey.activation_key.is_empty());
-        assert!(matches!(settings.theme, AppTheme::System));
+        assert_eq!(settings.theme.code(), "ropy-light");
         assert_eq!(settings.language.code(), "en");
     }
 
@@ -525,6 +498,20 @@ max_history_records = 100
             let toml = toml::to_string_pretty(&settings).unwrap();
             let loaded: Settings = toml::from_str(&toml).unwrap();
             assert_eq!(loaded.language.code(), lang_code);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_settings_theme_round_trip() {
+        let mut settings = Settings::default();
+        let themes = vec!["ropy-light", "ropy-dark", "custom-theme"];
+
+        for theme_code in themes {
+            settings.theme = ThemeId::new(theme_code);
+            let toml = toml::to_string_pretty(&settings).unwrap();
+            let loaded: Settings = toml::from_str(&toml).unwrap();
+            assert_eq!(loaded.theme.code(), theme_code);
         }
     }
 

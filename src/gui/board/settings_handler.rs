@@ -6,6 +6,7 @@ use gpui_component::{WindowExt, notification::Notification};
 use super::RopyBoard;
 use crate::{
     config::Settings,
+    gui::theme::ThemeId,
     i18n::{I18n, Language},
     repository::GlobalRepository,
 };
@@ -74,11 +75,10 @@ impl RopyBoard {
             max_storage = max_history;
         }
 
-        let theme = match self.selected_theme {
-            0 => crate::config::AppTheme::Light,
-            1 => crate::config::AppTheme::Dark,
-            _ => crate::config::AppTheme::System,
-        };
+        let theme = ThemeId::all()
+            .get(self.selected_theme)
+            .cloned()
+            .unwrap_or_default();
 
         let language = Language::all()
             .get(self.selected_language)
@@ -141,8 +141,7 @@ impl RopyBoard {
         }
 
         // Apply the new theme
-        let app_theme = &theme.get_theme();
-        crate::gui::app::set_app_theme(window, cx, app_theme);
+        crate::gui::app::set_app_theme(window, cx, &theme);
 
         self.settings_max_history_input.update(cx, |input, cx| {
             input.set_placeholder(max_history.to_string(), window, cx);

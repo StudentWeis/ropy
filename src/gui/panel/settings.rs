@@ -15,7 +15,7 @@ use gpui_component::{
 };
 
 use crate::{
-    gui::board::RopyBoard,
+    gui::{board::RopyBoard, theme::ThemeId},
     i18n::{I18n, Language},
 };
 
@@ -154,40 +154,25 @@ fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
 fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     settings_row(
         I18n::translate(cx, "settings_language"),
-        div()
-            .flex_shrink_0()
-            .child(Select::new(&board.language_select).small().w(px(140.0))),
+        h_flex().flex_1().justify_end().child(
+            div()
+                .w(px(148.0))
+                .child(Select::new(&board.language_select).small()),
+        ),
         cx,
     )
 }
 
 fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let theme_names = [
-        I18n::translate(cx, "settings_theme_light"),
-        I18n::translate(cx, "settings_theme_dark"),
-        I18n::translate(cx, "settings_theme_system"),
-    ];
-    // Wrap in a border-grouped container to give a segmented-control look
-    let theme_buttons = h_flex()
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_md()
-        .overflow_hidden()
-        .children(theme_names.into_iter().enumerate().map(|(index, name)| {
-            let is_selected = board.selected_theme == index;
-            let mut btn = Button::new(("theme-button", index)).small().label(name);
-            btn = if is_selected {
-                btn.primary()
-            } else {
-                btn.ghost()
-            };
-            btn.rounded_none()
-                .on_click(cx.listener(move |board, _, _window, cx| {
-                    board.selected_theme = index;
-                    cx.notify();
-                }))
-        }));
-    settings_row(I18n::translate(cx, "settings_theme"), theme_buttons, cx)
+    settings_row(
+        I18n::translate(cx, "settings_theme"),
+        h_flex().flex_1().justify_end().child(
+            div()
+                .w(px(148.0))
+                .child(Select::new(&board.theme_select).small()),
+        ),
+        cx,
+    )
 }
 
 fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -510,11 +495,10 @@ pub fn reset_settings_dialog(
                 .iter()
                 .position(|lang| lang == &s.language)
                 .unwrap_or(0);
-            let theme = match s.theme {
-                crate::config::AppTheme::Light => 0,
-                crate::config::AppTheme::Dark => 1,
-                crate::config::AppTheme::System => 2,
-            };
+            let theme = ThemeId::all()
+                .iter()
+                .position(|theme_id| theme_id == &s.theme)
+                .unwrap_or_default();
             (
                 lang,
                 theme,
@@ -537,6 +521,9 @@ pub fn reset_settings_dialog(
     // Reset the language select dropdown
     board.language_select.update(cx, |state, cx| {
         state.set_selected_index(Some(IndexPath::default().row(lang_idx)), window, cx);
+    });
+    board.theme_select.update(cx, |state, cx| {
+        state.set_selected_index(Some(IndexPath::default().row(theme_idx)), window, cx);
     });
 
     // Clear input fields

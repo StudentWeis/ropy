@@ -3,6 +3,7 @@ pub mod board;
 pub mod hotkey;
 mod panel;
 mod paste;
+pub mod theme;
 pub mod tray;
 pub mod utils;
 

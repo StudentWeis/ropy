@@ -2,4 +2,4 @@ mod autostart;
 mod settings;
 
 pub use autostart::{AutoStartError, AutoStartManager};
-pub use settings::{AppTheme, ConfirmMode, Settings};
+pub use settings::{ConfirmMode, Settings};

@@ -10,13 +10,16 @@ use gpui::{
     App, AppContext, AssetSource, Bounds, WindowBounds, WindowHandle, WindowKind, WindowOptions,
     px, rgb, size,
 };
-use gpui_component::{Root, ThemeMode, theme::Theme};
+use gpui_component::{Root, ThemeMode as ComponentThemeMode, theme::Theme};
 use rust_embed::RustEmbed;
 
 use crate::{
     clipboard::LastCopyState,
-    config::{AppTheme, Settings},
-    gui::board::RopyBoard,
+    config::Settings,
+    gui::{
+        board::RopyBoard,
+        theme::{ThemeDefinition, ThemeId, ThemeMode},
+    },
     repository::ClipboardRecord,
 };
 
@@ -55,8 +58,8 @@ pub fn create_window(
         },
         |window, cx| {
             // Apply the application theme based on settings
-            let app_theme = Settings::read(cx, |s| s.theme.get_theme());
-            set_app_theme(window, cx, &app_theme);
+            let theme_id = Settings::read(cx, |s| s.theme.clone());
+            set_app_theme(window, cx, &theme_id);
 
             let view = cx.new(|cx| RopyBoard::new(shared_records, last_copy, copy_tx, window, cx));
             cx.new(|cx| Root::new(view, window, cx))
@@ -68,33 +71,39 @@ pub fn create_window(
     })
 }
 
-/// Set the application theme (light or dark)
-pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, app_theme: &AppTheme) {
-    match app_theme.get_theme() {
-        AppTheme::Dark => {
-            Theme::change(ThemeMode::Dark, Some(window), cx);
-            let theme = Theme::global_mut(cx);
-            theme.background = rgb(0x002d_2d2d).into();
-            theme.foreground = rgb(0x00ff_ffff).into();
-            theme.secondary = rgb(0x003d_3d3d).into();
-            theme.secondary_foreground = rgb(0x00ff_ffff).into();
-            theme.border = rgb(0x004d_4d4d).into();
-            theme.accent = rgb(0x004d_4d4d).into();
-            theme.muted_foreground = rgb(0x0088_8888).into();
-            theme.input = rgb(0x0055_5555).into();
-        }
-        AppTheme::Light => {
-            Theme::change(ThemeMode::Light, Some(window), cx);
-            let theme = Theme::global_mut(cx);
-            theme.background = rgb(0x00ff_ffff).into();
-            theme.foreground = rgb(0x001a_1a1a).into();
-            theme.secondary = rgb(0x00f5_f5f5).into();
-            theme.secondary_foreground = rgb(0x001a_1a1a).into();
-            theme.border = rgb(0x00e0_e0e0).into();
-            theme.accent = rgb(0x00ad_d8e6).into();
-            theme.muted_foreground = rgb(0x006b_6b6b).into();
-            theme.input = rgb(0x00f0_f0f0).into();
-        }
-        AppTheme::System => todo!(),
-    }
+/// Set the application theme from a bundled theme definition.
+pub fn set_app_theme(window: &mut gpui::Window, cx: &mut App, theme_id: &ThemeId) {
+    let app_theme = ThemeDefinition::load_or_default(theme_id);
+    let component_mode = match app_theme.mode() {
+        ThemeMode::Light => ComponentThemeMode::Light,
+        ThemeMode::Dark => ComponentThemeMode::Dark,
+    };
+    let palette = app_theme.palette();
+
+    Theme::change(component_mode, Some(window), cx);
+
+    let theme = Theme::global_mut(cx);
+    theme.background = rgb(palette.background).into();
+    theme.foreground = rgb(palette.foreground).into();
+    theme.secondary = rgb(palette.secondary).into();
+    theme.secondary_foreground = rgb(palette.secondary_foreground).into();
+    theme.border = rgb(palette.border).into();
+    theme.accent = rgb(palette.accent).into();
+    theme.accent_foreground = rgb(palette.accent_foreground).into();
+    theme.muted = rgb(palette.muted).into();
+    theme.muted_foreground = rgb(palette.muted_foreground).into();
+    theme.input = rgb(palette.input).into();
+    theme.primary = rgb(palette.primary).into();
+    theme.primary_foreground = rgb(palette.primary_foreground).into();
+    theme.primary_hover = rgb(palette.primary_hover).into();
+    theme.primary_active = rgb(palette.primary_active).into();
+    theme.danger = rgb(palette.danger).into();
+    theme.danger_foreground = rgb(palette.danger_foreground).into();
+    theme.popover = rgb(palette.popover).into();
+    theme.popover_foreground = rgb(palette.popover_foreground).into();
+    theme.selection = rgb(palette.selection).into();
+    theme.ring = rgb(palette.ring).into();
+    theme.list_hover = rgb(palette.list_hover).into();
+    theme.list_active = rgb(palette.list_active).into();
+    theme.scrollbar_thumb = rgb(palette.scrollbar_thumb).into();
 }

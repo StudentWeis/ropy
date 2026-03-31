@@ -36,17 +36,6 @@ The project has almost no unit or integration tests despite `rstest` being confi
   - Add a CI workflow that runs `cargo test` on every PR.
   - Add concurrent read/write tests for the repository.
 
-### 2. `AppTheme::System` triggers a panic in `set_app_theme`
-
-**Priority:** Critical
-
-- Relevant code:
-  - `src/gui/app.rs` — `set_app_theme()` matches on `app_theme.get_theme()`, which resolves `System` to `Light` or `Dark` via `dark-light`. However, the final `match` arm is `AppTheme::System => todo!()`, which is unreachable through the normal path but can panic if `set_app_theme` is called with a raw `AppTheme::System` value that was not pre-resolved.
-- Why it matters:
-  - The `todo!()` is technically defensive dead code today because `get_theme()` always resolves `System`. However it is a latent panic risk that will trigger if any future caller passes `AppTheme::System` directly.
-- Recommendation:
-  - Replace `AppTheme::System => todo!()` with a recursive call to `get_theme()` or an `unreachable!()` with an explanatory comment.
-
 ### 3. `ContentType::FilePath` confirm flow is incomplete
 
 **Priority:** High
@@ -102,7 +91,6 @@ let mut guard = match shared_records.lock() {
 | Location | Value | Description |
 |----------|-------|-------------|
 | `src/gui/app.rs` | `px(400.), px(600.)` | Window dimensions |
-| `src/gui/app.rs` | `0x002d2d2d`, `0x00ffffff`, etc. | Theme colors |
 | `src/gui/paste.rs` | `Duration::from_millis(50)` | Paste delay |
 | `src/gui/x11.rs` | `Duration::from_millis(10)` | X11 poll interval |
 | `src/updater/checker.rs` | `"--connect-timeout", "15"` | HTTP timeout |

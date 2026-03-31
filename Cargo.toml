@@ -25,7 +25,6 @@ config = { version = "0.15.22", default-features = false, features = ["toml"] }
 toml = "1.1.0"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 tray-icon = "0.21.3"
-dark-light = "2.0.0"
 auto-launch = "0.6.0"
 regex = { version = "1.12.3", default-features = false, features = ["perf", "std"] }
 raw-window-handle = "0.6.2"

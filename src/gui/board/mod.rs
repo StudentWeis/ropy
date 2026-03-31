@@ -40,6 +40,7 @@ use crate::{
             about::render_about_content, help::render_help_content,
             settings::render_settings_content,
         },
+        theme::ThemeId,
     },
     i18n::{I18n, Language},
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
@@ -70,7 +71,8 @@ pub struct RopyBoard {
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) settings_max_storage_input: Entity<InputState>,
-    pub(crate) selected_theme: usize, // 0: Light, 1: Dark, 2: System
+    pub(crate) selected_theme: usize, // Index into ThemeId::all()
+    pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) autostart_enabled: bool,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) pinned: bool,
@@ -208,23 +210,18 @@ impl RopyBoard {
             max_history_records,
             max_storage_records,
             activation_key,
-            theme_index,
+            theme,
             language,
             confirm_mode,
             autostart_enabled,
             auto_check_enabled,
             hover_preview_enabled,
         ) = Settings::read(cx, |s| {
-            let theme_idx = match s.theme {
-                crate::config::AppTheme::Light => 0,
-                crate::config::AppTheme::Dark => 1,
-                crate::config::AppTheme::System => 2,
-            };
             (
                 s.storage.max_history_records,
                 s.storage.max_storage_records,
                 s.hotkey.activation_key.clone(),
-                theme_idx,
+                s.theme.clone(),
                 s.language.clone(),
                 s.confirm.mode,
                 s.autostart.enabled,
@@ -237,6 +234,41 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
         let settings_max_storage_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
+
+        let selected_theme = ThemeId::all()
+            .iter()
+            .position(|theme_id| theme_id == &theme)
+            .unwrap_or_default();
+
+        let theme_items: Vec<SharedString> = ThemeId::all()
+            .iter()
+            .map(|theme_id| SharedString::from(theme_id.display_name()))
+            .collect();
+        let theme_select = cx.new(|cx| {
+            SelectState::new(
+                theme_items,
+                Some(IndexPath::default().row(selected_theme)),
+                window,
+                cx,
+            )
+        });
+        cx.subscribe_in(
+            &theme_select,
+            window,
+            |this, _entity, event: &SelectEvent<Vec<SharedString>>, _window, cx| {
+                if let SelectEvent::Confirm(Some(val)) = event {
+                    let themes = ThemeId::all();
+                    if let Some(idx) = themes
+                        .iter()
+                        .position(|theme| theme.display_name() == val.as_ref())
+                    {
+                        this.selected_theme = idx;
+                        cx.notify();
+                    }
+                }
+            },
+        )
+        .detach();
 
         let selected_language = Language::all()
             .iter()
@@ -297,7 +329,8 @@ impl RopyBoard {
             settings_activation_key_input,
             settings_max_history_input,
             settings_max_storage_input,
-            selected_theme: theme_index,
+            selected_theme,
+            theme_select,
             autostart_enabled,
             confirm_mode,
             pinned: false,
