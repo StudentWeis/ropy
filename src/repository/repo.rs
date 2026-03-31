@@ -24,6 +24,10 @@ const DB_CACHE_CAPACITY: u64 = 8 * 1024 * 1024;
 
 /// Interval at which sled flushes dirty pages to disk (in milliseconds).
 const DB_FLUSH_INTERVAL_MS: u64 = 1000;
+/// Allow the repository to grow slightly past the configured limit so cleanup
+/// can batch deletions instead of scanning on every successful save.
+const CLEANUP_BUFFER_DIVISOR: usize = 10;
+const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 
 pub struct ClipboardRepository {
     db: Db,
@@ -378,6 +382,28 @@ impl ClipboardRepository {
     /// Pinned records are never removed.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
+        self.cleanup_old_records_with_total(keep_count, total)
+    }
+
+    /// Clean up old records only after the repository has exceeded the
+    /// configured limit by a small buffer.
+    pub fn cleanup_old_records_if_needed(
+        &self,
+        keep_count: usize,
+    ) -> Result<usize, RepositoryError> {
+        let total = self.count();
+        if total <= Self::cleanup_trigger_record_count(keep_count) {
+            return Ok(0);
+        }
+
+        self.cleanup_old_records(keep_count)
+    }
+
+    fn cleanup_old_records_with_total(
+        &self,
+        keep_count: usize,
+        total: usize,
+    ) -> Result<usize, RepositoryError> {
         if total <= keep_count {
             return Ok(0);
         }
@@ -408,6 +434,16 @@ impl ClipboardRepository {
             removed += 1;
         }
         Ok(removed)
+    }
+
+    fn cleanup_buffer_record_count(keep_count: usize) -> usize {
+        keep_count
+            .saturating_div(CLEANUP_BUFFER_DIVISOR)
+            .max(MIN_CLEANUP_BUFFER_RECORDS)
+    }
+
+    fn cleanup_trigger_record_count(keep_count: usize) -> usize {
+        keep_count.saturating_add(Self::cleanup_buffer_record_count(keep_count))
     }
 }
 
@@ -485,6 +521,7 @@ impl ClipboardRepository {
 mod tests {
     use std::{thread, time::Duration};
 
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::*;
@@ -495,6 +532,15 @@ mod tests {
         let db_path = temp_dir.path().join("test.db");
         ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
             .expect("Failed to create test repository")
+    }
+
+    #[allow(clippy::expect_used)]
+    fn save_numbered_records(repo: &ClipboardRepository, count: usize) {
+        for i in 1..=count {
+            repo.save_text(format!("Record {i}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
@@ -1045,6 +1091,50 @@ mod tests {
         let removed = repo.cleanup_old_records(1).expect("Failed to clean up");
         assert_eq!(removed, 0);
         assert_eq!(repo.count(), 1);
+    }
+
+    #[rstest]
+    #[case(10)]
+    #[case(50)]
+    fn test_cleanup_old_records_if_needed_at_threshold_preserves_records(
+        #[case] keep_count: usize,
+    ) {
+        let repo = create_test_repo();
+        let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
+
+        save_numbered_records(&repo, threshold);
+
+        let removed = repo
+            .cleanup_old_records_if_needed(keep_count)
+            .unwrap_or_else(|err| panic!("Failed to conditionally clean up: {err}"));
+
+        assert_eq!(removed, 0);
+        assert_eq!(repo.count(), threshold);
+    }
+
+    #[rstest]
+    #[case(10)]
+    #[case(50)]
+    fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
+        #[case] keep_count: usize,
+    ) {
+        let repo = create_test_repo();
+        let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
+
+        save_numbered_records(&repo, threshold + 1);
+
+        let removed = repo
+            .cleanup_old_records_if_needed(keep_count)
+            .unwrap_or_else(|err| panic!("Failed to conditionally clean up: {err}"));
+
+        assert_eq!(removed, threshold + 1 - keep_count);
+        assert_eq!(repo.count(), keep_count);
+
+        let recent = repo
+            .get_recent(keep_count)
+            .unwrap_or_else(|err| panic!("Failed to get recent: {err}"));
+        assert_eq!(recent.len(), keep_count);
+        assert_eq!(recent[0].content, format!("Record {}", threshold + 1));
     }
 
     #[test]

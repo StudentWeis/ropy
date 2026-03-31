@@ -84,7 +84,7 @@ fn start_clipboard_event_handler(
 
                 GlobalRepository::read(cx, |repo| {
                     if let Some(repo) = repo
-                        && let Err(e) = repo.cleanup_old_records(max_storage)
+                        && let Err(e) = repo.cleanup_old_records_if_needed(max_storage)
                     {
                         tracing::warn!(error = %e, "failed to cleanup old clipboard records");
                     }

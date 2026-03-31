@@ -2,21 +2,6 @@
 
 This document records a read-only optimization review of the current Ropy codebase.
 
-## Scope
-
-- Reviewed project structure, runtime flow, repository design, GUI rendering path, clipboard pipeline, and build configuration.
-- Verified the current baseline with:
-  - `rtk cargo test -- --test-threads=1`
-  - `rtk cargo clippy --all-targets --all-features -- -D warnings`
-- This review is based on source inspection and baseline validation, not on profiler captures or long-running production traces.
-
-## Current Baseline
-
-- Test suite status: passing (`183` tests)
-- Clippy status: passing with warnings denied
-- General code health: good
-- Main opportunity type: targeted structural and runtime optimizations rather than broad cleanup
-
 ## Priority Findings
 
 ### 1. Time index updates do not scale well
@@ -37,25 +22,6 @@ The current time index implementation removes stale entries by scanning the inde
   - Becomes increasingly expensive if `max_storage_records` is raised significantly.
 - Recommendation:
   - Add an auxiliary `id -> timestamp` index, or redesign the index so the old time entry can be removed in near O(1) time.
-
-### 2. Cleanup runs after every successful save
-
-**Priority:** High
-
-After a clipboard record is saved, the foreground update path immediately triggers repository cleanup.
-
-- Relevant code:
-  - `src/app.rs`
-  - `src/repository/repo.rs`
-  - `src/repository/time_index.rs`
-- Why it matters:
-  - Cleanup is maintenance work, not user-visible work.
-  - Running it after every event increases steady-state I/O and index traversal frequency.
-- Impact:
-  - Small at default limits.
-  - More noticeable during high-frequency clipboard activity or when storage limits are increased.
-- Recommendation:
-  - Debounce cleanup, batch it, or trigger it only when the repository exceeds the storage limit by a buffer.
 
 ### 3. `ContentType::FilePath` is not fully implemented in confirm flow
 
