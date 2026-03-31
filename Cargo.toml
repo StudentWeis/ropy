@@ -73,6 +73,9 @@ xz2 = "0.1.7"
 winres = "0.1.12"
 image = "0.25.10"
 
+[dev-dependencies]
+rstest = "0.26.1"
+
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }

@@ -4,19 +4,21 @@ This document details the threading model and message passing architecture of th
 
 # Thread Model
 
-The application primarily uses GPUI's async runtime (`cx.spawn()` / `cx.background_spawn()`) for event handling and background processing, minimizing the use of dedicated OS threads. All subsystems are initialized directly from the `App` context (`&mut App`), avoiding manual executor extraction.
+The application primarily uses GPUI's async runtime (`cx.spawn()` / `cx.background_spawn()`) for event handling and background processing. It also uses a small number of dedicated OS threads where external APIs expose blocking receivers or blocking work is simpler to isolate. All subsystems are initialized directly from the `App` context (`&mut App`), avoiding manual executor extraction.
 
 | Entity                      | Executor   | Responsibility                                    | Module              |
 | :-------------------------- | :--------- | :------------------------------------------------ | :------------------ |
 | **Main App**                | Foreground | Runs the GPUI event loop, handles UI rendering.   | `gui`               |
-| **Hotkey Listener**         | Foreground | Polls global hotkey events.                       | `gui::hotkey`       |
+| **Hotkey Listener**         | Foreground | Receives bridged hotkey messages and updates UI. | `gui::hotkey`       |
+| **Hotkey Event Forwarder**  | OS Thread  | Blocks on `GlobalHotKeyEvent::receiver()`.       | `gui::hotkey`       |
+| **Hotkey Update Forwarder** | OS Thread  | Blocks on hotkey update channel messages.        | `gui::hotkey`       |
 | **Tray Handler**            | Foreground | Polls system tray menu events.                    | `gui::tray`         |
 | **Clipboard Watcher**       | Background | Runs `clipboard-rs` watcher (blocking operation). | `clipboard`         |
 | **Image Processor**         | Background | Processes and saves images from clipboard.        | `clipboard`         |
 | **Clipboard Event Handler** | Background | Receives clipboard events and updates repository. | `app`               |
 | **Clipboard Writer**        | Background | Handles requests to write to system clipboard.    | `clipboard`         |
 
-> **Note**: Most "background" operations are implemented as async tasks spawned via `cx.background_spawn()` (running on a GPUI thread pool), rather than spawning new OS threads for each component. Foreground tasks use `cx.spawn()`, which provides an `AsyncApp` handle for UI updates.
+> **Note**: Most "background" operations are implemented as async tasks spawned via `cx.background_spawn()` (running on a GPUI thread pool). A few components still use dedicated OS threads when an integration provides a blocking API, such as the hotkey bridge and updater download/check flows. Foreground tasks use `cx.spawn()`, which provides an `AsyncApp` handle for UI updates.
 >
 > The top-level `app` module (`src/app.rs`) is responsible for orchestrating all subsystems: it initializes the clipboard monitor, repository, GUI window, hotkey listener, and tray handler, and wires them together via async channels. All subsystem startup functions receive `&mut App` directly, using `cx.spawn()` and `cx.background_spawn()` instead of manually extracting executors. The `gui` module focuses solely on rendering and window management.
 
@@ -37,8 +39,11 @@ The application relies on channels (`async_channel`) for communication between t
 ## 2. Hotkey Flow
 
 - **Source**: `GlobalHotKeyEvent` receiver.
-- **Mechanism**: A foreground task spawned via `cx.spawn()` polls the receiver. The `AsyncApp` handle is provided as a closure parameter.
-- **Handling**: When a hotkey is detected, the task dispatches an `Active` action to the window via `async_app.update`.
+- **Path**:
+  1. `Hotkey Event Forwarder` blocks on `GlobalHotKeyEvent::receiver()` and forwards events into an `async_channel`.
+  2. `Hotkey Update Forwarder` blocks on hotkey setting updates and forwards them into the same `async_channel`.
+- **Mechanism**: A foreground task spawned via `cx.spawn()` awaits the unified message stream. The `AsyncApp` handle is provided as a closure parameter.
+- **Handling**: Update messages re-register the current hotkey. Pressed hotkey events dispatch an `Active` action to the window via `async_app.update`.
 
 ## 3. Tray Flow
 
@@ -63,6 +68,11 @@ graph TD
         TH[Tray Handler Task]
     end
 
+    subgraph "Dedicated OS Threads"
+        HEF[Hotkey Event Forwarder]
+        HUF[Hotkey Update Forwarder]
+    end
+
     subgraph "GPUI Runtime (Background Pool)"
         CW[Clipboard Watcher Task]
         IP[Image Processor Task]
@@ -84,6 +94,8 @@ graph TD
     CL -- "Notify (via Channel)" --> Main
 
     %% User Input
+    HEF -- "HotkeyEvent" --> HL
+    HUF -- "Hotkey Update" --> HL
     HL -- "Dispatch Action" --> Main
     TH -- "Update/Quit" --> Main
 

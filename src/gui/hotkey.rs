@@ -1,7 +1,16 @@
-use std::time::Duration;
-
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 use gpui::{App, AsyncApp};
+
+#[derive(Clone)]
+enum ListenerMessage {
+    UpdateHotkey(String),
+    HotkeyEvent(GlobalHotKeyEvent),
+}
+
+struct HotkeyListenerState<Manager> {
+    current_hotkey: String,
+    manager: Option<Manager>,
+}
 
 /// Start a global hotkey listener in a foreground task with a custom callback.
 ///
@@ -17,37 +26,95 @@ where
     F: Fn(&AsyncApp) + 'static,
 {
     let (tx, rx) = async_channel::unbounded::<String>();
+    let (message_tx, message_rx) = async_channel::unbounded::<ListenerMessage>();
+
+    spawn_hotkey_event_forwarder(message_tx.clone());
+    spawn_hotkey_update_forwarder(rx, message_tx);
+
     cx.spawn(async move |async_app| {
-        let bg_executor = async_app.background_executor().clone();
-        let mut current_hotkey = initial_hotkey;
-        let mut manage_handle = register_hotkey(&current_hotkey);
-        let receiver = GlobalHotKeyEvent::receiver();
-        loop {
-            // Check for hotkey updates
-            let mut updated = false;
-            while let Ok(new_hotkey) = rx.try_recv() {
-                current_hotkey = new_hotkey;
-                updated = true;
-            }
+        let mut state = HotkeyListenerState {
+            manager: register_hotkey(&initial_hotkey),
+            current_hotkey: initial_hotkey,
+        };
 
-            if updated {
-                drop(manage_handle);
-                manage_handle = register_hotkey(&current_hotkey);
-            }
-
-            // Poll for hotkey events
-            if let Ok(event) = receiver.try_recv()
-                && event.state() == HotKeyState::Pressed
-            {
+        while let Ok(message) = message_rx.recv().await {
+            process_listener_message(&mut state, message, &mut register_hotkey, &mut || {
                 on_hotkey(async_app);
-            }
-
-            // Small sleep to avoid busy waiting
-            bg_executor.timer(Duration::from_millis(50)).await;
+            });
         }
     })
     .detach();
+
     tx
+}
+
+fn process_listener_message<Manager, RegisterHotkey, OnHotkey>(
+    state: &mut HotkeyListenerState<Manager>,
+    message: ListenerMessage,
+    register_hotkey: &mut RegisterHotkey,
+    on_hotkey: &mut OnHotkey,
+) where
+    RegisterHotkey: FnMut(&str) -> Option<Manager>,
+    OnHotkey: FnMut(),
+{
+    match message {
+        ListenerMessage::UpdateHotkey(new_hotkey) => {
+            if new_hotkey == state.current_hotkey {
+                return;
+            }
+
+            state.current_hotkey = new_hotkey;
+            state.manager = None;
+            state.manager = register_hotkey(&state.current_hotkey);
+        }
+        ListenerMessage::HotkeyEvent(event) => {
+            if event.state() == HotKeyState::Pressed {
+                on_hotkey();
+            }
+        }
+    }
+}
+
+fn spawn_hotkey_event_forwarder(message_tx: async_channel::Sender<ListenerMessage>) {
+    let receiver = GlobalHotKeyEvent::receiver().clone();
+    let spawn_result = std::thread::Builder::new()
+        .name("hotkey-event-forwarder".to_string())
+        .spawn(move || {
+            while let Ok(event) = receiver.recv() {
+                if message_tx
+                    .send_blocking(ListenerMessage::HotkeyEvent(event))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+    if let Err(err) = spawn_result {
+        tracing::error!(error = %err, "failed to spawn hotkey event forwarder");
+    }
+}
+
+fn spawn_hotkey_update_forwarder(
+    update_rx: async_channel::Receiver<String>,
+    message_tx: async_channel::Sender<ListenerMessage>,
+) {
+    let spawn_result = std::thread::Builder::new()
+        .name("hotkey-update-forwarder".to_string())
+        .spawn(move || {
+            while let Ok(hotkey) = update_rx.recv_blocking() {
+                if message_tx
+                    .send_blocking(ListenerMessage::UpdateHotkey(hotkey))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+    if let Err(err) = spawn_result {
+        tracing::error!(error = %err, "failed to spawn hotkey update forwarder");
+    }
 }
 
 fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
@@ -87,17 +154,88 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
+    use rstest::rstest;
+
     use super::*;
 
+    #[rstest]
+    #[case("")]
+    #[case("not+a+valid+hotkey")]
+    fn test_register_hotkey_invalid_input_returns_none(#[case] hotkey: &str) {
+        assert!(register_hotkey(hotkey).is_none());
+    }
+
     #[test]
-    #[allow(clippy::unwrap_used)]
-    fn test_hotkey_registration_and_unregistration() {
-        // This test verifies registration/unregistration and receiver availability
-        let manager = GlobalHotKeyManager::new().unwrap();
-        let hotkey: HotKey = "control+shift+d".parse().unwrap();
-        assert!(manager.register(hotkey).is_ok());
-        let receiver = GlobalHotKeyEvent::receiver();
-        assert!(receiver.try_recv().is_err());
-        assert!(manager.unregister(hotkey).is_ok());
+    fn test_listener_message_update_hotkey_re_registers_and_updates_state() {
+        let mut state = HotkeyListenerState {
+            current_hotkey: "ctrl+shift+a".to_string(),
+            manager: Some("initial-manager"),
+        };
+        let mut registered_hotkeys = Vec::new();
+        let callback_count = Cell::new(0);
+
+        process_listener_message(
+            &mut state,
+            ListenerMessage::UpdateHotkey("ctrl+shift+b".to_string()),
+            &mut |hotkey| {
+                registered_hotkeys.push(hotkey.to_string());
+                Some("updated-manager")
+            },
+            &mut || callback_count.set(callback_count.get() + 1),
+        );
+
+        assert_eq!(state.current_hotkey, "ctrl+shift+b");
+        assert_eq!(state.manager, Some("updated-manager"));
+        assert_eq!(registered_hotkeys, vec!["ctrl+shift+b"]);
+        assert_eq!(callback_count.get(), 0);
+    }
+
+    #[test]
+    fn test_listener_message_update_hotkey_same_value_skips_reregistration() {
+        let mut state = HotkeyListenerState {
+            current_hotkey: "ctrl+shift+a".to_string(),
+            manager: Some("initial-manager"),
+        };
+        let mut register_call_count = 0;
+
+        process_listener_message(
+            &mut state,
+            ListenerMessage::UpdateHotkey("ctrl+shift+a".to_string()),
+            &mut |_| {
+                register_call_count += 1;
+                Some("updated-manager")
+            },
+            &mut || {},
+        );
+
+        assert_eq!(state.current_hotkey, "ctrl+shift+a");
+        assert_eq!(state.manager, Some("initial-manager"));
+        assert_eq!(register_call_count, 0);
+    }
+
+    #[rstest]
+    #[case(HotKeyState::Pressed, 1)]
+    #[case(HotKeyState::Released, 0)]
+    fn test_listener_message_hotkey_event_state_matches_callback_trigger(
+        #[case] state: HotKeyState,
+        #[case] expected_callback_count: usize,
+    ) {
+        let mut listener_state = HotkeyListenerState {
+            current_hotkey: "ctrl+shift+a".to_string(),
+            manager: Some("manager"),
+        };
+        let callback_count = Cell::new(0);
+
+        process_listener_message(
+            &mut listener_state,
+            ListenerMessage::HotkeyEvent(GlobalHotKeyEvent { id: 42, state }),
+            &mut |_| Some("updated-manager"),
+            &mut || callback_count.set(callback_count.get() + 1),
+        );
+
+        assert_eq!(callback_count.get(), expected_callback_count);
+        assert_eq!(listener_state.manager, Some("manager"));
     }
 }
