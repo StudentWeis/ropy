@@ -64,29 +64,24 @@ fn start_clipboard_event_handler(
 
     // Process saved records on the foreground thread where GPUI globals are accessible.
     cx.spawn(async move |async_app| {
-        while let Ok(record) = notify_rx.recv().await {
+        while let Ok(_record) = notify_rx.recv().await {
             let _ = async_app.update(|cx| {
                 let (max_display, max_storage) = Settings::read(cx, |s| {
                     (s.storage.max_history_records, s.storage.max_storage_records)
                 });
 
-                {
-                    let mut guard = match shared_records.lock() {
-                        Ok(g) => g,
-                        Err(poisoned) => poisoned.into_inner(),
-                    };
-                    guard.retain(|r| r.id != record.id);
-                    guard.insert(0, record);
-                    if guard.len() > max_display {
-                        guard.truncate(max_display);
-                    }
-                }
-
                 GlobalRepository::read(cx, |repo| {
-                    if let Some(repo) = repo
-                        && let Err(e) = repo.cleanup_old_records_if_needed(max_storage)
-                    {
-                        tracing::warn!(error = %e, "failed to cleanup old clipboard records");
+                    if let Some(repo) = repo {
+                        if let Err(e) = repo.cleanup_old_records_if_needed(max_storage) {
+                            tracing::warn!(error = %e, "failed to cleanup old clipboard records");
+                        }
+
+                        match repo.get_display_records(max_display) {
+                            Ok(records) => replace_shared_records(&shared_records, records),
+                            Err(e) => {
+                                tracing::warn!(error = %e, "failed to reload display records");
+                            }
+                        }
                     }
                 });
 
@@ -119,8 +114,19 @@ fn load_initial_records(
     max_history_records: usize,
 ) -> Vec<ClipboardRecord> {
     repository
-        .and_then(|repo| repo.get_recent(max_history_records).ok())
+        .and_then(|repo| repo.get_display_records(max_history_records).ok())
         .unwrap_or_default()
+}
+
+fn replace_shared_records(
+    shared_records: &Arc<Mutex<Vec<ClipboardRecord>>>,
+    records: Vec<ClipboardRecord>,
+) {
+    let mut guard = match shared_records.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *guard = records;
 }
 
 /// Synchronize auto-start state with system on application launch

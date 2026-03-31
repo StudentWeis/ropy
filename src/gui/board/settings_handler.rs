@@ -7,6 +7,7 @@ use super::RopyBoard;
 use crate::{
     config::Settings,
     i18n::{I18n, Language},
+    repository::GlobalRepository,
 };
 
 impl RopyBoard {
@@ -152,6 +153,15 @@ impl RopyBoard {
             input.set_placeholder(max_storage.to_string(), window, cx);
             input.set_value("", window, cx);
         });
+
+        GlobalRepository::read(cx, |repo| {
+            if let Some(repo) = repo
+                && let Err(e) = repo.cleanup_old_records(max_storage)
+            {
+                tracing::warn!(error = %e, "failed to apply storage limit after saving settings");
+            }
+        });
+        self.refresh_records_from_repository(cx);
 
         // --- User notifications: auto width (content-driven), capped at 280px ---
         if let Some(err_msg) = save_disk_error {

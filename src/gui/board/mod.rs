@@ -42,7 +42,7 @@ use crate::{
         },
     },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, GlobalRepository, models::ContentType},
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
     updater::models::UpdateStatus,
 };
 
@@ -138,6 +138,35 @@ impl RopyBoard {
                 .map(|ids| ids.into_iter().collect())
                 .unwrap_or_default()
         })
+    }
+
+    fn refresh_records_from_repository(&mut self, cx: &Context<Self>) {
+        let max_history_records = Settings::read(cx, |s| s.storage.max_history_records);
+
+        GlobalRepository::read(cx, |repo| {
+            let Some(repo) = repo else {
+                return;
+            };
+
+            match repo.get_display_records(max_history_records) {
+                Ok(records) => {
+                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                    *guard = records;
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to reload display records");
+                }
+            }
+
+            match repo.favorite_ids() {
+                Ok(ids) => {
+                    self.favorite_ids = Arc::new(ids.into_iter().collect());
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to reload favorite ids");
+                }
+            }
+        });
     }
 
     /// Rebuild the tray menu with current i18n translations.
@@ -362,15 +391,9 @@ impl RopyBoard {
                 if let Err(e) = repo.delete(id) {
                     tracing::warn!(error = %e, "failed to delete clipboard record");
                 } else {
-                    self.records
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .retain(|record| record.id != id);
-                    let mut favorite_ids = (*self.favorite_ids).clone();
-                    favorite_ids.remove(&id);
-                    self.favorite_ids = Arc::new(favorite_ids);
                     // Mark that we're in a delete operation to preserve scroll position
                     self.deleting_record = true;
+                    self.refresh_records_from_repository(cx);
                 }
             }
         });
@@ -383,14 +406,8 @@ impl RopyBoard {
                 return;
             };
             match repo.toggle_favorite(id) {
-                Ok(is_favorite) => {
-                    let mut favorite_ids = (*self.favorite_ids).clone();
-                    if is_favorite {
-                        favorite_ids.insert(id);
-                    } else {
-                        favorite_ids.remove(&id);
-                    }
-                    self.favorite_ids = Arc::new(favorite_ids);
+                Ok(_) => {
+                    self.refresh_records_from_repository(cx);
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "failed to toggle favorite on clipboard record");
@@ -400,7 +417,7 @@ impl RopyBoard {
     }
 
     /// Toggle pin state of a record
-    pub fn toggle_record_pin(&self, id: u64, cx: &Context<Self>) {
+    pub fn toggle_record_pin(&mut self, id: u64, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
                 return;
@@ -409,10 +426,7 @@ impl RopyBoard {
                 tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
                 return;
             }
-            let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Some(record) = guard.iter_mut().find(|r| r.id == id) {
-                record.pinned = !record.pinned;
-            }
+            self.refresh_records_from_repository(cx);
         });
     }
 
@@ -453,11 +467,9 @@ impl RopyBoard {
                 let right = records.get(*right_index);
 
                 match (left, right) {
-                    (Some(left), Some(right)) => match (left.pinned, right.pinned) {
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                        _ => right.created_at.cmp(&left.created_at),
-                    },
+                    (Some(left), Some(right)) => {
+                        ClipboardRepository::compare_for_display(left, right)
+                    }
                     (Some(_), None) => std::cmp::Ordering::Less,
                     (None, Some(_)) => std::cmp::Ordering::Greater,
                     (None, None) => left_index.cmp(right_index),
@@ -566,9 +578,7 @@ impl Render for RopyBoard {
 
                 // Use splice to inform list state about the change instead of reset
                 // This helps preserve scroll position better
-                if old_len > new_len && self.deleting_record {
-                    // A record was deleted - use splice to update just that range
-                    // We replace the entire range with the new count
+                if self.deleting_record {
                     self.list_state.splice(0..old_len, new_len);
 
                     // Restore scroll position

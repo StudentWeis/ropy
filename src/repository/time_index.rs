@@ -7,6 +7,8 @@
 //! ## Value format (2 bytes)
 //! `pinned(u8) ++ content_type_tag(u8)`
 
+use std::collections::HashSet;
+
 use sled::Tree;
 
 use super::{
@@ -79,30 +81,55 @@ impl TimeIndex {
         Ok(())
     }
 
-    /// Select up to `limit` record IDs for display.
+    /// Select record IDs for the default board view.
     ///
-    /// All pinned IDs are collected first (they always appear), then unpinned
-    /// IDs are appended until the total reaches `limit`. Returns IDs in
-    /// newest-first order within each group.
-    pub fn select_recent_ids(&self, limit: usize) -> Result<Vec<u64>, RepositoryError> {
-        let mut pinned: Vec<u64> = Vec::new();
-        let mut unpinned: Vec<u64> = Vec::new();
+    /// Pinned records are always included first. Among unpinned records, all
+    /// favorited records are included without consuming the ordinary `limit`,
+    /// and up to `limit` ordinary records are appended in newest-first order.
+    pub fn select_display_ids(
+        &self,
+        limit: usize,
+        favorite_ids: &HashSet<u64>,
+    ) -> Result<Vec<u64>, RepositoryError> {
+        let mut pinned = Vec::new();
+        let mut selected_unpinned = Vec::new();
+        let mut ordinary_count = 0;
 
         for result in self.tree.iter().rev() {
             let (k, v) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
             let Some(entry) = Self::decode_entry(&k, &v) else {
                 continue;
             };
+
             if entry.is_pinned {
                 pinned.push(entry.id);
-            } else if pinned.len() + unpinned.len() < limit {
-                unpinned.push(entry.id);
+            } else if favorite_ids.contains(&entry.id) {
+                selected_unpinned.push(entry.id);
+            } else if ordinary_count < limit {
+                selected_unpinned.push(entry.id);
+                ordinary_count += 1;
             }
         }
 
-        let unpinned_slots = limit.saturating_sub(pinned.len());
-        unpinned.truncate(unpinned_slots);
-        pinned.extend(unpinned);
+        pinned.extend(selected_unpinned);
+        Ok(pinned)
+    }
+
+    /// Collect all pinned record IDs in newest-first order.
+    pub fn pinned_ids(&self) -> Result<Vec<u64>, RepositoryError> {
+        let mut pinned = Vec::new();
+
+        for result in self.tree.iter().rev() {
+            let (k, v) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
+            let Some(entry) = Self::decode_entry(&k, &v) else {
+                continue;
+            };
+
+            if entry.is_pinned {
+                pinned.push(entry.id);
+            }
+        }
+
         Ok(pinned)
     }
 
@@ -201,6 +228,8 @@ impl TimeIndex {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use tempfile::tempdir;
 
     use super::*;
@@ -212,6 +241,13 @@ mod tests {
         let db = sled::open(&db_path).expect("Failed to open database");
         let tree = db.open_tree("time_index").expect("Failed to open tree");
         TimeIndex::new(tree)
+    }
+
+    #[allow(clippy::expect_used)]
+    fn select_display_ids_without_favorites(index: &TimeIndex, limit: usize) -> Vec<u64> {
+        index
+            .select_display_ids(limit, &HashSet::new())
+            .expect("Failed to select")
     }
 
     // ── Encoding/Decoding Tests ───────────────────────────────────
@@ -306,7 +342,7 @@ mod tests {
 
         index.upsert(&record).expect("Failed to upsert");
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![1]);
     }
 
@@ -338,7 +374,7 @@ mod tests {
         index.upsert(&record2).expect("Failed to upsert second");
 
         // Should only have one entry
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids.len(), 1);
         assert_eq!(ids[0], 1);
     }
@@ -351,12 +387,12 @@ mod tests {
 
         index.insert_raw(timestamp, 1, false, &ContentType::Text);
 
-        let ids_before = index.select_recent_ids(10).expect("Failed to select");
+        let ids_before = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids_before.len(), 1);
 
         index.remove(timestamp, 1).expect("Failed to remove");
 
-        let ids_after = index.select_recent_ids(10).expect("Failed to select");
+        let ids_after = select_display_ids_without_favorites(&index, 10);
         assert!(ids_after.is_empty());
     }
 
@@ -380,7 +416,7 @@ mod tests {
         index.insert_raw(timestamp, 1, false, &ContentType::Text);
 
         // Verify initially unpinned
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         // Unpinned records are not returned first, so this verifies it's unpinned
         assert_eq!(ids, vec![1]);
 
@@ -390,7 +426,7 @@ mod tests {
             .expect("Failed to update pinned");
 
         // Verify now pinned (should appear in results even with limit 0)
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![1]);
     }
 
@@ -408,7 +444,7 @@ mod tests {
         index.clear().expect("Failed to clear");
 
         assert_eq!(index.tree.len(), 0);
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert!(ids.is_empty());
     }
 
@@ -416,16 +452,16 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_empty() {
+    fn test_select_display_ids_empty() {
         let index = create_test_time_index();
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert!(ids.is_empty());
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_ordering() {
+    fn test_select_display_ids_ordering() {
         let index = create_test_time_index();
 
         // Insert in non-chronological order
@@ -433,21 +469,21 @@ mod tests {
         index.insert_raw(1000, 1, false, &ContentType::Text);
         index.insert_raw(2000, 2, false, &ContentType::Text);
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         // Should be in reverse chronological order (newest first)
         assert_eq!(ids, vec![3, 2, 1]);
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_with_limit() {
+    fn test_select_display_ids_with_limit() {
         let index = create_test_time_index();
 
         for i in 1..=5 {
             index.insert_raw(i * 1000, i as u64, false, &ContentType::Text);
         }
 
-        let ids = index.select_recent_ids(3).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 3);
         assert_eq!(ids.len(), 3);
         // Should get the 3 most recent
         assert_eq!(ids, vec![5, 4, 3]);
@@ -455,7 +491,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_pinned_always_included() {
+    fn test_select_display_ids_pinned_always_included() {
         let index = create_test_time_index();
 
         // Insert unpinned records
@@ -467,39 +503,76 @@ mod tests {
         index.insert_raw(100, 100, true, &ContentType::Text);
         index.insert_raw(200, 200, true, &ContentType::Text);
 
-        let ids = index.select_recent_ids(3).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 3);
 
-        // Pinned records should appear first, even with limit
-        assert_eq!(ids.len(), 3);
+        // Pinned records should appear first and do not consume the ordinary limit.
+        assert_eq!(ids.len(), 5);
         assert_eq!(ids[0], 200); // newer pinned
         assert_eq!(ids[1], 100); // older pinned
-        // Third slot goes to most recent unpinned
+        // Remaining slots go to the 3 most recent unpinned records.
         assert_eq!(ids[2], 5);
+        assert_eq!(ids[3], 4);
+        assert_eq!(ids[4], 3);
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_only_pinned() {
+    fn test_select_display_ids_only_pinned() {
         let index = create_test_time_index();
 
         index.insert_raw(1000, 1, true, &ContentType::Text);
         index.insert_raw(2000, 2, true, &ContentType::Text);
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![2, 1]); // Newer pinned first
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_select_recent_ids_limit_zero() {
+    fn test_select_display_ids_limit_zero() {
         let index = create_test_time_index();
 
         index.insert_raw(1000, 1, false, &ContentType::Text);
         index.insert_raw(2000, 2, true, &ContentType::Text); // pinned
 
-        let ids = index.select_recent_ids(0).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 0);
         // Pinned records should still appear even with limit 0
         assert_eq!(ids, vec![2]);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_select_display_ids_when_favorites_present_keep_default_time_order() {
+        let index = create_test_time_index();
+
+        index.insert_raw(1000, 1, false, &ContentType::Text);
+        index.insert_raw(2000, 2, false, &ContentType::Text);
+        index.insert_raw(3000, 3, false, &ContentType::Text);
+        index.insert_raw(4000, 4, true, &ContentType::Text);
+
+        let favorite_ids = HashSet::from([2_u64]);
+        let ids = index
+            .select_display_ids(1, &favorite_ids)
+            .expect("Failed to select");
+
+        assert_eq!(ids, vec![4, 3, 2]);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_select_display_ids_when_limit_zero_returns_pinned_and_favorites() {
+        let index = create_test_time_index();
+
+        index.insert_raw(1000, 1, false, &ContentType::Text);
+        index.insert_raw(2000, 2, false, &ContentType::Text);
+        index.insert_raw(3000, 3, true, &ContentType::Text);
+
+        let favorite_ids = HashSet::from([2_u64]);
+        let ids = index
+            .select_display_ids(0, &favorite_ids)
+            .expect("Failed to select");
+
+        assert_eq!(ids, vec![3, 2]);
     }
 
     #[test]
@@ -592,7 +665,7 @@ mod tests {
         // Use internal method to remove by id
         index.remove_by_id(1).expect("Failed to remove by id");
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![2]);
     }
 
@@ -608,7 +681,7 @@ mod tests {
             .remove_by_id(999)
             .expect("Should not fail on non-existent");
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![1]);
     }
 
@@ -625,7 +698,7 @@ mod tests {
         // remove_by_id should only remove one (the first found in reverse iteration)
         index.remove_by_id(1).expect("Failed to remove by id");
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids.len(), 1);
     }
 
@@ -672,7 +745,7 @@ mod tests {
             handle.join().expect("Thread panicked");
         }
 
-        let ids = index.select_recent_ids(20).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 20);
         assert_eq!(ids.len(), 10);
     }
 
@@ -693,14 +766,14 @@ mod tests {
 
         // Request 100 records - should get all pinned (334) which exceeds limit
         // but pinned records are always included
-        let ids = index.select_recent_ids(100).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 100);
         // Pinned records (i % 3 == 0): 0, 3, 6, ... 999 = 334 records
         // All pinned records should be included even if exceeding limit
         assert!(!ids.is_empty());
 
-        // Verify we get the expected number of pinned records
+        // Verify we get all pinned records plus the requested ordinary window.
         let expected_pinned_count = (0..count).filter(|i| i % 3 == 0).count();
-        assert_eq!(ids.len(), expected_pinned_count);
+        assert_eq!(ids.len(), expected_pinned_count + 100);
 
         let oldest = index.oldest_unpinned(50).expect("Failed to get oldest");
         assert_eq!(oldest.len(), 50);
@@ -716,7 +789,7 @@ mod tests {
         index.insert_raw(now + 1, 2, false, &ContentType::Image);
         index.insert_raw(now + 2, 3, false, &ContentType::FilePath);
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids.len(), 3);
         // Order should be by timestamp, not content type
         assert_eq!(ids, vec![3, 2, 1]);
@@ -733,7 +806,7 @@ mod tests {
         let key = TimeIndex::encode_key(timestamp, 1);
         index.remove_raw(&key).expect("Failed to remove raw");
 
-        let ids = index.select_recent_ids(10).expect("Failed to select");
+        let ids = select_display_ids_without_favorites(&index, 10);
         assert!(ids.is_empty());
     }
 }

@@ -1,6 +1,6 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
-use std::{fs, path::PathBuf};
+use std::{cmp::Ordering, collections::HashSet, fs, path::PathBuf};
 
 use chrono::Local;
 use sled::Db;
@@ -227,14 +227,19 @@ impl ClipboardRepository {
         }
     }
 
-    /// Get the most recent `limit` records (pinned first).
+    /// Get the records for the default board view.
     ///
-    /// Uses the lightweight time index to select IDs, then batch-loads
-    /// only the needed records from the main tree.
-    pub fn get_recent(&self, limit: usize) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let selected_ids = self.time_index.select_recent_ids(limit)?;
+    /// Pinned records stay at the top. Favorited records do not consume the
+    /// ordinary `limit`, but otherwise remain in the default chronological
+    /// ordering with other unpinned records.
+    pub fn get_display_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
+        let favorite_ids = self.favorite_id_set()?;
+        let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
         let mut records = self.load_records(&selected_ids);
-        Self::sort_pinned_first(&mut records);
+        Self::sort_for_display(&mut records);
         Ok(records)
     }
 
@@ -259,14 +264,6 @@ impl ClipboardRepository {
 
         ids.sort_unstable();
         Ok(ids)
-    }
-
-    /// Return whether a record is currently favorited.
-    pub fn is_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
-        self.favorites
-            .get(id.to_be_bytes())
-            .map(|value| value.is_some())
-            .map_err(|e| RepositoryError::Query(e.to_string()))
     }
 
     /// Toggle the favorite state of a record.
@@ -382,7 +379,14 @@ impl ClipboardRepository {
     /// Pinned records are never removed.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
-        self.cleanup_old_records_with_total(keep_count, total)
+        let favorite_ids = self.favorite_id_set()?;
+        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
+        self.cleanup_old_records_with_ordinary_total(
+            keep_count,
+            ordinary_total,
+            total,
+            &favorite_ids,
+        )
     }
 
     /// Clean up old records only after the repository has exceeded the
@@ -392,19 +396,28 @@ impl ClipboardRepository {
         keep_count: usize,
     ) -> Result<usize, RepositoryError> {
         let total = self.count();
-        if total <= Self::cleanup_trigger_record_count(keep_count) {
+        let favorite_ids = self.favorite_id_set()?;
+        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
+        if ordinary_total <= Self::cleanup_trigger_record_count(keep_count) {
             return Ok(0);
         }
 
-        self.cleanup_old_records(keep_count)
+        self.cleanup_old_records_with_ordinary_total(
+            keep_count,
+            ordinary_total,
+            total,
+            &favorite_ids,
+        )
     }
 
-    fn cleanup_old_records_with_total(
+    fn cleanup_old_records_with_ordinary_total(
         &self,
         keep_count: usize,
+        ordinary_total: usize,
         total: usize,
+        favorite_ids: &HashSet<u64>,
     ) -> Result<usize, RepositoryError> {
-        if total <= keep_count {
+        if ordinary_total <= keep_count {
             return Ok(0);
         }
 
@@ -412,10 +425,10 @@ impl ClipboardRepository {
         let mut removed = 0;
 
         for (ti_key, id) in candidates {
-            if total.saturating_sub(removed) <= keep_count {
+            if ordinary_total.saturating_sub(removed) <= keep_count {
                 break;
             }
-            if self.is_favorite(id)? {
+            if favorite_ids.contains(&id) {
                 continue;
             }
 
@@ -448,13 +461,14 @@ impl ClipboardRepository {
 }
 
 impl ClipboardRepository {
-    /// Sort records with pinned items first, each group in descending time.
-    pub(crate) fn sort_pinned_first(records: &mut [ClipboardRecord]) {
-        records.sort_unstable_by(|a, b| match (a.pinned, b.pinned) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => b.created_at.cmp(&a.created_at),
-        });
+    pub(crate) fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
+        Self::display_priority(left)
+            .cmp(&Self::display_priority(right))
+            .then_with(|| right.created_at.cmp(&left.created_at))
+    }
+
+    pub(crate) fn sort_for_display(records: &mut [ClipboardRecord]) {
+        records.sort_unstable_by(Self::compare_for_display);
     }
 
     /// Raw sled get on the records tree.
@@ -505,6 +519,36 @@ impl ClipboardRepository {
         Ok(())
     }
 
+    fn favorite_id_set(&self) -> Result<HashSet<u64>, RepositoryError> {
+        let mut favorite_ids = HashSet::new();
+
+        for id in self.favorite_ids()? {
+            if self.get_raw(&id.to_be_bytes())?.is_some() {
+                favorite_ids.insert(id);
+            }
+        }
+
+        Ok(favorite_ids)
+    }
+
+    fn ordinary_record_count(
+        &self,
+        total: usize,
+        favorite_ids: &HashSet<u64>,
+    ) -> Result<usize, RepositoryError> {
+        let mut special_ids = self
+            .time_index
+            .pinned_ids()?
+            .into_iter()
+            .collect::<HashSet<_>>();
+        special_ids.extend(favorite_ids.iter().copied());
+        Ok(total.saturating_sub(special_ids.len()))
+    }
+
+    const fn display_priority(record: &ClipboardRecord) -> u8 {
+        (!record.pinned) as u8
+    }
+
     fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
         let key: [u8; 8] = bytes.try_into().ok()?;
         Some(u64::from_be_bytes(key))
@@ -532,6 +576,12 @@ mod tests {
         let db_path = temp_dir.path().join("test.db");
         ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
             .expect("Failed to create test repository")
+    }
+
+    #[allow(clippy::expect_used)]
+    fn load_display_records(repo: &ClipboardRepository, limit: usize) -> Vec<ClipboardRecord> {
+        repo.get_display_records(limit)
+            .expect("Failed to get display records")
     }
 
     #[allow(clippy::expect_used)]
@@ -563,7 +613,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_get_recent() {
+    fn test_get_display_records() {
         let repo = create_test_repo();
 
         for i in 1..=5 {
@@ -572,11 +622,177 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        let recent = repo.get_recent(3).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 3);
         assert_eq!(recent.len(), 3);
         assert_eq!(recent[0].content, "Record 5");
         assert_eq!(recent[1].content, "Record 4");
         assert_eq!(recent[2].content, "Record 3");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_display_records_when_favorites_present_keep_default_time_order() {
+        let repo = create_test_repo();
+
+        let favorite_and_pinned = repo
+            .save_text("Favorite pinned".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let favorite_only = repo
+            .save_text("Favorite only".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("Ordinary old".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("Ordinary new".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("Ordinary newest".to_string())
+            .expect("Failed to save");
+
+        repo.toggle_favorite(favorite_and_pinned.id)
+            .expect("Failed to favorite pinned record");
+        repo.toggle_pin(favorite_and_pinned.id)
+            .expect("Failed to pin favorite record");
+        repo.toggle_favorite(favorite_only.id)
+            .expect("Failed to favorite record");
+
+        let display_records = repo
+            .get_display_records(2)
+            .expect("Failed to get display records");
+        let contents = display_records
+            .iter()
+            .map(|record| record.content.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            contents,
+            vec![
+                "Favorite pinned",
+                "Ordinary newest",
+                "Ordinary new",
+                "Favorite only",
+            ]
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_returns_41() {
+        let repo = create_test_repo();
+
+        let first = repo
+            .save_text("Record 1".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let second = repo
+            .save_text("Record 2".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let third = repo
+            .save_text("Record 3".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+
+        repo.toggle_favorite(first.id)
+            .expect("Failed to favorite first");
+        repo.toggle_favorite(second.id)
+            .expect("Failed to favorite second");
+        repo.toggle_pin(third.id).expect("Failed to pin third");
+
+        for index in 4..=41 {
+            repo.save_text(format!("Record {index}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let display_records = repo
+            .get_display_records(40)
+            .expect("Failed to get display records");
+
+        assert_eq!(repo.count(), 41);
+        assert_eq!(display_records.len(), 41);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_returns_43() {
+        let repo = create_test_repo();
+
+        let first = repo
+            .save_text("Record 1".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let second = repo
+            .save_text("Record 2".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let third = repo
+            .save_text("Record 3".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+
+        repo.toggle_favorite(first.id)
+            .expect("Failed to favorite first");
+        repo.toggle_favorite(second.id)
+            .expect("Failed to favorite second");
+        repo.toggle_pin(third.id).expect("Failed to pin third");
+
+        for index in 4..=43 {
+            repo.save_text(format!("Record {index}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let display_records = repo
+            .get_display_records(40)
+            .expect("Failed to get display records");
+
+        assert_eq!(repo.count(), 43);
+        assert_eq!(display_records.len(), 43);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_get_display_records_when_newest_records_are_favorited_still_returns_43() {
+        let repo = create_test_repo();
+
+        let pinned = repo
+            .save_text("Pinned".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+
+        for index in 2..=43 {
+            repo.save_text(format!("Record {index}"))
+                .expect("Failed to save");
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        repo.toggle_pin(pinned.id).expect("Failed to pin");
+
+        let newest = repo.get_by_id(crate::utils::content_hash("Record 43", &ContentType::Text));
+        let second_newest =
+            repo.get_by_id(crate::utils::content_hash("Record 42", &ContentType::Text));
+
+        let newest = newest
+            .expect("Failed to get newest")
+            .expect("Newest should exist");
+        let second_newest = second_newest
+            .expect("Failed to get second newest")
+            .expect("Second newest should exist");
+
+        repo.toggle_favorite(newest.id)
+            .expect("Failed to favorite newest");
+        repo.toggle_favorite(second_newest.id)
+            .expect("Failed to favorite second newest");
+
+        let display_records = repo
+            .get_display_records(40)
+            .expect("Failed to get display records");
+
+        assert_eq!(repo.count(), 43);
+        assert_eq!(display_records.len(), 43);
     }
 
     #[test]
@@ -628,7 +844,7 @@ mod tests {
         assert_eq!(repo.count(), 5);
 
         // Verify that the latest records are retained
-        let recent = repo.get_recent(5).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 5);
         assert_eq!(recent[0].content, "Record 10");
         assert_eq!(recent[4].content, "Record 6");
     }
@@ -668,7 +884,7 @@ mod tests {
         // Only 2 unique records (A and B)
         assert_eq!(repo.count(), 2);
         // A is now the most recent
-        let recent = repo.get_recent(2).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 2);
         assert_eq!(recent[0].content, "A");
         assert_eq!(recent[0].created_at, a2.created_at);
         assert_eq!(recent[1].content, "B");
@@ -733,7 +949,7 @@ mod tests {
         // Pin the second record
         repo.toggle_pin(second.id).expect("Failed to toggle pin");
 
-        let recent = repo.get_recent(10).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 10);
         assert_eq!(recent[0].content, "Second"); // pinned → first
         assert_eq!(recent[1].content, "Third");
         assert_eq!(recent[2].content, "First");
@@ -753,7 +969,7 @@ mod tests {
         repo.toggle_pin(r1.id).expect("Failed to toggle pin");
         repo.toggle_pin(r3.id).expect("Failed to toggle pin");
 
-        let recent = repo.get_recent(10).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 10);
         // Both pinned, newer first
         assert_eq!(recent[0].content, "Gamma");
         assert_eq!(recent[1].content, "Alpha");
@@ -780,10 +996,9 @@ mod tests {
         assert_eq!(repo.count(), 6);
 
         let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
-        // The pinned record survives, and cleanup continues removing
-        // unpinned records until the total count reaches the keep limit.
-        assert_eq!(removed, 3);
-        assert_eq!(repo.count(), 3);
+        // The pinned record survives and no longer consumes the ordinary keep budget.
+        assert_eq!(removed, 2);
+        assert_eq!(repo.count(), 4);
         // Pinned record should survive
         let pinned = repo
             .get_by_id(r1.id)
@@ -814,7 +1029,7 @@ mod tests {
         repo.time_index
             .insert_raw(now.timestamp_millis(), 1000, false, &ContentType::Text);
 
-        let records = repo.get_recent(10).expect("Failed to get recent");
+        let records = load_display_records(&repo, 10);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].content, "binary record");
         assert!(!records[0].pinned);
@@ -838,12 +1053,10 @@ mod tests {
         repo.toggle_pin(r2.id).expect("Failed to toggle pin");
         repo.toggle_pin(r3.id).expect("Failed to toggle pin");
 
-        // keep_count = 2, but 3 pinned records cannot be removed
+        // keep_count = 2 applies only to ordinary records.
         let removed = repo.cleanup_old_records(2).expect("Failed to clean up");
-        // Only the 1 unpinned record (D) can be removed
-        assert_eq!(removed, 1);
-        // Total count = 3 (all pinned), which is above keep_count
-        assert_eq!(repo.count(), 3);
+        assert_eq!(removed, 0);
+        assert_eq!(repo.count(), 4);
     }
 
     #[test]
@@ -855,19 +1068,15 @@ mod tests {
             .expect("Failed to save");
 
         assert!(
-            !repo
-                .is_favorite(record.id)
-                .expect("Failed to query favorite")
+            repo.favorite_ids()
+                .expect("Failed to load favorite ids")
+                .is_empty()
         );
 
         let is_favorite = repo
             .toggle_favorite(record.id)
             .expect("Failed to add favorite");
         assert!(is_favorite);
-        assert!(
-            repo.is_favorite(record.id)
-                .expect("Failed to query favorite")
-        );
 
         let favorite_ids = repo.favorite_ids().expect("Failed to load favorite ids");
         assert_eq!(favorite_ids, vec![record.id]);
@@ -877,9 +1086,9 @@ mod tests {
             .expect("Failed to remove favorite");
         assert!(!is_favorite);
         assert!(
-            !repo
-                .is_favorite(record.id)
-                .expect("Failed to query favorite")
+            repo.favorite_ids()
+                .expect("Failed to load favorite ids")
+                .is_empty()
         );
         assert!(
             repo.get_favorites()
@@ -921,7 +1130,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_cleanup_old_records_favorited_record_keeps_record() {
+    fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_records() {
         let repo = create_test_repo();
 
         let favorite = repo
@@ -938,8 +1147,8 @@ mod tests {
             .expect("Failed to favorite record");
 
         let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
-        assert_eq!(removed, 3);
-        assert_eq!(repo.count(), 3);
+        assert_eq!(removed, 2);
+        assert_eq!(repo.count(), 4);
         assert!(
             repo.get_by_id(favorite.id)
                 .expect("Failed to get by id")
@@ -957,18 +1166,13 @@ mod tests {
 
         repo.toggle_favorite(record.id)
             .expect("Failed to favorite record");
-        assert!(
-            repo.is_favorite(record.id)
-                .expect("Failed to query favorite")
+        assert_eq!(
+            repo.favorite_ids().expect("Failed to load favorite ids"),
+            vec![record.id]
         );
 
         let deleted = repo.delete(record.id).expect("Failed to delete");
         assert!(deleted);
-        assert!(
-            !repo
-                .is_favorite(record.id)
-                .expect("Failed to query favorite")
-        );
         assert!(
             repo.favorite_ids()
                 .expect("Failed to load favorite ids")
@@ -1010,20 +1214,20 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_get_recent_zero_limit() {
+    fn test_get_display_records_zero_limit() {
         let repo = create_test_repo();
 
         repo.save_text("Test".to_string()).expect("Failed to save");
 
         // With limit 0, should return empty (except pinned records)
-        let result = repo.get_recent(0).expect("Failed to get recent");
+        let result = load_display_records(&repo, 0);
         // Pinned records always appear, so this tests unpinned behavior
         assert!(result.is_empty());
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_get_recent_large_limit() {
+    fn test_get_display_records_large_limit() {
         let repo = create_test_repo();
 
         // Save only 3 records but request 1000
@@ -1033,16 +1237,16 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        let result = repo.get_recent(1000).expect("Failed to get recent");
+        let result = load_display_records(&repo, 1000);
         assert_eq!(result.len(), 3);
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_get_recent_empty_repo() {
+    fn test_get_display_records_empty_repo() {
         let repo = create_test_repo();
 
-        let result = repo.get_recent(10).expect("Failed to get recent");
+        let result = load_display_records(&repo, 10);
         assert!(result.is_empty());
     }
 
@@ -1131,8 +1335,8 @@ mod tests {
         assert_eq!(repo.count(), keep_count);
 
         let recent = repo
-            .get_recent(keep_count)
-            .unwrap_or_else(|err| panic!("Failed to get recent: {err}"));
+            .get_display_records(keep_count)
+            .unwrap_or_else(|err| panic!("Failed to get display records: {err}"));
         assert_eq!(recent.len(), keep_count);
         assert_eq!(recent[0].content, format!("Record {}", threshold + 1));
     }
@@ -1324,7 +1528,7 @@ mod tests {
         assert_eq!(repo.count(), 2);
 
         // Verify remaining records
-        let recent = repo.get_recent(10).expect("Failed to get recent");
+        let recent = load_display_records(&repo, 10);
         assert_eq!(recent.len(), 2);
         // Pinned first, then third (most recent unpinned)
         assert_eq!(recent[0].content, "First");
@@ -1337,15 +1541,15 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_sort_pinned_first_empty() {
+    fn test_sort_for_display_empty() {
         let mut records: Vec<ClipboardRecord> = vec![];
-        ClipboardRepository::sort_pinned_first(&mut records);
+        ClipboardRepository::sort_for_display(&mut records);
         assert!(records.is_empty());
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_sort_pinned_first_single() {
+    fn test_sort_for_display_single() {
         let now = chrono::Local::now();
         let mut records = vec![ClipboardRecord {
             id: 1,
@@ -1355,14 +1559,14 @@ mod tests {
             pinned: false,
         }];
 
-        ClipboardRepository::sort_pinned_first(&mut records);
+        ClipboardRepository::sort_for_display(&mut records);
         assert_eq!(records.len(), 1);
         assert!(!records[0].pinned);
     }
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_sort_pinned_first_all_same_pinned_state() {
+    fn test_sort_for_display_all_same_pinned_state() {
         let now = chrono::Local::now();
         let mut records = vec![
             ClipboardRecord {
@@ -1388,7 +1592,7 @@ mod tests {
             },
         ];
 
-        ClipboardRepository::sort_pinned_first(&mut records);
+        ClipboardRepository::sort_for_display(&mut records);
 
         // Should be sorted by time descending (newest first)
         assert_eq!(records[0].content, "newest");
@@ -1487,7 +1691,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::expect_used)]
-    fn test_get_recent_with_pinned_and_limit() {
+    fn test_get_display_records_with_pinned_and_limit() {
         let repo = create_test_repo();
 
         // Create 5 unpinned records
@@ -1498,17 +1702,20 @@ mod tests {
         }
 
         // Pin the oldest one (first saved)
-        let recent = repo.get_recent(5).expect("Failed to get");
+        let recent = load_display_records(&repo, 5);
         let oldest_id = recent[4].id; // Last in the list is oldest
         repo.toggle_pin(oldest_id).expect("Failed to pin");
 
-        // Get recent with limit 3
-        let recent_limited = repo.get_recent(3).expect("Failed to get");
+        // Get display records with an ordinary limit of 3
+        let recent_limited = load_display_records(&repo, 3);
 
-        // Should include the pinned one plus 2 most recent unpinned
-        assert_eq!(recent_limited.len(), 3);
+        // Should include the pinned one plus the 3 most recent unpinned records.
+        assert_eq!(recent_limited.len(), 4);
         // First should be the pinned one
         assert!(recent_limited[0].pinned);
         assert_eq!(recent_limited[0].id, oldest_id);
+        assert_eq!(recent_limited[1].content, "Unpinned 5");
+        assert_eq!(recent_limited[2].content, "Unpinned 4");
+        assert_eq!(recent_limited[3].content, "Unpinned 3");
     }
 }
