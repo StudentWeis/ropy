@@ -4,12 +4,9 @@ use serde::Deserialize;
 
 /// A GitHub Release as returned by the API
 #[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
 pub struct GitHubRelease {
     pub tag_name: String,
-    pub name: Option<String>,
     pub body: Option<String>,
-    pub prerelease: bool,
     pub assets: Vec<GitHubAsset>,
 }
 

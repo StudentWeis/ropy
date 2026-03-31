@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
-use gpui::{App, BorrowAppContext, Global, ReadGlobal};
+use gpui::{App, Global, ReadGlobal};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::Language;
@@ -10,8 +10,6 @@ use crate::i18n::Language;
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 /// Default maximum number of records to store in the repository
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
-/// Default interval for update checks (in hours)
-const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS: u64 = 24;
 
 /// Application settings structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -176,8 +174,6 @@ pub struct AutoStartSettings {
 pub struct UpdateSettings {
     /// Whether to automatically check for updates on startup
     pub auto_check: bool,
-    /// Check interval in hours
-    pub check_interval_hours: u64,
     /// Whether to include pre-release versions
     pub include_prerelease: bool,
 }
@@ -186,7 +182,6 @@ impl Default for UpdateSettings {
     fn default() -> Self {
         Self {
             auto_check: true,
-            check_interval_hours: DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
             include_prerelease: false,
         }
     }
@@ -212,25 +207,6 @@ impl Settings {
     /// Read a value from the global settings via a closure.
     pub fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
         reader(Self::global(cx))
-    }
-
-    /// Update the global settings in place and persist to disk.
-    #[allow(dead_code)]
-    pub fn update_global(cx: &mut App, updater: impl FnOnce(&mut Self)) {
-        cx.update_global::<Self, _>(|settings, _cx| {
-            updater(settings);
-            if let Err(e) = settings.save() {
-                tracing::warn!(error = %e, "failed to persist settings to disk");
-            }
-        });
-    }
-
-    /// Update the global settings without auto-saving to disk.
-    #[allow(dead_code)]
-    pub fn update_global_without_save(cx: &mut App, updater: impl FnOnce(&mut Self)) {
-        cx.update_global::<Self, _>(|settings, _cx| {
-            updater(settings);
-        });
     }
 }
 
@@ -304,7 +280,6 @@ mod tests {
         settings.autostart.enabled = true;
         settings.language = Language::new("zh-CN");
         settings.update.auto_check = false;
-        settings.update.check_interval_hours = 12;
         settings.update.include_prerelease = true;
         settings.preview.hover_preview_enabled = false;
         settings.confirm.mode = ConfirmMode::PasteImmediately;
@@ -324,7 +299,6 @@ mod tests {
         assert!(loaded.autostart.enabled);
         assert_eq!(loaded.language.code(), "zh-CN");
         assert!(!loaded.update.auto_check);
-        assert_eq!(loaded.update.check_interval_hours, 12);
         assert!(loaded.update.include_prerelease);
         assert!(!loaded.preview.hover_preview_enabled);
         assert_eq!(loaded.confirm.mode, ConfirmMode::PasteImmediately);
@@ -506,10 +480,6 @@ max_history_records = 100
     fn test_update_settings_default() {
         let update = UpdateSettings::default();
         assert!(update.auto_check);
-        assert_eq!(
-            update.check_interval_hours,
-            DEFAULT_UPDATE_CHECK_INTERVAL_HOURS
-        );
         assert!(!update.include_prerelease);
     }
 

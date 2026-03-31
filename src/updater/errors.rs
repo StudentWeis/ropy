@@ -24,8 +24,4 @@ pub enum UpdateError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("current version {current} is already up to date (latest: {latest})")]
-    #[allow(dead_code)]
-    AlreadyUpToDate { current: String, latest: String },
 }

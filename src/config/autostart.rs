@@ -13,7 +13,6 @@ pub enum AutoStartError {
     Enable(String),
     #[error("Failed to disable auto-start: {0}")]
     Disable(String),
-    #[allow(dead_code)]
     #[error("Failed to check auto-start status: {0}")]
     StatusCheck(String),
 }

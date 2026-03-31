@@ -294,29 +294,6 @@ impl ClipboardRepository {
         Ok(true)
     }
 
-    /// Get all favorite records ordered by favorited time descending.
-    #[allow(dead_code)]
-    pub fn get_favorites(&self) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let mut favorites = Vec::new();
-
-        for entry in &self.favorites {
-            let (key, value) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let Some(id) = Self::decode_u64_key(&key) else {
-                continue;
-            };
-            let Some(favorited_at) = Self::decode_i64_value(&value) else {
-                continue;
-            };
-            favorites.push((favorited_at, id));
-        }
-
-        favorites.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
-        let ids = favorites.into_iter().map(|(_, id)| id).collect::<Vec<_>>();
-        Ok(self.load_records(&ids))
-    }
-}
-
-impl ClipboardRepository {
     /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
@@ -552,12 +529,6 @@ impl ClipboardRepository {
     fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
         let key: [u8; 8] = bytes.try_into().ok()?;
         Some(u64::from_be_bytes(key))
-    }
-
-    #[allow(dead_code)]
-    fn decode_i64_value(bytes: &[u8]) -> Option<i64> {
-        let value: [u8; 8] = bytes.try_into().ok()?;
-        Some(i64::from_be_bytes(value))
     }
 }
 
@@ -1090,42 +1061,6 @@ mod tests {
                 .expect("Failed to load favorite ids")
                 .is_empty()
         );
-        assert!(
-            repo.get_favorites()
-                .expect("Failed to load favorites")
-                .is_empty()
-        );
-    }
-
-    #[test]
-    #[allow(clippy::expect_used)]
-    fn test_favorite_get_favorites_returns_records_by_favorited_time() {
-        let repo = create_test_repo();
-
-        let first = repo.save_text("First".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let second = repo
-            .save_text("Second".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let third = repo.save_text("Third".to_string()).expect("Failed to save");
-
-        repo.toggle_favorite(second.id)
-            .expect("Failed to favorite second");
-        thread::sleep(Duration::from_millis(10));
-        repo.toggle_favorite(first.id)
-            .expect("Failed to favorite first");
-        thread::sleep(Duration::from_millis(10));
-        repo.toggle_favorite(third.id)
-            .expect("Failed to favorite third");
-
-        let favorites = repo.get_favorites().expect("Failed to load favorites");
-        let favorite_contents: Vec<_> = favorites
-            .iter()
-            .map(|record| record.content.as_str())
-            .collect();
-
-        assert_eq!(favorite_contents, vec!["Third", "First", "Second"]);
     }
 
     #[test]

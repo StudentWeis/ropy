@@ -7,12 +7,9 @@ use x11rb::{
     wrapper::ConnectionExt as _,
 };
 
-#[allow(dead_code)]
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
-    net_client_list: u32,
-    net_wm_pid: u32,
     net_wm_state_above: u32,
     net_wm_state: u32,
     window_id: u32,
@@ -49,8 +46,6 @@ impl X11 {
         Ok(Self {
             connection: conn,
             root_id,
-            net_client_list,
-            net_wm_pid,
             net_wm_state_above,
             net_wm_state,
             window_id: window_id.ok_or_else(|| io::Error::other("Failed to get window id"))?,
