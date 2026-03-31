@@ -19,6 +19,7 @@ use crate::{
     gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
+    utils::lock_or_recover,
 };
 
 #[cfg(target_os = "linux")]
@@ -122,10 +123,7 @@ fn replace_shared_records(
     shared_records: &Arc<Mutex<Vec<ClipboardRecord>>>,
     records: Vec<ClipboardRecord>,
 ) {
-    let mut guard = match shared_records.lock() {
-        Ok(g) => g,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut guard = lock_or_recover(shared_records);
     *guard = records;
 }
 

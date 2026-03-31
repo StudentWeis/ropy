@@ -1,4 +1,52 @@
 use gpui::{Context, Window};
+
+/// Spawn a named thread that runs a blocking receive loop and forwards mapped
+/// events to an `async_channel::Sender`.
+///
+/// `receive_loop` is called with a closure that the caller invokes for each
+/// received event. The closure accepts `Option<T>`: `None` values are skipped
+/// (filtered), and `Some(value)` values are forwarded. It returns `true` while
+/// the sender is still connected; the caller should stop when it returns `false`.
+///
+/// # Example
+///
+/// ```ignore
+/// let receiver = GlobalHotKeyEvent::receiver().clone();
+/// spawn_event_forwarder("hotkey-forwarder", sender, move |forward| {
+///     while let Ok(event) = receiver.recv() {
+///         if !forward(Some(ListenerMessage::HotkeyEvent(event))) {
+///             break;
+///         }
+///     }
+/// });
+/// ```
+pub fn spawn_event_forwarder<T, F>(
+    thread_name: &str,
+    sender: async_channel::Sender<T>,
+    receive_loop: F,
+) where
+    T: Send + 'static,
+    F: FnOnce(&dyn Fn(Option<T>) -> bool) + Send + 'static,
+{
+    let spawn_result = std::thread::Builder::new()
+        .name(thread_name.to_string())
+        .spawn(move || {
+            receive_loop(&|mapped| {
+                let Some(value) = mapped else {
+                    return true;
+                };
+                sender.send_blocking(value).is_ok()
+            });
+        });
+
+    if let Err(err) = spawn_result {
+        tracing::error!(
+            thread_name = thread_name,
+            error = %err,
+            "failed to spawn event forwarder"
+        );
+    }
+}
 #[cfg(target_os = "windows")]
 use {
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
@@ -113,5 +161,53 @@ pub fn set_activation_policy_accessory() {
         // Config the app to be accessory (no dock icon & cmd tab)
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::mpsc, time::Duration};
+
+    use super::spawn_event_forwarder;
+
+    #[test]
+    fn test_spawn_event_forwarder_none_input_skips_value() {
+        let (sender, receiver) = async_channel::unbounded();
+        let (done_tx, done_rx) = mpsc::channel();
+
+        spawn_event_forwarder("test-forwarder-filter", sender, move |forward| {
+            let first_result = forward(None);
+            let second_result = forward(Some(42));
+            assert!(done_tx.send((first_result, second_result)).is_ok());
+        });
+
+        let (first_result, second_result) = match done_rx.recv_timeout(Duration::from_secs(1)) {
+            Ok(results) => results,
+            Err(err) => panic!("forwarder thread should finish promptly: {err}"),
+        };
+
+        assert!(first_result);
+        assert!(second_result);
+        assert_eq!(receiver.recv_blocking(), Ok(42));
+        assert!(receiver.recv_blocking().is_err());
+    }
+
+    #[test]
+    fn test_spawn_event_forwarder_receiver_disconnected_returns_false() {
+        let (sender, receiver) = async_channel::unbounded::<usize>();
+        let (done_tx, done_rx) = mpsc::channel();
+        drop(receiver);
+
+        spawn_event_forwarder("test-forwarder-disconnect", sender, move |forward| {
+            let send_result = forward(Some(42));
+            assert!(done_tx.send(send_result).is_ok());
+        });
+
+        let send_result = match done_rx.recv_timeout(Duration::from_secs(1)) {
+            Ok(result) => result,
+            Err(err) => panic!("forwarder thread should report disconnected result: {err}"),
+        };
+
+        assert!(!send_result);
     }
 }

@@ -63,27 +63,6 @@ The project has almost no unit or integration tests despite `rstest` being confi
 - Recommendation:
   - Replace `let _ =` with `if let Err(e) = ... { tracing::warn!(...) }` at minimum.
 
-### 5. Duplicated lock-poisoning recovery pattern
-
-**Priority:** Medium
-
-The following pattern appears in 5+ locations across `src/app.rs` and `src/clipboard/listener.rs`:
-
-```rust
-let mut guard = match shared_records.lock() {
-    Ok(g) => g,
-    Err(poisoned) => poisoned.into_inner(),
-};
-```
-
-- Recommendation:
-  - Extract a helper function in `src/utils/`:
-    ```rust
-    pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
-        mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-    ```
-
 ### 6. Hardcoded magic values are scattered
 
 **Priority:** Medium
@@ -100,15 +79,6 @@ let mut guard = match shared_records.lock() {
 - Recommendation:
   - Move defaults and constants to `src/constants.rs`.
   - Unify HTTP timeout values between checker and downloader.
-
-### 7. Duplicated thread event forwarder pattern
-
-**Priority:** Medium
-
-`src/gui/hotkey.rs` (`spawn_hotkey_event_forwarder`) and `src/gui/tray.rs` (`spawn_tray_menu_event_forwarder`) share nearly identical spawn-and-forward logic.
-
-- Recommendation:
-  - Extract a generic `spawn_event_forwarder<T>` helper that accepts a receiver and a mapping closure.
 
 ### 9. Time index upsert does not scale
 
@@ -256,32 +226,3 @@ Some modules have good doc comments (`updater/checker.rs`, `utils/hash.rs`), but
 
 - Recommendation:
   - Add `#![warn(missing_docs)]` to enforce documentation on public APIs incrementally.
-
-## Positive Observations
-
-### 1. No `unwrap()` or `expect()` in application code
-
-Clippy rules enforce `unwrap_used = "warn"` and `expect_used = "warn"`, and the source code complies fully. This is excellent practice.
-
-### 2. Unsafe code is minimal and justified
-
-Only 6 `unsafe` blocks exist, all in platform-specific FFI code (`src/gui/utils.rs`, `src/utils/single_instance.rs`). No unsafe code in business logic. (Note: these blocks currently lack `// SAFETY:` comments — see Finding #13.)
-
-### 3. Error types are well-defined
-
-All modules use `thiserror` for error definitions, following the project convention in `AGENTS.md`.
-
-### 4. Architecture boundaries are clean
-
-The orchestration layer (`src/app.rs`) is well-separated from GUI rendering and repository internals, making targeted refactors low-risk.
-
-### 5. Engineering toolchain is mature
-
-- `scripts/precheck.sh` runs fmt, check, clippy, test, i18n check, and icon check.
-- `scripts/record_build_size.sh` tracks binary size over time.
-- `scripts/memory_profile.sh` provides macOS memory profiling.
-- `scripts/check_i18n.py` validates translation key consistency.
-
-### 6. Strict Clippy configuration
-
-The project enables `clippy::pedantic` and `clippy::nursery` lints, which catches many subtle issues at compile time.

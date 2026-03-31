@@ -11,6 +11,7 @@ use gpui::{App, AppContext as _};
 use image::DynamicImage;
 
 use super::{ClipboardEvent, LastCopyState};
+use crate::utils::lock_or_recover;
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -45,10 +46,7 @@ impl ClipboardMonitor {
 impl ClipboardHandler for ClipboardMonitor {
     // Don't send duplicate clipboard contents
     fn on_clipboard_change(&mut self) {
-        let mut last_copy_guard = match self.last_copy.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut last_copy_guard = lock_or_recover(&self.last_copy);
         if let Ok(image) = self.ctx.get_image()
             && let Ok(dyn_img) = image.get_dynamic_image()
         {

@@ -1,5 +1,3 @@
-use std::thread;
-
 #[cfg(target_os = "linux")]
 use gpui::AppContext;
 use gpui::{App, BorrowAppContext, Global, ReadGlobal, WindowHandle};
@@ -216,45 +214,24 @@ fn spawn_tray_menu_event_forwarder(
     quit_id: MenuId,
 ) {
     let receiver = tray_icon::menu::MenuEvent::receiver().clone();
-    let spawn_result = thread::Builder::new()
-        .name("tray-menu-event-forwarder".to_string())
-        .spawn(move || {
-            while let Ok(event) = receiver.recv() {
-                let Some(tray_event) = tray_event_from_menu_event(&event, &show_id, &quit_id)
-                else {
-                    continue;
-                };
-
-                if tx.send_blocking(tray_event).is_err() {
-                    break;
-                }
+    super::utils::spawn_event_forwarder("tray-menu-event-forwarder", tx, move |forward| {
+        while let Ok(event) = receiver.recv() {
+            if !forward(tray_event_from_menu_event(&event, &show_id, &quit_id)) {
+                break;
             }
-        });
-
-    if let Err(err) = spawn_result {
-        tracing::error!(error = %err, "failed to spawn tray menu event forwarder");
-    }
+        }
+    });
 }
 
 fn spawn_tray_icon_event_forwarder(tx: async_channel::Sender<TrayEvent>) {
     let receiver = TrayIconEvent::receiver().clone();
-    let spawn_result = thread::Builder::new()
-        .name("tray-icon-event-forwarder".to_string())
-        .spawn(move || {
-            while let Ok(event) = receiver.recv() {
-                let Some(tray_event) = tray_event_from_icon_event(&event) else {
-                    continue;
-                };
-
-                if tx.send_blocking(tray_event).is_err() {
-                    break;
-                }
+    super::utils::spawn_event_forwarder("tray-icon-event-forwarder", tx, move |forward| {
+        while let Ok(event) = receiver.recv() {
+            if !forward(tray_event_from_icon_event(&event)) {
+                break;
             }
-        });
-
-    if let Err(err) = spawn_result {
-        tracing::error!(error = %err, "failed to spawn tray icon event forwarder");
-    }
+        }
+    });
 }
 
 fn tray_event_from_menu_event(

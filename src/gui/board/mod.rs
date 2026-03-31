@@ -10,7 +10,7 @@ mod updater_ui;
 
 use std::{
     collections::HashSet,
-    sync::{Arc, Mutex, PoisonError, mpsc},
+    sync::{Arc, Mutex, mpsc},
     time::Duration,
 };
 
@@ -45,6 +45,7 @@ use crate::{
     i18n::{I18n, Language},
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
     updater::models::UpdateStatus,
+    utils::lock_or_recover,
 };
 
 /// `RopyBoard` Main Window Component
@@ -152,7 +153,7 @@ impl RopyBoard {
 
             match repo.get_display_records(max_history_records) {
                 Ok(records) => {
-                    let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                    let mut guard = lock_or_recover(&self.records);
                     *guard = records;
                 }
                 Err(e) => {
@@ -396,7 +397,7 @@ impl RopyBoard {
                     tracing::warn!(error = %e, "failed to clear clipboard history");
                 } else {
                     {
-                        let mut guard = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                        let mut guard = lock_or_recover(&self.records);
                         guard.clear();
                     }
                     self.favorite_ids = Arc::new(HashSet::new());
@@ -407,14 +408,8 @@ impl RopyBoard {
 
     /// Clear last copy state
     pub(crate) fn clear_last_copy_state(&self) {
-        match self.last_copy.lock() {
-            Ok(mut guard) => {
-                *guard = LastCopyState::Text(String::new());
-            }
-            Err(poisoned) => {
-                *poisoned.into_inner() = LastCopyState::Text(String::new());
-            }
-        }
+        let mut guard = lock_or_recover(&self.last_copy);
+        *guard = LastCopyState::Text(String::new());
     }
 
     /// Delete a single record by ID
@@ -483,7 +478,7 @@ impl RopyBoard {
     /// Get filtered records based on search query and content type filter
     fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
         let mut filtered_indices = {
-            let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+            let records = lock_or_recover(&self.records);
             filter_records_by_query(
                 &records,
                 query,
@@ -494,7 +489,7 @@ impl RopyBoard {
         };
 
         {
-            let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+            let records = lock_or_recover(&self.records);
             filtered_indices.sort_unstable_by(|left_index, right_index| {
                 let left = records.get(*left_index);
                 let right = records.get(*right_index);
@@ -522,7 +517,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn filtered_record_id_at(&self, index: usize) -> Option<u64> {
-        let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+        let records = lock_or_recover(&self.records);
         let record_index = self.filtered_record_index_at(index)?;
         records.get(record_index).map(|record| record.id)
     }
@@ -536,7 +531,7 @@ impl RopyBoard {
                 return;
             };
             let record = {
-                let records = self.records.lock().unwrap_or_else(PoisonError::into_inner);
+                let records = lock_or_recover(&self.records);
                 records.get(record_index).cloned()
             };
             let Some(record) = record else {

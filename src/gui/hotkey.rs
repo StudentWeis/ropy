@@ -77,46 +77,27 @@ fn process_listener_message<Manager, RegisterHotkey, OnHotkey>(
 
 fn spawn_hotkey_event_forwarder(message_tx: async_channel::Sender<ListenerMessage>) {
     let receiver = GlobalHotKeyEvent::receiver().clone();
-    let spawn_result = std::thread::Builder::new()
-        .name("hotkey-event-forwarder".to_string())
-        .spawn(move || {
-            while let Ok(event) = receiver.recv() {
-                if message_tx
-                    .send_blocking(ListenerMessage::HotkeyEvent(event))
-                    .is_err()
-                {
-                    break;
-                }
+    super::utils::spawn_event_forwarder("hotkey-event-forwarder", message_tx, move |forward| {
+        while let Ok(event) = receiver.recv() {
+            if !forward(Some(ListenerMessage::HotkeyEvent(event))) {
+                break;
             }
-        });
-
-    if let Err(err) = spawn_result {
-        tracing::error!(error = %err, "failed to spawn hotkey event forwarder");
-    }
+        }
+    });
 }
 
 fn spawn_hotkey_update_forwarder(
     update_rx: async_channel::Receiver<String>,
     message_tx: async_channel::Sender<ListenerMessage>,
 ) {
-    let spawn_result = std::thread::Builder::new()
-        .name("hotkey-update-forwarder".to_string())
-        .spawn(move || {
-            while let Ok(hotkey) = update_rx.recv_blocking() {
-                if message_tx
-                    .send_blocking(ListenerMessage::UpdateHotkey(hotkey))
-                    .is_err()
-                {
-                    break;
-                }
+    super::utils::spawn_event_forwarder("hotkey-update-forwarder", message_tx, move |forward| {
+        while let Ok(hotkey) = update_rx.recv_blocking() {
+            if !forward(Some(ListenerMessage::UpdateHotkey(hotkey))) {
+                break;
             }
-        });
-
-    if let Err(err) = spawn_result {
-        tracing::error!(error = %err, "failed to spawn hotkey update forwarder");
-    }
+        }
+    });
 }
-
 fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
     if hotkey_str.is_empty() {
         return None;

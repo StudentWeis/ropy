@@ -15,7 +15,10 @@ use gpui_component::{
 use regex::Regex;
 
 use super::{RopyBoard, preview};
-use crate::repository::{ClipboardRecord, models::ContentType};
+use crate::{
+    repository::{ClipboardRecord, models::ContentType},
+    utils::lock_or_recover,
+};
 
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 100;
 const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 800;
@@ -391,9 +394,7 @@ impl RopyBoard {
                         return div().into_any_element();
                     };
                     {
-                        let guard = records
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let guard = lock_or_recover(&records);
                         let Some(record) = guard.get(record_index) else {
                             return div().into_any_element();
                         };
