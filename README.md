@@ -57,6 +57,21 @@ cargo build --release
 ./target/release/ropy
 ```
 
+## Memory Profiling
+
+For Rust heap profiling, Ropy includes an optional `dhat` integration.
+
+```bash
+rtk cargo run --profile dhat --features dhat-heap
+```
+
+Then reproduce the scenario, quit via `Cmd-Q` or the tray's `Quit` action, and load `target/dhat-heap.json` into the online DHAT viewer.
+
+- This is best for answering "which Rust allocation paths are keeping heap memory alive?"
+- Ropy flushes the profile immediately before its in-app quit actions; hiding the window is not enough.
+- It does not include non-Rust-process memory such as AppKit/CoreAnimation/Metal window backing stores on macOS.
+- For whole-process memory on macOS, pair it with `bash scripts/memory_profile.sh` or Instruments' `Allocations` and `VM Tracker`.
+
 ## Usage
 
 - Launch Ropy to start recording clipboard history.

@@ -166,6 +166,7 @@ pub fn start_tray_handler(
                 }
                 TrayEvent::Quit => {
                     let _ = async_app.update(move |cx: &mut gpui::App| {
+                        crate::utils::finish_heap_profiling();
                         cx.quit();
                     });
                 }
