@@ -43,15 +43,42 @@ use crate::{
         theme::ThemeId,
     },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, models::ContentType},
+    repository::{
+        ClipboardRecord, ClipboardRepository, GlobalRepository, SharedRecords, models::ContentType,
+    },
     updater::models::UpdateStatus,
-    utils::lock_or_recover,
+    utils::{lock_or_recover, read_or_recover, write_or_recover},
 };
+
+fn filter_and_sort_record_indices(
+    records: &[ClipboardRecord],
+    query: &str,
+    content_filter: ContentFilter,
+    search_options: SearchOptions,
+    favorite_ids: &HashSet<u64>,
+) -> Vec<usize> {
+    let mut filtered_indices =
+        filter_records_by_query(records, query, content_filter, search_options, favorite_ids);
+
+    filtered_indices.sort_unstable_by(|left_index, right_index| {
+        let left = records.get(*left_index);
+        let right = records.get(*right_index);
+
+        match (left, right) {
+            (Some(left), Some(right)) => ClipboardRepository::compare_for_display(left, right),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => left_index.cmp(right_index),
+        }
+    });
+
+    filtered_indices
+}
 
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
-    pub(crate) records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    pub(crate) records: SharedRecords,
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
@@ -153,7 +180,7 @@ impl RopyBoard {
 
             match repo.get_display_records(max_history_records) {
                 Ok(records) => {
-                    let mut guard = lock_or_recover(&self.records);
+                    let mut guard = write_or_recover(&self.records);
                     *guard = records;
                 }
                 Err(e) => {
@@ -179,7 +206,7 @@ impl RopyBoard {
 
     #[allow(clippy::too_many_lines)]
     pub fn new(
-        records: Arc<Mutex<Vec<ClipboardRecord>>>,
+        records: SharedRecords,
         last_copy: Arc<Mutex<LastCopyState>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
@@ -397,7 +424,7 @@ impl RopyBoard {
                     tracing::warn!(error = %e, "failed to clear clipboard history");
                 } else {
                     {
-                        let mut guard = lock_or_recover(&self.records);
+                        let mut guard = write_or_recover(&self.records);
                         guard.clear();
                     }
                     self.favorite_ids = Arc::new(HashSet::new());
@@ -477,35 +504,14 @@ impl RopyBoard {
 
     /// Get filtered records based on search query and content type filter
     fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
-        let mut filtered_indices = {
-            let records = lock_or_recover(&self.records);
-            filter_records_by_query(
-                &records,
-                query,
-                self.content_filter,
-                self.search_options,
-                &self.favorite_ids,
-            )
-        };
-
-        {
-            let records = lock_or_recover(&self.records);
-            filtered_indices.sort_unstable_by(|left_index, right_index| {
-                let left = records.get(*left_index);
-                let right = records.get(*right_index);
-
-                match (left, right) {
-                    (Some(left), Some(right)) => {
-                        ClipboardRepository::compare_for_display(left, right)
-                    }
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (None, None) => left_index.cmp(right_index),
-                }
-            });
-        }
-
-        filtered_indices
+        let records = read_or_recover(&self.records);
+        filter_and_sort_record_indices(
+            &records,
+            query,
+            self.content_filter,
+            self.search_options,
+            &self.favorite_ids,
+        )
     }
 
     pub(crate) fn filtered_record_len(&self) -> usize {
@@ -517,7 +523,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn filtered_record_id_at(&self, index: usize) -> Option<u64> {
-        let records = lock_or_recover(&self.records);
+        let records = read_or_recover(&self.records);
         let record_index = self.filtered_record_index_at(index)?;
         records.get(record_index).map(|record| record.id)
     }
@@ -531,7 +537,7 @@ impl RopyBoard {
                 return;
             };
             let record = {
-                let records = lock_or_recover(&self.records);
+                let records = read_or_recover(&self.records);
                 records.get(record_index).cloned()
             };
             let Some(record) = record else {
@@ -670,8 +676,33 @@ impl Render for RopyBoard {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Local, TimeZone};
+
     use super::*;
     use crate::config::ConfirmMode;
+
+    fn test_datetime(hour: u32) -> chrono::DateTime<Local> {
+        Local
+            .with_ymd_and_hms(2026, 3, 31, hour, 0, 0)
+            .single()
+            .unwrap_or_else(|| panic!("invalid local datetime for test hour {hour}"))
+    }
+
+    fn test_record(
+        id: u64,
+        content: &str,
+        content_type: ContentType,
+        pinned: bool,
+        created_at: chrono::DateTime<Local>,
+    ) -> ClipboardRecord {
+        ClipboardRecord {
+            id,
+            content: content.to_string(),
+            content_type,
+            pinned,
+            created_at,
+        }
+    }
 
     #[test]
     fn test_window_pin_availability_depends_on_confirm_mode() {
@@ -735,5 +766,44 @@ mod tests {
             ContentFilter::Text
         };
         assert_eq!(filter, ContentFilter::Text);
+    }
+
+    #[test]
+    fn test_filter_and_sort_record_indices_display_order_returns_sorted_indices() {
+        let records = vec![
+            test_record(1, "alpha", ContentType::Text, false, test_datetime(9)),
+            test_record(2, "beta", ContentType::Text, true, test_datetime(8)),
+            test_record(3, "alphabet", ContentType::Text, true, test_datetime(10)),
+            test_record(4, "gamma", ContentType::Image, false, test_datetime(11)),
+        ];
+
+        let indices = filter_and_sort_record_indices(
+            &records,
+            "alp",
+            ContentFilter::All,
+            SearchOptions::default(),
+            &HashSet::new(),
+        );
+
+        assert_eq!(indices, vec![2, 0]);
+    }
+
+    #[test]
+    fn test_filter_and_sort_record_indices_image_filter_ignores_query() {
+        let records = vec![
+            test_record(1, "hello", ContentType::Text, false, test_datetime(9)),
+            test_record(2, "image-a", ContentType::Image, false, test_datetime(8)),
+            test_record(3, "image-b", ContentType::Image, true, test_datetime(10)),
+        ];
+
+        let indices = filter_and_sort_record_indices(
+            &records,
+            "hello",
+            ContentFilter::Image,
+            SearchOptions::default(),
+            &HashSet::new(),
+        );
+
+        assert_eq!(indices, vec![2, 1]);
     }
 }

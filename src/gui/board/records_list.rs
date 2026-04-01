@@ -17,7 +17,7 @@ use regex::Regex;
 use super::{RopyBoard, preview};
 use crate::{
     repository::{ClipboardRecord, models::ContentType},
-    utils::lock_or_recover,
+    utils::read_or_recover,
 };
 
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 100;
@@ -394,7 +394,7 @@ impl RopyBoard {
                         return div().into_any_element();
                     };
                     {
-                        let guard = lock_or_recover(&records);
+                        let guard = read_or_recover(&records);
                         let Some(record) = guard.get(record_index) else {
                             return div().into_any_element();
                         };

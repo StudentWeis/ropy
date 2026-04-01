@@ -18,8 +18,8 @@ use crate::{
     constants::APP_NAME,
     gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
-    utils::lock_or_recover,
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, SharedRecords},
+    utils::write_or_recover,
 };
 
 #[cfg(target_os = "linux")]
@@ -32,7 +32,7 @@ pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 /// and does not belong to the clipboard I/O layer alone.
 fn start_clipboard_event_handler(
     clipboard_rx: async_channel::Receiver<ClipboardEvent>,
-    shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    shared_records: SharedRecords,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
@@ -120,10 +120,10 @@ fn load_initial_records(
 }
 
 fn replace_shared_records(
-    shared_records: &Arc<Mutex<Vec<ClipboardRecord>>>,
-    records: Vec<ClipboardRecord>,
+    shared_records: &SharedRecords,
+    records: Vec<crate::repository::ClipboardRecord>,
 ) {
-    let mut guard = lock_or_recover(shared_records);
+    let mut guard = write_or_recover(shared_records);
     *guard = records;
 }
 
@@ -238,7 +238,7 @@ pub fn launch() {
             // Register repository as GPUI Global for app-wide access
             cx.set_global(GlobalRepository::new(repository));
 
-            let shared_records = Arc::new(Mutex::new(initial_records));
+            let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
             let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
             let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(cx);

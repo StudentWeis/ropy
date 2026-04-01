@@ -7,7 +7,7 @@ pub mod models;
 pub mod repo;
 mod time_index;
 
-pub use models::{ClipboardRecord, ContentType};
+pub use models::{ClipboardRecord, ContentType, SharedRecords};
 pub use repo::ClipboardRepository;
 
 /// GPUI Global wrapper for the clipboard repository.

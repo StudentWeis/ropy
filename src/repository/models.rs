@@ -1,5 +1,7 @@
 //! Data model for clipboard records
 
+use std::sync::{Arc, RwLock};
+
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +20,9 @@ pub struct ClipboardRecord {
     #[serde(default)]
     pub pinned: bool,
 }
+
+/// Shared clipboard record list type alias for thread-safe access
+pub type SharedRecords = Arc<RwLock<Vec<ClipboardRecord>>>;
 
 /// Content type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

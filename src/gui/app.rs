@@ -20,7 +20,7 @@ use crate::{
         board::RopyBoard,
         theme::{ThemeDefinition, ThemeId, ThemeMode},
     },
-    repository::ClipboardRecord,
+    repository::SharedRecords,
 };
 
 #[derive(RustEmbed)]
@@ -42,7 +42,7 @@ impl AssetSource for Assets {
 /// Create the main application window.
 pub fn create_window(
     cx: &mut App,
-    shared_records: Arc<Mutex<Vec<ClipboardRecord>>>,
+    shared_records: SharedRecords,
     last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     is_silent: bool,

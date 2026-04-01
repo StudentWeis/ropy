@@ -1,6 +1,6 @@
 //! Synchronization helpers.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Acquire a mutex guard and recover the inner value if the mutex was poisoned.
 pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -9,12 +9,24 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// Acquire a read guard and recover the inner value if the lock was poisoned.
+pub fn read_or_recover<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Acquire a write guard and recover the inner value if the lock was poisoned.
+pub fn write_or_recover<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    lock.write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 #[allow(clippy::significant_drop_tightening)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, RwLock};
 
-    use super::lock_or_recover;
+    use super::{lock_or_recover, read_or_recover, write_or_recover};
 
     #[test]
     fn test_lock_or_recover_returns_guard_for_healthy_mutex() {
@@ -42,6 +54,46 @@ mod tests {
         .join();
 
         let mut guard = lock_or_recover(&mutex);
+        guard.push_str(" after recovery");
+
+        assert_eq!(guard.as_str(), "before panic during panic after recovery");
+    }
+
+    #[test]
+    fn test_read_or_recover_returns_guard_for_healthy_rwlock() {
+        let lock = RwLock::new(vec![1]);
+
+        let guard = read_or_recover(&lock);
+
+        assert_eq!(*guard, vec![1]);
+    }
+
+    #[test]
+    fn test_write_or_recover_updates_healthy_rwlock() {
+        let lock = RwLock::new(vec![1]);
+
+        let mut guard = write_or_recover(&lock);
+        guard.push(2);
+
+        assert_eq!(*guard, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_read_or_recover_recovers_poisoned_rwlock() {
+        let lock = Arc::new(RwLock::new(String::from("before panic")));
+        let poisoned_lock = Arc::clone(&lock);
+
+        let _ = std::thread::spawn(move || {
+            let mut guard = match poisoned_lock.write() {
+                Ok(guard) => guard,
+                Err(err) => panic!("failed to lock rwlock before poisoning: {err}"),
+            };
+            guard.push_str(" during panic");
+            panic!("poison rwlock for recovery test");
+        })
+        .join();
+
+        let mut guard = write_or_recover(&lock);
         guard.push_str(" after recovery");
 
         assert_eq!(guard.as_str(), "before panic during panic after recovery");
