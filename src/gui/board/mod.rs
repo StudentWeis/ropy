@@ -47,8 +47,37 @@ use crate::{
         ClipboardRecord, ClipboardRepository, GlobalRepository, SharedRecords, models::ContentType,
     },
     updater::models::UpdateStatus,
-    utils::{lock_or_recover, read_or_recover, write_or_recover},
+    utils::{deserialize_file_paths, lock_or_recover, read_or_recover, write_or_recover},
 };
+
+fn build_copy_request(
+    content: &str,
+    content_type: &ContentType,
+    completion: Option<mpsc::Sender<()>>,
+) -> Option<crate::clipboard::CopyRequest> {
+    match content_type {
+        ContentType::Text => Some(completion.map_or_else(
+            || crate::clipboard::CopyRequest::text(content.to_string()),
+            |tx| crate::clipboard::CopyRequest::text_with_completion(content.to_string(), tx),
+        )),
+        ContentType::Image => Some(completion.map_or_else(
+            || crate::clipboard::CopyRequest::image(content.to_string()),
+            |tx| crate::clipboard::CopyRequest::image_with_completion(content.to_string(), tx),
+        )),
+        ContentType::FilePath => {
+            let paths = deserialize_file_paths(content);
+            if paths.is_empty() {
+                None
+            } else {
+                Some(if let Some(tx) = completion {
+                    crate::clipboard::CopyRequest::files_with_completion(paths, tx)
+                } else {
+                    crate::clipboard::CopyRequest::files(paths)
+                })
+            }
+        }
+    }
+}
 
 fn filter_and_sort_record_indices(
     records: &[ClipboardRecord],
@@ -56,9 +85,16 @@ fn filter_and_sort_record_indices(
     content_filter: ContentFilter,
     search_options: SearchOptions,
     favorite_ids: &HashSet<u64>,
+    favorites_only: bool,
 ) -> Vec<usize> {
-    let mut filtered_indices =
-        filter_records_by_query(records, query, content_filter, search_options, favorite_ids);
+    let mut filtered_indices = filter_records_by_query(
+        records,
+        query,
+        content_filter,
+        search_options,
+        favorite_ids,
+        favorites_only,
+    );
 
     filtered_indices.sort_unstable_by(|left_index, right_index| {
         let left = records.get(*left_index);
@@ -119,6 +155,8 @@ pub struct RopyBoard {
     pub(crate) show_clear_confirm: bool,
     /// Active content type filter
     pub(crate) content_filter: ContentFilter,
+    /// Whether to show only favorited records (independent of content type filter)
+    pub(crate) favorites_only: bool,
     /// Active text search options
     pub(crate) search_options: SearchOptions,
 }
@@ -370,6 +408,7 @@ impl RopyBoard {
             hover_preview_enabled,
             show_clear_confirm: false,
             content_filter: ContentFilter::default(),
+            favorites_only: false,
             search_options: SearchOptions::default(),
         }
     }
@@ -380,23 +419,11 @@ impl RopyBoard {
             .confirm_mode
             .requires_clipboard_completion()
             .then(mpsc::channel);
-        let request = match content_type {
-            ContentType::Text => Some(match completion.as_ref() {
-                Some((tx, _)) => crate::clipboard::CopyRequest::text_with_completion(
-                    content.to_string(),
-                    tx.clone(),
-                ),
-                None => crate::clipboard::CopyRequest::text(content.to_string()),
-            }),
-            ContentType::Image => Some(match completion.as_ref() {
-                Some((tx, _)) => crate::clipboard::CopyRequest::image_with_completion(
-                    content.to_string(),
-                    tx.clone(),
-                ),
-                None => crate::clipboard::CopyRequest::image(content.to_string()),
-            }),
-            ContentType::FilePath => todo!(),
-        };
+        let request = build_copy_request(
+            content,
+            content_type,
+            completion.as_ref().map(|(tx, _)| tx.clone()),
+        );
 
         if let Some(req) = request {
             if self.copy_tx.send_blocking(req).is_err() {
@@ -493,6 +520,11 @@ impl RopyBoard {
         }
     }
 
+    /// Toggle the favorites-only filter (independent of content type filter).
+    pub(crate) const fn toggle_favorites_only(&mut self) {
+        self.favorites_only = !self.favorites_only;
+    }
+
     pub(crate) const fn toggle_case_sensitive_search(&mut self) {
         self.search_options.case_sensitive = !self.search_options.case_sensitive;
     }
@@ -510,6 +542,7 @@ impl RopyBoard {
             self.content_filter,
             self.search_options,
             &self.favorite_ids,
+            self.favorites_only,
         )
     }
 
@@ -758,6 +791,14 @@ mod tests {
         };
         assert_eq!(filter, ContentFilter::Image);
 
+        // Simulate toggle to Files
+        filter = if filter == ContentFilter::Files {
+            ContentFilter::All
+        } else {
+            ContentFilter::Files
+        };
+        assert_eq!(filter, ContentFilter::Files);
+
         // Simulate toggle to Text while Image is active -> switches to Text
         filter = if filter == ContentFilter::Text {
             ContentFilter::All
@@ -782,6 +823,7 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &HashSet::new(),
+            false,
         );
 
         assert_eq!(indices, vec![2, 0]);
@@ -801,8 +843,71 @@ mod tests {
             ContentFilter::Image,
             SearchOptions::default(),
             &HashSet::new(),
+            false,
         );
 
         assert_eq!(indices, vec![2, 1]);
+    }
+
+    #[test]
+    fn test_filter_and_sort_record_indices_files_filter_matches_file_records() {
+        let records = vec![
+            test_record(
+                1,
+                "[\"/tmp/notes.txt\"]",
+                ContentType::FilePath,
+                false,
+                test_datetime(9),
+            ),
+            test_record(2, "hello", ContentType::Text, false, test_datetime(8)),
+            test_record(
+                3,
+                "[\"/tmp/archive.zip\"]",
+                ContentType::FilePath,
+                true,
+                test_datetime(10),
+            ),
+        ];
+
+        let indices = filter_and_sort_record_indices(
+            &records,
+            "",
+            ContentFilter::Files,
+            SearchOptions::default(),
+            &HashSet::new(),
+            false,
+        );
+
+        assert_eq!(indices, vec![2, 0]);
+    }
+
+    #[test]
+    fn test_build_copy_request_when_file_payload_is_json_returns_files_request() {
+        let request = build_copy_request(
+            "[\"/tmp/alpha.txt\",\"/tmp/beta.txt\"]",
+            &ContentType::FilePath,
+            None,
+        );
+
+        match request {
+            Some(crate::clipboard::CopyRequest::Files { paths, completion }) => {
+                assert_eq!(paths, vec!["/tmp/alpha.txt", "/tmp/beta.txt"]);
+                assert!(completion.is_none());
+            }
+            _ => panic!("expected files copy request"),
+        }
+    }
+
+    #[test]
+    fn test_build_copy_request_when_file_payload_is_legacy_string_returns_single_file() {
+        let request = build_copy_request("/tmp/legacy.txt", &ContentType::FilePath, None);
+
+        match request {
+            Some(crate::clipboard::CopyRequest::Files { paths, completion }) => {
+                assert_eq!(paths, vec!["/tmp/legacy.txt"]);
+                assert!(completion.is_none());
+            }
+            _ => panic!("expected files copy request"),
+        }
     }
 }

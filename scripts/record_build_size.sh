@@ -8,7 +8,7 @@ set -euo pipefail
 
 rtk cargo build --release
 
-CSV_FILE="doc/build_sizes.csv"
+CSV_FILE="doc/data/build_sizes.csv"
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 

@@ -1,4 +1,4 @@
-use clipboard_rs::{Clipboard, ClipboardContext};
+use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
 use gpui::{App, AppContext as _};
 use image::ImageReader;
 
@@ -25,6 +25,10 @@ pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
                 }
                 CopyRequest::Image { path, completion } => {
                     set_image(&ctx, &path);
+                    notify_completion(completion);
+                }
+                CopyRequest::Files { paths, completion } => {
+                    set_files(&ctx, &paths);
                     notify_completion(completion);
                 }
             }
@@ -83,6 +87,27 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
                 tracing::warn!(error = %e, "failed to set image to clipboard");
             }
         }
+    }
+}
+
+fn set_files(ctx: &ClipboardContext, paths: &[String]) {
+    if paths.is_empty() {
+        return;
+    }
+
+    let contents = vec![
+        ClipboardContent::Text(paths.join("\n")),
+        ClipboardContent::Files(paths.to_vec()),
+    ];
+
+    if let Err(error) = ctx.set(contents)
+        && let Err(fallback_error) = ctx.set_files(paths.to_vec())
+    {
+        tracing::warn!(
+            error = %error,
+            fallback_error = %fallback_error,
+            "failed to set files to clipboard"
+        );
     }
 }
 

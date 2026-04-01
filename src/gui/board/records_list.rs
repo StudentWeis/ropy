@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui::{
     AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img, list,
@@ -16,7 +16,7 @@ use gpui_component::{
 use super::{RopyBoard, preview};
 use crate::{
     repository::{ClipboardRecord, models::ContentType},
-    utils::read_or_recover,
+    utils::{deserialize_file_paths, read_or_recover},
 };
 
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 100;
@@ -88,20 +88,101 @@ fn render_text_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
     }
 }
 
+fn file_display_name(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| path.to_string(), ToString::to_string)
+}
+
+fn file_preview_content(record_content: &str) -> String {
+    deserialize_file_paths(record_content).join("\n")
+}
+
+fn render_file_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
+    let files = deserialize_file_paths(&record.content);
+    if files.is_empty() {
+        return div()
+            .text_sm()
+            .text_color(cx.theme().secondary_foreground)
+            .child("File")
+            .into_any_element();
+    }
+
+    let title = if files.len() == 1 {
+        file_display_name(&files[0])
+    } else {
+        format!("{} files", files.len())
+    };
+    let detail = if files.len() == 1 {
+        files[0].clone()
+    } else {
+        files
+            .iter()
+            .take(2)
+            .map(|path| file_display_name(path))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    v_flex()
+        .gap_1()
+        .child(
+            h_flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(cx.theme().accent_foreground)
+                        .bg(cx.theme().accent)
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded_sm()
+                        .child(Icon::empty().path("icon/filter-files.svg").size(px(12.0))),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().secondary_foreground)
+                        .child(title),
+                ),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .line_height(gpui::relative(1.4))
+                .child(truncate_content(&detail, LIST_CONTENT_PREVIEW_LIMIT)),
+        )
+        .into_any_element()
+}
+
 fn create_preview(
     content_type: &ContentType,
     record_content: &str,
     window: &Window,
     cx: &mut App,
 ) -> AnyView {
-    if content_type == &ContentType::Image {
-        preview::image_tooltip(record_content, window, cx)
-    } else {
-        preview::simple_tooltip(
+    match content_type {
+        ContentType::Image => preview::image_tooltip(record_content, window, cx),
+        ContentType::FilePath => preview::simple_tooltip(
+            truncate_content(
+                &file_preview_content(record_content),
+                TOOLTIP_CONTENT_PREVIEW_LIMIT,
+            ),
+            window,
+            cx,
+        ),
+        ContentType::Text => preview::simple_tooltip(
             truncate_content(record_content, TOOLTIP_CONTENT_PREVIEW_LIMIT),
             window,
             cx,
-        )
+        ),
     }
 }
 
@@ -186,7 +267,7 @@ fn render_record_body(
         .child(match ctx.record.content_type {
             ContentType::Text => render_text_record(cx, ctx.record),
             ContentType::Image => render_image_record(ctx.record),
-            ContentType::FilePath => div().child("File").into_any_element(),
+            ContentType::FilePath => render_file_record(cx, ctx.record),
         })
         .child(render_record_meta(ctx.index, ctx.record, cx))
         .into_any_element()
@@ -422,7 +503,7 @@ impl RopyBoard {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_hex_color, truncate_content};
+    use super::{file_display_name, file_preview_content, get_hex_color, truncate_content};
 
     #[test]
     fn truncate_content_preserves_short_text() {
@@ -445,5 +526,24 @@ mod tests {
         assert_eq!(get_hex_color("abc"), None);
         assert_eq!(get_hex_color("#abcd"), None);
         assert_eq!(get_hex_color("#12x456"), None);
+    }
+
+    #[test]
+    fn test_file_display_name_when_path_has_filename_returns_filename() {
+        assert_eq!(file_display_name("/tmp/archive.zip"), "archive.zip");
+    }
+
+    #[test]
+    fn test_file_preview_content_when_json_array_returns_joined_paths() {
+        let preview = file_preview_content("[\"/tmp/a.txt\",\"/tmp/b.txt\"]");
+
+        assert_eq!(preview, "/tmp/a.txt\n/tmp/b.txt");
+    }
+
+    #[test]
+    fn test_file_preview_content_when_legacy_string_returns_single_path() {
+        let preview = file_preview_content("/tmp/a.txt");
+
+        assert_eq!(preview, "/tmp/a.txt");
     }
 }

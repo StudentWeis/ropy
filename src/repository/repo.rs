@@ -10,7 +10,7 @@ use super::{
     models::{ClipboardRecord, ContentType},
     time_index::TimeIndex,
 };
-use crate::utils::content_hash;
+use crate::utils::{content_hash, normalize_file_paths, serialize_file_paths};
 
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;
@@ -210,6 +210,19 @@ impl ClipboardRepository {
     /// Save text content (convenience wrapper).
     pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)
+    }
+
+    /// Save file list content (convenience wrapper).
+    pub fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
+        let normalized = normalize_file_paths(paths);
+        if normalized.is_empty() {
+            return Err(RepositoryError::Query("file list is empty".to_string()));
+        }
+
+        let content = serialize_file_paths(&normalized)
+            .map_err(|error| RepositoryError::Serialization(error.to_string()))?;
+
+        self.save(content, ContentType::FilePath)
     }
 }
 
@@ -1379,6 +1392,41 @@ mod tests {
 
         // Verify both are stored
         assert_eq!(repo.count(), 2);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_repository_save_files_normalizes_and_persists_file_payload() {
+        let repo = create_test_repo();
+
+        let record = repo
+            .save_files(&[
+                "file:///tmp/alpha%20file.txt".to_string(),
+                "/tmp/beta.txt".to_string(),
+            ])
+            .expect("Failed to save file paths");
+
+        assert_eq!(record.content_type, ContentType::FilePath);
+        assert_eq!(
+            record.content,
+            "[\"/tmp/alpha file.txt\",\"/tmp/beta.txt\"]"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
+        let repo = create_test_repo();
+
+        let first = repo
+            .save_files(&["file:///tmp/demo%20file.txt".to_string()])
+            .expect("Failed to save first file record");
+        let second = repo
+            .save_files(&["/tmp/demo file.txt".to_string()])
+            .expect("Failed to save second file record");
+
+        assert_eq!(first.id, second.id);
+        assert_eq!(repo.count(), 1);
     }
 
     #[test]

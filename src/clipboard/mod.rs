@@ -12,6 +12,7 @@ pub enum ClipboardEvent {
     Text(String),
     /// Image(path, `content_hash`)
     Image(String, u64),
+    Files(Vec<String>),
 }
 
 pub enum CopyRequest {
@@ -21,6 +22,10 @@ pub enum CopyRequest {
     },
     Image {
         path: String,
+        completion: Option<CompletionSender<()>>,
+    },
+    Files {
+        paths: Vec<String>,
         completion: Option<CompletionSender<()>>,
     },
 }
@@ -53,11 +58,29 @@ impl CopyRequest {
             completion: Some(completion),
         }
     }
+
+    pub const fn files(paths: Vec<String>) -> Self {
+        Self::Files {
+            paths,
+            completion: None,
+        }
+    }
+
+    pub const fn files_with_completion(
+        paths: Vec<String>,
+        completion: CompletionSender<()>,
+    ) -> Self {
+        Self::Files {
+            paths,
+            completion: Some(completion),
+        }
+    }
 }
 
 pub enum LastCopyState {
     Text(String),
     Image(u64),
+    Files(u64),
 }
 
 #[cfg(test)]
@@ -76,7 +99,9 @@ mod tests {
                 assert_eq!(text, "hello");
                 assert!(completion.is_none());
             }
-            CopyRequest::Image { .. } => panic!("expected text copy request"),
+            CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+                panic!("expected text copy request")
+            }
         }
     }
 
@@ -91,7 +116,9 @@ mod tests {
                 assert_eq!(text, "hello");
                 completion.unwrap().send(()).unwrap();
             }
-            CopyRequest::Image { .. } => panic!("expected text copy request"),
+            CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+                panic!("expected text copy request")
+            }
         }
 
         assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
@@ -107,7 +134,9 @@ mod tests {
                 assert_eq!(path, "/tmp/example.png");
                 assert!(completion.is_none());
             }
-            CopyRequest::Text { .. } => panic!("expected image copy request"),
+            CopyRequest::Text { .. } | CopyRequest::Files { .. } => {
+                panic!("expected image copy request")
+            }
         }
     }
 
@@ -123,7 +152,44 @@ mod tests {
                 assert_eq!(path, "/tmp/example.png");
                 completion.unwrap().send(()).unwrap();
             }
-            CopyRequest::Text { .. } => panic!("expected image copy request"),
+            CopyRequest::Text { .. } | CopyRequest::Files { .. } => {
+                panic!("expected image copy request")
+            }
+        }
+
+        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+    }
+
+    #[test]
+    fn test_copy_request_files_constructor_sets_paths_without_completion() {
+        let request = CopyRequest::files(vec!["/tmp/example.txt".to_string()]);
+
+        match request {
+            CopyRequest::Files { paths, completion } => {
+                assert_eq!(paths, vec!["/tmp/example.txt"]);
+                assert!(completion.is_none());
+            }
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } => {
+                panic!("expected files copy request")
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_copy_request_files_with_completion_sends_signal() {
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let request =
+            CopyRequest::files_with_completion(vec!["/tmp/example.txt".to_string()], completion_tx);
+
+        match request {
+            CopyRequest::Files { paths, completion } => {
+                assert_eq!(paths, vec!["/tmp/example.txt"]);
+                completion.unwrap().send(()).unwrap();
+            }
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } => {
+                panic!("expected files copy request")
+            }
         }
 
         assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));

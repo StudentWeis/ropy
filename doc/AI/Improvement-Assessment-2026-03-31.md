@@ -4,19 +4,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
-### 3. `ContentType::FilePath` confirm flow is incomplete
-
-**Priority:** High
-
-- Relevant code:
-  - `src/gui/board/` — confirm action for file-path records
-  - `src/repository/repo.rs`
-- Why it matters:
-  - If a file-path record reaches the confirm flow, it can panic.
-  - This was already documented in `doc/Optimization-Assessment-2026-03-30.md`.
-- Recommendation:
-  - Implement clipboard write behavior for file paths, or fail gracefully with a user-visible warning.
-
 ### 4. Errors are silently discarded in clipboard I/O
 
 **Priority:** High

@@ -49,6 +49,7 @@ fn start_clipboard_event_handler(
             let result = match event {
                 ClipboardEvent::Text(text) => repo.save_text(text),
                 ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
+                ClipboardEvent::Files(paths) => repo.save_files(&paths),
             };
 
             match result {

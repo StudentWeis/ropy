@@ -11,7 +11,7 @@ use gpui::{App, AppContext as _};
 use image::DynamicImage;
 
 use super::{ClipboardEvent, LastCopyState};
-use crate::utils::lock_or_recover;
+use crate::utils::{hash_file_paths, lock_or_recover, normalize_file_paths};
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
@@ -51,6 +51,10 @@ fn should_forward_text(last_copy: &LastCopyState, text: &str) -> bool {
     !matches!(last_copy, LastCopyState::Text(last_text) if last_text == text)
 }
 
+const fn should_forward_files(last_copy: &LastCopyState, hash: u64) -> bool {
+    !matches!(last_copy, LastCopyState::Files(last_hash) if *last_hash == hash)
+}
+
 impl ClipboardHandler for ClipboardMonitor {
     // Don't send duplicate clipboard contents
     fn on_clipboard_change(&mut self) {
@@ -65,11 +69,25 @@ impl ClipboardHandler for ClipboardMonitor {
                 let _ = self.image_tx.send_blocking((dyn_img, hash));
                 *last_copy_guard = LastCopyState::Image(hash);
             }
-        } else if let Ok(text) = self.ctx.get_text()
-            && should_forward_text(&last_copy_guard, &text)
-        {
-            let _ = self.tx.send_blocking(ClipboardEvent::Text(text.clone()));
-            *last_copy_guard = LastCopyState::Text(text);
+        } else {
+            let files = self
+                .ctx
+                .get_files()
+                .ok()
+                .map(|paths| normalize_file_paths(&paths));
+
+            if let Some(files) = files.filter(|paths| !paths.is_empty()) {
+                let hash = hash_file_paths(&files);
+                if should_forward_files(&last_copy_guard, hash) {
+                    let _ = self.tx.send_blocking(ClipboardEvent::Files(files));
+                    *last_copy_guard = LastCopyState::Files(hash);
+                }
+            } else if let Ok(text) = self.ctx.get_text()
+                && should_forward_text(&last_copy_guard, &text)
+            {
+                let _ = self.tx.send_blocking(ClipboardEvent::Text(text.clone()));
+                *last_copy_guard = LastCopyState::Text(text);
+            }
         }
     }
 }
@@ -134,6 +152,20 @@ mod tests {
     }
 
     #[test]
+    fn test_should_forward_files_when_same_hash_returns_false() {
+        let last_copy = LastCopyState::Files(42);
+
+        assert!(!should_forward_files(&last_copy, 42));
+    }
+
+    #[test]
+    fn test_should_forward_files_when_different_hash_returns_true() {
+        let last_copy = LastCopyState::Files(42);
+
+        assert!(should_forward_files(&last_copy, 7));
+    }
+
+    #[test]
     fn test_should_forward_image_when_same_hash_returns_false() {
         let last_copy = LastCopyState::Image(42);
 
@@ -152,5 +184,12 @@ mod tests {
         let last_copy = LastCopyState::Text("hello".to_string());
 
         assert!(should_forward_image(&last_copy, 42));
+    }
+
+    #[test]
+    fn test_should_forward_files_when_last_copy_is_text_returns_true() {
+        let last_copy = LastCopyState::Text("hello".to_string());
+
+        assert!(should_forward_files(&last_copy, 42));
     }
 }

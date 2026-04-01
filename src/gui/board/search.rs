@@ -16,9 +16,14 @@ use super::RopyBoard;
 use crate::{
     i18n::I18n,
     repository::{ClipboardRecord, models::ContentType},
+    utils::deserialize_file_paths,
 };
 
-/// Content type filter for the clipboard history view
+/// Content type filter for the clipboard history view.
+///
+/// This filter controls which *content types* are shown. It is independent of
+/// the favorites toggle (`favorites_only`) so users can combine them – e.g.
+/// "show only favorited images".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ContentFilter {
     /// Show all content types
@@ -28,8 +33,8 @@ pub enum ContentFilter {
     Text,
     /// Show only image records
     Image,
-    /// Show only favorited records
-    Favorites,
+    /// Show only file records
+    Files,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -80,24 +85,40 @@ pub(super) fn text_matches_query(content: &str, query: &str, options: SearchOpti
     }
 }
 
-/// Filter records based on search query and content type filter
+fn file_paths_match_query(content: &str, query: &str, options: SearchOptions) -> bool {
+    deserialize_file_paths(content)
+        .iter()
+        .any(|path| text_matches_query(path, query, options))
+}
+
+/// Filter records based on search query, content type filter, and favorites toggle.
+///
+/// `filter` and `favorites_only` are independent dimensions:
+/// - `filter` restricts by content type (Text / Image / Files / All).
+/// - `favorites_only` further restricts to favorited records when `true`.
 pub(super) fn filter_records_by_query(
     records: &[ClipboardRecord],
     query: &str,
     filter: ContentFilter,
     options: SearchOptions,
     favorite_ids: &HashSet<u64>,
+    favorites_only: bool,
 ) -> Vec<usize> {
     records
         .iter()
         .enumerate()
         .filter(|(_, record)| {
+            // Apply favorites filter (independent dimension)
+            if favorites_only && !favorite_ids.contains(&record.id) {
+                return false;
+            }
+
             // Apply content type filter
             let passes_type_filter = match filter {
                 ContentFilter::All => true,
                 ContentFilter::Text => record.content_type == ContentType::Text,
                 ContentFilter::Image => record.content_type == ContentType::Image,
-                ContentFilter::Favorites => favorite_ids.contains(&record.id),
+                ContentFilter::Files => record.content_type == ContentType::FilePath,
             };
 
             if !passes_type_filter {
@@ -109,13 +130,16 @@ pub(super) fn filter_records_by_query(
                 return true;
             }
 
-            // Text/All/Favorites filter: apply text search on text records
+            // Text/All filter: apply text search on text records
             if query.is_empty() {
                 return true;
             }
 
-            record.content_type == ContentType::Text
-                && text_matches_query(&record.content, query, options)
+            match record.content_type {
+                ContentType::Text => text_matches_query(&record.content, query, options),
+                ContentType::FilePath => file_paths_match_query(&record.content, query, options),
+                ContentType::Image => false,
+            }
         })
         .map(|(index, _)| index)
         .collect()
@@ -227,11 +251,11 @@ fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
         )
 }
 
-/// Render content type filter buttons
+/// Render content type filter buttons (text, image, files only)
 fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let text_filter_tooltip = I18n::translate(cx, "filter_text");
     let image_filter_tooltip = I18n::translate(cx, "filter_image");
-    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+    let files_filter_tooltip = I18n::translate(cx, "filter_files");
 
     let text_button = if board.content_filter == ContentFilter::Text {
         Button::new("filter-text-btn").primary()
@@ -245,10 +269,10 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         Button::new("filter-image-btn").ghost()
     };
 
-    let favorites_button = if board.content_filter == ContentFilter::Favorites {
-        Button::new("filter-favorites-btn").primary()
+    let files_button = if board.content_filter == ContentFilter::Files {
+        Button::new("filter-files-btn").primary()
     } else {
-        Button::new("filter-favorites-btn").ghost()
+        Button::new("filter-files-btn").ghost()
     };
 
     h_flex()
@@ -281,12 +305,41 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
         )
         .child(
+            files_button
+                .icon(Icon::empty().path("icon/filter-files.svg"))
+                .tooltip(files_filter_tooltip)
+                .rounded(px(14.0))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Files);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        )
+}
+
+/// Render favorites filter button (separate from other filter buttons, with capsule wrapper)
+fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+
+    let favorites_button = if board.favorites_only {
+        Button::new("filter-favorites-btn").primary()
+    } else {
+        Button::new("filter-favorites-btn").ghost()
+    };
+
+    h_flex()
+        .items_center()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded(px(16.0))
+        .p(px(2.0))
+        .child(
             favorites_button
                 .icon(Icon::empty().path("icon/filter-star.svg"))
                 .tooltip(favorites_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.toggle_content_filter(ContentFilter::Favorites);
+                    this.toggle_favorites_only();
                     cx.notify();
                 }))
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
@@ -304,6 +357,7 @@ pub(super) fn render_search_input(
         .gap_2()
         .child(render_search_field(board, cx))
         .child(render_filter_buttons(board, cx))
+        .child(render_favorites_button(board, cx))
 }
 
 #[cfg(test)]
@@ -353,6 +407,7 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![0, 1, 2]);
     }
@@ -366,6 +421,7 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![0, 1]);
     }
@@ -395,6 +451,7 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![0, 1]);
     }
@@ -427,6 +484,7 @@ mod tests {
                 whole_word: false,
             },
             &empty_favorites(),
+            false,
         );
 
         assert_eq!(result, vec![0]);
@@ -467,6 +525,7 @@ mod tests {
                 whole_word: true,
             },
             &empty_favorites(),
+            false,
         );
 
         assert_eq!(result, vec![0, 1]);
@@ -500,6 +559,7 @@ mod tests {
                 whole_word: true,
             },
             &empty_favorites(),
+            false,
         );
 
         assert_eq!(result, vec![0]);
@@ -524,6 +584,7 @@ mod tests {
                 whole_word: true,
             },
             &empty_favorites(),
+            false,
         );
 
         assert!(result.is_empty());
@@ -545,6 +606,7 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert!(result.is_empty());
     }
@@ -565,8 +627,63 @@ mod tests {
             ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_filter_all_with_query_matches_file_path_records() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "[\"/tmp/final-report.pdf\",\"/tmp/notes.txt\"]".to_string(),
+                content_type: ContentType::FilePath,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "Hello World".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = filter_records_by_query(
+            &records,
+            "report",
+            ContentFilter::All,
+            SearchOptions::default(),
+            &empty_favorites(),
+            false,
+        );
+
+        assert_eq!(result, vec![0]);
+    }
+
+    #[test]
+    fn test_filter_favorites_with_query_matches_file_path_records() {
+        let records = vec![ClipboardRecord {
+            id: 7,
+            content: "/tmp/archive.zip".to_string(),
+            content_type: ContentType::FilePath,
+            created_at: chrono::Local::now(),
+            pinned: false,
+        }];
+        let favorites = HashSet::from([7]);
+
+        let result = filter_records_by_query(
+            &records,
+            "archive",
+            ContentFilter::All,
+            SearchOptions::default(),
+            &favorites,
+            true,
+        );
+
+        assert_eq!(result, vec![0]);
     }
 
     // --- ContentFilter::Text tests ---
@@ -580,6 +697,7 @@ mod tests {
             ContentFilter::Text,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![0, 1]);
     }
@@ -593,6 +711,7 @@ mod tests {
             ContentFilter::Text,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![0]);
     }
@@ -608,6 +727,7 @@ mod tests {
             ContentFilter::Image,
             SearchOptions::default(),
             &empty_favorites(),
+            false,
         );
         assert_eq!(result, vec![2]);
     }
@@ -629,9 +749,72 @@ mod tests {
                 ContentFilter::Image,
                 options,
                 &no_favorites,
+                false,
             );
             assert_eq!(result, vec![2]);
         }
+    }
+
+    #[test]
+    fn test_filter_files_no_query_returns_files_only() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "[\"/tmp/report.pdf\"]".to_string(),
+                content_type: ContentType::FilePath,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "hello".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = filter_records_by_query(
+            &records,
+            "",
+            ContentFilter::Files,
+            SearchOptions::default(),
+            &empty_favorites(),
+            false,
+        );
+
+        assert_eq!(result, vec![0]);
+    }
+
+    #[test]
+    fn test_filter_files_with_query_matches_file_paths_only() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "[\"/tmp/report.pdf\",\"/tmp/notes.txt\"]".to_string(),
+                content_type: ContentType::FilePath,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "report body".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+            },
+        ];
+
+        let result = filter_records_by_query(
+            &records,
+            "report",
+            ContentFilter::Files,
+            SearchOptions::default(),
+            &empty_favorites(),
+            false,
+        );
+
+        assert_eq!(result, vec![0]);
     }
 
     // --- ContentFilter::Favorites tests ---
@@ -643,9 +826,10 @@ mod tests {
         let result = filter_records_by_query(
             &records,
             "",
-            ContentFilter::Favorites,
+            ContentFilter::All,
             SearchOptions::default(),
             &favorites,
+            true,
         );
         assert_eq!(result, vec![0, 2]);
     }
@@ -657,9 +841,10 @@ mod tests {
         let result = filter_records_by_query(
             &records,
             "hello",
-            ContentFilter::Favorites,
+            ContentFilter::All,
             SearchOptions::default(),
             &favorites,
+            true,
         );
         assert_eq!(result, vec![0]);
     }
@@ -670,9 +855,10 @@ mod tests {
         let result = filter_records_by_query(
             &records,
             "",
-            ContentFilter::Favorites,
+            ContentFilter::All,
             SearchOptions::default(),
             &empty_favorites(),
+            true,
         );
         assert!(result.is_empty());
     }
