@@ -180,110 +180,130 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
 }
 
-/// Render the search input section with content type filter buttons
-pub(super) fn render_search_input(
-    board: &RopyBoard,
-    cx: &Context<'_, RopyBoard>,
-) -> impl IntoElement {
-    let is_text_active = board.content_filter == ContentFilter::Text;
-    let is_image_active = board.content_filter == ContentFilter::Image;
-    let is_favorites_active = board.content_filter == ContentFilter::Favorites;
-    let text_filter_tooltip = I18n::translate(cx, "filter_text");
-    let image_filter_tooltip = I18n::translate(cx, "filter_image");
-    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+/// Render the search icon
+fn render_search_icon() -> impl IntoElement {
+    div()
+        .pl_2()
+        .child(Icon::empty().path("icon/search.svg").size(px(16.0)))
+}
 
-    let text_button = if is_text_active {
-        Button::new("filter-text-btn").primary()
-    } else {
-        Button::new("filter-text-btn").ghost()
-    };
+/// Render the search input box
+fn render_search_input_box(board: &RopyBoard) -> impl IntoElement {
+    div().flex_1().min_w_0().child(
+        Input::new(&board.search_input)
+            .appearance(false)
+            .px_1()
+            .py_1(),
+    )
+}
 
-    let image_button = if is_image_active {
-        Button::new("filter-image-btn").primary()
-    } else {
-        Button::new("filter-image-btn").ghost()
-    };
+/// Render the search separator
+fn render_search_separator(cx: &gpui::App) -> impl IntoElement {
+    div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45)
+}
 
-    let favorites_button = if is_favorites_active {
-        Button::new("filter-favorites-btn").primary()
-    } else {
-        Button::new("filter-favorites-btn").ghost()
-    };
-
+/// Render the search input field with search options
+fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     h_flex()
-        .w_full()
-        .mb_4()
-        .gap_2()
+        .flex_1()
+        .min_w_0()
+        .items_center()
+        .gap_0p5()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded(px(16.0))
+        .p(px(2.0))
         .child(
             h_flex()
                 .flex_1()
                 .min_w_0()
                 .items_center()
                 .gap_0p5()
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_md()
-                .px_1()
-                .py_1()
-                .child(
-                    div().flex_1().min_w_0().child(
-                        Input::new(&board.search_input)
-                            .appearance(false)
-                            .px_1()
-                            .py_1(),
-                    ),
-                )
-                .child(div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45))
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap(px(2.0))
-                        .child(create_case_sensitive_button(board, cx))
-                        .child(create_whole_word_button(board, cx)),
-                ),
+                .child(render_search_icon())
+                .child(render_search_input_box(board))
+                .child(render_search_separator(cx))
+                .child(create_case_sensitive_button(board, cx))
+                .child(create_whole_word_button(board, cx)),
+        )
+}
+
+/// Render content type filter buttons
+fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let text_filter_tooltip = I18n::translate(cx, "filter_text");
+    let image_filter_tooltip = I18n::translate(cx, "filter_image");
+    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+
+    let text_button = if board.content_filter == ContentFilter::Text {
+        Button::new("filter-text-btn").primary()
+    } else {
+        Button::new("filter-text-btn").ghost()
+    };
+
+    let image_button = if board.content_filter == ContentFilter::Image {
+        Button::new("filter-image-btn").primary()
+    } else {
+        Button::new("filter-image-btn").ghost()
+    };
+
+    let favorites_button = if board.content_filter == ContentFilter::Favorites {
+        Button::new("filter-favorites-btn").primary()
+    } else {
+        Button::new("filter-favorites-btn").ghost()
+    };
+
+    h_flex()
+        .items_center()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded(px(16.0))
+        .p(px(2.0))
+        .gap(px(1.0))
+        .child(
+            text_button
+                .icon(Icon::empty().path("icon/filter-text.svg"))
+                .tooltip(text_filter_tooltip)
+                .rounded(px(14.0))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Text);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
         )
         .child(
-            h_flex()
-                .items_center()
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded(px(16.0))
-                .p(px(2.0))
-                .gap(px(1.0))
-                .child(
-                    text_button
-                        .icon(Icon::empty().path("icon/filter-text.svg"))
-                        .tooltip(text_filter_tooltip)
-                        .rounded(px(14.0))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.toggle_content_filter(ContentFilter::Text);
-                            cx.notify();
-                        }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                )
-                .child(
-                    image_button
-                        .icon(Icon::empty().path("icon/filter-image.svg"))
-                        .tooltip(image_filter_tooltip)
-                        .rounded(px(14.0))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.toggle_content_filter(ContentFilter::Image);
-                            cx.notify();
-                        }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                )
-                .child(
-                    favorites_button
-                        .icon(Icon::empty().path("icon/filter-star.svg"))
-                        .tooltip(favorites_filter_tooltip)
-                        .rounded(px(14.0))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.toggle_content_filter(ContentFilter::Favorites);
-                            cx.notify();
-                        }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                ),
+            image_button
+                .icon(Icon::empty().path("icon/filter-image.svg"))
+                .tooltip(image_filter_tooltip)
+                .rounded(px(14.0))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Image);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
         )
+        .child(
+            favorites_button
+                .icon(Icon::empty().path("icon/filter-star.svg"))
+                .tooltip(favorites_filter_tooltip)
+                .rounded(px(14.0))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_content_filter(ContentFilter::Favorites);
+                    cx.notify();
+                }))
+                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        )
+}
+
+/// Render the search input section with content type filter buttons
+pub(super) fn render_search_input(
+    board: &RopyBoard,
+    cx: &Context<'_, RopyBoard>,
+) -> impl IntoElement {
+    h_flex()
+        .w_full()
+        .mb_4()
+        .gap_2()
+        .child(render_search_field(board, cx))
+        .child(render_filter_buttons(board, cx))
 }
 
 #[cfg(test)]

@@ -9,7 +9,6 @@ tray_show = "表示"
 tray_quit = "終了"
 
 # Main window
-search_placeholder = "/ で検索 ... "
 clear_all = "すべてクリア"
 clear_confirm_title = "すべての記録を消去"
 clear_confirm_message = "保存されたすべてのクリップボード記録が完全に削除されます。この操作は取り消せません。"

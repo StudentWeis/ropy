@@ -42,7 +42,7 @@ use crate::{
         },
         theme::ThemeId,
     },
-    i18n::{I18n, Language},
+    i18n::Language,
     repository::{
         ClipboardRecord, ClipboardRepository, GlobalRepository, SharedRecords, models::ContentType,
     },
@@ -331,8 +331,7 @@ impl RopyBoard {
         )
         .detach();
 
-        let search_placeholder = I18n::translate(cx, "search_placeholder");
-        let search_input = cx.new(|cx| InputState::new(window, cx).placeholder(search_placeholder));
+        let search_input = cx.new(|cx| InputState::new(window, cx));
         let favorite_ids = Arc::new(Self::load_favorite_ids(cx));
 
         Self {

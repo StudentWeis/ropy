@@ -128,12 +128,6 @@ impl RopyBoard {
         // Update tray menu with new language
         Self::update_tray_menu(cx);
 
-        // Update search placeholder with new language
-        let search_placeholder = I18n::translate(cx, "search_placeholder");
-        self.search_input.update(cx, |input, cx| {
-            input.set_placeholder(search_placeholder, window, cx);
-        });
-
         // Sync auto-start state with system
         let autostart_error = self.sync_autostart_state().err();
         if let Some(ref e) = autostart_error {
