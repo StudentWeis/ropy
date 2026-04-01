@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::OnceLock};
+use std::path::PathBuf;
 
 use gpui::{
     AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img, list,
@@ -12,7 +12,6 @@ use gpui_component::{
     scroll::{Scrollbar, ScrollbarShow},
     v_flex,
 };
-use regex::Regex;
 
 use super::{RopyBoard, preview};
 use crate::{
@@ -24,29 +23,19 @@ const LIST_CONTENT_PREVIEW_LIMIT: usize = 100;
 const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 800;
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
-    static HEX_REGEX: OnceLock<Regex> = OnceLock::new();
-    let regex = HEX_REGEX.get_or_init(|| {
-        Regex::new(r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$").unwrap_or_else(|e| {
-            tracing::error!(error = %e, "fatal: invalid hex color regex");
-            #[allow(clippy::unwrap_used)]
-            Regex::new(r"a^").unwrap()
-        })
-    });
-
-    if regex.is_match(content) {
-        let hex = content.trim_start_matches('#');
-        let value = if hex.len() == 3 {
+    let hex = content.strip_prefix('#')?;
+    let value = match hex.len() {
+        3 if hex.chars().all(|ch| ch.is_ascii_hexdigit()) => {
             let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
             let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
             let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
             ((u32::from(r) * 17) << 16) | ((u32::from(g) * 17) << 8) | (u32::from(b) * 17)
-        } else {
-            u32::from_str_radix(hex, 16).ok()?
-        };
-        Some(gpui::rgb(value))
-    } else {
-        None
-    }
+        }
+        6 if hex.chars().all(|ch| ch.is_ascii_hexdigit()) => u32::from_str_radix(hex, 16).ok()?,
+        _ => return None,
+    };
+
+    Some(gpui::rgb(value))
 }
 
 fn truncate_content(content: &str, limit: usize) -> String {
@@ -433,7 +422,7 @@ impl RopyBoard {
 
 #[cfg(test)]
 mod tests {
-    use super::truncate_content;
+    use super::{get_hex_color, truncate_content};
 
     #[test]
     fn truncate_content_preserves_short_text() {
@@ -443,5 +432,18 @@ mod tests {
     #[test]
     fn truncate_content_appends_ellipsis_for_long_text() {
         assert_eq!(truncate_content("abcdef", 3), "abc...");
+    }
+
+    #[test]
+    fn get_hex_color_accepts_short_and_long_hex_values() {
+        assert_eq!(get_hex_color("#abc"), Some(gpui::rgb(0xAA_BB_CC)));
+        assert_eq!(get_hex_color("#A1b2C3"), Some(gpui::rgb(0xA1_B2_C3)));
+    }
+
+    #[test]
+    fn get_hex_color_rejects_invalid_hex_values() {
+        assert_eq!(get_hex_color("abc"), None);
+        assert_eq!(get_hex_color("#abcd"), None);
+        assert_eq!(get_hex_color("#12x456"), None);
     }
 }

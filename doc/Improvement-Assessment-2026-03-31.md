@@ -103,7 +103,6 @@ The project has almost no unit or integration tests despite `rstest` being confi
   - Optimizes aggressively for binary size, potentially at the cost of startup time and runtime responsiveness.
 - Recommendation:
   - Benchmark `opt-level = "s"` and `opt-level = 3` against the current profile.
-  - Already documented in `doc/Optimization-Assessment-2026-03-30.md`.
 
 ### 11. `RopyBoard` is a god struct with 30+ fields
 
