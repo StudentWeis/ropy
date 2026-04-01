@@ -2,9 +2,14 @@ use std::sync::Arc;
 
 use gpui::{App, Global, ReadGlobal};
 
+pub mod backend;
 pub mod errors;
+#[cfg(test)]
+pub mod memory_backend;
 pub mod models;
+pub mod redb_backend;
 pub mod repo;
+pub mod sled_backend;
 mod time_index;
 
 pub use models::{ClipboardRecord, ContentType, SharedRecords};

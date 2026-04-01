@@ -9,9 +9,8 @@
 
 use std::collections::HashSet;
 
-use sled::Tree;
-
 use super::{
+    backend::KvTree,
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
 };
@@ -26,12 +25,13 @@ pub struct IndexEntry {
 /// `(pinned, content_type)`, enabling chronological queries and
 /// type-based filtering without touching the main record store.
 pub struct TimeIndex {
-    tree: Tree,
+    entries: Box<dyn KvTree>,
+    id_lookup: Box<dyn KvTree>,
 }
 
 impl TimeIndex {
-    pub const fn new(tree: Tree) -> Self {
-        Self { tree }
+    pub fn new(entries: Box<dyn KvTree>, id_lookup: Box<dyn KvTree>) -> Self {
+        Self { entries, id_lookup }
     }
 
     /// Insert or update the time index entry for a record.
@@ -42,18 +42,22 @@ impl TimeIndex {
         self.remove_by_id(record.id)?;
         let key = Self::encode_key(record.created_at.timestamp_millis(), record.id);
         let val = Self::encode_value(record.pinned, &record.content_type);
-        self.tree
-            .insert(key, &val)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+        self.entries.insert(&key, &val)?;
+        if let Err(error) = self.id_lookup.insert(
+            &record.id.to_be_bytes(),
+            &record.created_at.timestamp_millis().to_be_bytes(),
+        ) {
+            let _ = self.entries.remove(&key);
+            return Err(error);
+        }
         Ok(())
     }
 
     /// Remove the entry that matches the given `(timestamp_millis, id)` pair.
     pub fn remove(&self, timestamp_millis: i64, id: u64) -> Result<(), RepositoryError> {
         let key = Self::encode_key(timestamp_millis, id);
-        self.tree
-            .remove(key)
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.entries.remove(&key)?;
+        self.id_lookup.remove(&id.to_be_bytes())?;
         Ok(())
     }
 
@@ -67,18 +71,13 @@ impl TimeIndex {
     ) -> Result<(), RepositoryError> {
         let key = Self::encode_key(timestamp_millis, id);
         let val = Self::encode_value(pinned, content_type);
-        self.tree
-            .insert(key, &val)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-        Ok(())
+        self.entries.insert(&key, &val)
     }
 
     /// Clear all entries.
     pub fn clear(&self) -> Result<(), RepositoryError> {
-        self.tree
-            .clear()
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
-        Ok(())
+        self.entries.clear()?;
+        self.id_lookup.clear()
     }
 
     /// Select record IDs for the default board view.
@@ -95,10 +94,9 @@ impl TimeIndex {
         let mut selected_unpinned = Vec::new();
         let mut ordinary_count = 0;
 
-        for result in self.tree.iter().rev() {
-            let (k, v) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let Some(entry) = Self::decode_entry(&k, &v) else {
-                continue;
+        self.entries.scan_descending(&mut |key, value| {
+            let Some(entry) = Self::decode_entry(key, value) else {
+                return true;
             };
 
             if entry.is_pinned {
@@ -109,7 +107,8 @@ impl TimeIndex {
                 selected_unpinned.push(entry.id);
                 ordinary_count += 1;
             }
-        }
+            true
+        })?;
 
         pinned.extend(selected_unpinned);
         Ok(pinned)
@@ -119,16 +118,16 @@ impl TimeIndex {
     pub fn pinned_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut pinned = Vec::new();
 
-        for result in self.tree.iter().rev() {
-            let (k, v) = result.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let Some(entry) = Self::decode_entry(&k, &v) else {
-                continue;
+        self.entries.scan_descending(&mut |key, value| {
+            let Some(entry) = Self::decode_entry(key, value) else {
+                return true;
             };
 
             if entry.is_pinned {
                 pinned.push(entry.id);
             }
-        }
+            true
+        })?;
 
         Ok(pinned)
     }
@@ -136,45 +135,41 @@ impl TimeIndex {
     /// Collect up to `max` oldest unpinned entries for cleanup.
     ///
     /// Returns `(encoded_key, record_id)` pairs sorted oldest-first
-    /// (natural sled iteration order).
+    /// (natural iteration order).
     pub fn oldest_unpinned(&self, max: usize) -> Result<Vec<([u8; 16], u64)>, RepositoryError> {
         let mut result = Vec::new();
-        for entry in &self.tree {
+
+        self.entries.scan_ascending(&mut |key, value| {
             if result.len() >= max {
-                break;
+                return false;
             }
-            let (k, v) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            if k.len() != 16 || v.is_empty() {
-                continue;
+            if key.len() != 16 || value.is_empty() {
+                return true;
             }
-            if v[0] != 0 {
+            if value[0] != 0 {
                 // pinned — skip
-                continue;
+                return true;
             }
-            let id = u64::from_be_bytes(k[8..].try_into().unwrap_or_default());
-            let mut key = [0u8; 16];
-            key.copy_from_slice(&k);
-            result.push((key, id));
-        }
+            let id = u64::from_be_bytes(key[8..].try_into().unwrap_or_default());
+            let mut encoded_key = [0u8; 16];
+            encoded_key.copy_from_slice(key);
+            result.push((encoded_key, id));
+            true
+        })?;
+
         Ok(result)
     }
 
-    /// Remove entry associated with the given `id` by scanning the index.
+    /// Remove entry associated with the given `id`.
     fn remove_by_id(&self, id: u64) -> Result<(), RepositoryError> {
-        let id_bytes = id.to_be_bytes();
-        let mut to_remove = None;
-        for entry in self.tree.iter().rev() {
-            let (k, _) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            if k.len() == 16 && k[8..] == id_bytes {
-                to_remove = Some(k);
-                break;
-            }
-        }
-        if let Some(k) = to_remove {
-            self.tree
-                .remove(k)
-                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
-        }
+        let id_key = id.to_be_bytes();
+        let Some(timestamp_bytes) = self.id_lookup.get(&id_key)? else {
+            return Ok(());
+        };
+        let timestamp = Self::decode_lookup_timestamp(&timestamp_bytes)?;
+        let key = Self::encode_key(timestamp, id);
+        self.entries.remove(&key)?;
+        self.id_lookup.remove(&id_key)?;
         Ok(())
     }
 
@@ -191,6 +186,13 @@ impl TimeIndex {
         [u8::from(pinned), content_type.as_tag()]
     }
 
+    fn decode_lookup_timestamp(bytes: &[u8]) -> Result<i64, RepositoryError> {
+        let timestamp: [u8; 8] = bytes
+            .try_into()
+            .map_err(|_| RepositoryError::Deserialization("bad time index lookup".into()))?;
+        Ok(i64::from_be_bytes(timestamp))
+    }
+
     fn decode_entry(key: &[u8], value: &[u8]) -> Option<IndexEntry> {
         if key.len() != 16 || value.is_empty() {
             return None;
@@ -202,9 +204,9 @@ impl TimeIndex {
 
     /// Delete a raw encoded key from the underlying tree.
     pub fn remove_raw(&self, key: &[u8; 16]) -> Result<(), RepositoryError> {
-        self.tree
-            .remove(key.as_ref())
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.entries.remove(key.as_ref())?;
+        let id = u64::from_be_bytes(key[8..].try_into().unwrap_or_default());
+        self.id_lookup.remove(&id.to_be_bytes())?;
         Ok(())
     }
 }
@@ -222,7 +224,11 @@ impl TimeIndex {
         let key = Self::encode_key(timestamp_millis, id);
         let val = Self::encode_value(pinned, content_type);
         #[allow(clippy::expect_used)]
-        self.tree.insert(key, &val).expect("test insert failed");
+        self.entries.insert(&key, &val).expect("test insert failed");
+        #[allow(clippy::expect_used)]
+        self.id_lookup
+            .insert(&id.to_be_bytes(), &timestamp_millis.to_be_bytes())
+            .expect("test lookup insert failed");
     }
 }
 
@@ -230,17 +236,34 @@ impl TimeIndex {
 mod tests {
     use std::collections::HashSet;
 
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::*;
+    use crate::repository::{
+        backend::BackendFactory, memory_backend::memory_backend_factory,
+        redb_backend::redb_backend_factory, sled_backend::sled_backend_factory,
+    };
+
+    #[allow(clippy::expect_used)]
+    fn create_test_time_index_with(factory: BackendFactory) -> (tempfile::TempDir, TimeIndex) {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join("test_time_index.db");
+        let backend = factory(&db_path).expect("Failed to open backend");
+        let entries = backend
+            .open_tree("time_index")
+            .expect("Failed to open tree");
+        let id_lookup = backend
+            .open_tree("time_index_lookup")
+            .expect("Failed to open lookup tree");
+        let index = TimeIndex::new(entries, id_lookup);
+        (temp_dir, index)
+    }
 
     #[allow(clippy::expect_used)]
     fn create_test_time_index() -> TimeIndex {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test_time_index.db");
-        let db = sled::open(&db_path).expect("Failed to open database");
-        let tree = db.open_tree("time_index").expect("Failed to open tree");
-        TimeIndex::new(tree)
+        let (_temp_dir, index) = create_test_time_index_with(memory_backend_factory);
+        index
     }
 
     #[allow(clippy::expect_used)]
@@ -328,10 +351,13 @@ mod tests {
 
     // ── CRUD Tests ────────────────────────────────────────────────
 
-    #[test]
+    #[rstest]
+    #[case(sled_backend_factory)]
+    #[case(redb_backend_factory)]
+    #[case(memory_backend_factory)]
     #[allow(clippy::expect_used)]
-    fn test_upsert_new_record() {
-        let index = create_test_time_index();
+    fn test_upsert_new_record(#[case] factory: BackendFactory) {
+        let (_temp_dir, index) = create_test_time_index_with(factory);
         let record = ClipboardRecord {
             id: 1,
             content: "test".to_string(),
@@ -340,7 +366,9 @@ mod tests {
             pinned: false,
         };
 
-        index.upsert(&record).expect("Failed to upsert");
+        index
+            .upsert(&record)
+            .unwrap_or_else(|error| panic!("Failed to upsert: {error}"));
 
         let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![1]);
@@ -439,11 +467,13 @@ mod tests {
         index.insert_raw(2000, 2, true, &ContentType::Image);
         index.insert_raw(3000, 3, false, &ContentType::FilePath);
 
-        assert_eq!(index.tree.len(), 3);
+        assert_eq!(index.entries.len(), 3);
+        assert_eq!(index.id_lookup.len(), 3);
 
         index.clear().expect("Failed to clear");
 
-        assert_eq!(index.tree.len(), 0);
+        assert_eq!(index.entries.len(), 0);
+        assert_eq!(index.id_lookup.len(), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
         assert!(ids.is_empty());
     }
@@ -459,10 +489,13 @@ mod tests {
         assert!(ids.is_empty());
     }
 
-    #[test]
+    #[rstest]
+    #[case(sled_backend_factory)]
+    #[case(redb_backend_factory)]
+    #[case(memory_backend_factory)]
     #[allow(clippy::expect_used)]
-    fn test_select_display_ids_ordering() {
-        let index = create_test_time_index();
+    fn test_select_display_ids_ordering(#[case] factory: BackendFactory) {
+        let (_temp_dir, index) = create_test_time_index_with(factory);
 
         // Insert in non-chronological order
         index.insert_raw(3000, 3, false, &ContentType::Text);
@@ -806,6 +839,8 @@ mod tests {
         let key = TimeIndex::encode_key(timestamp, 1);
         index.remove_raw(&key).expect("Failed to remove raw");
 
+        assert_eq!(index.entries.len(), 0);
+        assert_eq!(index.id_lookup.len(), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
         assert!(ids.is_empty());
     }

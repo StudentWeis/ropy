@@ -304,10 +304,16 @@ mod tests {
 
     #[allow(clippy::expect_used)]
     fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository) {
+        use crate::repository::memory_backend::memory_backend_factory;
+
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
-        let repo = ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
-            .expect("Failed to create test repository");
+        let repo = ClipboardRepository::init(
+            &db_path,
+            temp_dir.path().join("images"),
+            memory_backend_factory,
+        )
+        .expect("Failed to create test repository");
 
         (temp_dir, repo)
     }

@@ -4,19 +4,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
-### 9. Time index upsert does not scale
-
-**Priority:** Low (at current defaults)
-
-- Relevant code:
-  - `src/repository/time_index.rs` — `TimeIndex::upsert`, `TimeIndex::remove_by_id`
-- Why it matters:
-  - Stale entry removal scans the entire index.
-  - Acceptable at the default `max_storage_records`, but degrades at higher values.
-- Recommendation:
-  - Add an auxiliary `id → timestamp` index for O(1) stale-entry removal.
-  - Already documented in `doc/Optimization-Assessment-2026-03-30.md`.
-
 ### 10. Release profile tradeoff is untested
 
 **Priority:** Low
@@ -42,19 +29,6 @@ This document records a comprehensive improvement review of the current Ropy cod
     - `SettingsEditor` — `hotkey_recording`, `hotkey_manual_editing`, `pending_hotkey`, `hotkey_before_recording`, `settings_*_input`, `selected_theme`, `selected_language`, `language_select`, `autostart_enabled`, `auto_check_enabled`, `hover_preview_enabled`
     - `UpdateManager` — `update_status`
     - Keep `RopyBoard` focused on core board state: records, filtering, selection, and layout
-
-### 18. `sled` is no longer actively maintained
-
-**Priority:** Low (long-term)
-
-- Relevant code:
-  - `Cargo.toml` — `sled = "0.34.7"`
-- Why it matters:
-  - The `sled` author has stated the project is no longer actively maintained. No new releases since 2021.
-  - Security patches and compatibility fixes will not be forthcoming.
-- Recommendation:
-  - Monitor for a suitable replacement (`redb`, `sqlite` via `rusqlite`, or `fjall`).
-  - No immediate action needed — the current version works correctly.
 
 ## Engineering and CI Gaps
 

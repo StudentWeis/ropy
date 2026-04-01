@@ -3,16 +3,18 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
 use chrono::Local;
-use sled::Db;
 
 use super::{
+    backend::{BackendFactory, KvTree, StorageBackend},
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
+    redb_backend::redb_backend_factory,
+    sled_backend::sled_backend_factory,
     time_index::TimeIndex,
 };
 use crate::{
@@ -21,83 +23,74 @@ use crate::{
 };
 
 /// Schema version for the database. Bump this when the key format changes.
-const SCHEMA_VERSION: u64 = 3;
+const SCHEMA_VERSION: u64 = 4;
 
-/// Maximum page cache size for the sled database (16 MB).
-///
-/// sled defaults to 1 GB, which is far too large for a clipboard manager.
-/// 32 MB provides ample room for typical workloads while keeping the memory
-/// footprint reasonable.
-const DB_CACHE_CAPACITY: u64 = 8 * 1024 * 1024;
-
-/// Interval at which sled flushes dirty pages to disk (in milliseconds).
-const DB_FLUSH_INTERVAL_MS: u64 = 1000;
 /// Allow the repository to grow slightly past the configured limit so cleanup
 /// can batch deletions instead of scanning on every successful save.
 const CLEANUP_BUFFER_DIVISOR: usize = 10;
 const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 
+#[derive(Clone, Copy)]
+enum RepositoryBackend {
+    Sled,
+    Redb,
+}
+
 pub struct ClipboardRepository {
-    db: Db,
-    records: sled::Tree,
+    backend: Box<dyn StorageBackend>,
+    records: Box<dyn KvTree>,
     time_index: TimeIndex,
-    favorites: sled::Tree,
+    favorites: Box<dyn KvTree>,
     images_dir: PathBuf,
 }
 
 impl ClipboardRepository {
-    /// Create a new repository using the default data directory.
+    /// Create a new repository using the configured backend.
+    ///
+    /// Defaults to sled. Set `ROPY_STORAGE_BACKEND=redb` to opt into redb
+    /// without affecting the existing sled data file.
     pub fn new() -> Result<Self, RepositoryError> {
-        let db_path = Self::default_db_path()?;
+        let backend = Self::configured_backend();
+        let db_path = Self::default_db_path(backend)?;
         let images_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
             .join("images");
-        Self::init(&db_path, images_dir)
+        Self::init(&db_path, images_dir, Self::backend_factory(backend))
     }
 
-    /// Initialize repository with explicit paths (used by tests).
-    pub fn init(db_path: &PathBuf, images_dir: PathBuf) -> Result<Self, RepositoryError> {
-        let db = sled::Config::new()
-            .path(db_path)
-            .cache_capacity(DB_CACHE_CAPACITY)
-            .flush_every_ms(Some(DB_FLUSH_INTERVAL_MS))
-            .open()
-            .map_err(|e| RepositoryError::DatabaseOpen(e.to_string()))?;
+    /// Initialize repository with explicit paths and a pluggable backend factory.
+    ///
+    /// Use [`sled_backend_factory`] for the default sled-based storage, or
+    /// provide a custom factory to use a different database engine.
+    pub fn init(
+        db_path: &PathBuf,
+        images_dir: PathBuf,
+        factory: BackendFactory,
+    ) -> Result<Self, RepositoryError> {
+        let backend = factory(db_path)?;
 
-        let meta = db
-            .open_tree("meta")
-            .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
-        let records = db
-            .open_tree("clipboard_records")
-            .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
+        let meta = backend.open_tree("meta")?;
+        let records = backend.open_tree("clipboard_records")?;
         let time_index = TimeIndex::new(
-            db.open_tree("time_index")
-                .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?,
+            backend.open_tree("time_index")?,
+            backend.open_tree("time_index_lookup")?,
         );
-        let favorites = db
-            .open_tree("favorites")
-            .map_err(|e| RepositoryError::TreeOpen(e.to_string()))?;
+        let favorites = backend.open_tree("favorites")?;
 
-        if Self::needs_schema_migration(&meta)? {
-            records
-                .clear()
-                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        if Self::needs_schema_migration(meta.as_ref())? {
+            records.clear()?;
             time_index.clear()?;
-            favorites
-                .clear()
-                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+            favorites.clear()?;
             if images_dir.exists() {
                 fs::remove_dir_all(&images_dir).ok();
             }
-            meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())
-                .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-            db.flush()
-                .map_err(|e| RepositoryError::Flush(e.to_string()))?;
+            meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
+            backend.flush()?;
         }
 
         Ok(Self {
-            db,
+            backend,
             records,
             time_index,
             favorites,
@@ -107,27 +100,40 @@ impl ClipboardRepository {
 
     /// Flush data to disk.
     pub fn flush(&self) -> Result<(), RepositoryError> {
-        self.db
-            .flush()
-            .map_err(|e| RepositoryError::Flush(e.to_string()))?;
-        Ok(())
+        self.backend.flush()
     }
 
-    fn default_db_path() -> Result<PathBuf, RepositoryError> {
+    fn default_db_path(backend: RepositoryBackend) -> Result<PathBuf, RepositoryError> {
+        let file_name = match backend {
+            RepositoryBackend::Sled => "clipboard.db",
+            RepositoryBackend::Redb => "clipboard.redb",
+        };
+
         Ok(dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
-            .join("clipboard.db"))
+            .join(file_name))
     }
 
-    fn needs_schema_migration(meta: &sled::Tree) -> Result<bool, RepositoryError> {
-        match meta
-            .get(b"schema_version")
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-        {
+    fn configured_backend() -> RepositoryBackend {
+        match env::var("ROPY_STORAGE_BACKEND").ok().as_deref() {
+            Some("redb") => RepositoryBackend::Redb,
+            _ => RepositoryBackend::Sled,
+        }
+    }
+
+    const fn backend_factory(backend: RepositoryBackend) -> BackendFactory {
+        match backend {
+            RepositoryBackend::Sled => sled_backend_factory,
+            RepositoryBackend::Redb => redb_backend_factory,
+        }
+    }
+
+    fn needs_schema_migration(meta: &dyn KvTree) -> Result<bool, RepositoryError> {
+        match meta.get(b"schema_version")? {
             Some(v) if v.len() == 8 => {
                 let stored =
-                    u64::from_be_bytes(v.as_ref().try_into().map_err(|_| {
+                    u64::from_be_bytes(v[..8].try_into().map_err(|_| {
                         RepositoryError::Deserialization("bad schema version".into())
                     })?);
                 Ok(stored != SCHEMA_VERSION)
@@ -275,13 +281,12 @@ impl ClipboardRepository {
     pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut ids = Vec::new();
 
-        for entry in &self.favorites {
-            let (key, _) = entry.map_err(|e| RepositoryError::Query(e.to_string()))?;
-            let Some(id) = Self::decode_u64_key(&key) else {
-                continue;
-            };
-            ids.push(id);
-        }
+        self.favorites.scan_ascending(&mut |key, _value| {
+            if let Some(id) = Self::decode_u64_key(key) {
+                ids.push(id);
+            }
+            true
+        })?;
 
         ids.sort_unstable();
         Ok(ids)
@@ -296,22 +301,13 @@ impl ClipboardRepository {
         }
 
         let key = id.to_be_bytes();
-        if self
-            .favorites
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))?
-            .is_some()
-        {
-            self.favorites
-                .remove(key)
-                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        if self.favorites.get(&key)?.is_some() {
+            self.favorites.remove(&key)?;
             return Ok(false);
         }
 
         let favorited_at = Local::now().timestamp_millis().to_be_bytes();
-        self.favorites
-            .insert(key, favorited_at.as_slice())
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
+        self.favorites.insert(&key, &favorited_at)?;
         Ok(true)
     }
 
@@ -344,28 +340,21 @@ impl ClipboardRepository {
         }
 
         let key = id.to_be_bytes();
-        let removed = self
-            .records
-            .remove(key)
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        let removed = self.records.remove(&key)?;
         self.remove_favorite(id)?;
 
         if let Some(rec) = record {
             self.time_index
                 .remove(rec.created_at.timestamp_millis(), rec.id)?;
         }
-        Ok(removed.is_some())
+        Ok(removed)
     }
 
     /// Clear all records and images.
     pub fn clear(&self) -> Result<(), RepositoryError> {
-        self.records
-            .clear()
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.records.clear()?;
         self.time_index.clear()?;
-        self.favorites
-            .clear()
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.favorites.clear()?;
         if self.images_dir.exists() {
             fs::remove_dir_all(&self.images_dir).ok();
         }
@@ -438,9 +427,7 @@ impl ClipboardRepository {
             {
                 Self::remove_image_files(&record.content);
             }
-            self.records
-                .remove(rec_key)
-                .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+            self.records.remove(&rec_key)?;
             self.time_index.remove_raw(&ti_key)?;
             removed += 1;
         }
@@ -469,21 +456,16 @@ impl ClipboardRepository {
         records.sort_unstable_by(Self::compare_for_display);
     }
 
-    /// Raw sled get on the records tree.
-    fn get_raw(&self, key: &[u8]) -> Result<Option<sled::IVec>, RepositoryError> {
-        self.records
-            .get(key)
-            .map_err(|e| RepositoryError::Query(e.to_string()))
+    /// Get raw bytes from the records tree.
+    fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
+        self.records.get(key)
     }
 
     /// Serialize and insert a record into the records tree.
     fn put_raw(&self, key: &[u8], record: &ClipboardRecord) -> Result<(), RepositoryError> {
         let value = postcard::to_allocvec(record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-        self.records
-            .insert(key, value)
-            .map_err(|e| RepositoryError::Insert(e.to_string()))?;
-        Ok(())
+        self.records.insert(key, &value)
     }
 
     /// Load multiple records by ID, silently skipping failures.
@@ -511,9 +493,7 @@ impl ClipboardRepository {
     }
 
     fn remove_favorite(&self, id: u64) -> Result<(), RepositoryError> {
-        self.favorites
-            .remove(id.to_be_bytes())
-            .map_err(|e| RepositoryError::Delete(e.to_string()))?;
+        self.favorites.remove(&id.to_be_bytes())?;
         Ok(())
     }
 
@@ -561,13 +541,24 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::repository::{
+        memory_backend::memory_backend_factory, redb_backend::redb_backend_factory,
+        sled_backend::sled_backend_factory,
+    };
+
+    #[allow(clippy::expect_used)]
+    fn create_test_repo_with(factory: BackendFactory) -> (tempfile::TempDir, ClipboardRepository) {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join("test.db");
+        let repo = ClipboardRepository::init(&db_path, temp_dir.path().join("images"), factory)
+            .expect("Failed to create test repository");
+        (temp_dir, repo)
+    }
 
     #[allow(clippy::expect_used)]
     fn create_test_repo() -> ClipboardRepository {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-        ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
-            .expect("Failed to create test repository")
+        let (_temp_dir, repo) = create_test_repo_with(memory_backend_factory);
+        repo
     }
 
     #[allow(clippy::expect_used)]
@@ -585,21 +576,24 @@ mod tests {
         }
     }
 
-    #[test]
+    #[rstest]
+    #[case(sled_backend_factory)]
+    #[case(redb_backend_factory)]
+    #[case(memory_backend_factory)]
     #[allow(clippy::expect_used)]
-    fn test_save_and_get_text() {
-        let repo = create_test_repo();
+    fn test_save_and_get_text(#[case] factory: BackendFactory) {
+        let (_temp_dir, repo) = create_test_repo_with(factory);
 
         let record = repo
             .save_text("Hello, World!".to_string())
-            .expect("Failed to save");
+            .unwrap_or_else(|error| panic!("Failed to save: {error}"));
         assert_eq!(record.content, "Hello, World!");
         assert_eq!(record.content_type, ContentType::Text);
 
         let retrieved = repo
             .get_by_id(record.id)
-            .expect("Failed to get by id")
-            .expect("Record not found");
+            .unwrap_or_else(|error| panic!("Failed to get by id: {error}"))
+            .unwrap_or_else(|| panic!("Record not found"));
         assert_eq!(retrieved.content, "Hello, World!");
     }
 
@@ -819,19 +813,24 @@ mod tests {
         assert_eq!(repo.count(), 0);
     }
 
-    #[test]
+    #[rstest]
+    #[case(sled_backend_factory)]
+    #[case(redb_backend_factory)]
+    #[case(memory_backend_factory)]
     #[allow(clippy::expect_used)]
-    fn test_cleanup_old_records() {
-        let repo = create_test_repo();
+    fn test_cleanup_old_records(#[case] factory: BackendFactory) {
+        let (_temp_dir, repo) = create_test_repo_with(factory);
 
         for i in 1..=10 {
             repo.save_text(format!("Record {i}"))
-                .expect("Failed to save");
+                .unwrap_or_else(|error| panic!("Failed to save: {error}"));
             thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(repo.count(), 10);
 
-        let removed = repo.cleanup_old_records(5).expect("Failed to clean up");
+        let removed = repo
+            .cleanup_old_records(5)
+            .unwrap_or_else(|error| panic!("Failed to clean up: {error}"));
         assert_eq!(removed, 5);
         assert_eq!(repo.count(), 5);
 
@@ -1015,7 +1014,7 @@ mod tests {
         };
         let key = 1000_u64.to_be_bytes();
         let value = postcard::to_allocvec(&record).expect("failed to serialize");
-        repo.records.insert(key, value).expect("failed to insert");
+        repo.records.insert(&key, &value).expect("failed to insert");
 
         // Insert matching time_index entry
         repo.time_index

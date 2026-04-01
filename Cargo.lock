@@ -5491,6 +5491,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redb"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef99362319c782aa4639ad3a306b64c3bb90e12874e99b8df124cb679d988611"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5660,6 +5669,7 @@ dependencies = [
  "objc2",
  "postcard",
  "raw-window-handle",
+ "redb",
  "rstest",
  "rust-embed",
  "seahash",
