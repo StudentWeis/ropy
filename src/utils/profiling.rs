@@ -51,7 +51,7 @@ pub fn start_heap_profiling() {
 }
 
 #[cfg(not(feature = "dhat-heap"))]
-pub fn start_heap_profiling() {}
+pub const fn start_heap_profiling() {}
 
 #[cfg(feature = "dhat-heap")]
 pub fn finish_heap_profiling() {
@@ -71,4 +71,4 @@ pub fn finish_heap_profiling() {
 }
 
 #[cfg(not(feature = "dhat-heap"))]
-pub fn finish_heap_profiling() {}
+pub const fn finish_heap_profiling() {}

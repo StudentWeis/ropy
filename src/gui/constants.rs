@@ -1,7 +1,7 @@
 use gpui::{px, size};
 
 pub const DEFAULT_WINDOW_WIDTH_PX: f32 = 400.0;
-pub const DEFAULT_WINDOW_HEIGHT_PX: f32 = 600.0;
+pub const DEFAULT_WINDOW_HEIGHT_PX: f32 = 550.0;
 
 pub const fn default_window_size() -> gpui::Size<gpui::Pixels> {
     size(px(DEFAULT_WINDOW_WIDTH_PX), px(DEFAULT_WINDOW_HEIGHT_PX))

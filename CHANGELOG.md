@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-04-01
+
+### 🚀 Features
+
+- Add redb backend and improve abstraction layers by @StudentWeis
+- Add file path support and related UI updates by @StudentWeis
+
+### 🐛 Bug Fixes
+
+- Improve error handling and logging across multiple modules by @StudentWeis
+
+### 💼 Other
+
+- Add dhat heap profiling support and related docs updates by @StudentWeis
+- Update Cargo.toml dependencies and script paths by @StudentWeis
+
+### 🚜 Refactor
+
+- Improve image handling and thumbnail generation logic by @StudentWeis
+- Extract hardcoded values into constants and improve code readability by @StudentWeis
+- Cache display names for themes and languages by @StudentWeis
+
+### 🧪 Testing
+
+- Add unit tests for clipboard and updater modules by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+
+- Add script for checking theme files consistency and validity of color values. by @StudentWeis
+
 ## [0.4.1] - 2026-04-01
 
 ### 🚀 Features

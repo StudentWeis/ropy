@@ -32,10 +32,12 @@ git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 # 4. Confirm before push git tag
 dist plan
 while true; do
-	read -r -p "Run 'git tag & git push --tags'? [Y/n] " REPLY
+	read -r -p "Continue? [Y/n] " REPLY
 	REPLY=${REPLY:-Y}
 	case "$REPLY" in
 	[Yy]*)
+		git add -A
+		git commit -m "chore: update version to $NEW_VERSION"
 		git tag "$NEW_VERSION"
 		git push --tags
 		break
