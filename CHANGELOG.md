@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-04-01
+
+### 🚀 Features
+
+- Add search icon by @StudentWeis
+- Enhance thme system and add more themes by @StudentWeis
+- Exclude pinned and favorite records from history limits by @StudentWeis
+
+### 🚜 Refactor
+
+- Replace Mutex with RwLock for shared records and update synchronization utilities by @StudentWeis
+- Add lock_or_recover function for safe mutex handling and replace duplicated lock handling with lock_or_recover in multiple modules by @StudentWeis
+- Implement CurlCommandBuilder to streamline HTTP requests by @StudentWeis
+- Remove dead code and unused error variants across multiple modules by @StudentWeis
+- Optimize cleanup process in ClipboardRepository to reduce I/O frequency by @StudentWeis
+- Enhance tray event handling with async channels and dedicated forwarders by @StudentWeis
+- Replace hotkey polling with blocking channel bridges by @StudentWeis
+
 ## [0.4.0] - 2026-03-30
 
 ### 🚀 Features
