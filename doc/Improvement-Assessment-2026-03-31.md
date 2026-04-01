@@ -148,18 +148,6 @@ The project has almost no unit or integration tests despite `rstest` being confi
   - Add `// SAFETY:` comments explaining why each `unsafe` block is sound.
   - Consider enabling `clippy::undocumented_unsafe_blocks = "warn"`.
 
-### 14. `Language::display_name()` re-parses TOML on every call
-
-**Priority:** Low
-
-- Relevant code:
-  - `src/i18n/language.rs` — `display_name()` reads from `LocaleAssets`, converts to UTF-8, and parses the full TOML file each time it is called.
-- Why it matters:
-  - Called during language dropdown rendering (once per language per render cycle).
-  - Acceptable today but wasteful for embedded data that never changes at runtime.
-- Recommendation:
-  - Cache the parsed display names in a `OnceLock<HashMap<String, String>>` at first access.
-
 ### 15. Image filenames use nanosecond timestamps — collision risk
 
 **Priority:** Low

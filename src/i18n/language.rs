@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 #[derive(RustEmbed)]
 #[folder = "assets/locales"]
 pub(super) struct LocaleAssets;
+
+static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 
 /// A language identified by its locale code (e.g. `"en"`, `"zh-CN"`).
 ///
@@ -33,15 +35,10 @@ impl Language {
     /// key inside the corresponding TOML file.  Falls back to the locale code
     /// if the file or key is absent.
     pub fn display_name(&self) -> String {
-        let file_name = format!("{}.toml", self.0);
-        if let Some(file) = LocaleAssets::get(&file_name)
-            && let Ok(content) = std::str::from_utf8(&file.data)
-            && let Ok(map) = toml::from_str::<HashMap<String, String>>(content)
-            && let Some(name) = map.get("language_name")
-        {
-            return name.clone();
-        }
-        self.0.clone()
+        cached_display_names()
+            .get(self.code())
+            .cloned()
+            .unwrap_or_else(|| self.0.clone())
     }
 
     /// Return all languages discovered from `assets/locales/*.toml`, sorted
@@ -59,5 +56,45 @@ impl Language {
 impl Default for Language {
     fn default() -> Self {
         Self::new("en")
+    }
+}
+
+fn cached_display_names() -> &'static HashMap<String, String> {
+    DISPLAY_NAMES.get_or_init(|| {
+        LocaleAssets::iter()
+            .filter_map(|name| {
+                let locale_code = name.as_ref().strip_suffix(".toml")?.to_owned();
+                let file = LocaleAssets::get(name.as_ref())?;
+                let content = std::str::from_utf8(&file.data).ok()?;
+                let name = toml::from_str::<HashMap<String, String>>(content)
+                    .ok()?
+                    .get("language_name")
+                    .cloned()?;
+
+                Some((locale_code, name))
+            })
+            .collect()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_name_cache_contains_bundled_languages() {
+        let display_names = cached_display_names();
+
+        assert_eq!(display_names.get("en").map(String::as_str), Some("English"));
+        assert_eq!(
+            display_names.get("zh-CN").map(String::as_str),
+            Some("简体中文")
+        );
+        assert_eq!(display_names.get("ja").map(String::as_str), Some("日本語"));
+    }
+
+    #[test]
+    fn test_display_name_cache_is_initialized_once() {
+        assert!(std::ptr::eq(cached_display_names(), cached_display_names()));
     }
 }

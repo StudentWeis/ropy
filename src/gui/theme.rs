@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::OnceLock};
+
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -6,6 +8,8 @@ use thiserror::Error;
 #[derive(RustEmbed)]
 #[folder = "assets/themes"]
 struct ThemeAssets;
+
+static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 
 /// A theme identified by its file name (without `.toml`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -22,10 +26,10 @@ impl ThemeId {
     }
 
     pub fn display_name(&self) -> String {
-        match ThemeDefinition::load(self) {
-            Ok(theme) => theme.name,
-            Err(_) => self.0.clone(),
-        }
+        cached_display_names()
+            .get(self.code())
+            .cloned()
+            .unwrap_or_else(|| self.0.clone())
     }
 
     pub fn all() -> Vec<Self> {
@@ -297,6 +301,23 @@ fn parse_color(theme_id: &ThemeId, field: &'static str, value: &str) -> Result<u
     })
 }
 
+fn cached_display_names() -> &'static HashMap<String, String> {
+    DISPLAY_NAMES.get_or_init(|| {
+        ThemeAssets::iter()
+            .filter_map(|name| {
+                let theme_code = name.as_ref().strip_suffix(".toml")?.to_owned();
+                let file = ThemeAssets::get(name.as_ref())?;
+                let content = std::str::from_utf8(&file.data).ok()?;
+                let theme_name = toml::from_str::<ThemeDefinitionRaw>(content)
+                    .ok()?
+                    .theme_name;
+
+                Some((theme_code, theme_name))
+            })
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -304,7 +325,7 @@ mod tests {
     use rstest::rstest;
     use serde::Deserialize;
 
-    use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode};
+    use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode, cached_display_names};
 
     #[test]
     fn test_theme_id_all_discovers_bundled_themes() {
@@ -322,6 +343,33 @@ mod tests {
         let theme = ThemeId::new("ropy-dark");
 
         assert_eq!(theme.display_name(), "Ropy Dark");
+    }
+
+    #[test]
+    fn test_theme_display_name_cache_contains_bundled_themes() {
+        let display_names = cached_display_names();
+
+        assert_eq!(
+            display_names.get("ropy-dark").map(String::as_str),
+            Some("Ropy Dark")
+        );
+        assert_eq!(
+            display_names.get("ropy-light").map(String::as_str),
+            Some("Ropy Light")
+        );
+        assert_eq!(
+            display_names.get("everforest-night").map(String::as_str),
+            Some("Everforest Night")
+        );
+        assert_eq!(
+            display_names.get("nord-light").map(String::as_str),
+            Some("Nord Light")
+        );
+    }
+
+    #[test]
+    fn test_theme_display_name_cache_is_initialized_once() {
+        assert!(std::ptr::eq(cached_display_names(), cached_display_names()));
     }
 
     #[test]
