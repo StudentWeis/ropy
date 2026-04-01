@@ -3,6 +3,8 @@ use std::{thread, time::Duration};
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use thiserror::Error;
 
+const PASTE_DELAY_MS: u64 = 50;
+
 #[derive(Debug, Error)]
 pub enum PasteError {
     #[error("failed to initialize input simulator: {0}")]
@@ -13,7 +15,7 @@ pub enum PasteError {
 
 pub fn trigger_paste() -> Result<(), PasteError> {
     // Give the previous application a brief moment to regain focus after the popup hides.
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(paste_delay());
 
     let mut enigo = Enigo::new(&Settings::default())
         .map_err(|error| PasteError::Initialize(error.to_string()))?;
@@ -35,9 +37,35 @@ pub fn trigger_paste() -> Result<(), PasteError> {
     Ok(())
 }
 
+const fn paste_delay() -> Duration {
+    Duration::from_millis(PASTE_DELAY_MS)
+}
+
 const fn paste_modifier_key() -> Key {
     #[cfg(target_os = "macos")]
     return Key::Meta;
     #[cfg(not(target_os = "macos"))]
     return Key::Control;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_paste_delay_when_called_returns_expected_duration() {
+        assert_eq!(paste_delay(), Duration::from_millis(PASTE_DELAY_MS));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_paste_modifier_key_when_macos_returns_meta() {
+        assert!(matches!(paste_modifier_key(), Key::Meta));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_paste_modifier_key_when_non_macos_returns_control() {
+        assert!(matches!(paste_modifier_key(), Key::Control));
+    }
 }

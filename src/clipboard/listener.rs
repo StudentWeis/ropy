@@ -43,6 +43,14 @@ impl ClipboardMonitor {
     }
 }
 
+const fn should_forward_image(last_copy: &LastCopyState, hash: u64) -> bool {
+    !matches!(last_copy, LastCopyState::Image(last_hash) if *last_hash == hash)
+}
+
+fn should_forward_text(last_copy: &LastCopyState, text: &str) -> bool {
+    !matches!(last_copy, LastCopyState::Text(last_text) if last_text == text)
+}
+
 impl ClipboardHandler for ClipboardMonitor {
     // Don't send duplicate clipboard contents
     fn on_clipboard_change(&mut self) {
@@ -53,12 +61,12 @@ impl ClipboardHandler for ClipboardMonitor {
             // Calculate deterministic image hash using seahash
             let hash: u64 = seahash::hash(dyn_img.as_bytes());
 
-            if !matches!(*last_copy_guard, LastCopyState::Image(h) if h == hash) {
+            if should_forward_image(&last_copy_guard, hash) {
                 let _ = self.image_tx.send_blocking((dyn_img, hash));
                 *last_copy_guard = LastCopyState::Image(hash);
             }
         } else if let Ok(text) = self.ctx.get_text()
-            && !matches!(*last_copy_guard, LastCopyState::Text(ref last_text) if *last_text == text)
+            && should_forward_text(&last_copy_guard, &text)
         {
             let _ = self.tx.send_blocking(ClipboardEvent::Text(text.clone()));
             *last_copy_guard = LastCopyState::Text(text);
@@ -98,4 +106,51 @@ pub fn start_clipboard_monitor(
         watcher.start_watch();
     })
     .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_forward_text_when_same_text_returns_false() {
+        let last_copy = LastCopyState::Text("hello".to_string());
+
+        assert!(!should_forward_text(&last_copy, "hello"));
+    }
+
+    #[test]
+    fn test_should_forward_text_when_different_text_returns_true() {
+        let last_copy = LastCopyState::Text("hello".to_string());
+
+        assert!(should_forward_text(&last_copy, "world"));
+    }
+
+    #[test]
+    fn test_should_forward_text_when_last_copy_is_image_returns_true() {
+        let last_copy = LastCopyState::Image(42);
+
+        assert!(should_forward_text(&last_copy, "hello"));
+    }
+
+    #[test]
+    fn test_should_forward_image_when_same_hash_returns_false() {
+        let last_copy = LastCopyState::Image(42);
+
+        assert!(!should_forward_image(&last_copy, 42));
+    }
+
+    #[test]
+    fn test_should_forward_image_when_different_hash_returns_true() {
+        let last_copy = LastCopyState::Image(42);
+
+        assert!(should_forward_image(&last_copy, 7));
+    }
+
+    #[test]
+    fn test_should_forward_image_when_last_copy_is_text_returns_true() {
+        let last_copy = LastCopyState::Text("hello".to_string());
+
+        assert!(should_forward_image(&last_copy, 42));
+    }
 }

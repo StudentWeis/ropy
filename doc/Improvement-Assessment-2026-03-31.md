@@ -4,38 +4,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
-### 1. Test coverage is critically low
-
-**Priority:** Critical
-
-The project has almost no unit or integration tests despite `rstest` being configured as a dev-dependency and `AGENTS.md` requiring TDD.
-
-- Modules with no test coverage:
-  - `src/app.rs`
-  - `src/clipboard/listener.rs`
-  - `src/clipboard/writer.rs`
-  - `src/clipboard/mod.rs`
-  - `src/gui/app.rs`
-  - `src/gui/paste.rs`
-  - `src/gui/utils.rs`
-  - `src/gui/x11.rs`
-  - `src/utils/single_instance.rs`
-  - `src/main.rs`
-- Modules with partial coverage:
-  - `src/repository/repo.rs`
-  - `src/config/settings.rs`
-  - `src/i18n/`
-  - `src/updater/`
-  - `src/gui/hotkey.rs`
-  - `src/gui/tray.rs`
-- Why it matters:
-  - Core clipboard and repository logic can regress silently.
-  - The CI workflow (`release.yml`) does not run tests, so regressions are only caught locally via `scripts/precheck.sh`.
-- Recommendation:
-  - Prioritize tests for `repository`, `clipboard`, and `config` modules.
-  - Add a CI workflow that runs `cargo test` on every PR.
-  - Add concurrent read/write tests for the repository.
-
 ### 3. `ContentType::FilePath` confirm flow is incomplete
 
 **Priority:** High

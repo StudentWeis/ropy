@@ -200,10 +200,14 @@ fn load_settings() -> Settings {
     }
 }
 
+fn is_silent_launch(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == crate::constants::SILENT_ARG)
+}
+
 /// Entry point: initialize all subsystems and launch the application.
 pub fn launch() {
     let args: Vec<String> = std::env::args().collect();
-    let is_silent = args.iter().any(|arg| arg == crate::constants::SILENT_ARG);
+    let is_silent = is_silent_launch(&args);
 
     gpui::Application::new()
         .with_assets(crate::gui::Assets)
@@ -285,4 +289,96 @@ pub fn launch() {
                 let _ = x11.active_window();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{thread, time::Duration};
+
+    use chrono::Local;
+
+    use super::*;
+
+    #[allow(clippy::expect_used)]
+    fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository) {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join("test.db");
+        let repo = ClipboardRepository::init(&db_path, temp_dir.path().join("images"))
+            .expect("Failed to create test repository");
+
+        (temp_dir, repo)
+    }
+
+    #[test]
+    fn test_is_silent_launch_when_flag_is_present_returns_true() {
+        let args = vec!["ropy".to_string(), crate::constants::SILENT_ARG.to_string()];
+
+        assert!(is_silent_launch(&args));
+    }
+
+    #[test]
+    fn test_is_silent_launch_when_flag_is_missing_returns_false() {
+        let args = vec!["ropy".to_string(), "--verbose".to_string()];
+
+        assert!(!is_silent_launch(&args));
+    }
+
+    #[test]
+    fn test_load_initial_records_when_repository_is_missing_returns_empty() {
+        let records = load_initial_records(None, 10);
+
+        assert!(records.is_empty());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_load_initial_records_when_repository_exists_respects_limit() {
+        let (_temp_dir, repo) = create_test_repo();
+
+        repo.save_text("first".to_string())
+            .expect("Failed to save first");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("second".to_string())
+            .expect("Failed to save second");
+        thread::sleep(Duration::from_millis(10));
+        repo.save_text("third".to_string())
+            .expect("Failed to save third");
+
+        let repo = Arc::new(repo);
+        let records = load_initial_records(Some(&repo), 2);
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].content, "third");
+        assert_eq!(records[1].content, "second");
+    }
+
+    #[test]
+    fn test_replace_shared_records_when_called_replaces_existing_records() {
+        let shared_records = Arc::new(std::sync::RwLock::new(vec![ClipboardRecord {
+            id: 1,
+            content: "old".to_string(),
+            created_at: Local::now(),
+            content_type: crate::repository::ContentType::Text,
+            pinned: false,
+        }]));
+        let new_records = vec![ClipboardRecord {
+            id: 2,
+            content: "new".to_string(),
+            created_at: Local::now(),
+            content_type: crate::repository::ContentType::Text,
+            pinned: true,
+        }];
+
+        replace_shared_records(&shared_records, new_records);
+
+        let record = {
+            let records = crate::utils::read_or_recover(&shared_records);
+            assert_eq!(records.len(), 1);
+            records[0].clone()
+        };
+
+        assert_eq!(record.id, 2);
+        assert_eq!(record.content, "new");
+        assert!(record.pinned);
+    }
 }

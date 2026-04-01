@@ -34,6 +34,12 @@ pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
     tx
 }
 
+fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {
+    ImageReader::open(path)
+        .map_err(image::ImageError::from)
+        .and_then(image::ImageReader::decode)
+}
+
 /// Set text to clipboard
 fn set_text(ctx: &ClipboardContext, text: String) {
     let _ = ctx.set_text(text);
@@ -42,9 +48,7 @@ fn set_text(ctx: &ClipboardContext, text: String) {
 /// Set image to clipboard. The image is read from the given file path.
 /// After setting the image, the original file and its thumbnail are deleted.
 fn set_image(ctx: &ClipboardContext, path: &str) {
-    let img_res = ImageReader::open(path)
-        .map_err(image::ImageError::from)
-        .and_then(image::ImageReader::decode);
+    let img_res = load_image_from_path(path);
     if let Ok(img) = img_res {
         #[cfg(target_os = "macos")]
         {
@@ -85,5 +89,49 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
 fn notify_completion(completion: Option<std::sync::mpsc::Sender<()>>) {
     if let Some(tx) = completion {
         let _ = tx.send(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::mpsc, time::Duration};
+
+    use super::*;
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_load_image_from_path_when_png_exists_returns_decoded_image() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let image_path = temp_dir.path().join("test.png");
+        image::DynamicImage::new_rgba8(2, 3)
+            .save(&image_path)
+            .unwrap();
+
+        let image = load_image_from_path(image_path.to_str().unwrap()).unwrap();
+
+        assert_eq!(image.width(), 2);
+        assert_eq!(image.height(), 3);
+    }
+
+    #[test]
+    fn test_load_image_from_path_when_file_is_missing_returns_error() {
+        let result = load_image_from_path("/definitely/missing/image.png");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_notify_completion_when_sender_exists_sends_signal() {
+        let (completion_tx, completion_rx) = mpsc::channel();
+
+        notify_completion(Some(completion_tx));
+
+        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+    }
+
+    #[test]
+    fn test_notify_completion_when_sender_missing_returns_without_panic() {
+        notify_completion(None);
     }
 }
