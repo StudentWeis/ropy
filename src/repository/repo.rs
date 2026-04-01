@@ -23,7 +23,7 @@ use crate::{
 };
 
 /// Schema version for the database. Bump this when the key format changes.
-const SCHEMA_VERSION: u64 = 4;
+const SCHEMA_VERSION: u64 = 3;
 
 /// Allow the repository to grow slightly past the configured limit so cleanup
 /// can batch deletions instead of scanning on every successful save.

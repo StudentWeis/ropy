@@ -1,62 +1,63 @@
 # Rich Text Support
 
+## Status
+
+This document is a design proposal, not a description of the current implementation.
+
+Current baseline in the repository as of 2026-04-02:
+
+- `ContentType` supports `Text`, `Image`, and `FilePath`.
+- `ClipboardEvent` supports `Text`, `Image`, and `Files`.
+- `CopyRequest` supports `Text`, `Image`, and `Files`.
+- Clipboard listener priority is `Image -> Files -> Text`.
+- The repository defaults to `sled` (`clipboard.db`) and also supports `redb` (`clipboard.redb`).
+
+Rich text capture, storage, and lossless paste-back are not implemented yet.
+
 ## Background
 
-Ropy currently captures three `ContentType` variants: `Text`, `Image`, and `FilePath`. When users copy content from applications like Word, web browsers, or rich text editors, the system clipboard simultaneously contains **multiple formats** (plain text + HTML + RTF), but Ropy only captures the plain text portion, **losing all formatting**.
+Ropy currently preserves three clipboard content categories: plain text, images, and file lists. When users copy content from applications like Word, web browsers, or rich text editors, the system clipboard often contains multiple formats at once, such as plain text, HTML, and RTF. Ropy currently reads the plain text portion only, so formatting is lost when the item is copied back out of Ropy.
 
-The `clipboard-rs` crate (v0.3.3) already provides native support for `get_html()`, `get_rich_text()`, `set_html()`, `set_rich_text()`, and batch read/write via `get()`/`set()` APIs. The underlying capability is ready.
+The `clipboard-rs` crate (v0.3.3) already exposes `get_html()`, `get_rich_text()`, `set_html()`, `set_rich_text()`, and batch `set()` APIs, so the lower-level clipboard capability is available.
 
 ## Goals
 
-1. **Lossless paste**: Rich text copied by users should retain original formatting (HTML/RTF) when pasted back.
-2. **Backward compatible**: No breaking changes to existing text/image records; smooth database schema upgrade.
-3. **Storage efficient**: Rich text metadata stored on-demand; pure text records incur no extra overhead.
-4. **Display friendly**: GUI list shows plain text summary; a small icon indicates rich text availability.
-5. **Minimal invasion**: Reuse existing architecture; changes concentrated at clear boundaries.
+1. **Lossless paste**: rich text copied by users should retain original formatting when pasted back.
+2. **Fit the current architecture**: keep the change localized to the clipboard, repository, and board copy path.
+3. **Storage efficient**: rich text payloads should be stored only when present; plain text records should not pay extra cost.
+4. **Display friendly**: the list should still render a plain text summary, with a lightweight indicator that rich text is available.
+5. **Preserve existing behavior**: image and file handling should continue to work exactly as they do today.
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    System Clipboard                      │
-│  ┌──────┐  ┌──────┐  ┌─────┐  ┌───────┐  ┌──────────┐  │
-│  │ Text │  │ HTML │  │ RTF │  │ Image │  │ FilePath │  │
-│  └──┬───┘  └──┬───┘  └──┬──┘  └───┬───┘  └────┬─────┘  │
-└─────┼─────────┼─────────┼─────────┼────────────┼────────┘
-      │         │         │         │            │
-      ▼         ▼         ▼         ▼            ▼
-┌─────────────────────────────────────────────────────────┐
-│              ClipboardMonitor (listener.rs)              │
-│  on_clipboard_change():                                  │
-│    1. Image detection (existing, highest priority)        │
-│    2. get_text() → plain_text                            │
-│    3. has(Html) / has(Rtf) → detect richness             │
-│    4. get_html() / get_rich_text() if available          │
-│    5. Emit ClipboardEvent::RichText or ::Text            │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│              Repository (repo.rs)                        │
-│  save_rich_text(plain, html, rtf):                       │
-│    - ID = hash(plain_text)  (dedup by text content)      │
-│    - Store ClipboardRecord with ContentType::RichText    │
-│    - html/rtf → saved as files in rich_text/ directory   │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│              GUI                                         │
-│  List: show plain_text with rich text indicator icon     │
-│  Paste: write back all original formats via set()        │
-└─────────────────────────────────────────────────────────┘
+```text
+System Clipboard
+  Text / HTML / RTF / Image / FilePath
+        |
+        v
+ClipboardMonitor (listener.rs)
+  1. Image detection (existing, highest priority)
+  2. File-list detection (existing)
+  3. Plain-text read (existing)
+  4. If text exists, probe HTML / RTF and emit RichText when available
+        |
+        v
+Repository (repo.rs)
+  save_text / save_files / save_image_from_path / save_rich_text
+  rich text payload stored as sidecar files under rich_text/
+        |
+        v
+GUI
+  list renders plain-text summary
+  rich-text records show an indicator badge
+  paste path uses CopyRequest::RichText to restore all formats
 ```
 
 ## Detailed Design
 
 ### 1. Data Model (`src/repository/models.rs`)
 
-Add `RichText` variant to `ContentType` and a new `RichTextMeta` struct:
+Add `RichText` to `ContentType` and a `RichTextMeta` sidecar descriptor:
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -64,7 +65,7 @@ pub enum ContentType {
     Text,
     Image,
     FilePath,
-    RichText, // new
+    RichText,
 }
 
 impl ContentType {
@@ -73,85 +74,80 @@ impl ContentType {
             Self::Text => 0,
             Self::Image => 1,
             Self::FilePath => 2,
-            Self::RichText => 3, // new
+            Self::RichText => 3,
         }
     }
 }
 
-/// Rich text metadata referencing external files.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RichTextMeta {
-    /// HTML file name relative to the rich_text/ directory.
     pub html_path: Option<String>,
-    /// RTF file name relative to the rich_text/ directory.
     pub rtf_path: Option<String>,
 }
 ```
 
-Add an optional field to `ClipboardRecord`:
+Extend `ClipboardRecord` with optional metadata:
 
 ```rust
 pub struct ClipboardRecord {
     pub id: u64,
-    /// Plain text content. Always populated for RichText records (used for search and display).
+    /// Plain-text content, used for display, search, and dedup.
     pub content: String,
     pub created_at: DateTime<Local>,
     pub content_type: ContentType,
     #[serde(default)]
     pub pinned: bool,
-    /// Rich text metadata. Only present for RichText records.
     #[serde(default)]
     pub rich_text_meta: Option<RichTextMeta>,
 }
 ```
 
-**Key decisions**:
-- `content` always stores plain text → search, display, and dedup logic remain unchanged.
-- HTML/RTF stored as files → avoids sled value bloat and serialization overhead.
-- `#[serde(default)]` on `rich_text_meta` → old records deserialize with `None`, fully backward compatible.
+Key decisions:
+
+- `content` remains the plain-text summary even for rich text records.
+- HTML and RTF are stored outside the main KV value to avoid inflating record size.
+- `rich_text_meta` uses `#[serde(default)]` so older records can deserialize without the field.
 
 ### 2. File Storage Layout (`src/clipboard/utils.rs`)
 
-```
-~/.local/share/ropy/          (data_local_dir)
-├── clipboard.db/             (sled database)
-├── images/                   (existing)
+```text
+~/.local/share/ropy/
+├── clipboard.db      # default sled backend
+├── clipboard.redb    # optional redb backend
+├── images/           # existing
 │   ├── {id}.png
 │   └── {id}_thumb.png
-└── rich_text/                (new)
+└── rich_text/        # new
     ├── {id}.html
     └── {id}.rtf
 ```
 
-New functions:
+Add helper functions:
 
 ```rust
-/// Save rich text content to files, returning RichTextMeta.
 pub fn save_rich_text_files(
     record_id: u64,
     html: Option<&str>,
     rtf: Option<&str>,
 ) -> Option<RichTextMeta>;
 
-/// Load HTML content from a rich text file.
 pub fn load_rich_text_html(meta: &RichTextMeta) -> Option<String>;
 
-/// Load RTF content from a rich text file.
 pub fn load_rich_text_rtf(meta: &RichTextMeta) -> Option<String>;
 
-/// Remove rich text files associated with a record.
 pub fn remove_rich_text_files(meta: &RichTextMeta);
 ```
 
 ### 3. Clipboard Event (`src/clipboard/mod.rs`)
 
-Add a new event variant:
+Keep existing text, image, and file-list events, then add rich text:
 
 ```rust
 pub enum ClipboardEvent {
     Text(String),
+    /// Image(path, `content_hash`)
     Image(String, u64),
-    /// Rich text: plain_text + optional HTML + optional RTF.
+    Files(Vec<String>),
     RichText {
         plain_text: String,
         html: Option<String>,
@@ -160,13 +156,22 @@ pub enum ClipboardEvent {
 }
 ```
 
-Add a corresponding `CopyRequest` variant:
+Do the same for clipboard writes:
 
 ```rust
 pub enum CopyRequest {
-    Text { text: String, completion: Option<CompletionSender<()>> },
-    Image { path: String, completion: Option<CompletionSender<()>> },
-    /// Write back all original formats simultaneously.
+    Text {
+        text: String,
+        completion: Option<CompletionSender<()>>,
+    },
+    Image {
+        path: String,
+        completion: Option<CompletionSender<()>>,
+    },
+    Files {
+        paths: Vec<String>,
+        completion: Option<CompletionSender<()>>,
+    },
     RichText {
         plain_text: String,
         html: Option<String>,
@@ -178,29 +183,39 @@ pub enum CopyRequest {
 
 ### 4. Clipboard Listener (`src/clipboard/listener.rs`)
 
-Modify `on_clipboard_change()` to detect and capture rich text formats:
+The listener should keep the current detection order and extend only the text branch:
 
 ```rust
 fn on_clipboard_change(&mut self) {
-    // ... existing lock acquisition ...
+    let mut last_copy_guard = lock_or_recover(&self.last_copy);
 
-    // 1. Image detection (highest priority, unchanged)
-    if let Ok(image) = self.ctx.get_image() /* ... */ {
-        // ... existing image logic ...
+    if let Ok(image) = self.ctx.get_image()
+        && let Ok(dyn_img) = image.get_dynamic_image()
+    {
+        // existing image path
         return;
     }
 
-    // 2. Text detection
+    let files = self
+        .ctx
+        .get_files()
+        .ok()
+        .map(|paths| normalize_file_paths(&paths));
+
+    if let Some(files) = files.filter(|paths| !paths.is_empty()) {
+        // existing file-list path
+        return;
+    }
+
     if let Ok(text) = self.ctx.get_text()
-        && !matches!(*last_copy_guard, LastCopyState::Text(ref last) if *last == text)
+        && should_forward_text(&last_copy_guard, &text)
     {
-        // 3. Detect rich text formats
         let has_html = self.ctx.has(ContentFormat::Html);
         let has_rtf = self.ctx.has(ContentFormat::Rtf);
 
         if has_html || has_rtf {
-            let html = if has_html { self.ctx.get_html().ok() } else { None };
-            let rtf = if has_rtf { self.ctx.get_rich_text().ok() } else { None };
+            let html = has_html.then(|| self.ctx.get_html().ok()).flatten();
+            let rtf = has_rtf.then(|| self.ctx.get_rich_text().ok()).flatten();
 
             let _ = self.tx.send_blocking(ClipboardEvent::RichText {
                 plain_text: text.clone(),
@@ -216,17 +231,17 @@ fn on_clipboard_change(&mut self) {
 }
 ```
 
-**Key points**:
-- Dedup remains based on plain text content (`LastCopyState::Text`).
-- Image priority is higher than rich text (preserves existing behavior).
-- `has()` check is very lightweight, no performance impact.
+Key points:
+
+- Image priority remains highest.
+- File-list priority remains above text so copied files are not downgraded to plain text.
+- Rich text dedup can continue to reuse `LastCopyState::Text` based on plain text.
 
 ### 5. Repository (`src/repository/repo.rs`)
 
-Add a new save method:
+Add a save method alongside the existing `save_text` and `save_files` helpers:
 
 ```rust
-/// Save a rich text record.
 pub fn save_rich_text(
     &self,
     plain_text: String,
@@ -265,26 +280,36 @@ pub fn save_rich_text(
 }
 ```
 
+Note: this keeps rich text dedup consistent with the existing `content_hash(content, content_type)` approach. If cross-type dedup with plain text is desired, that should be a separate explicit decision.
+
 ### 6. Event Handler (`src/app.rs`)
 
-Add a new match arm in `start_clipboard_event_handler`:
+Extend the current match instead of replacing it:
 
 ```rust
 let result = match event {
     ClipboardEvent::Text(text) => repo.save_text(text),
     ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
-    ClipboardEvent::RichText { plain_text, html, rtf } => {
-        repo.save_rich_text(plain_text, html, rtf)
-    }
+    ClipboardEvent::Files(paths) => repo.save_files(&paths),
+    ClipboardEvent::RichText {
+        plain_text,
+        html,
+        rtf,
+    } => repo.save_rich_text(plain_text, html, rtf),
 };
 ```
 
 ### 7. Clipboard Writer (`src/clipboard/writer.rs`)
 
-Handle the new `CopyRequest::RichText` variant using the batch `set()` API:
+Add a `RichText` write path using the same batch `set()` style already used for file payloads:
 
 ```rust
-CopyRequest::RichText { plain_text, html, rtf, completion } => {
+CopyRequest::RichText {
+    plain_text,
+    html,
+    rtf,
+    completion,
+} => {
     let mut contents = vec![ClipboardContent::Text(plain_text)];
     if let Some(html_content) = html {
         contents.push(ClipboardContent::Html(html_content));
@@ -297,60 +322,68 @@ CopyRequest::RichText { plain_text, html, rtf, completion } => {
 }
 ```
 
-Using `ctx.set(contents)` writes all formats atomically, ensuring the target application sees all formats and achieves **lossless paste**.
-
 ### 8. GUI Changes
 
-- **List view**: No layout changes. Add a small rich text indicator icon (e.g., `Rt` badge) on `RichText` records.
-- **Preview panel**: Show plain text content (same as today). No HTML rendering needed.
-- **Paste action**: When pasting a `RichText` record, send `CopyRequest::RichText` instead of `CopyRequest::Text`, loading HTML/RTF from files via `RichTextMeta`.
+- **List view**: keep the current layout and render the plain-text summary; add a small rich text badge or icon to `RichText` rows.
+- **Preview panel**: continue to show the plain-text summary; HTML rendering is not required for the first iteration.
+- **Paste action**: when the selected record is `RichText`, load HTML and RTF from `RichTextMeta` and send `CopyRequest::RichText`.
+- **Filters**: no dedicated rich text filter is required for the first iteration.
 
 ### 9. Cleanup Logic
 
-Extend existing `delete` and `cleanup_old_records` methods:
+Extend the existing image cleanup behavior to cover rich text sidecar files too:
 
 ```rust
-// When deleting a record, also clean up associated rich text files
-if record.content_type == ContentType::RichText {
-    if let Some(ref meta) = record.rich_text_meta {
-        remove_rich_text_files(meta);
-    }
+if record.content_type == ContentType::Image {
+    Self::remove_image_files(&record.content);
+}
+
+if let Some(meta) = record.rich_text_meta.as_ref() {
+    remove_rich_text_files(meta);
 }
 ```
 
-## Database Migration
+This applies to:
 
-- Bump `SCHEMA_VERSION` from 3 → 4.
-- `rich_text_meta` uses `#[serde(default)]`, so old records deserialize with `None` automatically.
-- Old records only contain `Text`/`Image`/`FilePath` variants, so no `RichText` deserialization issues.
-- **No destructive migration needed**: old records remain fully compatible.
+- `delete`
+- `cleanup_old_records`
+- `clear`
+- schema-migration cleanup, if a destructive migration path is ever used
+
+## Persistence and Migration
+
+- The current repository `SCHEMA_VERSION` is already `4`.
+- The current schema-migration path is destructive: if the stored schema version differs, the repository clears records, time index entries, favorites, and persisted images.
+- Because this proposal adds only a new enum tag and an optional `rich_text_meta` field with `#[serde(default)]`, it should be possible to keep the schema version unchanged as long as the on-disk key/value encoding does not change.
+- If implementation later requires a schema bump, document that the current migration path will wipe stored history unless a non-destructive migration flow is added first.
 
 ## Risks and Considerations
 
-- **Storage growth**: HTML/RTF content can be large (tens of KB to MB). Consider adding a "store plain text only" option in settings.
-- **`content_hash` consistency**: `ContentType::RichText` participates in hash calculation. If the same text is first stored as `Text` then as `RichText`, they produce different hashes. Consider using `ContentType::Text` for hash calculation of `RichText` records to enable cross-type dedup.
-- **Clipboard race condition**: `get_html()` and `get_rich_text()` calls should immediately follow `get_text()` to minimize the window where another application could modify the clipboard.
-- **Platform differences**: RTF support quality varies across platforms. HTML is more universally supported and should be prioritized.
+- **Storage growth**: HTML and RTF content can be much larger than plain text. Consider a future setting to store plain text only.
+- **Cross-type dedup**: `content_hash` currently includes the content type tag. A plain text item and a rich text item with the same visible text will be stored as different records.
+- **Clipboard race window**: `get_html()` and `get_rich_text()` should happen immediately after `get_text()` to minimize drift if another app mutates the clipboard.
+- **Platform differences**: HTML and RTF support varies by platform and application. HTML should be treated as the more portable format.
+- **Cleanup parity**: any place that currently removes image sidecar files must also remove rich text sidecar files.
 
 ## Implementation Phases
 
 | Phase | Scope | Complexity |
 |-------|-------|------------|
-| **P0** | Data model + Listener + Storage + Writer | Medium |
-| **P1** | GUI rich text indicator icon | Low |
-| **P2** | Cleanup logic + Storage statistics | Low |
+| **P0** | Data model, listener, repository, writer | Medium |
+| **P1** | Board copy path and list indicator | Low |
+| **P2** | Cleanup hardening and optional storage controls | Low |
 
-After **P0**, users can experience the full flow: copy from Word/browser → Ropy records → paste back with formatting preserved.
+After **P1**, users should be able to copy from Word or a browser, store the item in Ropy, and paste it back with formatting preserved.
 
 ## Affected Modules
 
 | Module | File(s) | Change Type |
 |--------|---------|-------------|
-| Models | `src/repository/models.rs` | Add `RichText` variant, `RichTextMeta` struct, field on `ClipboardRecord` |
-| Utils | `src/clipboard/utils.rs` | Add `save_rich_text_files`, `load_rich_text_html`, `load_rich_text_rtf`, `remove_rich_text_files` |
-| Events | `src/clipboard/mod.rs` | Add `ClipboardEvent::RichText`, `CopyRequest::RichText` |
-| Listener | `src/clipboard/listener.rs` | Detect and capture HTML/RTF in `on_clipboard_change` |
-| Repository | `src/repository/repo.rs` | Add `save_rich_text` method, extend cleanup |
-| App | `src/app.rs` | Add `RichText` match arm in event handler |
-| Writer | `src/clipboard/writer.rs` | Handle `CopyRequest::RichText` with batch `set()` |
-| GUI | `src/gui/board/` | Add rich text icon, use `CopyRequest::RichText` for paste |
+| Models | `src/repository/models.rs` | Add `RichText` and `RichTextMeta` |
+| Clipboard Utils | `src/clipboard/utils.rs` | Add rich text sidecar save/load/remove helpers |
+| Events | `src/clipboard/mod.rs` | Add `ClipboardEvent::RichText` and `CopyRequest::RichText` without removing `Files` |
+| Listener | `src/clipboard/listener.rs` | Probe HTML and RTF only after the existing image and file branches |
+| Repository | `src/repository/repo.rs` | Add `save_rich_text` and rich text cleanup |
+| App | `src/app.rs` | Add `RichText` handling to the clipboard event pipeline |
+| Writer | `src/clipboard/writer.rs` | Write text plus optional HTML and RTF with batch `set()` |
+| GUI | `src/gui/board/mod.rs`, `src/gui/board/records_list.rs` | Add paste support and a lightweight rich text indicator |

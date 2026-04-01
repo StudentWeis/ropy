@@ -29,7 +29,7 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\")
 # 3. Update CHANGELOG.md using git cliff
 git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 
-# 4. Confirm before push git tag
+# 4. Confirm before push
 dist plan
 while true; do
 	read -r -p "Continue? [Y/n] " REPLY
@@ -38,6 +38,7 @@ while true; do
 	[Yy]*)
 		git add -A
 		git commit -m "chore: update version to $NEW_VERSION"
+		git push
 		git tag "$NEW_VERSION"
 		git push --tags
 		break
