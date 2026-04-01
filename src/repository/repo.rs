@@ -1,6 +1,11 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
-use std::{cmp::Ordering, collections::HashSet, fs, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use chrono::Local;
 use sled::Db;
@@ -10,7 +15,10 @@ use super::{
     models::{ClipboardRecord, ContentType},
     time_index::TimeIndex,
 };
-use crate::utils::{content_hash, normalize_file_paths, serialize_file_paths};
+use crate::{
+    clipboard::thumb_path_for,
+    utils::{content_hash, normalize_file_paths, serialize_file_paths},
+};
 
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;
@@ -498,7 +506,7 @@ impl ClipboardRepository {
     /// Remove image file and its thumbnail.
     fn remove_image_files(path: &str) {
         let _ = fs::remove_file(path);
-        let thumb_path = path.replace(".png", "_thumb.png");
+        let thumb_path = thumb_path_for(Path::new(path));
         let _ = fs::remove_file(thumb_path);
     }
 

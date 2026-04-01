@@ -71,31 +71,6 @@ This document records a comprehensive improvement review of the current Ropy cod
   - Add `// SAFETY:` comments explaining why each `unsafe` block is sound.
   - Consider enabling `clippy::undocumented_unsafe_blocks = "warn"`.
 
-### 15. Image filenames use nanosecond timestamps — collision risk
-
-**Priority:** Low
-
-- Relevant code:
-  - `src/clipboard/utils.rs` — `let id = now.timestamp_nanos_opt().unwrap_or(0) as u64;`
-- Why it matters:
-  - Rapid consecutive clipboard image events can produce identical nanosecond timestamps, causing filename collisions.
-  - The repository uses content hash as the record key, but the file system path is timestamp-based, creating an inconsistency.
-- Recommendation:
-  - Use the content hash (already computed by the listener) as the image filename to align with the repository key strategy.
-
-### 16. Thumbnail path construction is fragile string manipulation
-
-**Priority:** Low
-
-- Relevant code:
-  - `src/clipboard/utils.rs` — constructs `{id}_thumb.png` alongside `{id}.png`
-  - `src/gui/board/records_list.rs` — `render_image_record()` derives thumbnail path by extracting `file_stem` and appending `_thumb.png`
-- Why it matters:
-  - The path derivation logic is duplicated and relies on filename conventions rather than a shared function.
-  - If the naming convention changes, both locations must be updated in sync.
-- Recommendation:
-  - Extract a single `thumb_path_for(original: &Path) -> PathBuf` function.
-
 ### 17. Log files accumulate without rotation limits
 
 **Priority:** Low

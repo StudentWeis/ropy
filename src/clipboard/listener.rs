@@ -105,7 +105,7 @@ pub fn start_clipboard_monitor(
 
     cx.background_spawn(async move {
         while let Ok((image, hash)) = image_rx.recv().await {
-            if let Some(path) = super::save_image(&image) {
+            if let Some(path) = super::save_image(&image, hash) {
                 let _ = tx.send_blocking(ClipboardEvent::Image(path, hash));
             }
         }

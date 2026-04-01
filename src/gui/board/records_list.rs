@@ -15,6 +15,7 @@ use gpui_component::{
 
 use super::{RopyBoard, preview};
 use crate::{
+    clipboard::thumb_path_for,
     repository::{ClipboardRecord, models::ContentType},
     utils::{deserialize_file_paths, read_or_recover},
 };
@@ -48,9 +49,7 @@ fn truncate_content(content: &str, limit: usize) -> String {
 
 fn render_image_record(record: &ClipboardRecord) -> AnyElement {
     let path = PathBuf::from(record.content.clone());
-    let file_stem = path.file_stem().unwrap_or_default().to_string_lossy();
-    let thumb_name = format!("{file_stem}_thumb.png");
-    let thumb_path = path.parent().unwrap_or(&path).join(thumb_name);
+    let thumb_path = thumb_path_for(&path);
 
     let display_path = if thumb_path.exists() {
         thumb_path

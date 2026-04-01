@@ -5,7 +5,7 @@ mod utils;
 mod writer;
 
 pub use listener::start_clipboard_monitor;
-pub use utils::save_image;
+pub use utils::{save_image, thumb_path_for};
 pub use writer::start_clipboard_writer;
 
 pub enum ClipboardEvent {
