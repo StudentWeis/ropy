@@ -46,7 +46,9 @@ fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {
 
 /// Set text to clipboard
 fn set_text(ctx: &ClipboardContext, text: String) {
-    let _ = ctx.set_text(text);
+    if let Err(e) = ctx.set_text(text) {
+        tracing::warn!(error = %e, "failed to set text to clipboard");
+    }
 }
 
 /// Set image to clipboard. The image is read from the given file path.

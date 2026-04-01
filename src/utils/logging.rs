@@ -66,7 +66,22 @@ pub fn init() -> Option<LoggingGuard> {
         return None;
     }
 
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "ropy.jsonl");
+    let file_appender = match tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("ropy")
+        .filename_suffix("jsonl")
+        .max_log_files(30)
+        .build(&log_dir)
+    {
+        Ok(appender) => appender,
+        Err(err) => {
+            let subscriber = build_file_subscriber(std::io::stdout);
+            if tracing::subscriber::set_global_default(subscriber).is_ok() {
+                tracing::warn!(%err, path = %log_dir.display(), "failed to create rolling file appender; falling back to stdout");
+            }
+            return None;
+        }
+    };
     let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
 
     let subscriber = build_file_subscriber(non_blocking);

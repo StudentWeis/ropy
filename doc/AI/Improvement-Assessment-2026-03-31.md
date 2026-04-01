@@ -4,20 +4,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
-### 4. Errors are silently discarded in clipboard I/O
-
-**Priority:** High
-
-- Relevant code:
-  - `src/clipboard/writer.rs` — `let _ = ctx.set_text(text);`
-  - `src/clipboard/listener.rs` — `let _ = self.tx.send_blocking(...);`
-  - `src/app.rs` — `let _ = notify_tx.send(record).await;`
-- Why it matters:
-  - Clipboard write failures are invisible to the user.
-  - Channel send failures mean records are silently lost.
-- Recommendation:
-  - Replace `let _ =` with `if let Err(e) = ... { tracing::warn!(...) }` at minimum.
-
 ### 9. Time index upsert does not scale
 
 **Priority:** Low (at current defaults)
@@ -56,32 +42,6 @@ This document records a comprehensive improvement review of the current Ropy cod
     - `SettingsEditor` — `hotkey_recording`, `hotkey_manual_editing`, `pending_hotkey`, `hotkey_before_recording`, `settings_*_input`, `selected_theme`, `selected_language`, `language_select`, `autostart_enabled`, `auto_check_enabled`, `hover_preview_enabled`
     - `UpdateManager` — `update_status`
     - Keep `RopyBoard` focused on core board state: records, filtering, selection, and layout
-
-### 13. Unsafe blocks lack `// SAFETY:` comments
-
-**Priority:** Medium
-
-- Relevant code:
-  - `src/gui/utils.rs` — 5 `unsafe` blocks calling Windows API (`ShowWindow`, `SetForegroundWindow`, `SetWindowPos`, `ReleaseCapture`, `PostMessageA`) and macOS ObjC (`setActivationPolicy`)
-  - `src/utils/single_instance.rs` — 1 `unsafe` block calling `CreateMutexW`, `GetLastError`, `FindWindowW`, `ShowWindow`, `SetForegroundWindow`
-- Why it matters:
-  - Clippy's `undocumented_unsafe_blocks` lint is not enabled, so these pass silently.
-  - Reviewing correctness of `unsafe` code is harder without documented invariants.
-- Recommendation:
-  - Add `// SAFETY:` comments explaining why each `unsafe` block is sound.
-  - Consider enabling `clippy::undocumented_unsafe_blocks = "warn"`.
-
-### 17. Log files accumulate without rotation limits
-
-**Priority:** Low
-
-- Relevant code:
-  - `src/utils/logging.rs` — `tracing_appender::rolling::daily(&log_dir, "ropy.jsonl")`
-- Why it matters:
-  - `tracing-appender`'s `daily` rolling creates a new file every day but never deletes old files.
-  - On long-running installations, log files accumulate indefinitely.
-- Recommendation:
-  - Use `tracing_appender::rolling::RollingFileAppender::builder()` with `.max_log_files(N)` (available since `tracing-appender` 0.2.3) to cap retained log files.
 
 ### 18. `sled` is no longer actively maintained
 

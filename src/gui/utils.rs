@@ -66,6 +66,9 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
+        // ShowWindow is safe to call with any valid window handle. SW_HIDE simply hides the
+        // window without destroying it, which is the intended behavior for hiding the window.
         unsafe {
             ShowWindow(hwnd, SW_HIDE);
         }
@@ -116,6 +119,10 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
+        // SetWindowPos is called with SWP_NOMOVE | SWP_NOSIZE to only change the Z-order
+        // (topmost state) without affecting position or size. The hwnd_insert_after value
+        // is either HWND_TOPMOST or HWND_NOTOPMOST, both of which are valid system constants.
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{
                 HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
@@ -147,6 +154,11 @@ pub fn start_window_drag(window: &Window) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
+        // ReleaseCapture releases any mouse capture and is safe to call even if no capture exists.
+        // PostMessageA posts a WM_NCLBUTTONDOWN message with HTCAPTION to simulate dragging the
+        // window's title bar. This is a standard technique for implementing custom window drag
+        // and is safe as the message is handled by the window manager.
         unsafe {
             ReleaseCapture();
             PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
@@ -157,6 +169,10 @@ pub fn start_window_drag(window: &Window) {
 #[cfg(target_os = "macos")]
 pub fn set_activation_policy_accessory() {
     use objc2::{class, msg_send, runtime::AnyObject};
+    // SAFETY: NSApplication.sharedApplication returns a valid singleton instance that exists
+    // for the lifetime of the application. setActivationPolicy: with argument 1 (NSApplicationActivationPolicyAccessory)
+    // is a standard API call to configure the app as an accessory (no dock icon, no cmd+tab entry).
+    // The msg_send! macro ensures proper ABI compatibility with Objective-C runtime.
     unsafe {
         // Config the app to be accessory (no dock icon & cmd tab)
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];

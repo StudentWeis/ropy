@@ -66,7 +66,9 @@ impl ClipboardHandler for ClipboardMonitor {
             let hash: u64 = seahash::hash(dyn_img.as_bytes());
 
             if should_forward_image(&last_copy_guard, hash) {
-                let _ = self.image_tx.send_blocking((dyn_img, hash));
+                if let Err(e) = self.image_tx.send_blocking((dyn_img, hash)) {
+                    tracing::warn!(error = %e, "failed to send image to processing channel");
+                }
                 *last_copy_guard = LastCopyState::Image(hash);
             }
         } else {
@@ -79,13 +81,17 @@ impl ClipboardHandler for ClipboardMonitor {
             if let Some(files) = files.filter(|paths| !paths.is_empty()) {
                 let hash = hash_file_paths(&files);
                 if should_forward_files(&last_copy_guard, hash) {
-                    let _ = self.tx.send_blocking(ClipboardEvent::Files(files));
+                    if let Err(e) = self.tx.send_blocking(ClipboardEvent::Files(files)) {
+                        tracing::warn!(error = %e, "failed to send files to clipboard event channel");
+                    }
                     *last_copy_guard = LastCopyState::Files(hash);
                 }
             } else if let Ok(text) = self.ctx.get_text()
                 && should_forward_text(&last_copy_guard, &text)
             {
-                let _ = self.tx.send_blocking(ClipboardEvent::Text(text.clone()));
+                if let Err(e) = self.tx.send_blocking(ClipboardEvent::Text(text.clone())) {
+                    tracing::warn!(error = %e, "failed to send text to clipboard event channel");
+                }
                 *last_copy_guard = LastCopyState::Text(text);
             }
         }
@@ -105,8 +111,10 @@ pub fn start_clipboard_monitor(
 
     cx.background_spawn(async move {
         while let Ok((image, hash)) = image_rx.recv().await {
-            if let Some(path) = super::save_image(&image, hash) {
-                let _ = tx.send_blocking(ClipboardEvent::Image(path, hash));
+            if let Some(path) = super::save_image(&image, hash)
+                && let Err(e) = tx.send_blocking(ClipboardEvent::Image(path, hash))
+            {
+                tracing::warn!(error = %e, "failed to send image event to clipboard channel");
             }
         }
     })

@@ -54,7 +54,9 @@ fn start_clipboard_event_handler(
 
             match result {
                 Ok(record) => {
-                    let _ = notify_tx.send(record).await;
+                    if let Err(e) = notify_tx.send(record).await {
+                        tracing::warn!(error = %e, "failed to notify foreground of new record");
+                    }
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "failed to save clipboard record");

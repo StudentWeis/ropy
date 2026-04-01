@@ -29,7 +29,11 @@ pub fn thumb_path_for(original: &Path) -> PathBuf {
     )
 }
 
-fn save_image_to_dir(image: &DynamicImage, image_content_hash: u64, data_dir: &Path) -> Option<PathBuf> {
+fn save_image_to_dir(
+    image: &DynamicImage,
+    image_content_hash: u64,
+    data_dir: &Path,
+) -> Option<PathBuf> {
     if !data_dir.exists() {
         std::fs::create_dir_all(data_dir).ok()?;
     }
