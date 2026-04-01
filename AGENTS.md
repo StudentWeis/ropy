@@ -1,7 +1,7 @@
 ## Total
 
 - Think in terms of first principles.
-- Write code following the principles of Clean Code.
+- Write code following the principles of Clean Code, DRY and KISS.
 - Follow the TDD (Test-Driven Development) approach, prioritizing writing tests that fail first, then writing implementation code that passes.
 
 ## Development

@@ -18,23 +18,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 - Recommendation:
   - Replace `let _ =` with `if let Err(e) = ... { tracing::warn!(...) }` at minimum.
 
-### 6. Hardcoded magic values are scattered
-
-**Priority:** Medium
-
-| Location | Value | Description |
-|----------|-------|-------------|
-| `src/gui/app.rs` | `px(400.), px(600.)` | Window dimensions |
-| `src/gui/paste.rs` | `Duration::from_millis(50)` | Paste delay |
-| `src/gui/x11.rs` | `Duration::from_millis(10)` | X11 poll interval |
-| `src/updater/checker.rs` | `"--connect-timeout", "15"` | HTTP timeout |
-| `src/updater/downloader.rs` | `"--connect-timeout", "30"` | HTTP timeout (inconsistent) |
-| `src/config/settings.rs` | `DEFAULT_MAX_HISTORY_RECORDS = 100` | Default limits |
-
-- Recommendation:
-  - Move defaults and constants to `src/constants.rs`.
-  - Unify HTTP timeout values between checker and downloader.
-
 ### 9. Time index upsert does not scale
 
 **Priority:** Low (at current defaults)
@@ -73,21 +56,6 @@ This document records a comprehensive improvement review of the current Ropy cod
     - `SettingsEditor` — `hotkey_recording`, `hotkey_manual_editing`, `pending_hotkey`, `hotkey_before_recording`, `settings_*_input`, `selected_theme`, `selected_language`, `language_select`, `autostart_enabled`, `auto_check_enabled`, `hover_preview_enabled`
     - `UpdateManager` — `update_status`
     - Keep `RopyBoard` focused on core board state: records, filtering, selection, and layout
-
-### 12. `Mutex<Vec<ClipboardRecord>>` on UI thread — `RwLock` is more appropriate
-
-**Priority:** Medium
-
-- Relevant code:
-  - `src/gui/board/mod.rs` — `records: Arc<Mutex<Vec<ClipboardRecord>>>`
-  - `get_filtered_record_indices()` acquires the Mutex lock twice (once for filtering, once for sorting)
-- Why it matters:
-  - Records are read-heavy (every render cycle) and write-rare (only on clipboard events).
-  - `Mutex` blocks a UI read if a background writer holds the lock. `RwLock` allows concurrent readers.
-  - The double-lock pattern in `get_filtered_record_indices()` is wasteful; filtering and sorting should happen in a single lock scope.
-- Recommendation:
-  - Switch to `RwLock<Vec<ClipboardRecord>>` for the shared record cache.
-  - Merge the two lock acquisitions in `get_filtered_record_indices()` into one.
 
 ### 13. Unsafe blocks lack `// SAFETY:` comments
 

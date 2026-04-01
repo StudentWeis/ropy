@@ -102,8 +102,7 @@ fn parse_version(tag: &str) -> Result<Version, UpdateError> {
 fn http_get(url: &str) -> Result<String, UpdateError> {
     super::http::CurlCommandBuilder::new(url)
         .header("Accept: application/vnd.github.v3+json")
-        .connect_timeout(15)
-        .max_time(30)
+        .with_api_timeouts()
         .execute_to_string()
 }
 

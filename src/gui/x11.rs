@@ -7,6 +7,8 @@ use x11rb::{
     wrapper::ConnectionExt as _,
 };
 
+const ACTIVE_WINDOW_POLL_INTERVAL_MS: u64 = 10;
+
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
@@ -166,7 +168,7 @@ impl X11 {
                 return Ok(());
             }
 
-            thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(ACTIVE_WINDOW_POLL_INTERVAL_MS));
         }
     }
 }

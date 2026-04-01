@@ -77,8 +77,7 @@ fn download_file(
     use std::process::Stdio;
 
     let mut curl_command = super::http::CurlCommandBuilder::new(url)
-        .connect_timeout(30)
-        .max_time(600)
+        .with_download_timeouts()
         .into_command();
 
     let mut child = curl_command
@@ -133,8 +132,7 @@ fn download_file(
 /// Download the `.sha256` file and verify the asset against it.
 fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateError> {
     let checksum_body = super::http::CurlCommandBuilder::new(checksum_url)
-        .connect_timeout(15)
-        .max_time(30)
+        .with_api_timeouts()
         .execute_to_string()?;
 
     // The checksum file format from cargo-dist is:  "<hex>  <filename>\n"

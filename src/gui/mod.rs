@@ -1,5 +1,6 @@
 pub mod app;
 pub mod board;
+mod constants;
 pub mod hotkey;
 mod panel;
 mod paste;

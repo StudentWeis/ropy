@@ -8,7 +8,7 @@ use std::{
 
 use gpui::{
     App, AppContext, AssetSource, Bounds, WindowBounds, WindowHandle, WindowKind, WindowOptions,
-    px, rgb, size,
+    rgb,
 };
 use gpui_component::{Root, ThemeMode as ComponentThemeMode, theme::Theme};
 use rust_embed::RustEmbed;
@@ -18,6 +18,7 @@ use crate::{
     config::Settings,
     gui::{
         board::RopyBoard,
+        constants::default_window_size,
         theme::{ThemeDefinition, ThemeId, ThemeMode},
     },
     repository::SharedRecords,
@@ -47,7 +48,7 @@ pub fn create_window(
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     is_silent: bool,
 ) -> WindowHandle<Root> {
-    let bounds = Bounds::centered(None, size(px(400.), px(600.0)), cx);
+    let bounds = Bounds::centered(None, default_window_size(), cx);
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),

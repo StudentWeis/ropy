@@ -1,6 +1,8 @@
 use gpui::{Context, Focusable, Window};
 
-use crate::gui::{active_window, board::RopyBoard, hide_window, panel::settings};
+use crate::gui::{
+    active_window, board::RopyBoard, constants::default_window_size, hide_window, panel::settings,
+};
 
 impl RopyBoard {
     /// Clear the search input content and blur it
@@ -85,7 +87,7 @@ impl RopyBoard {
         self.show_about = false;
         self.show_help = false;
         self.show_clear_confirm = false;
-        window.resize(gpui::size(gpui::px(400.), gpui::px(600.)));
+        window.resize(default_window_size());
         active_window(window, cx);
     }
 

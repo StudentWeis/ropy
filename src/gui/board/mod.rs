@@ -50,6 +50,8 @@ use crate::{
     utils::{deserialize_file_paths, lock_or_recover, read_or_recover, write_or_recover},
 };
 
+const CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS: u64 = 500;
+
 fn build_copy_request(
     content: &str,
     content_type: &ContentType,
@@ -431,7 +433,9 @@ impl RopyBoard {
                 return false;
             }
             if let Some((_, rx)) = completion
-                && rx.recv_timeout(Duration::from_millis(500)).is_err()
+                && rx
+                    .recv_timeout(Duration::from_millis(CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS))
+                    .is_err()
             {
                 tracing::warn!("timed out waiting for clipboard write completion");
                 return false;

@@ -11,6 +11,8 @@ use crate::{
     repository::GlobalRepository,
 };
 
+const SETTINGS_NOTIFICATION_MAX_WIDTH_PX: f32 = 280.0;
+
 impl RopyBoard {
     pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
         if self.hotkey_manual_editing {
@@ -164,7 +166,10 @@ impl RopyBoard {
                 err_msg
             );
             window.push_notification(
-                Notification::new().message(msg).w_auto().max_w(px(280.0)),
+                Notification::new()
+                    .message(msg)
+                    .w_auto()
+                    .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                 cx,
             );
         } else {
@@ -174,7 +179,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }
@@ -184,7 +189,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }
@@ -194,7 +199,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }
@@ -204,7 +209,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }
@@ -214,7 +219,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("⚠  {warn_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }
@@ -229,7 +234,7 @@ impl RopyBoard {
                     Notification::new()
                         .message(format!("✓  {ok_msg}"))
                         .w_auto()
-                        .max_w(px(280.0)),
+                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
                     cx,
                 );
             }

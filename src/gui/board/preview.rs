@@ -7,6 +7,10 @@ use gpui::{
 use gpui_component::ActiveTheme;
 use image::ImageReader;
 
+const TOOLTIP_HORIZONTAL_MARGIN_PX: f32 = 40.0;
+const IMAGE_TOOLTIP_MAX_WIDTH_PX: f32 = 600.0;
+const IMAGE_TOOLTIP_MAX_HEIGHT_PX: f32 = 400.0;
+
 /// Create a tooltip preview that supports automatic line wrapping
 ///
 /// This implementation returns a `View` that will be correctly rendered by `GPUI`'s tooltip system
@@ -21,7 +25,7 @@ use image::ImageReader;
 pub fn simple_tooltip(content: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let content = content.into();
     let window_width = window.bounds().size.width;
-    let max_width = (window_width - px(40.0)).into();
+    let max_width = (window_width - px(TOOLTIP_HORIZONTAL_MARGIN_PX)).into();
 
     cx.new(move |_cx| TooltipView { content, max_width }).into()
 }
@@ -71,8 +75,8 @@ pub fn image_tooltip(image_path: impl Into<String>, window: &Window, cx: &mut Ap
     let image_path = image_path.into();
     let window_width = window.bounds().size.width;
     let window_height = window.bounds().size.height;
-    let max_width = (window_width * 0.9).min(px(600.0));
-    let max_height = (window_height * 0.9).min(px(400.0));
+    let max_width = (window_width * 0.9).min(px(IMAGE_TOOLTIP_MAX_WIDTH_PX));
+    let max_height = (window_height * 0.9).min(px(IMAGE_TOOLTIP_MAX_HEIGHT_PX));
 
     let (width, height) = calculate_image_size(&image_path, max_width, max_height);
 
