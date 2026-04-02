@@ -371,44 +371,28 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Into
 }
 
 fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let mode_names = [
-        I18n::translate(cx, "settings_confirm_mode_copy"),
-        I18n::translate(cx, "settings_confirm_mode_paste"),
-    ];
-    let mode_buttons = h_flex()
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_md()
-        .overflow_hidden()
-        .children(mode_names.into_iter().enumerate().map(|(index, name)| {
-            let is_selected = matches!(
-                (index, board.confirm_mode),
-                (0, crate::config::ConfirmMode::CopyToClipboard)
-                    | (1, crate::config::ConfirmMode::PasteImmediately)
-            );
-            let mut btn = Button::new(("confirm-mode-button", index))
-                .small()
-                .label(name);
-            btn = if is_selected {
-                btn.primary()
-            } else {
-                btn.ghost()
-            };
-            btn.rounded_none()
-                .on_click(cx.listener(move |board, _, window, cx| {
-                    let mode = if index == 0 {
-                        crate::config::ConfirmMode::CopyToClipboard
-                    } else {
+    let entity = cx.entity();
+    let toggle = Switch::new("confirm-mode-toggle")
+        .checked(matches!(
+            board.confirm_mode,
+            crate::config::ConfirmMode::PasteImmediately
+        ))
+        .on_click(move |_, window, cx| {
+            entity.update(cx, |board, _window| {
+                let new_mode = match board.confirm_mode {
+                    crate::config::ConfirmMode::CopyToClipboard => {
                         crate::config::ConfirmMode::PasteImmediately
-                    };
-                    board.set_confirm_mode(mode, window);
-                    cx.notify();
-                }))
-        }));
-
+                    }
+                    crate::config::ConfirmMode::PasteImmediately => {
+                        crate::config::ConfirmMode::CopyToClipboard
+                    }
+                };
+                board.set_confirm_mode(new_mode, window);
+            });
+        });
     settings_row(
-        I18n::translate(cx, "settings_confirm_mode"),
-        mode_buttons,
+        I18n::translate(cx, "settings_paste_immediately"),
+        toggle,
         cx,
     )
 }
