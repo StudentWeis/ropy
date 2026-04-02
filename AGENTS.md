@@ -12,11 +12,8 @@
 
 ## Tests
 
-- Use tempfile to create temporary files.
-- Use rstest to perform parameterized tests.
-- Use appropriate macros to avoid clippy warnings in test functions.
-- Test functions should follow the `test_<object>_<scenario>_<expected>` naming pattern.
+- Look at the [Testing](./doc/TESTING.md) documentation for guidelines on writing tests and ensuring code quality.
 
 ## Others
 
-- Use the [rtk](./RTK.md) prefix when executing Shell commands.
+- Use the [rtk](./doc/RTK.md) prefix when executing Shell commands.
