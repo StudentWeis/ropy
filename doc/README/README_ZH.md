@@ -18,15 +18,14 @@
 </p>
 
 <p align="center">
-<img src="https://www.imgur.la/images/2026/03/13/pic_1773332541063.png" alt="Ropy Dark" width="40%">
-<img src="https://www.imgur.la/images/2026/03/13/pic_1773332561411.png" alt="Ropy Light" width="40%">
+<img src="https://www.imgur.la/images/2026/04/02/pic_1775108102590.png" alt="Ropy Dark" width="80%">
 </p>
 
 ## 特性
 
 - 使用 Zed 的 GPUI 构建的原生桌面应用。
 - 跨平台支持：Windows、macOS 和 Linux（X11）。
-- 追踪文本和图片剪贴板历史，并基于内容进行去重。
+- 追踪文本、图片和文件路径剪贴板历史，并基于内容进行去重。
 - 支持使用大小写敏感和整词匹配选项搜索已加载的历史记录。
 - 支持收藏和置顶记录；自动清理时会保留已置顶和已收藏的内容。
 - 支持预览文本和图片，并可配置悬浮预览延迟。

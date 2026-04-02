@@ -4,6 +4,11 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
+- CONTRIBUTING
+- 设置页优化
+- RFT 支持
+- redb 支持
+
 ### 10. Release profile tradeoff is untested
 
 **Priority:** Low

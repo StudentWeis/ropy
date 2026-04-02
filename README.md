@@ -16,15 +16,14 @@
 <p align="center">English | <a href="doc/README/README_ZH.md">简体中文</a></p>
 
 <p align="center">
-<img src="https://www.imgur.la/images/2026/03/13/pic_1773332541063.png" alt="Ropy Dark" width="40%">
-<img src="https://www.imgur.la/images/2026/03/13/pic_1773332561411.png" alt="Ropy Light" width="40%">
+<img src="https://www.imgur.la/images/2026/04/02/pic_1775108102590.png" alt="Ropy Dark" width="80%">
 </p>
 
 ## Features
 
 - Native desktop application built with Zed's GPUI.
 - Cross-platform support for Windows, macOS, and Linux (X11).
-- Tracks text and image clipboard history with content-based deduplication.
+- Tracks text, image, and file path clipboard history with content-based deduplication.
 - Search the loaded history with case-sensitive and whole-word options.
 - Favorite and pin records; automatic cleanup preserves pinned and favorited items.
 - Preview text and images with a configurable hover delay.
@@ -56,21 +55,6 @@ cd ropy
 cargo build --release
 ./target/release/ropy
 ```
-
-## Memory Profiling
-
-For Rust heap profiling, Ropy includes an optional `dhat` integration.
-
-```bash
-rtk cargo run --profile dhat --features dhat-heap
-```
-
-Then reproduce the scenario, quit via `Cmd-Q` or the tray's `Quit` action, and load `target/dhat-heap.json` into the online DHAT viewer.
-
-- This is best for answering "which Rust allocation paths are keeping heap memory alive?"
-- Ropy flushes the profile immediately before its in-app quit actions; hiding the window is not enough.
-- It does not include non-Rust-process memory such as AppKit/CoreAnimation/Metal window backing stores on macOS.
-- For whole-process memory on macOS, pair it with `bash scripts/memory_profile.sh` or Instruments' `Allocations` and `VM Tracker`.
 
 ## Usage
 
