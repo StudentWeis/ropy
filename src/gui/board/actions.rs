@@ -97,13 +97,14 @@ impl RopyBoard {
             return;
         }
 
-        if self.show_settings {
-            settings::reset_settings_dialog(self, window, cx);
-            return;
-        }
         if self.show_clear_confirm {
             self.show_clear_confirm = false;
             cx.notify();
+            return;
+        }
+
+        if self.show_settings {
+            settings::reset_settings_dialog(self, window, cx);
             return;
         }
         if self.show_about {

@@ -11,23 +11,13 @@ use gpui_component::{
 use super::RopyBoard;
 use crate::{constants::APP_NAME, i18n::I18n};
 
-fn create_clear_button(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    Button::new("clear-button")
-        .ghost()
-        .icon(Icon::empty().path("icon/clear-all.svg"))
-        .tooltip(I18n::translate(cx, "clear_all"))
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.show_clear_confirm = true;
-            cx.notify();
-        }))
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-}
-
-/// Render the header section with title and settings/clear buttons
+/// Render the header section with title and window action buttons
 pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let is_pinned = board.pinned;
-    let show_pin_button = board.can_toggle_window_pin();
-    let pin_tooltip = if is_pinned {
+    let can_toggle_window_pin = board.can_toggle_window_pin();
+    let pin_tooltip = if !can_toggle_window_pin {
+        I18n::translate(cx, "pin_unavailable")
+    } else if is_pinned {
         I18n::translate(cx, "unpin")
     } else {
         I18n::translate(cx, "pin")
@@ -53,27 +43,26 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
             h_flex()
                 .gap_2()
                 .items_center()
-                .when(show_pin_button, |el| {
-                    el.child(
-                        if is_pinned {
-                            Button::new("pin-button").primary()
-                        } else {
-                            Button::new("pin-button").ghost()
-                        }
-                        .icon(Icon::empty().path("icon/pin-to-top.svg"))
-                        .tooltip(pin_tooltip)
-                        .on_click(cx.listener(
-                            |this, _event, #[allow(unused_variables)] window, cx| {
-                                this.toggle_window_pin(window);
-                                cx.notify();
-                            },
-                        ))
-                        .on_mouse_down(
-                            gpui::MouseButton::Left,
-                            cx.listener(|_, _, _, cx| cx.stop_propagation()),
-                        ),
+                .child(
+                    if is_pinned {
+                        Button::new("pin-button").primary()
+                    } else {
+                        Button::new("pin-button").ghost().opacity(0.5_f32)
+                    }
+                    .when(can_toggle_window_pin, |button| button.opacity(1.0_f32))
+                    .icon(Icon::empty().path("icon/pin-to-top.svg"))
+                    .tooltip(pin_tooltip)
+                    .on_click(
+                        cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
+                            this.toggle_window_pin(window);
+                            cx.notify();
+                        }),
                     )
-                })
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|_, _, _, cx| cx.stop_propagation()),
+                    ),
+                )
                 .child(
                     Button::new("help-button")
                         .ghost()
@@ -109,7 +98,6 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                             cx.notify();
                         }))
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-                )
-                .child(create_clear_button(cx)),
+                ),
         )
 }

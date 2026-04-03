@@ -72,6 +72,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let max_storage_row = render_max_storage_row(board, cx);
     let autostart_row = render_autostart_row(board, cx);
     let confirm_mode_row = render_confirm_mode_row(board, cx);
+    let clear_history_row = render_clear_history_row(cx);
     let open_dirs_row = render_open_dirs_row(cx);
     let auto_check_row = render_auto_check_row(board, cx);
     let hover_preview_row = render_hover_preview_row(board, cx);
@@ -101,6 +102,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(hover_preview_row)
             .child(Divider::horizontal())
             .child(auto_check_row)
+            .child(Divider::horizontal())
+            .child(clear_history_row)
             .child(Divider::horizontal())
             .child(open_dirs_row),
     )
@@ -408,6 +411,21 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             });
         });
     settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
+}
+
+fn render_clear_history_row(cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        I18n::translate(cx, "settings_clear_history"),
+        Button::new("clear-history-button")
+            .small()
+            .danger()
+            .label(I18n::translate(cx, "clear_all"))
+            .on_click(cx.listener(|board, _, _, cx| {
+                board.show_clear_confirm = true;
+                cx.notify();
+            })),
+        cx,
+    )
 }
 
 fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
