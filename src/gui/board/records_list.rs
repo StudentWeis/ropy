@@ -20,8 +20,8 @@ use crate::{
     utils::{deserialize_file_paths, read_or_recover},
 };
 
-const LIST_CONTENT_PREVIEW_LIMIT: usize = 100;
-const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 800;
+const LIST_CONTENT_PREVIEW_LIMIT: usize = 80;
+const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 500;
 
 fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
     let hex = content.strip_prefix('#')?;
@@ -47,6 +47,29 @@ fn truncate_content(content: &str, limit: usize) -> String {
     }
 }
 
+fn truncate_content_with_lines(content: &str, char_limit: usize, max_lines: usize) -> String {
+    // First limit to max lines
+    let lines: Vec<&str> = content.lines().take(max_lines).collect();
+    let line_limited_content = lines.join("\n");
+
+    // Then limit character count
+    if line_limited_content.chars().count() > char_limit {
+        format!("{}...", line_limited_content.chars().take(char_limit).collect::<String>())
+    } else if content.lines().count() > max_lines {
+        format!("{line_limited_content}...")
+    } else {
+        line_limited_content
+    }
+}
+
+fn truncate_content_for_list(content: &str, limit: usize) -> String {
+    truncate_content_with_lines(content, limit, 3)
+}
+
+fn truncate_content_for_preview(content: &str, limit: usize) -> String {
+    truncate_content_with_lines(content, limit, 10)
+}
+
 fn render_image_record(record: &ClipboardRecord) -> AnyElement {
     let path = PathBuf::from(record.content.clone());
     let thumb_path = thumb_path_for(&path);
@@ -60,7 +83,11 @@ fn render_image_record(record: &ClipboardRecord) -> AnyElement {
 }
 
 fn render_text_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
-    let text = truncate_content(&record.content, LIST_CONTENT_PREVIEW_LIMIT);
+    // Remove leading blank lines and spaces
+    let trimmed_content = record.content.trim_start();
+
+    // Truncate content with line limit for list display
+    let text = truncate_content_for_list(trimmed_content, LIST_CONTENT_PREVIEW_LIMIT);
     let text_element = div()
         .text_sm()
         .text_color(cx.theme().secondary_foreground)
@@ -170,7 +197,7 @@ fn create_preview(
     match content_type {
         ContentType::Image => preview::image_tooltip(record_content, window, cx),
         ContentType::FilePath => preview::simple_tooltip(
-            truncate_content(
+            truncate_content_for_preview(
                 &file_preview_content(record_content),
                 TOOLTIP_CONTENT_PREVIEW_LIMIT,
             ),
@@ -178,7 +205,7 @@ fn create_preview(
             cx,
         ),
         ContentType::Text => preview::simple_tooltip(
-            truncate_content(record_content, TOOLTIP_CONTENT_PREVIEW_LIMIT),
+            truncate_content_for_preview(record_content, TOOLTIP_CONTENT_PREVIEW_LIMIT),
             window,
             cx,
         ),
