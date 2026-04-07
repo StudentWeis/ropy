@@ -44,21 +44,90 @@ fn settings_row<C: IntoElement>(
         .child(control)
 }
 
-/// Render the settings panel content — all items at the same level, left-right layout.
+/// Render a section label displayed above a settings card.
+fn settings_section_label(
+    label: impl Into<gpui::SharedString>,
+    cx: &Context<RopyBoard>,
+) -> impl IntoElement {
+    div()
+        .text_xs()
+        .text_color(cx.theme().muted_foreground)
+        .mt_4()
+        .mb_1()
+        .child(label.into())
+}
+
+/// Render a card container that groups related settings rows.
+fn settings_card(cx: &Context<RopyBoard>) -> gpui::Div {
+    v_flex()
+        .w_full()
+        .px_5()
+        .rounded_xl()
+        .bg(cx.theme().secondary)
+}
+
+/// Interleave settings rows with dividers inside a card.
+fn card_with_rows(rows: Vec<gpui::AnyElement>, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let mut card = settings_card(cx);
+    let last_index = rows.len().saturating_sub(1);
+    for (index, row) in rows.into_iter().enumerate() {
+        card = card.child(row);
+        if index < last_index {
+            card = card.child(Divider::horizontal());
+        }
+    }
+    card
+}
+
+/// Render the settings panel content with grouped card sections.
 pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = render_settings_header(cx);
-    let language_row = render_language_row(board, cx);
-    let theme_row = render_theme_row(board, cx);
-    let window_opacity_row = render_window_opacity_row(board, cx);
-    let activation_key_row = render_activation_key_row(board, cx);
-    let max_history_row = render_max_history_row(board, cx);
-    let max_storage_row = render_max_storage_row(board, cx);
-    let autostart_row = render_autostart_row(board, cx);
-    let confirm_mode_row = render_confirm_mode_row(board, cx);
-    let clear_history_row = render_clear_history_row(cx);
-    let open_dirs_row = render_open_dirs_row(cx);
-    let auto_check_row = render_auto_check_row(board, cx);
-    let hover_preview_row = render_hover_preview_row(board, cx);
+
+    // Appearance section
+    let appearance_label =
+        settings_section_label(I18n::translate(cx, "settings_section_appearance"), cx);
+    let appearance_card = card_with_rows(
+        vec![
+            render_language_row(board, cx).into_any_element(),
+            render_theme_row(board, cx).into_any_element(),
+            render_window_opacity_row(board, cx).into_any_element(),
+        ],
+        cx,
+    );
+
+    // Behavior section
+    let behavior_label =
+        settings_section_label(I18n::translate(cx, "settings_section_behavior"), cx);
+    let behavior_card = card_with_rows(
+        vec![
+            render_activation_key_row(board, cx).into_any_element(),
+            render_confirm_mode_row(board, cx).into_any_element(),
+            render_hover_preview_row(board, cx).into_any_element(),
+            render_autostart_row(board, cx).into_any_element(),
+        ],
+        cx,
+    );
+
+    // Storage section
+    let storage_label = settings_section_label(I18n::translate(cx, "settings_section_storage"), cx);
+    let storage_card = card_with_rows(
+        vec![
+            render_max_history_row(board, cx).into_any_element(),
+            render_max_storage_row(board, cx).into_any_element(),
+            render_clear_history_row(cx).into_any_element(),
+        ],
+        cx,
+    );
+
+    // About section
+    let about_label = settings_section_label(I18n::translate(cx, "settings_section_about"), cx);
+    let about_card = card_with_rows(
+        vec![
+            render_auto_check_row(board, cx).into_any_element(),
+            render_open_dirs_row(cx).into_any_element(),
+        ],
+        cx,
+    );
 
     v_flex().size_full().child(header).child(
         v_flex()
@@ -66,31 +135,16 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .overflow_y_scroll()
             .size_full()
             .flex_1()
-            .px_4()
+            .px_2()
             .pb_4()
-            .child(language_row)
-            .child(Divider::horizontal())
-            .child(theme_row)
-            .child(Divider::horizontal())
-            .child(window_opacity_row)
-            .child(Divider::horizontal())
-            .child(activation_key_row)
-            .child(Divider::horizontal())
-            .child(max_history_row)
-            .child(Divider::horizontal())
-            .child(max_storage_row)
-            .child(Divider::horizontal())
-            .child(autostart_row)
-            .child(Divider::horizontal())
-            .child(confirm_mode_row)
-            .child(Divider::horizontal())
-            .child(hover_preview_row)
-            .child(Divider::horizontal())
-            .child(auto_check_row)
-            .child(Divider::horizontal())
-            .child(clear_history_row)
-            .child(Divider::horizontal())
-            .child(open_dirs_row),
+            .child(appearance_label)
+            .child(appearance_card)
+            .child(behavior_label)
+            .child(behavior_card)
+            .child(storage_label)
+            .child(storage_card)
+            .child(about_label)
+            .child(about_card),
     )
 }
 
@@ -102,20 +156,22 @@ fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
         .px_4()
         .pt_4()
         .pb_3()
-        .border_b_1()
-        .border_color(cx.theme().border)
         .child(
-            Button::new("cancel-button")
-                .small()
-                .ghost()
-                .label(crate::constants::BACK_ARROW)
-                .on_click(cx.listener(|board, _click_event, window, cx| {
-                    reset_settings_dialog(board, window, cx);
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            div().w(px(72.0)).flex().items_start().child(
+                Button::new("cancel-button")
+                    .small()
+                    .ghost()
+                    .label(crate::constants::BACK_ARROW)
+                    .on_click(cx.listener(|board, _click_event, window, cx| {
+                        reset_settings_dialog(board, window, cx);
+                    }))
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            ),
         )
         .child(
             div()
+                .flex_1()
+                .text_center()
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
@@ -167,7 +223,7 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
     settings_row(
         I18n::translate(cx, "settings_window_opacity"),
         h_flex()
-            .w(px(200.0))
+            .w(px(160.0))
             .items_center()
             .gap_2()
             .child(
@@ -432,6 +488,8 @@ fn render_clear_history_row(cx: &Context<RopyBoard>) -> impl IntoElement {
                 Button::new("clear-ordinary-history-button")
                     .small()
                     .ghost()
+                    .border_1()
+                    .border_color(cx.theme().border)
                     .label(I18n::translate(cx, "clear_ordinary"))
                     .on_click(cx.listener(|board, _, _, cx| {
                         board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, cx);
@@ -454,6 +512,8 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
     let log_button = Button::new("open-log-button")
         .small()
         .ghost()
+        .border_1()
+        .border_color(cx.theme().border)
         .label(I18n::translate(cx, "settings_open_log"))
         .on_click(cx.listener(|_, _, _, _| {
             let log_dir = crate::utils::logging::log_dir();
@@ -468,6 +528,8 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
     let config_button = Button::new("open-config-button")
         .small()
         .ghost()
+        .border_1()
+        .border_color(cx.theme().border)
         .label(I18n::translate(cx, "settings_open_config"))
         .on_click(cx.listener(|_, _, _, _| {
             if let Ok(config_dir) = crate::config::Settings::config_dir() {
@@ -484,16 +546,14 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
             }
         }));
 
-    settings_row(
-        I18n::translate(cx, "settings_open_dirs_title"),
-        h_flex()
-            .justify_end()
-            .items_center()
-            .gap_1()
-            .child(log_button)
-            .child(config_button),
-        cx,
-    )
+    h_flex()
+        .justify_end()
+        .items_center()
+        .w_full()
+        .py_3()
+        .gap_1()
+        .child(log_button)
+        .child(config_button)
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

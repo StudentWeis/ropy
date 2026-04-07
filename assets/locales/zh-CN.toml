@@ -29,6 +29,12 @@ search_match_whole_word = "全词"
 settings_button = "设置"
 settings_title = "设置"
 
+# 设置分组
+settings_section_appearance = "外观"
+settings_section_behavior = "行为"
+settings_section_storage = "存储"
+settings_section_about = "其他"
+
 # 设置选项
 settings_language = "语言"
 settings_theme = "主题"
@@ -50,7 +56,6 @@ settings_max_history_invalid_warning = "最大历史记录数无效"
 settings_paste_immediately = "确认后立即粘贴"
 settings_hover_preview = "悬停预览"
 settings_clear_history = "清空历史"
-settings_open_dirs_title = "打开目录"
 settings_open_log = "打开日志目录"
 settings_open_config = "打开配置目录"
 

@@ -23,25 +23,29 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
         .mb_4()
         .pt_4()
         .child(
-            Button::new("back-button")
-                .small()
-                .ghost()
-                .label(BACK_ARROW)
-                .on_click(cx.listener(|board, _, window, cx| {
-                    board.show_about = false;
-                    window.focus(&board.focus_handle);
-                    cx.notify();
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            div().w(px(72.0)).flex().items_start().child(
+                Button::new("back-button")
+                    .small()
+                    .ghost()
+                    .label(BACK_ARROW)
+                    .on_click(cx.listener(|board, _, window, cx| {
+                        board.show_about = false;
+                        window.focus(&board.focus_handle);
+                        cx.notify();
+                    }))
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            ),
         )
         .child(
             div()
+                .flex_1()
+                .text_center()
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui::FontWeight::BOLD)
                 .child(I18n::translate(cx, "about_title")),
         )
-        .child(div().w(px(55.)));
+        .child(div().w(px(72.0)));
 
     #[cfg(target_os = "windows")]
     let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {

@@ -30,6 +30,11 @@ settings_button = "Settings"
 settings_title = "Settings"
 
 # Settings sections
+settings_section_appearance = "Appearance"
+settings_section_behavior = "Behavior"
+settings_section_storage = "Storage"
+settings_section_about = "Other"
+
 settings_language = "Language"
 settings_theme = "Theme"
 settings_window_opacity = "Opacity"
@@ -50,7 +55,6 @@ settings_max_history_invalid_warning = "Invalid max history value"
 settings_paste_immediately = "Paste immediately after confirm"
 settings_hover_preview = "Hover Preview"
 settings_clear_history = "Clear History"
-settings_open_dirs_title = "Open Directories"
 settings_open_log = "Open Log Directory"
 settings_open_config = "Open Config Directory"
 

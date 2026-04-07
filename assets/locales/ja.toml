@@ -31,6 +31,11 @@ settings_button = "設定"
 settings_title = "設定"
 
 # Settings sections
+settings_section_appearance = "外観"
+settings_section_behavior = "動作"
+settings_section_storage = "ストレージ"
+settings_section_about = "その他"
+
 settings_language = "言語"
 settings_theme = "テーマ"
 settings_window_opacity = "不透明度"
@@ -51,7 +56,6 @@ settings_max_history_invalid_warning = "履歴数の値が無効です"
 settings_paste_immediately = "確認後すぐ貼り付け"
 settings_hover_preview = "ホバー プレビュー"
 settings_clear_history = "履歴を消去"
-settings_open_dirs_title = "ディレクトリを開く"
 settings_open_log = "ログディレクトリを開く"
 settings_open_config = "設定ディレクトリを開く"
 
