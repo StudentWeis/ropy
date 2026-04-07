@@ -9,9 +9,12 @@ tray_show = "表示"
 tray_quit = "終了"
 
 # Main window
+clear_ordinary = "通常の記録を消去"
 clear_all = "すべてクリア"
 clear_confirm_title = "すべての記録を消去"
 clear_confirm_message = "保存されたすべてのクリップボード記録が完全に削除されます。この操作は取り消せません。"
+clear_ordinary_confirm_title = "通常の記録を消去"
+clear_ordinary_confirm_message = "ピン留めもお気に入り登録もされていないクリップボード記録を完全に削除します。ピン留め済みとお気に入り済みの記録は保持されます。"
 clear_confirm_cancel = "キャンセル"
 clear_confirm_button = "消去"
 pin = "ピン留め"

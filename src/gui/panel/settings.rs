@@ -16,7 +16,10 @@ use gpui_component::{
 };
 
 use crate::{
-    gui::{board::RopyBoard, theme::ThemeId},
+    gui::{
+        board::{ClearConfirmAction, RopyBoard},
+        theme::ThemeId,
+    },
     i18n::{I18n, Language},
 };
 
@@ -445,14 +448,27 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
 fn render_clear_history_row(cx: &Context<RopyBoard>) -> impl IntoElement {
     settings_row(
         I18n::translate(cx, "settings_clear_history"),
-        Button::new("clear-history-button")
-            .small()
-            .danger()
-            .label(I18n::translate(cx, "clear_all"))
-            .on_click(cx.listener(|board, _, _, cx| {
-                board.show_clear_confirm = true;
-                cx.notify();
-            })),
+        h_flex()
+            .items_center()
+            .gap_2()
+            .child(
+                Button::new("clear-ordinary-history-button")
+                    .small()
+                    .ghost()
+                    .label(I18n::translate(cx, "clear_ordinary"))
+                    .on_click(cx.listener(|board, _, _, cx| {
+                        board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, cx);
+                    })),
+            )
+            .child(
+                Button::new("clear-history-button")
+                    .small()
+                    .danger()
+                    .label(I18n::translate(cx, "clear_all"))
+                    .on_click(cx.listener(|board, _, _, cx| {
+                        board.open_clear_confirm(ClearConfirmAction::AllHistory, cx);
+                    })),
+            ),
         cx,
     )
 }

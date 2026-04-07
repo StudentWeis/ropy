@@ -9,13 +9,24 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use super::RopyBoard;
+use super::{ClearConfirmAction, RopyBoard};
 use crate::i18n::I18n;
 
 /// Render the clear-all confirmation overlay (backdrop + centered dialog card)
-pub(super) fn render_clear_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let title = I18n::translate(cx, "clear_confirm_title");
-    let message = I18n::translate(cx, "clear_confirm_message");
+pub(super) fn render_clear_confirm_overlay(
+    action: ClearConfirmAction,
+    cx: &Context<'_, RopyBoard>,
+) -> impl IntoElement {
+    let (title, message) = match action {
+        ClearConfirmAction::AllHistory => (
+            I18n::translate(cx, "clear_confirm_title"),
+            I18n::translate(cx, "clear_confirm_message"),
+        ),
+        ClearConfirmAction::OrdinaryRecords => (
+            I18n::translate(cx, "clear_ordinary_confirm_title"),
+            I18n::translate(cx, "clear_ordinary_confirm_message"),
+        ),
+    };
     let cancel_label = I18n::translate(cx, "clear_confirm_cancel");
     let confirm_label = I18n::translate(cx, "clear_confirm_button");
 
@@ -77,8 +88,7 @@ pub(super) fn render_clear_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl 
                                 .danger()
                                 .label(confirm_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.clear_history(cx);
-                                    this.clear_last_copy_state();
+                                    this.confirm_clear_action(cx);
                                     this.show_clear_confirm = false;
                                     cx.notify();
                                 })),

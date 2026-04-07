@@ -361,6 +361,15 @@ impl ClipboardRepository {
         Ok(())
     }
 
+    /// Clear all ordinary records while preserving pinned and favorited ones.
+    pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
+        let total = self.count();
+        let favorite_ids = self.favorite_id_set()?;
+        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
+
+        self.cleanup_old_records_with_ordinary_total(0, ordinary_total, total, &favorite_ids)
+    }
+
     /// Clean up old records, keeping the most recent `keep_count` records.
     ///
     /// Pinned records are never removed.
@@ -811,6 +820,111 @@ mod tests {
 
         repo.clear().expect("Failed to clear");
         assert_eq!(repo.count(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
+        let repo = create_test_repo();
+
+        let pinned = repo
+            .save_text("Pinned".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let favorite = repo
+            .save_text("Favorite".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let pinned_and_favorite = repo
+            .save_text("Pinned Favorite".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let ordinary_one = repo
+            .save_text("Ordinary One".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let ordinary_two = repo
+            .save_text("Ordinary Two".to_string())
+            .expect("Failed to save");
+
+        repo.toggle_pin(pinned.id).expect("Failed to pin record");
+        repo.toggle_favorite(favorite.id)
+            .expect("Failed to favorite record");
+        repo.toggle_pin(pinned_and_favorite.id)
+            .expect("Failed to pin record");
+        repo.toggle_favorite(pinned_and_favorite.id)
+            .expect("Failed to favorite record");
+
+        let removed = repo
+            .clear_ordinary_records()
+            .expect("Failed to clear ordinary records");
+
+        assert_eq!(removed, 2);
+        assert_eq!(repo.count(), 3);
+        assert!(
+            repo.get_by_id(pinned.id)
+                .expect("Failed to load pinned")
+                .is_some()
+        );
+        assert!(
+            repo.get_by_id(favorite.id)
+                .expect("Failed to load favorite")
+                .is_some()
+        );
+        assert!(
+            repo.get_by_id(pinned_and_favorite.id)
+                .expect("Failed to load pinned favorite")
+                .is_some()
+        );
+        assert!(
+            repo.get_by_id(ordinary_one.id)
+                .expect("Failed to load ordinary")
+                .is_none()
+        );
+        assert!(
+            repo.get_by_id(ordinary_two.id)
+                .expect("Failed to load ordinary")
+                .is_none()
+        );
+        assert_eq!(
+            repo.favorite_ids().expect("Failed to load favorite ids"),
+            vec![favorite.id, pinned_and_favorite.id]
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
+        let repo = create_test_repo();
+
+        let pinned = repo
+            .save_text("Pinned".to_string())
+            .expect("Failed to save");
+        thread::sleep(Duration::from_millis(10));
+        let favorite = repo
+            .save_text("Favorite".to_string())
+            .expect("Failed to save");
+
+        repo.toggle_pin(pinned.id).expect("Failed to pin record");
+        repo.toggle_favorite(favorite.id)
+            .expect("Failed to favorite record");
+
+        let removed = repo
+            .clear_ordinary_records()
+            .expect("Failed to clear ordinary records");
+
+        assert_eq!(removed, 0);
+        assert_eq!(repo.count(), 2);
+        assert!(
+            repo.get_by_id(pinned.id)
+                .expect("Failed to load pinned")
+                .is_some()
+        );
+        assert!(
+            repo.get_by_id(favorite.id)
+                .expect("Failed to load favorite")
+                .is_some()
+        );
     }
 
     #[rstest]

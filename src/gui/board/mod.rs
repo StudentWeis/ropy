@@ -115,6 +115,12 @@ fn filter_and_sort_record_indices(
     filtered_indices
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ClearConfirmAction {
+    AllHistory,
+    OrdinaryRecords,
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -159,6 +165,8 @@ pub struct RopyBoard {
     pub(crate) hover_preview_enabled: bool,
     /// Whether the clear-all confirmation dialog is visible
     pub(crate) show_clear_confirm: bool,
+    /// Which clear action is currently awaiting confirmation
+    clear_confirm_action: ClearConfirmAction,
     /// Active content type filter
     pub(crate) content_filter: ContentFilter,
     /// Whether to show only favorited records (independent of content type filter)
@@ -472,6 +480,7 @@ impl RopyBoard {
             auto_check_enabled,
             hover_preview_enabled,
             show_clear_confirm: false,
+            clear_confirm_action: ClearConfirmAction::AllHistory,
             content_filter: ContentFilter::default(),
             favorites_only: false,
             search_options: SearchOptions::default(),
@@ -524,6 +533,38 @@ impl RopyBoard {
                 }
             }
         });
+    }
+
+    /// Clear only ordinary clipboard history, preserving pinned and favorited records.
+    pub(crate) fn clear_ordinary_history(&mut self, cx: &Context<Self>) {
+        GlobalRepository::read(cx, |repo| {
+            if let Some(repo) = repo {
+                if let Err(e) = repo.clear_ordinary_records() {
+                    tracing::warn!(error = %e, "failed to clear ordinary clipboard records");
+                } else {
+                    self.refresh_records_from_repository(cx);
+                }
+            }
+        });
+    }
+
+    pub(super) fn open_clear_confirm(
+        &mut self,
+        action: ClearConfirmAction,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_confirm_action = action;
+        self.show_clear_confirm = true;
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_clear_action(&mut self, cx: &Context<Self>) {
+        match self.clear_confirm_action {
+            ClearConfirmAction::AllHistory => self.clear_history(cx),
+            ClearConfirmAction::OrdinaryRecords => self.clear_ordinary_history(cx),
+        }
+
+        self.clear_last_copy_state();
     }
 
     /// Clear last copy state
@@ -756,12 +797,16 @@ impl Render for RopyBoard {
         let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
         let has_notifs = !notifs.is_empty();
         let show_clear_confirm = self.show_clear_confirm;
+        let clear_confirm_action = self.clear_confirm_action;
         gpui::div()
             .relative()
             .size_full()
             .child(body)
             .when(show_clear_confirm, |this| {
-                this.child(clear_confirm::render_clear_confirm_overlay(cx))
+                this.child(clear_confirm::render_clear_confirm_overlay(
+                    clear_confirm_action,
+                    cx,
+                ))
             })
             .when(has_notifs, move |this| {
                 this.child(
