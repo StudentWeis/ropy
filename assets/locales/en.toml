@@ -55,7 +55,7 @@ settings_autostart = "Launch at system startup"
 settings_max_history_invalid_warning = "Invalid max history value; reset"
 settings_paste_immediately = "Paste immediately after confirm"
 settings_hover_preview = "Hover Preview"
-settings_clear_history = "Clear Clipboard History"
+settings_clear_history = "Clear History"
 settings_open_log = "Open Log Directory"
 settings_open_config = "Open Config Directory"
 
