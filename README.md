@@ -84,3 +84,13 @@ cargo build --release
 - Tray icon helper: [tray-icon](https://github.com/tauri-apps/tray-icon)
 - Embedded DB: [sled](https://github.com/spacejam/sled)
 - Configuration: [config-rs](https://github.com/rust-cli/config-rs)
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=studentweis%2Fropy&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=studentweis/ropy&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=studentweis/ropy&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=studentweis/ropy&type=date&legend=top-left" />
+ </picture>
+</a>
