@@ -320,11 +320,11 @@ impl RopyBoard {
             });
     }
 
-    #[allow(clippy::missing_const_for_fn)]
-    pub(crate) fn set_window_pinned(&mut self, _window: &Window, pinned: bool) {
+    #[allow(unused_variables, clippy::missing_const_for_fn)]
+    pub(crate) fn set_window_pinned(&mut self, window: &Window, pinned: bool) {
         self.pinned = Self::resolve_window_pin_state(self.confirm_mode, pinned);
         #[cfg(not(target_os = "macos"))]
-        crate::gui::utils::set_always_on_top(_window, self.pinned);
+        crate::gui::utils::set_always_on_top(window, self.pinned);
     }
 
     pub(crate) fn toggle_window_pin(&mut self, window: &Window) {

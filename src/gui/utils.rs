@@ -102,6 +102,9 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+        // SAFETY: The hwnd comes from gpui's live window handle. Calling ShowWindow and
+        // SetForegroundWindow with this handle only changes visibility/focus state and does
+        // not transfer ownership or outlive the window's lifetime in this scope.
         unsafe {
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);

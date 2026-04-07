@@ -7,7 +7,13 @@ fn main() {
 
     #[cfg(target_os = "windows")]
     {
-        let out_dir = std::env::var("OUT_DIR").unwrap();
+        let out_dir = match std::env::var("OUT_DIR") {
+            Ok(path) => path,
+            Err(e) => {
+                println!("cargo:warning=OUT_DIR is not set: {e}");
+                return;
+            }
+        };
         let icon_path = std::path::Path::new(&out_dir).join("logo.ico");
 
         // Convert png to ico if it doesn't exist or if png is newer.
@@ -24,7 +30,15 @@ fn main() {
                 println!("cargo:warning=Failed to save logo.ico: {e}");
             } else {
                 let mut res = winres::WindowsResource::new();
-                res.set_icon(icon_path.to_str().unwrap());
+                if let Some(icon_path_str) = icon_path.to_str() {
+                    res.set_icon(icon_path_str);
+                } else {
+                    println!(
+                        "cargo:warning=Icon path is not valid UTF-8: {}",
+                        icon_path.display()
+                    );
+                    return;
+                }
                 if let Err(e) = res.compile() {
                     println!("cargo:warning=Failed to compile Windows resource: {e}");
                 }
