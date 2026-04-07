@@ -74,7 +74,7 @@ impl RopyBoard {
     }
 
     pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
-        if self.show_settings && self.hotkey_recording {
+        if self.show_settings && self.settings_editor.hotkey_recording {
             return;
         }
 
@@ -92,7 +92,7 @@ impl RopyBoard {
     }
 
     pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
-        if self.show_settings && self.hotkey_recording {
+        if self.show_settings && self.settings_editor.hotkey_recording {
             self.cancel_hotkey_recording(window, cx);
             return;
         }

@@ -61,9 +61,11 @@ impl RopyBoard {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let placeholder = Self::hotkey_placeholder_text(&current_hotkey, cx);
 
-        self.settings_activation_key_input.update(cx, |input, cx| {
-            input.set_placeholder(placeholder.clone(), window, cx);
-        });
+        self.settings_editor
+            .settings_activation_key_input
+            .update(cx, |input, cx| {
+                input.set_placeholder(placeholder.clone(), window, cx);
+            });
     }
 
     pub(crate) fn sync_activation_key_input(
@@ -76,10 +78,12 @@ impl RopyBoard {
         let next_value = value.to_string();
         let placeholder = Self::hotkey_placeholder_text(placeholder_hotkey, cx);
 
-        self.settings_activation_key_input.update(cx, |input, cx| {
-            input.set_placeholder(placeholder.clone(), window, cx);
-            input.set_value(next_value.clone(), window, cx);
-        });
+        self.settings_editor
+            .settings_activation_key_input
+            .update(cx, |input, cx| {
+                input.set_placeholder(placeholder.clone(), window, cx);
+                input.set_value(next_value.clone(), window, cx);
+            });
     }
 
     pub(crate) fn sync_activation_key_input_from_candidate(
@@ -101,12 +105,17 @@ impl RopyBoard {
     pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let input_value = self
+            .settings_editor
             .settings_activation_key_input
             .read(cx)
             .value()
             .to_string();
 
-        Self::resolve_hotkey_candidate_input(&input_value, &self.pending_hotkey, &current_hotkey)
+        Self::resolve_hotkey_candidate_input(
+            &input_value,
+            &self.settings_editor.pending_hotkey,
+            &current_hotkey,
+        )
     }
 
     pub(crate) fn has_pending_hotkey(&self, cx: &Context<Self>) -> bool {
@@ -118,13 +127,23 @@ impl RopyBoard {
 
     pub(crate) fn has_pending_max_history(&self, cx: &Context<Self>) -> bool {
         let current_max_history = Settings::read(cx, |s| s.storage.max_history_records);
-        let input = self.settings_max_history_input.read(cx).value().to_string();
+        let input = self
+            .settings_editor
+            .settings_max_history_input
+            .read(cx)
+            .value()
+            .to_string();
         Self::has_pending_numeric_input(&input, current_max_history, Self::parse_max_history_input)
     }
 
     pub(crate) fn has_pending_max_storage(&self, cx: &Context<Self>) -> bool {
         let current_max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
-        let input = self.settings_max_storage_input.read(cx).value().to_string();
+        let input = self
+            .settings_editor
+            .settings_max_storage_input
+            .read(cx)
+            .value()
+            .to_string();
         Self::has_pending_numeric_input(&input, current_max_storage, Self::parse_max_storage_input)
     }
 
@@ -200,8 +219,8 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.selected_theme = theme_idx;
-        self.theme_select.update(cx, |state, cx| {
+        self.settings_editor.selected_theme = theme_idx;
+        self.settings_editor.theme_select.update(cx, |state, cx| {
             state.set_selected_index(
                 Some(gpui_component::IndexPath::default().row(theme_idx)),
                 window,
@@ -216,20 +235,22 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.selected_language = language_idx;
-        self.language_select.update(cx, |state, cx| {
-            state.set_selected_index(
-                Some(gpui_component::IndexPath::default().row(language_idx)),
-                window,
-                cx,
-            );
-        });
+        self.settings_editor.selected_language = language_idx;
+        self.settings_editor
+            .language_select
+            .update(cx, |state, cx| {
+                state.set_selected_index(
+                    Some(gpui_component::IndexPath::default().row(language_idx)),
+                    window,
+                    cx,
+                );
+            });
     }
 
     pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous_theme = Settings::read(cx, |s| s.theme.clone());
         let next_theme = ThemeId::all()
-            .get(self.selected_theme)
+            .get(self.settings_editor.selected_theme)
             .cloned()
             .unwrap_or_default();
 
@@ -250,23 +271,31 @@ impl RopyBoard {
                 window,
                 cx,
                 &previous_theme,
-                self.window_opacity_percent,
+                self.settings_editor.window_opacity_percent,
             );
-            crate::gui::app::apply_window_opacity(window, self.window_opacity_percent);
+            crate::gui::app::apply_window_opacity(
+                window,
+                self.settings_editor.window_opacity_percent,
+            );
             Self::notify_settings_save_failed(window, cx, &error_message);
             cx.notify();
             return;
         }
 
-        crate::gui::app::set_app_theme(window, cx, &next_theme, self.window_opacity_percent);
-        crate::gui::app::apply_window_opacity(window, self.window_opacity_percent);
+        crate::gui::app::set_app_theme(
+            window,
+            cx,
+            &next_theme,
+            self.settings_editor.window_opacity_percent,
+        );
+        crate::gui::app::apply_window_opacity(window, self.settings_editor.window_opacity_percent);
         cx.notify();
     }
 
     pub(crate) fn save_selected_language(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous_language = Settings::read(cx, |s| s.language.clone());
         let next_language = Language::all()
-            .get(self.selected_language)
+            .get(self.settings_editor.selected_language)
             .cloned()
             .unwrap_or_default();
 
@@ -300,7 +329,7 @@ impl RopyBoard {
 
     pub(crate) fn save_window_opacity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous_opacity = Settings::read(cx, |s| s.window.opacity_percent);
-        let next_opacity = self.window_opacity_percent;
+        let next_opacity = self.settings_editor.window_opacity_percent;
 
         if next_opacity == previous_opacity {
             return;
@@ -310,10 +339,10 @@ impl RopyBoard {
             settings.window.opacity_percent = next_opacity;
             settings.window.normalize_opacity();
         }) {
-            self.window_opacity_percent = previous_opacity;
+            self.settings_editor.window_opacity_percent = previous_opacity;
             self.sync_window_opacity_slider(previous_opacity, window, cx);
             let theme = ThemeId::all()
-                .get(self.selected_theme)
+                .get(self.settings_editor.selected_theme)
                 .cloned()
                 .unwrap_or_default();
             crate::gui::app::set_app_theme(window, cx, &theme, previous_opacity);
@@ -344,9 +373,13 @@ impl RopyBoard {
         }
 
         if activation_key == current_hotkey {
-            self.hotkey_recording = false;
-            self.pending_hotkey.clone_from(&activation_key);
-            self.hotkey_before_recording.clone_from(&activation_key);
+            self.settings_editor.hotkey_recording = false;
+            self.settings_editor
+                .pending_hotkey
+                .clone_from(&activation_key);
+            self.settings_editor
+                .hotkey_before_recording
+                .clone_from(&activation_key);
             self.sync_activation_key_input("", &activation_key, window, cx);
             cx.notify();
             return;
@@ -360,9 +393,13 @@ impl RopyBoard {
             return;
         }
 
-        self.hotkey_recording = false;
-        self.pending_hotkey.clone_from(&activation_key);
-        self.hotkey_before_recording.clone_from(&activation_key);
+        self.settings_editor.hotkey_recording = false;
+        self.settings_editor
+            .pending_hotkey
+            .clone_from(&activation_key);
+        self.settings_editor
+            .hotkey_before_recording
+            .clone_from(&activation_key);
         self.sync_activation_key_input("", &activation_key, window, cx);
 
         if let Some(tx) = &self.hotkey_tx {
@@ -377,7 +414,12 @@ impl RopyBoard {
         let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
-        let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
+        let max_history_input = self
+            .settings_editor
+            .settings_max_history_input
+            .read(cx)
+            .value()
+            .to_string();
         let Ok(max_history) =
             Self::parse_max_history_input(&max_history_input, current_max_history)
         else {
@@ -399,9 +441,11 @@ impl RopyBoard {
         }
 
         if max_history == current_max_history {
-            self.settings_max_history_input.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-            });
+            self.settings_editor
+                .settings_max_history_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             cx.notify();
             return;
         }
@@ -413,10 +457,12 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_max_history_input.update(cx, |input, cx| {
-            input.set_placeholder(max_history.to_string(), window, cx);
-            input.set_value("", window, cx);
-        });
+        self.settings_editor
+            .settings_max_history_input
+            .update(cx, |input, cx| {
+                input.set_placeholder(max_history.to_string(), window, cx);
+                input.set_value("", window, cx);
+            });
         self.refresh_records_from_repository(cx);
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
@@ -426,7 +472,12 @@ impl RopyBoard {
         let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
-        let max_storage_input = self.settings_max_storage_input.read(cx).value().to_string();
+        let max_storage_input = self
+            .settings_editor
+            .settings_max_storage_input
+            .read(cx)
+            .value()
+            .to_string();
         let Ok(max_storage) =
             Self::parse_max_storage_input(&max_storage_input, current_max_storage)
         else {
@@ -448,9 +499,11 @@ impl RopyBoard {
         }
 
         if max_storage == current_max_storage {
-            self.settings_max_storage_input.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-            });
+            self.settings_editor
+                .settings_max_storage_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             cx.notify();
             return;
         }
@@ -462,10 +515,12 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_max_storage_input.update(cx, |input, cx| {
-            input.set_placeholder(max_storage.to_string(), window, cx);
-            input.set_value("", window, cx);
-        });
+        self.settings_editor
+            .settings_max_storage_input
+            .update(cx, |input, cx| {
+                input.set_placeholder(max_storage.to_string(), window, cx);
+                input.set_value("", window, cx);
+            });
 
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
@@ -483,7 +538,7 @@ impl RopyBoard {
 
     pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let previous_value = Settings::read(cx, |s| s.autostart.enabled);
-        let next_value = !self.autostart_enabled;
+        let next_value = !self.settings_editor.autostart_enabled;
 
         if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
             settings.autostart.enabled = next_value;
@@ -499,7 +554,7 @@ impl RopyBoard {
             }) {
                 Self::notify_settings_save_failed(window, cx, &rollback_error);
             }
-            self.autostart_enabled = Settings::read(cx, |s| s.autostart.enabled);
+            self.settings_editor.autostart_enabled = Settings::read(cx, |s| s.autostart.enabled);
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -509,7 +564,7 @@ impl RopyBoard {
             return;
         }
 
-        self.autostart_enabled = next_value;
+        self.settings_editor.autostart_enabled = next_value;
         cx.notify();
     }
 
@@ -553,7 +608,7 @@ impl RopyBoard {
             return;
         }
 
-        self.auto_check_enabled = enabled;
+        self.settings_editor.auto_check_enabled = enabled;
         cx.notify();
     }
 
@@ -575,7 +630,7 @@ impl RopyBoard {
             return;
         }
 
-        self.hover_preview_enabled = enabled;
+        self.settings_editor.hover_preview_enabled = enabled;
         cx.notify();
     }
 

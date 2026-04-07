@@ -98,7 +98,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
 
 /// Render the update section with status and action button.
 fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let status_text: gpui::SharedString = match &board.update_status {
+    let status_text: gpui::SharedString = match &board.update_manager.status {
         UpdateStatus::Idle => I18n::translate(cx, "update_check_now").into(),
         UpdateStatus::Checking => I18n::translate(cx, "update_checking").into(),
         UpdateStatus::Available(info) => format!(
@@ -128,13 +128,13 @@ fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
             friendly_msg.into()
         }
     };
-    let status_color = match &board.update_status {
+    let status_color = match &board.update_manager.status {
         UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,
         UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
         _ => cx.theme().muted_foreground,
     };
 
-    let action_button: Option<Button> = match &board.update_status {
+    let action_button: Option<Button> = match &board.update_manager.status {
         UpdateStatus::Available(_) => Some(
             Button::new("update-download-button")
                 .small()

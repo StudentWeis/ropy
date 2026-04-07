@@ -121,6 +121,80 @@ pub(super) enum ClearConfirmAction {
     OrdinaryRecords,
 }
 
+#[allow(clippy::redundant_pub_crate)]
+#[allow(clippy::struct_excessive_bools)]
+pub(crate) struct SettingsEditor {
+    pub(crate) hotkey_recording: bool,
+    pub(crate) pending_hotkey: String,
+    pub(crate) hotkey_before_recording: String,
+    pub(crate) settings_activation_key_input: Entity<InputState>,
+    pub(crate) settings_max_history_input: Entity<InputState>,
+    pub(crate) settings_max_storage_input: Entity<InputState>,
+    pub(crate) settings_window_opacity_slider: Entity<SliderState>,
+    pub(crate) settings_window_opacity_slider_visible: bool,
+    pub(crate) selected_theme: usize,
+    pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) window_opacity_percent: u8,
+    pub(crate) autostart_enabled: bool,
+    pub(crate) selected_language: usize,
+    pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) auto_check_enabled: bool,
+    pub(crate) hover_preview_enabled: bool,
+}
+
+impl SettingsEditor {
+    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::missing_const_for_fn)]
+    fn new(
+        pending_hotkey: String,
+        hotkey_before_recording: String,
+        settings_activation_key_input: Entity<InputState>,
+        settings_max_history_input: Entity<InputState>,
+        settings_max_storage_input: Entity<InputState>,
+        settings_window_opacity_slider: Entity<SliderState>,
+        selected_theme: usize,
+        theme_select: Entity<SelectState<Vec<SharedString>>>,
+        window_opacity_percent: u8,
+        autostart_enabled: bool,
+        selected_language: usize,
+        language_select: Entity<SelectState<Vec<SharedString>>>,
+        auto_check_enabled: bool,
+        hover_preview_enabled: bool,
+    ) -> Self {
+        Self {
+            hotkey_recording: false,
+            pending_hotkey,
+            hotkey_before_recording,
+            settings_activation_key_input,
+            settings_max_history_input,
+            settings_max_storage_input,
+            settings_window_opacity_slider,
+            settings_window_opacity_slider_visible: false,
+            selected_theme,
+            theme_select,
+            window_opacity_percent,
+            autostart_enabled,
+            selected_language,
+            language_select,
+            auto_check_enabled,
+            hover_preview_enabled,
+        }
+    }
+}
+
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) struct UpdateManager {
+    pub(crate) status: UpdateStatus,
+}
+
+impl UpdateManager {
+    const fn new() -> Self {
+        Self {
+            status: UpdateStatus::Idle,
+        }
+    }
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -138,31 +212,13 @@ pub struct RopyBoard {
     pub(crate) show_about: bool,
     pub(crate) show_help: bool,
     pub(crate) show_preview: bool,
-    pub(crate) hotkey_recording: bool,
-    pub(crate) pending_hotkey: String,
-    pub(crate) hotkey_before_recording: String,
-    pub(crate) settings_activation_key_input: Entity<InputState>,
-    pub(crate) settings_max_history_input: Entity<InputState>,
-    pub(crate) settings_max_storage_input: Entity<InputState>,
-    pub(crate) settings_window_opacity_slider: Entity<SliderState>,
-    pub(crate) settings_window_opacity_slider_visible: bool,
-    pub(crate) selected_theme: usize, // Index into ThemeId::all()
-    pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
-    pub(crate) window_opacity_percent: u8,
-    pub(crate) autostart_enabled: bool,
+    pub(crate) settings_editor: SettingsEditor,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) pinned: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
-    pub(crate) selected_language: usize, // Index into Language::all()
-    pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
     /// Track if we're in a delete operation to preserve scroll position
     pub(crate) deleting_record: bool,
-    /// Current auto-update status
-    pub(crate) update_status: UpdateStatus,
-    /// Whether auto-check for updates is enabled (mirrors settings)
-    pub(crate) auto_check_enabled: bool,
-    /// Whether hover preview is enabled (mirrors settings)
-    pub(crate) hover_preview_enabled: bool,
+    pub(crate) update_manager: UpdateManager,
     /// Whether the clear-all confirmation dialog is visible
     pub(crate) show_clear_confirm: bool,
     /// Which clear action is currently awaiting confirmation
@@ -189,12 +245,13 @@ impl RopyBoard {
     }
 
     pub(crate) fn main_panel_surface(&self, color: gpui::Hsla) -> gpui::Hsla {
-        surface_with_opacity(color, self.window_opacity_percent)
+        surface_with_opacity(color, self.settings_editor.window_opacity_percent)
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.show_settings = true;
-        self.settings_window_opacity_slider_visible = false;
+        self.settings_editor.settings_window_opacity_slider_visible = false;
         window.focus(&self.focus_handle);
 
         let entity = cx.entity();
@@ -204,7 +261,7 @@ impl RopyBoard {
                     return;
                 }
 
-                board.settings_window_opacity_slider_visible = true;
+                board.settings_editor.settings_window_opacity_slider_visible = true;
                 window.focus(&board.focus_handle);
                 cx.notify();
             });
@@ -234,9 +291,9 @@ impl RopyBoard {
             |this, _, event: &SliderEvent, window, cx| {
                 let SliderEvent::Change(value) = event;
                 let opacity_percent = value.start().round() as u8;
-                this.window_opacity_percent = opacity_percent;
+                this.settings_editor.window_opacity_percent = opacity_percent;
                 let theme = ThemeId::all()
-                    .get(this.selected_theme)
+                    .get(this.settings_editor.selected_theme)
                     .cloned()
                     .unwrap_or_default();
                 // Keep window-level transparency and theme surface alpha in sync for immediate feedback.
@@ -256,9 +313,11 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.settings_window_opacity_slider.update(cx, |slider, cx| {
-            slider.set_value(f32::from(opacity_percent), window, cx);
-        });
+        self.settings_editor
+            .settings_window_opacity_slider
+            .update(cx, |slider, cx| {
+                slider.set_value(f32::from(opacity_percent), window, cx);
+            });
     }
 
     #[allow(clippy::missing_const_for_fn)]
@@ -421,7 +480,7 @@ impl RopyBoard {
                         .iter()
                         .position(|theme| theme.display_name() == val.as_ref())
                     {
-                        this.selected_theme = idx;
+                        this.settings_editor.selected_theme = idx;
                         this.save_selected_theme(window, cx);
                     }
                 }
@@ -454,7 +513,7 @@ impl RopyBoard {
                 if let SelectEvent::Confirm(Some(val)) = event {
                     let langs = Language::all();
                     if let Some(idx) = langs.iter().position(|l| l.display_name() == val.as_ref()) {
-                        this.selected_language = idx;
+                        this.settings_editor.selected_language = idx;
                         this.save_selected_language(window, cx);
                     }
                 }
@@ -464,6 +523,22 @@ impl RopyBoard {
 
         let search_input = cx.new(|cx| InputState::new(window, cx));
         let favorite_ids = Arc::new(Self::load_favorite_ids(cx));
+        let settings_editor = SettingsEditor::new(
+            activation_key.clone(),
+            activation_key,
+            settings_activation_key_input,
+            settings_max_history_input,
+            settings_max_storage_input,
+            settings_window_opacity_slider,
+            selected_theme,
+            theme_select,
+            window_opacity_percent,
+            autostart_enabled,
+            selected_language,
+            language_select,
+            auto_check_enabled,
+            hover_preview_enabled,
+        );
 
         Self {
             records,
@@ -480,27 +555,12 @@ impl RopyBoard {
             show_about: false,
             show_help: false,
             show_preview: false,
-            hotkey_recording: false,
-            pending_hotkey: activation_key.clone(),
-            hotkey_before_recording: activation_key,
-            settings_activation_key_input,
-            settings_max_history_input,
-            settings_max_storage_input,
-            settings_window_opacity_slider,
-            settings_window_opacity_slider_visible: false,
-            selected_theme,
-            theme_select,
-            window_opacity_percent,
-            autostart_enabled,
+            settings_editor,
             confirm_mode,
             pinned: false,
             hotkey_tx: None,
-            selected_language,
-            language_select,
             deleting_record: false,
-            update_status: UpdateStatus::Idle,
-            auto_check_enabled,
-            hover_preview_enabled,
+            update_manager: UpdateManager::new(),
             show_clear_confirm: false,
             clear_confirm_action: ClearConfirmAction::AllHistory,
             content_filter: ContentFilter::default(),
@@ -918,6 +978,11 @@ mod tests {
             ConfirmMode::PasteImmediately,
             false,
         ));
+    }
+
+    #[test]
+    fn test_update_manager_new_starts_idle() {
+        assert!(matches!(UpdateManager::new().status, UpdateStatus::Idle));
     }
 
     #[test]

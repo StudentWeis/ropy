@@ -6,7 +6,7 @@ use crate::{config::Settings, updater::models::UpdateStatus};
 impl RopyBoard {
     /// Trigger a manual update check in the background
     pub fn check_for_update_async(&mut self, cx: &mut Context<Self>) {
-        self.update_status = UpdateStatus::Checking;
+        self.update_manager.status = UpdateStatus::Checking;
         cx.notify();
 
         let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);
@@ -34,14 +34,14 @@ impl RopyBoard {
             let _ = this.update(cx, |board, cx| {
                 match result {
                     Ok(Some(info)) => {
-                        board.update_status = UpdateStatus::Available(info);
+                        board.update_manager.status = UpdateStatus::Available(info);
                     }
                     Ok(None) => {
-                        board.update_status = UpdateStatus::UpToDate;
+                        board.update_manager.status = UpdateStatus::UpToDate;
                     }
                     Err(e) => {
                         tracing::warn!(error = ?e, "update check failed");
-                        board.update_status = UpdateStatus::Error(e.to_string());
+                        board.update_manager.status = UpdateStatus::Error(e.to_string());
                     }
                 }
                 cx.notify();
@@ -52,11 +52,11 @@ impl RopyBoard {
 
     /// Trigger download and install in the background with progress updates
     pub fn download_and_install_update(&mut self, cx: &mut Context<Self>) {
-        let release = match &self.update_status {
+        let release = match &self.update_manager.status {
             UpdateStatus::Available(info) => info.clone(),
             _ => return,
         };
-        self.update_status = UpdateStatus::Downloading(0.0);
+        self.update_manager.status = UpdateStatus::Downloading(0.0);
         cx.notify();
 
         let (progress_tx, progress_rx) = async_channel::unbounded::<f32>();
@@ -78,7 +78,7 @@ impl RopyBoard {
             // is dropped (download finishes or fails).
             while let Ok(progress) = progress_rx.recv().await {
                 let _ = this.update(cx, |board, cx| {
-                    board.update_status = UpdateStatus::Downloading(progress);
+                    board.update_manager.status = UpdateStatus::Downloading(progress);
                     cx.notify();
                 });
             }
@@ -93,11 +93,11 @@ impl RopyBoard {
             let _ = this.update(cx, |board, cx| {
                 match result {
                     Ok(()) => {
-                        board.update_status = UpdateStatus::ReadyToRestart;
+                        board.update_manager.status = UpdateStatus::ReadyToRestart;
                     }
                     Err(e) => {
                         tracing::error!(error = ?e, "update installation failed");
-                        board.update_status = UpdateStatus::Error(e.to_string());
+                        board.update_manager.status = UpdateStatus::Error(e.to_string());
                     }
                 }
                 cx.notify();

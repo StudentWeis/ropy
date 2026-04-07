@@ -137,7 +137,7 @@ fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoE
         h_flex().flex_1().justify_end().child(
             div()
                 .w(px(148.0))
-                .child(Select::new(&board.language_select).small()),
+                .child(Select::new(&board.settings_editor.language_select).small()),
         ),
         cx,
     )
@@ -149,7 +149,7 @@ fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElem
         h_flex().flex_1().justify_end().child(
             div()
                 .w(px(148.0))
-                .child(Select::new(&board.theme_select).small()),
+                .child(Select::new(&board.settings_editor.theme_select).small()),
         ),
         cx,
     )
@@ -171,15 +171,17 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
             .items_center()
             .gap_2()
             .child(
-                Slider::new(&board.settings_window_opacity_slider)
+                Slider::new(&board.settings_editor.settings_window_opacity_slider)
                     .flex_1()
                     .bg(cx.theme().accent)
                     .text_color(cx.theme().accent_foreground)
-                    .opacity(if board.settings_window_opacity_slider_visible {
-                        1.0_f32
-                    } else {
-                        0.0_f32
-                    }),
+                    .opacity(
+                        if board.settings_editor.settings_window_opacity_slider_visible {
+                            1.0_f32
+                        } else {
+                            0.0_f32
+                        },
+                    ),
             )
             .child(
                 div()
@@ -187,7 +189,7 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
                     .text_right()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child(format!("{}%", board.window_opacity_percent)),
+                    .child(format!("{}%", board.settings_editor.window_opacity_percent)),
             )
             .on_mouse_up(
                 gpui::MouseButton::Left,
@@ -208,19 +210,19 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
 fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let is_dirty = board.has_pending_hotkey(cx);
 
-    let border_color = if board.hotkey_recording {
+    let border_color = if board.settings_editor.hotkey_recording {
         cx.theme().accent
     } else {
         cx.theme().border
     };
 
-    let record_tooltip = if board.hotkey_recording {
+    let record_tooltip = if board.settings_editor.hotkey_recording {
         I18n::translate(cx, "settings_hotkey_record_hint")
     } else {
         I18n::translate(cx, "settings_hotkey_record")
     };
 
-    let record_button = if board.hotkey_recording {
+    let record_button = if board.settings_editor.hotkey_recording {
         Button::new("hotkey-record-button").primary()
     } else {
         Button::new("hotkey-record-button")
@@ -244,7 +246,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
         .py_1()
         .child(
             div().flex_1().min_w_0().child(
-                Input::new(&board.settings_activation_key_input)
+                Input::new(&board.settings_editor.settings_activation_key_input)
                     .appearance(false)
                     .px_2()
                     .py_1(),
@@ -258,7 +260,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .icon(Icon::empty().path("icon/hotkey-record.svg").size(px(14.0)))
                 .tooltip(record_tooltip)
                 .on_click(cx.listener(|board, _, window, cx| {
-                    if board.hotkey_recording {
+                    if board.settings_editor.hotkey_recording {
                         board.cancel_hotkey_recording(window, cx);
                     } else {
                         board.start_hotkey_recording(window, cx);
@@ -301,7 +303,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
             .py_1()
             .child(
                 div().flex_1().min_w_0().child(
-                    Input::new(&board.settings_max_history_input)
+                    Input::new(&board.settings_editor.settings_max_history_input)
                         .appearance(false)
                         .px_2()
                         .py_1(),
@@ -344,7 +346,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
             .py_1()
             .child(
                 div().flex_1().min_w_0().child(
-                    Input::new(&board.settings_max_storage_input)
+                    Input::new(&board.settings_editor.settings_max_storage_input)
                         .appearance(false)
                         .px_2()
                         .py_1(),
@@ -368,7 +370,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let entity = cx.entity();
     let toggle = Switch::new("autostart-toggle")
-        .checked(board.autostart_enabled)
+        .checked(board.settings_editor.autostart_enabled)
         .on_click(move |_, window, cx| {
             entity.update(cx, |board, cx| {
                 board.toggle_autostart(window, cx);
@@ -407,10 +409,14 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let entity = cx.entity();
     let toggle = Switch::new("hover-preview-toggle")
-        .checked(board.hover_preview_enabled)
+        .checked(board.settings_editor.hover_preview_enabled)
         .on_click(move |_, window, cx| {
             entity.update(cx, |board, cx| {
-                board.save_hover_preview_enabled(!board.hover_preview_enabled, window, cx);
+                board.save_hover_preview_enabled(
+                    !board.settings_editor.hover_preview_enabled,
+                    window,
+                    cx,
+                );
             });
         });
     settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
@@ -491,10 +497,14 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let entity = cx.entity();
     let toggle = Switch::new("auto-check-toggle")
-        .checked(board.auto_check_enabled)
+        .checked(board.settings_editor.auto_check_enabled)
         .on_click(move |_, window, cx| {
             entity.update(cx, |board, cx| {
-                board.save_auto_check_enabled(!board.auto_check_enabled, window, cx);
+                board.save_auto_check_enabled(
+                    !board.settings_editor.auto_check_enabled,
+                    window,
+                    cx,
+                );
             });
         });
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
@@ -526,37 +536,49 @@ pub fn reset_settings_dialog(
                 s.window.opacity_percent,
             )
         });
-    board.selected_language = lang_idx;
-    board.selected_theme = theme_idx;
-    board.autostart_enabled = autostart;
-    board.auto_check_enabled = auto_check;
+    board.settings_editor.selected_language = lang_idx;
+    board.settings_editor.selected_theme = theme_idx;
+    board.settings_editor.autostart_enabled = autostart;
+    board.settings_editor.auto_check_enabled = auto_check;
     board.confirm_mode = confirm_mode;
-    board.window_opacity_percent = window_opacity;
-    board.pending_hotkey.clone_from(&activation_key);
-    board.hotkey_before_recording = activation_key;
-    board.hotkey_recording = false;
+    board.settings_editor.window_opacity_percent = window_opacity;
+    board
+        .settings_editor
+        .pending_hotkey
+        .clone_from(&activation_key);
+    board.settings_editor.hotkey_before_recording = activation_key;
+    board.settings_editor.hotkey_recording = false;
 
     // Reset the language select dropdown
-    board.language_select.update(cx, |state, cx| {
-        state.set_selected_index(Some(IndexPath::default().row(lang_idx)), window, cx);
-    });
-    board.theme_select.update(cx, |state, cx| {
+    board
+        .settings_editor
+        .language_select
+        .update(cx, |state, cx| {
+            state.set_selected_index(Some(IndexPath::default().row(lang_idx)), window, cx);
+        });
+    board.settings_editor.theme_select.update(cx, |state, cx| {
         state.set_selected_index(Some(IndexPath::default().row(theme_idx)), window, cx);
     });
 
     // Clear input fields
-    board.settings_max_history_input.update(cx, |input, cx| {
-        input.set_value("", window, cx);
-    });
-    board.settings_max_storage_input.update(cx, |input, cx| {
-        input.set_value("", window, cx);
-    });
-    board.settings_window_opacity_slider_visible = false;
+    board
+        .settings_editor
+        .settings_max_history_input
+        .update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+    board
+        .settings_editor
+        .settings_max_storage_input
+        .update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+    board.settings_editor.settings_window_opacity_slider_visible = false;
     board.sync_window_opacity_slider(window_opacity, window, cx);
     let theme = ThemeId::all().get(theme_idx).cloned().unwrap_or_default();
     crate::gui::app::set_app_theme(window, cx, &theme, window_opacity);
     crate::gui::app::apply_window_opacity(window, window_opacity);
-    let current_hotkey = board.pending_hotkey.clone();
+    let current_hotkey = board.settings_editor.pending_hotkey.clone();
     board.sync_activation_key_input("", &current_hotkey, window, cx);
 
     board.show_settings = false;

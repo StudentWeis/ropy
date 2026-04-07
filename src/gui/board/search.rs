@@ -178,7 +178,7 @@ fn create_search_option_button(
 
 fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
     create_search_option_button(
-        board.window_opacity_percent,
+        board.settings_editor.window_opacity_percent,
         "search-case-sensitive-btn",
         "Aa",
         board.search_options.case_sensitive,
@@ -194,7 +194,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
 
 fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
     create_search_option_button(
-        board.window_opacity_percent,
+        board.settings_editor.window_opacity_percent,
         "search-whole-word-btn",
         "W",
         board.search_options.whole_word,
@@ -232,7 +232,7 @@ fn render_search_separator(cx: &gpui::App) -> impl IntoElement {
 
 /// Render the search input field with search options
 fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let opacity_percent = board.window_opacity_percent;
+    let opacity_percent = board.settings_editor.window_opacity_percent;
 
     h_flex()
         .flex_1()
@@ -263,7 +263,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
     let text_filter_tooltip = I18n::translate(cx, "filter_text");
     let image_filter_tooltip = I18n::translate(cx, "filter_image");
     let files_filter_tooltip = I18n::translate(cx, "filter_files");
-    let opacity_percent = board.window_opacity_percent;
+    let opacity_percent = board.settings_editor.window_opacity_percent;
 
     let text_button = if board.content_filter == ContentFilter::Text {
         Button::new("filter-text-btn").primary()
@@ -329,7 +329,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
 /// Render favorites filter button (separate from other filter buttons, with capsule wrapper)
 fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
-    let opacity_percent = board.window_opacity_percent;
+    let opacity_percent = board.settings_editor.window_opacity_percent;
 
     let favorites_button = if board.favorites_only {
         Button::new("filter-favorites-btn").primary()

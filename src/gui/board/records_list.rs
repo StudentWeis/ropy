@@ -510,8 +510,9 @@ impl RopyBoard {
         let scrollbar_state = list_state.clone();
         let selected_index = self.selected_index;
         let show_preview = self.show_preview;
-        let hover_preview_enabled = self.hover_preview_enabled && !self.show_clear_confirm;
-        let opacity_percent = self.window_opacity_percent;
+        let hover_preview_enabled =
+            self.settings_editor.hover_preview_enabled && !self.show_clear_confirm;
+        let opacity_percent = self.settings_editor.window_opacity_percent;
         let view = context.weak_entity();
 
         div()
