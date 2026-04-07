@@ -10,7 +10,7 @@ use gpui_component::{
 };
 
 use crate::{
-    constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, i18n::I18n, updater::models::UpdateStatus,
+    constants::BACK_ARROW, gui::board::RopyBoard, i18n::I18n, updater::models::UpdateStatus,
 };
 
 /// Render the about panel content
@@ -26,7 +26,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             Button::new("back-button")
                 .small()
                 .ghost()
-                .label(ABOUT_BACK_ARROW)
+                .label(BACK_ARROW)
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.show_about = false;
                     window.focus(&board.focus_handle);

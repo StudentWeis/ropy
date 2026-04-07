@@ -14,4 +14,4 @@ pub const APP_NAME: &str = "Ropy";
 pub const SILENT_ARG: &str = "--silent";
 
 /// Arrow used for the "back" button in the about panel.
-pub const ABOUT_BACK_ARROW: &str = "←";
+pub const BACK_ARROW: &str = "←";

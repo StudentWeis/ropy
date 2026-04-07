@@ -93,8 +93,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                         .icon(Icon::empty().path("icon/settings.svg"))
                         .tooltip(I18n::translate(cx, "settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
-                            this.show_settings = true;
-                            window.focus(&this.focus_handle);
+                            this.open_settings_panel(window, cx);
                             cx.notify();
                         }))
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),

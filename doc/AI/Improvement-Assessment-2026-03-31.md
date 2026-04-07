@@ -4,8 +4,6 @@ This document records a comprehensive improvement review of the current Ropy cod
 
 ## Priority Findings
 
-- CONTRIBUTING
-- 设置页优化
 - RFT 支持
 - redb 支持
 
@@ -43,10 +41,3 @@ The `release.yml` workflow only builds and publishes. There is no PR-level workf
 
 - Recommendation:
   - Add a `ci.yml` workflow triggered on pull requests.
-
-### 2. Missing documentation comments
-
-Some modules have good doc comments (`updater/checker.rs`, `utils/hash.rs`), but many public functions lack documentation entirely.
-
-- Recommendation:
-  - Add `#![warn(missing_docs)]` to enforce documentation on public APIs incrementally.

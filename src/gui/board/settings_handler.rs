@@ -5,7 +5,7 @@ use gpui_component::{WindowExt, notification::Notification};
 
 use super::RopyBoard;
 use crate::{
-    config::Settings,
+    config::{ConfirmMode, Settings},
     gui::theme::ThemeId,
     i18n::{I18n, Language},
     repository::GlobalRepository,
@@ -14,140 +14,453 @@ use crate::{
 const SETTINGS_NOTIFICATION_MAX_WIDTH_PX: f32 = 280.0;
 
 impl RopyBoard {
-    pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
-        if self.hotkey_manual_editing {
-            self.settings_activation_key_input
-                .read(cx)
-                .value()
-                .trim()
-                .to_string()
+    pub(crate) fn hotkey_placeholder_text(hotkey: &str, cx: &Context<Self>) -> gpui::SharedString {
+        if hotkey.trim().is_empty() {
+            I18n::translate(cx, "settings_hotkey_empty").into()
         } else {
-            self.pending_hotkey.trim().to_string()
+            hotkey.trim().to_owned().into()
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub(crate) fn save_settings(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        self.hotkey_recording = false;
-        let mut activation_key = self.resolve_activation_key_input(cx);
-
-        let mut is_hotkey_invalid = false;
-        if activation_key.is_empty() {
-            let current_key = Settings::read(cx, |s| s.hotkey.activation_key.clone());
-            activation_key = if current_key.is_empty() {
-                Settings::default().hotkey.activation_key
-            } else {
-                current_key
-            };
-        } else if global_hotkey::hotkey::HotKey::from_str(&activation_key).is_err() {
-            is_hotkey_invalid = true;
-            activation_key = Settings::default().hotkey.activation_key;
+    fn resolve_hotkey_candidate_input(
+        input: &str,
+        pending_hotkey: &str,
+        current_hotkey: &str,
+    ) -> String {
+        let trimmed_input = input.trim();
+        if !trimmed_input.is_empty() {
+            return trimmed_input.to_string();
         }
 
-        self.pending_hotkey.clone_from(&activation_key);
-        self.hotkey_before_recording.clone_from(&activation_key);
-        self.hotkey_manual_editing = false;
+        if pending_hotkey.trim() != current_hotkey.trim() {
+            return pending_hotkey.trim().to_string();
+        }
 
-        // Get current values from GPUI Global settings as fallback
-        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
-            (s.storage.max_history_records, s.storage.max_storage_records)
+        current_hotkey.trim().to_string()
+    }
+
+    fn normalize_hotkey_for_save(candidate_hotkey: &str, current_hotkey: &str) -> String {
+        let trimmed_candidate = candidate_hotkey.trim();
+        if !trimmed_candidate.is_empty() {
+            return trimmed_candidate.to_string();
+        }
+
+        let trimmed_current = current_hotkey.trim();
+        if !trimmed_current.is_empty() {
+            return trimmed_current.to_string();
+        }
+
+        Settings::default().hotkey.activation_key
+    }
+
+    pub(crate) fn refresh_activation_key_placeholder(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+        let placeholder = Self::hotkey_placeholder_text(&current_hotkey, cx);
+
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_placeholder(placeholder.clone(), window, cx);
+        });
+    }
+
+    pub(crate) fn sync_activation_key_input(
+        &self,
+        value: &str,
+        placeholder_hotkey: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let next_value = value.to_string();
+        let placeholder = Self::hotkey_placeholder_text(placeholder_hotkey, cx);
+
+        self.settings_activation_key_input.update(cx, |input, cx| {
+            input.set_placeholder(placeholder.clone(), window, cx);
+            input.set_value(next_value.clone(), window, cx);
+        });
+    }
+
+    pub(crate) fn sync_activation_key_input_from_candidate(
+        &self,
+        candidate: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+        let value = if candidate.trim() == current_hotkey.trim() {
+            ""
+        } else {
+            candidate.trim()
+        };
+
+        self.sync_activation_key_input(value, &current_hotkey, window, cx);
+    }
+
+    pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
+        let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+        let input_value = self
+            .settings_activation_key_input
+            .read(cx)
+            .value()
+            .to_string();
+
+        Self::resolve_hotkey_candidate_input(&input_value, &self.pending_hotkey, &current_hotkey)
+    }
+
+    pub(crate) fn has_pending_hotkey(&self, cx: &Context<Self>) -> bool {
+        let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+        let candidate_hotkey = self.resolve_activation_key_input(cx);
+
+        Self::normalize_hotkey_for_save(&candidate_hotkey, &current_hotkey) != current_hotkey
+    }
+
+    pub(crate) fn has_pending_max_history(&self, cx: &Context<Self>) -> bool {
+        let current_max_history = Settings::read(cx, |s| s.storage.max_history_records);
+        let input = self.settings_max_history_input.read(cx).value().to_string();
+        Self::has_pending_numeric_input(&input, current_max_history, Self::parse_max_history_input)
+    }
+
+    pub(crate) fn has_pending_max_storage(&self, cx: &Context<Self>) -> bool {
+        let current_max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
+        let input = self.settings_max_storage_input.read(cx).value().to_string();
+        Self::has_pending_numeric_input(&input, current_max_storage, Self::parse_max_storage_input)
+    }
+
+    fn push_settings_notification(
+        window: &mut Window,
+        notification: Notification,
+        cx: &mut Context<Self>,
+    ) {
+        window.push_notification(
+            notification
+                .w_auto()
+                .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
+            cx,
+        );
+    }
+
+    fn notify_settings_warning(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        message: impl Into<gpui::SharedString>,
+    ) {
+        Self::push_settings_notification(window, Notification::warning(message.into()), cx);
+    }
+
+    fn notify_settings_success(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        message: impl Into<gpui::SharedString>,
+    ) {
+        Self::push_settings_notification(window, Notification::success(message.into()), cx);
+    }
+
+    fn notify_settings_save_failed(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        error_message: &str,
+    ) {
+        let message = format!(
+            "{}: {}",
+            I18n::translate(cx, "settings_save_failed"),
+            error_message
+        );
+        Self::push_settings_notification(window, Notification::error(message), cx);
+    }
+
+    fn persist_settings_update(
+        cx: &mut Context<Self>,
+        updater: impl FnOnce(&mut Settings),
+    ) -> Result<(), String> {
+        let mut result = Ok(());
+        let mut updater = Some(updater);
+
+        cx.update_global::<Settings, _>(|settings, _cx| {
+            let previous = settings.clone();
+
+            if let Some(updater) = updater.take() {
+                updater(settings);
+            }
+
+            if let Err(error) = settings.save() {
+                tracing::warn!(error = %error, "failed to save settings");
+                *settings = previous;
+                result = Err(format!("{error}"));
+            }
         });
 
-        let window_opacity_percent = self.window_opacity_percent;
+        result
+    }
 
-        // Validate max_history input from the settings UI.
-        let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
+    fn set_theme_selection(
+        &mut self,
+        theme_idx: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.selected_theme = theme_idx;
+        self.theme_select.update(cx, |state, cx| {
+            state.set_selected_index(
+                Some(gpui_component::IndexPath::default().row(theme_idx)),
+                window,
+                cx,
+            );
+        });
+    }
 
-        let (max_history, is_max_history_invalid) =
-            match Self::parse_max_history_input(&max_history_input, current_max_history) {
-                Ok(v) => (v, false),
-                Err(()) => (current_max_history, true),
-            };
+    fn set_language_selection(
+        &mut self,
+        language_idx: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.selected_language = language_idx;
+        self.language_select.update(cx, |state, cx| {
+            state.set_selected_index(
+                Some(gpui_component::IndexPath::default().row(language_idx)),
+                window,
+                cx,
+            );
+        });
+    }
 
-        // Validate max_storage input from the settings UI.
-        let max_storage_input = self.settings_max_storage_input.read(cx).value().to_string();
-
-        let (mut max_storage, is_max_storage_invalid) =
-            match Self::parse_max_storage_input(&max_storage_input, current_max_storage) {
-                Ok(v) => (v, false),
-                Err(()) => (current_max_storage, true),
-            };
-
-        // Ensure max_storage >= max_history
-        let is_max_storage_lt_history = max_storage < max_history;
-        if is_max_storage_lt_history {
-            max_storage = max_history;
-        }
-
-        let theme = ThemeId::all()
+    pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous_theme = Settings::read(cx, |s| s.theme.clone());
+        let next_theme = ThemeId::all()
             .get(self.selected_theme)
             .cloned()
             .unwrap_or_default();
 
-        let language = Language::all()
+        if next_theme == previous_theme {
+            return;
+        }
+
+        let theme_to_save = next_theme.clone();
+        if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
+            settings.theme = theme_to_save;
+        }) {
+            let previous_theme_idx = ThemeId::all()
+                .iter()
+                .position(|theme_id| theme_id == &previous_theme)
+                .unwrap_or_default();
+            self.set_theme_selection(previous_theme_idx, window, cx);
+            crate::gui::app::set_app_theme(
+                window,
+                cx,
+                &previous_theme,
+                self.window_opacity_percent,
+            );
+            crate::gui::app::apply_window_opacity(window, self.window_opacity_percent);
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            cx.notify();
+            return;
+        }
+
+        crate::gui::app::set_app_theme(window, cx, &next_theme, self.window_opacity_percent);
+        crate::gui::app::apply_window_opacity(window, self.window_opacity_percent);
+        cx.notify();
+    }
+
+    pub(crate) fn save_selected_language(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous_language = Settings::read(cx, |s| s.language.clone());
+        let next_language = Language::all()
             .get(self.selected_language)
             .cloned()
             .unwrap_or_default();
 
-        // Update GPUI Global settings (auto-persists to disk)
-        let autostart_enabled = self.autostart_enabled;
-        let auto_check_enabled = self.auto_check_enabled;
-        let hover_preview_enabled = self.hover_preview_enabled;
-        let confirm_mode = self.confirm_mode;
-        let save_disk_error: Option<String> = {
-            let activation_key_ref = activation_key.clone();
-            let theme_ref = theme.clone();
-            let language_ref = language.clone();
-            let mut disk_error = None;
-            cx.update_global::<Settings, _>(|s, _cx| {
-                s.hotkey.activation_key.clone_from(&activation_key_ref);
-                s.storage.max_history_records = max_history;
-                s.storage.max_storage_records = max_storage;
-                s.theme = theme_ref;
-                s.autostart.enabled = autostart_enabled;
-                s.language = language_ref;
-                s.update.auto_check = auto_check_enabled;
-                s.preview.hover_preview_enabled = hover_preview_enabled;
-                s.confirm.mode = confirm_mode;
-                s.window.opacity_percent = window_opacity_percent;
-                s.window.normalize_opacity();
-                if let Err(e) = s.save() {
-                    tracing::warn!(error = %e, "failed to save settings");
-                    disk_error = Some(format!("{e}"));
-                }
-            });
-            disk_error
-        };
-
-        // Update hotkey if sender is available
-        if let Some(tx) = &self.hotkey_tx {
-            let _ = tx.try_send(activation_key.clone());
+        if next_language == previous_language {
+            return;
         }
 
-        // Apply the new language via Global
+        let language_to_save = next_language.clone();
+        if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
+            settings.language = language_to_save;
+        }) {
+            let previous_language_idx = Language::all()
+                .iter()
+                .position(|language| language == &previous_language)
+                .unwrap_or_default();
+            self.set_language_selection(previous_language_idx, window, cx);
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            cx.notify();
+            return;
+        }
+
         cx.update_global::<I18n, _>(|i18n: &mut I18n, _cx| {
-            if let Err(e) = i18n.set_language(language) {
-                tracing::warn!(error = ?e, "failed to set language");
+            if let Err(error) = i18n.set_language(next_language) {
+                tracing::warn!(error = ?error, "failed to set language");
             }
         });
-
-        // Update tray menu with new language
         Self::update_tray_menu(cx);
+        self.refresh_activation_key_placeholder(window, cx);
+        cx.notify();
+    }
 
-        // Sync auto-start state with system
-        let autostart_error = self.sync_autostart_state().err();
-        if let Some(ref e) = autostart_error {
-            tracing::warn!(error = ?e, "failed to sync auto-start state");
+    pub(crate) fn save_window_opacity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous_opacity = Settings::read(cx, |s| s.window.opacity_percent);
+        let next_opacity = self.window_opacity_percent;
+
+        if next_opacity == previous_opacity {
+            return;
         }
 
-        // Apply the new theme
-        crate::gui::app::set_app_theme(window, cx, &theme, window_opacity_percent);
-        crate::gui::app::apply_window_opacity(window, window_opacity_percent);
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.window.opacity_percent = next_opacity;
+            settings.window.normalize_opacity();
+        }) {
+            self.window_opacity_percent = previous_opacity;
+            self.sync_window_opacity_slider(previous_opacity, window, cx);
+            let theme = ThemeId::all()
+                .get(self.selected_theme)
+                .cloned()
+                .unwrap_or_default();
+            crate::gui::app::set_app_theme(window, cx, &theme, previous_opacity);
+            crate::gui::app::apply_window_opacity(window, previous_opacity);
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            cx.notify();
+            return;
+        }
+
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        cx.notify();
+    }
+
+    pub(crate) fn save_hotkey(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
+        let activation_key = Self::normalize_hotkey_for_save(
+            &self.resolve_activation_key_input(cx),
+            &current_hotkey,
+        );
+
+        if !activation_key.is_empty() && !Self::is_valid_hotkey_input(&activation_key) {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_hotkey_invalid_warning"),
+            );
+            return;
+        }
+
+        if activation_key == current_hotkey {
+            self.hotkey_recording = false;
+            self.pending_hotkey.clone_from(&activation_key);
+            self.hotkey_before_recording.clone_from(&activation_key);
+            self.sync_activation_key_input("", &activation_key, window, cx);
+            cx.notify();
+            return;
+        }
+
+        let activation_key_to_save = activation_key.clone();
+        if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
+            settings.hotkey.activation_key = activation_key_to_save;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.hotkey_recording = false;
+        self.pending_hotkey.clone_from(&activation_key);
+        self.hotkey_before_recording.clone_from(&activation_key);
+        self.sync_activation_key_input("", &activation_key, window, cx);
+
+        if let Some(tx) = &self.hotkey_tx {
+            let _ = tx.try_send(activation_key);
+        }
+
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        cx.notify();
+    }
+
+    pub(crate) fn save_max_history(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
+            (s.storage.max_history_records, s.storage.max_storage_records)
+        });
+        let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
+        let Ok(max_history) =
+            Self::parse_max_history_input(&max_history_input, current_max_history)
+        else {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_max_history_invalid_warning"),
+            );
+            return;
+        };
+
+        if !Self::is_valid_storage_pair(max_history, current_max_storage) {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_max_storage_lt_history_warning"),
+            );
+            return;
+        }
+
+        if max_history == current_max_history {
+            self.settings_max_history_input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
+            cx.notify();
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.storage.max_history_records = max_history;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
 
         self.settings_max_history_input.update(cx, |input, cx| {
             input.set_placeholder(max_history.to_string(), window, cx);
             input.set_value("", window, cx);
         });
+        self.refresh_records_from_repository(cx);
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        cx.notify();
+    }
+
+    pub(crate) fn save_max_storage(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
+            (s.storage.max_history_records, s.storage.max_storage_records)
+        });
+        let max_storage_input = self.settings_max_storage_input.read(cx).value().to_string();
+        let Ok(max_storage) =
+            Self::parse_max_storage_input(&max_storage_input, current_max_storage)
+        else {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_max_storage_invalid_warning"),
+            );
+            return;
+        };
+
+        if !Self::is_valid_storage_pair(current_max_history, max_storage) {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_max_storage_lt_history_warning"),
+            );
+            return;
+        }
+
+        if max_storage == current_max_storage {
+            self.settings_max_storage_input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
+            cx.notify();
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.storage.max_storage_records = max_storage;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
 
         self.settings_max_storage_input.update(cx, |input, cx| {
             input.set_placeholder(max_storage.to_string(), window, cx);
@@ -155,109 +468,149 @@ impl RopyBoard {
         });
 
         GlobalRepository::read(cx, |repo| {
-            if let Some(repo) = repo
-                && let Err(e) = repo.cleanup_old_records(max_storage)
-            {
-                tracing::warn!(error = %e, "failed to apply storage limit after saving settings");
+            let Some(repo) = repo else {
+                return;
+            };
+
+            if let Err(error) = repo.cleanup_old_records(max_storage) {
+                tracing::warn!(error = %error, "failed to apply storage limit after saving settings");
             }
         });
         self.refresh_records_from_repository(cx);
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        cx.notify();
+    }
 
-        // --- User notifications: auto width (content-driven), capped at 280px ---
-        if let Some(err_msg) = save_disk_error {
-            let msg = format!(
-                "✕  {}: {}",
-                I18n::translate(cx, "settings_save_failed"),
-                err_msg
-            );
-            window.push_notification(
-                Notification::new()
-                    .message(msg)
-                    .w_auto()
-                    .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                cx,
-            );
-        } else {
-            if is_hotkey_invalid {
-                let warn_msg = I18n::translate(cx, "settings_hotkey_invalid_warning");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("⚠  {warn_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
-            if is_max_history_invalid {
-                let warn_msg = I18n::translate(cx, "settings_max_history_invalid_warning");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("⚠  {warn_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
-            if is_max_storage_invalid {
-                let warn_msg = I18n::translate(cx, "settings_max_storage_invalid_warning");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("⚠  {warn_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
-            if is_max_storage_lt_history {
-                let warn_msg = I18n::translate(cx, "settings_max_storage_lt_history_warning");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("⚠  {warn_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
-            if autostart_error.is_some() {
-                let warn_msg = I18n::translate(cx, "settings_autostart_failed");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("⚠  {warn_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
-            if !is_hotkey_invalid
-                && autostart_error.is_none()
-                && !is_max_history_invalid
-                && !is_max_storage_invalid
-                && !is_max_storage_lt_history
-            {
-                let ok_msg = I18n::translate(cx, "settings_save_success");
-                window.push_notification(
-                    Notification::new()
-                        .message(format!("✓  {ok_msg}"))
-                        .w_auto()
-                        .max_w(px(SETTINGS_NOTIFICATION_MAX_WIDTH_PX)),
-                    cx,
-                );
-            }
+    pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous_value = Settings::read(cx, |s| s.autostart.enabled);
+        let next_value = !self.autostart_enabled;
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.autostart.enabled = next_value;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
         }
 
+        if let Err(error) = Self::sync_autostart_state_for(next_value) {
+            tracing::warn!(error = ?error, "failed to sync auto-start state");
+            if let Err(rollback_error) = Self::persist_settings_update(cx, |settings| {
+                settings.autostart.enabled = previous_value;
+            }) {
+                Self::notify_settings_save_failed(window, cx, &rollback_error);
+            }
+            self.autostart_enabled = Settings::read(cx, |s| s.autostart.enabled);
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_autostart_failed"),
+            );
+            cx.notify();
+            return;
+        }
+
+        self.autostart_enabled = next_value;
         cx.notify();
     }
 
-    pub(crate) fn toggle_autostart(&mut self, cx: &mut Context<Self>) {
-        self.autostart_enabled = !self.autostart_enabled;
+    pub(crate) fn save_confirm_mode(
+        &mut self,
+        confirm_mode: ConfirmMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_mode = Settings::read(cx, |s| s.confirm.mode);
+        if confirm_mode == previous_mode {
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.confirm.mode = confirm_mode;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.set_confirm_mode(confirm_mode, window);
         cx.notify();
     }
 
-    pub(super) fn sync_autostart_state(&self) -> Result<(), crate::config::AutoStartError> {
+    pub(crate) fn save_auto_check_enabled(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_value = Settings::read(cx, |s| s.update.auto_check);
+        if enabled == previous_value {
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.update.auto_check = enabled;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.auto_check_enabled = enabled;
+        cx.notify();
+    }
+
+    pub(crate) fn save_hover_preview_enabled(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_value = Settings::read(cx, |s| s.preview.hover_preview_enabled);
+        if enabled == previous_value {
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.preview.hover_preview_enabled = enabled;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.hover_preview_enabled = enabled;
+        cx.notify();
+    }
+
+    pub(super) fn sync_autostart_state_for(
+        enabled: bool,
+    ) -> Result<(), crate::config::AutoStartError> {
         use crate::constants::APP_NAME;
         let manager = crate::config::AutoStartManager::new(APP_NAME)?;
-        manager.sync_state(self.autostart_enabled)?;
+        manager.sync_state(enabled)?;
         Ok(())
+    }
+
+    fn is_valid_hotkey_input(input: &str) -> bool {
+        let trimmed = input.trim();
+        !trimmed.is_empty() && global_hotkey::hotkey::HotKey::from_str(trimmed).is_ok()
+    }
+
+    fn has_pending_numeric_input(
+        input: &str,
+        current_value: usize,
+        parser: impl Fn(&str, usize) -> Result<usize, ()>,
+    ) -> bool {
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+
+        match parser(trimmed, current_value) {
+            Ok(value) => value != current_value,
+            Err(()) => true,
+        }
+    }
+
+    const fn is_valid_storage_pair(max_history: usize, max_storage: usize) -> bool {
+        max_storage >= max_history
     }
 
     /// Validate max history input from settings UI.
@@ -327,5 +680,117 @@ mod tests {
         assert!(RopyBoard::parse_max_history_input("0", current).is_err());
         // above maximum (10_000)
         assert!(RopyBoard::parse_max_history_input("10001", current).is_err());
+    }
+
+    #[test]
+    fn test_is_valid_hotkey_input_empty_returns_false() {
+        assert!(!RopyBoard::is_valid_hotkey_input(""));
+    }
+
+    #[test]
+    fn test_is_valid_hotkey_input_invalid_format_returns_false() {
+        assert!(!RopyBoard::is_valid_hotkey_input("not+a+valid+hotkey"));
+    }
+
+    #[test]
+    fn test_is_valid_hotkey_input_valid_format_returns_true() {
+        assert!(RopyBoard::is_valid_hotkey_input("control+shift+d"));
+    }
+
+    #[test]
+    fn test_resolve_hotkey_candidate_input_empty_uses_current_when_no_pending_change() {
+        let resolved = RopyBoard::resolve_hotkey_candidate_input("", "cmd+shift+c", "cmd+shift+c");
+
+        assert_eq!(resolved, "cmd+shift+c");
+    }
+
+    #[test]
+    fn test_resolve_hotkey_candidate_input_typed_value_takes_precedence() {
+        let resolved =
+            RopyBoard::resolve_hotkey_candidate_input("cmd+shift+v", "cmd+shift+c", "cmd+shift+c");
+
+        assert_eq!(resolved, "cmd+shift+v");
+    }
+
+    #[test]
+    fn test_resolve_hotkey_candidate_input_empty_keeps_pending_clear_candidate() {
+        let resolved = RopyBoard::resolve_hotkey_candidate_input("", "", "cmd+shift+c");
+
+        assert_eq!(resolved, "");
+    }
+
+    #[test]
+    fn test_resolve_hotkey_candidate_input_empty_keeps_recorded_candidate() {
+        let resolved = RopyBoard::resolve_hotkey_candidate_input("", "cmd+shift+v", "cmd+shift+c");
+
+        assert_eq!(resolved, "cmd+shift+v");
+    }
+
+    #[test]
+    fn test_normalize_hotkey_for_save_empty_uses_current_hotkey() {
+        let normalized = RopyBoard::normalize_hotkey_for_save("", "cmd+shift+c");
+
+        assert_eq!(normalized, "cmd+shift+c");
+    }
+
+    #[test]
+    fn test_normalize_hotkey_for_save_empty_and_current_empty_uses_default() {
+        let normalized = RopyBoard::normalize_hotkey_for_save("", "");
+
+        assert_eq!(normalized, Settings::default().hotkey.activation_key);
+    }
+
+    #[test]
+    fn test_normalize_hotkey_for_save_explicit_value_preserves_candidate() {
+        let normalized = RopyBoard::normalize_hotkey_for_save("cmd+shift+v", "cmd+shift+c");
+
+        assert_eq!(normalized, "cmd+shift+v");
+    }
+
+    #[test]
+    fn test_is_valid_storage_pair_storage_below_history_returns_false() {
+        assert!(!RopyBoard::is_valid_storage_pair(10, 9));
+    }
+
+    #[test]
+    fn test_is_valid_storage_pair_storage_equal_or_above_history_returns_true() {
+        assert!(RopyBoard::is_valid_storage_pair(10, 10));
+        assert!(RopyBoard::is_valid_storage_pair(10, 11));
+    }
+
+    #[test]
+    fn test_has_pending_numeric_input_empty_returns_false() {
+        assert!(!RopyBoard::has_pending_numeric_input(
+            "",
+            10,
+            RopyBoard::parse_max_history_input,
+        ));
+    }
+
+    #[test]
+    fn test_has_pending_numeric_input_same_value_returns_false() {
+        assert!(!RopyBoard::has_pending_numeric_input(
+            "10",
+            10,
+            RopyBoard::parse_max_history_input,
+        ));
+    }
+
+    #[test]
+    fn test_has_pending_numeric_input_different_value_returns_true() {
+        assert!(RopyBoard::has_pending_numeric_input(
+            "11",
+            10,
+            RopyBoard::parse_max_history_input,
+        ));
+    }
+
+    #[test]
+    fn test_has_pending_numeric_input_invalid_value_returns_true() {
+        assert!(RopyBoard::has_pending_numeric_input(
+            "abc",
+            10,
+            RopyBoard::parse_max_history_input,
+        ));
     }
 }

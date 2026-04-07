@@ -9,7 +9,7 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::{constants::ABOUT_BACK_ARROW, gui::board::RopyBoard, i18n::I18n};
+use crate::{constants::BACK_ARROW, gui::board::RopyBoard, i18n::I18n};
 
 /// A single row in the shortcuts table
 struct ShortcutRow {
@@ -72,7 +72,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
             Button::new("help-back-button")
                 .small()
                 .ghost()
-                .label(ABOUT_BACK_ARROW)
+                .label(BACK_ARROW)
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.show_help = false;
                     window.focus(&board.focus_handle);

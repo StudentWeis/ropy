@@ -150,43 +150,22 @@ fn is_modifier_key(key: &str) -> bool {
 // --- RopyBoard hotkey recording methods ---
 
 impl RopyBoard {
-    pub(crate) fn displayed_hotkey(&self) -> &str {
-        &self.pending_hotkey
-    }
-
     pub(crate) fn start_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.hotkey_before_recording = self.pending_hotkey.clone();
+        self.hotkey_before_recording = self.resolve_activation_key_input(cx);
         self.hotkey_recording = true;
-        self.hotkey_manual_editing = false;
+        self.refresh_activation_key_placeholder(window, cx);
         self.settings_activation_key_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
         window.focus(&self.focus_handle);
-        cx.notify();
-    }
-
-    pub(crate) fn enable_hotkey_manual_edit(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.hotkey_recording = false;
-        self.hotkey_manual_editing = true;
-        let pending_hotkey = self.pending_hotkey.clone();
-        self.settings_activation_key_input.update(cx, |input, cx| {
-            input.set_value(pending_hotkey, window, cx);
-        });
-        window.focus(&self.settings_activation_key_input.focus_handle(cx));
         cx.notify();
     }
 
     pub(crate) fn clear_hotkey_candidate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.hotkey_recording = false;
         self.pending_hotkey.clear();
-        self.settings_activation_key_input.update(cx, |input, cx| {
-            input.set_value("", window, cx);
-        });
-        window.focus(&self.focus_handle);
+        self.sync_activation_key_input_from_candidate("", window, cx);
+        window.focus(&self.settings_activation_key_input.focus_handle(cx));
         cx.notify();
     }
 
@@ -194,7 +173,9 @@ impl RopyBoard {
         self.hotkey_recording = false;
         self.pending_hotkey
             .clone_from(&self.hotkey_before_recording);
-        window.focus(&self.focus_handle);
+        let candidate = self.pending_hotkey.clone();
+        self.sync_activation_key_input_from_candidate(&candidate, window, cx);
+        window.focus(&self.settings_activation_key_input.focus_handle(cx));
         cx.notify();
     }
 
@@ -223,9 +204,9 @@ impl RopyBoard {
         };
 
         self.hotkey_recording = false;
-        self.hotkey_manual_editing = false;
-        self.pending_hotkey = hotkey;
-        window.focus(&self.focus_handle);
+        self.pending_hotkey.clone_from(&hotkey);
+        self.sync_activation_key_input(&hotkey, &self.hotkey_before_recording, window, cx);
+        window.focus(&self.settings_activation_key_input.focus_handle(cx));
         cx.notify();
     }
 }

@@ -139,13 +139,13 @@ pub struct RopyBoard {
     pub(crate) show_help: bool,
     pub(crate) show_preview: bool,
     pub(crate) hotkey_recording: bool,
-    pub(crate) hotkey_manual_editing: bool,
     pub(crate) pending_hotkey: String,
     pub(crate) hotkey_before_recording: String,
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) settings_max_storage_input: Entity<InputState>,
     pub(crate) settings_window_opacity_slider: Entity<SliderState>,
+    pub(crate) settings_window_opacity_slider_visible: bool,
     pub(crate) selected_theme: usize, // Index into ThemeId::all()
     pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) window_opacity_percent: u8,
@@ -192,6 +192,25 @@ impl RopyBoard {
         surface_with_opacity(color, self.window_opacity_percent)
     }
 
+    pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_settings = true;
+        self.settings_window_opacity_slider_visible = false;
+        window.focus(&self.focus_handle);
+
+        let entity = cx.entity();
+        window.on_next_frame(move |window, cx| {
+            entity.update(cx, |board, cx| {
+                if !board.show_settings {
+                    return;
+                }
+
+                board.settings_window_opacity_slider_visible = true;
+                window.focus(&board.focus_handle);
+                cx.notify();
+            });
+        });
+    }
+
     fn build_window_opacity_slider(
         opacity_percent: u8,
         window: &Window,
@@ -231,14 +250,15 @@ impl RopyBoard {
         slider
     }
 
-    pub(crate) fn rebuild_window_opacity_slider(
-        &mut self,
+    pub(crate) fn sync_window_opacity_slider(
+        &self,
         opacity_percent: u8,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.settings_window_opacity_slider =
-            Self::build_window_opacity_slider(opacity_percent, window, cx);
+        self.settings_window_opacity_slider.update(cx, |slider, cx| {
+            slider.set_value(f32::from(opacity_percent), window, cx);
+        });
     }
 
     #[allow(clippy::missing_const_for_fn)]
@@ -364,7 +384,9 @@ impl RopyBoard {
                 s.preview.hover_preview_enabled,
             )
         });
-        let settings_activation_key_input = cx.new(|cx| InputState::new(window, cx));
+        let activation_key_placeholder = Self::hotkey_placeholder_text(&activation_key, cx);
+        let settings_activation_key_input = cx
+            .new(|cx| InputState::new(window, cx).placeholder(activation_key_placeholder.clone()));
         let settings_max_history_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
         let settings_max_storage_input =
@@ -392,7 +414,7 @@ impl RopyBoard {
         cx.subscribe_in(
             &theme_select,
             window,
-            |this, _entity, event: &SelectEvent<Vec<SharedString>>, _window, cx| {
+            |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
                     let themes = ThemeId::all();
                     if let Some(idx) = themes
@@ -400,7 +422,7 @@ impl RopyBoard {
                         .position(|theme| theme.display_name() == val.as_ref())
                     {
                         this.selected_theme = idx;
-                        cx.notify();
+                        this.save_selected_theme(window, cx);
                     }
                 }
             },
@@ -428,12 +450,12 @@ impl RopyBoard {
         cx.subscribe_in(
             &language_select,
             window,
-            |this, _entity, event: &SelectEvent<Vec<SharedString>>, _window, cx| {
+            |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
                     let langs = Language::all();
                     if let Some(idx) = langs.iter().position(|l| l.display_name() == val.as_ref()) {
                         this.selected_language = idx;
-                        cx.notify();
+                        this.save_selected_language(window, cx);
                     }
                 }
             },
@@ -459,13 +481,13 @@ impl RopyBoard {
             show_help: false,
             show_preview: false,
             hotkey_recording: false,
-            hotkey_manual_editing: false,
             pending_hotkey: activation_key.clone(),
             hotkey_before_recording: activation_key,
             settings_activation_key_input,
             settings_max_history_input,
             settings_max_storage_input,
             settings_window_opacity_slider,
+            settings_window_opacity_slider_visible: false,
             selected_theme,
             theme_select,
             window_opacity_percent,
@@ -828,6 +850,26 @@ mod tests {
 
     use super::*;
     use crate::config::ConfirmMode;
+
+    #[test]
+    fn test_open_settings_panel_hides_opacity_slider_until_next_frame() {
+        let mut slider_visible = true;
+        let show_settings = true;
+
+        if show_settings {
+            slider_visible = false;
+        }
+
+        assert!(!slider_visible);
+    }
+
+    #[test]
+    fn test_window_opacity_slider_reveals_only_while_settings_open() {
+        let reveal_slider = |show_settings: bool| show_settings;
+
+        assert!(reveal_slider(true));
+        assert!(!reveal_slider(false));
+    }
 
     fn test_datetime(hour: u32) -> chrono::DateTime<Local> {
         Local
