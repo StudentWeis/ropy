@@ -484,14 +484,16 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
             }
         }));
 
-    h_flex()
-        .justify_end()
-        .items_center()
-        .w_full()
-        .py_3()
-        .gap_2()
-        .child(log_button)
-        .child(config_button)
+    settings_row(
+        I18n::translate(cx, "settings_open_dirs_title"),
+        h_flex()
+            .justify_end()
+            .items_center()
+            .gap_1()
+            .child(log_button)
+            .child(config_button),
+        cx,
+    )
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

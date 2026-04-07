@@ -50,6 +50,7 @@ settings_max_history_invalid_warning = "最大历史记录数无效"
 settings_paste_immediately = "确认后立即粘贴"
 settings_hover_preview = "悬停预览"
 settings_clear_history = "清空历史"
+settings_open_dirs_title = "打开目录"
 settings_open_log = "打开日志目录"
 settings_open_config = "打开配置目录"
 

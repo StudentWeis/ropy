@@ -180,6 +180,9 @@ impl RopyBoard {
             "d" => {
                 self.on_delete_record(&DeleteRecord, window, cx);
             }
+            "q" => {
+                self.on_hide_action(&Hide, window, cx);
+            }
             "f" => {
                 if let Some(id) = self.filtered_record_id_at(self.selected_index) {
                     self.toggle_record_favorite(id, cx);
