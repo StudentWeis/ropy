@@ -239,7 +239,7 @@ fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
         .min_w_0()
         .items_center()
         .gap_0p5()
-        .bg(surface_with_opacity(cx.theme().input, opacity_percent))
+        .bg(surface_with_opacity(cx.theme().secondary, opacity_percent))
         .border_1()
         .border_color(surface_with_opacity(cx.theme().border, opacity_percent))
         .rounded(px(16.0))
