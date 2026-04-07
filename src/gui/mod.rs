@@ -15,4 +15,4 @@ pub use app::{Assets, create_window};
 pub use tray::start_tray_handler;
 #[cfg(target_os = "macos")]
 pub use utils::set_activation_policy_accessory;
-pub use utils::{active_window, hide_window};
+pub use utils::{active_window, hide_window, surface_with_opacity};

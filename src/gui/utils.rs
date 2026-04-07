@@ -1,4 +1,13 @@
-use gpui::{Context, Window};
+use gpui::{Context, Hsla, Window, hsla};
+
+pub fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
+    hsla(
+        color.h,
+        color.s,
+        color.l,
+        color.a * (f32::from(opacity_percent) / 100.0),
+    )
+}
 
 /// Spawn a named thread that runs a blocking receive loop and forwards mapped
 /// events to an `async_channel::Sender`.

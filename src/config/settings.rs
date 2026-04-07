@@ -10,6 +10,10 @@ use crate::{gui::theme::ThemeId, i18n::Language};
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 /// Default maximum number of records to store in the repository
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
+/// Minimum supported window opacity percentage.
+const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
+/// Maximum supported window opacity percentage.
+const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
 /// Application settings structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -17,6 +21,7 @@ pub struct Settings {
     pub hotkey: HotkeySettings,
     pub storage: StorageSettings,
     pub theme: ThemeId,
+    pub window: WindowSettings,
     pub autostart: AutoStartSettings,
     pub language: Language,
     pub update: UpdateSettings,
@@ -63,6 +68,7 @@ impl Settings {
 
         // Validate and reset hotkey if invalid
         settings.validate_hotkey();
+        settings.validate_window_opacity();
 
         Ok(settings)
     }
@@ -85,6 +91,10 @@ impl Settings {
             self.hotkey.activation_key = Self::default().hotkey.activation_key;
         }
     }
+
+    fn validate_window_opacity(&mut self) {
+        self.window.normalize_opacity();
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -105,6 +115,31 @@ impl ConfirmMode {
 pub struct ConfirmSettings {
     /// Behavior when confirming a record from the board
     pub mode: ConfirmMode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowSettings {
+    /// Window opacity percentage in the settings UI (40 - 100).
+    pub opacity_percent: u8,
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            opacity_percent: MAX_WINDOW_OPACITY_PERCENT,
+        }
+    }
+}
+
+impl WindowSettings {
+    pub const MIN_OPACITY_PERCENT: u8 = MIN_WINDOW_OPACITY_PERCENT;
+    pub const MAX_OPACITY_PERCENT: u8 = MAX_WINDOW_OPACITY_PERCENT;
+
+    pub fn normalize_opacity(&mut self) {
+        self.opacity_percent = self
+            .opacity_percent
+            .clamp(MIN_WINDOW_OPACITY_PERCENT, MAX_WINDOW_OPACITY_PERCENT);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,6 +243,7 @@ mod tests {
             DEFAULT_MAX_STORAGE_RECORDS
         );
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
+        assert_eq!(settings.window.opacity_percent, 100);
     }
 
     #[test]
@@ -256,6 +292,7 @@ mod tests {
         settings.update.include_prerelease = true;
         settings.preview.hover_preview_enabled = false;
         settings.confirm.mode = ConfirmMode::PasteImmediately;
+        settings.window.opacity_percent = 72;
 
         // Save to file
         let toml = toml::to_string_pretty(&settings).expect("Failed to serialize");
@@ -275,6 +312,7 @@ mod tests {
         assert!(loaded.update.include_prerelease);
         assert!(!loaded.preview.hover_preview_enabled);
         assert_eq!(loaded.confirm.mode, ConfirmMode::PasteImmediately);
+        assert_eq!(loaded.window.opacity_percent, 72);
     }
 
     #[test]
@@ -464,6 +502,25 @@ max_history_records = 100
         assert!(preview.hover_preview_enabled);
     }
 
+    #[test]
+    fn test_window_settings_default() {
+        let window = WindowSettings::default();
+        assert_eq!(window.opacity_percent, 100);
+        let opacity_factor = f32::from(window.opacity_percent) / 100.0;
+        assert!((opacity_factor - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_window_settings_normalize_opacity_clamps_to_supported_range() {
+        let mut window = WindowSettings { opacity_percent: 5 };
+        window.normalize_opacity();
+        assert_eq!(window.opacity_percent, MIN_WINDOW_OPACITY_PERCENT);
+
+        window.opacity_percent = 150;
+        window.normalize_opacity();
+        assert_eq!(window.opacity_percent, 100);
+    }
+
     // ── AutoStartSettings Tests ───────────────────────────────────
 
     #[test]
@@ -530,6 +587,7 @@ max_history_records = 100
         assert!(toml.contains("[update]"), "Missing [update] section");
         assert!(toml.contains("[preview]"), "Missing [preview] section");
         assert!(toml.contains("[confirm]"), "Missing [confirm] section");
+        assert!(toml.contains("[window]"), "Missing [window] section");
         // Note: [theme] and [language] are serialized as inline tables, not section headers
         assert!(toml.contains("theme"), "Missing theme field");
         assert!(toml.contains("language"), "Missing language field");

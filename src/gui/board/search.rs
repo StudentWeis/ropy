@@ -14,6 +14,7 @@ use gpui_component::{
 
 use super::RopyBoard;
 use crate::{
+    gui::surface_with_opacity,
     i18n::I18n,
     repository::{ClipboardRecord, models::ContentType},
     utils::deserialize_file_paths,
@@ -146,6 +147,7 @@ pub(super) fn filter_records_by_query(
 }
 
 fn create_search_option_button(
+    opacity_percent: u8,
     element_id: impl Into<gpui::ElementId>,
     label: impl Into<gpui::SharedString>,
     is_active: bool,
@@ -154,7 +156,7 @@ fn create_search_option_button(
 ) -> Button {
     let id = element_id.into();
     let button = if is_active {
-        let accent = cx.theme().accent;
+        let accent = surface_with_opacity(cx.theme().accent, opacity_percent);
         let variant = gpui_component::button::ButtonCustomVariant::new(cx)
             .color(accent)
             .foreground(cx.theme().accent_foreground)
@@ -176,6 +178,7 @@ fn create_search_option_button(
 
 fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
     create_search_option_button(
+        board.window_opacity_percent,
         "search-case-sensitive-btn",
         "Aa",
         board.search_options.case_sensitive,
@@ -191,6 +194,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
 
 fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
     create_search_option_button(
+        board.window_opacity_percent,
         "search-whole-word-btn",
         "W",
         board.search_options.whole_word,
@@ -228,13 +232,16 @@ fn render_search_separator(cx: &gpui::App) -> impl IntoElement {
 
 /// Render the search input field with search options
 fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let opacity_percent = board.window_opacity_percent;
+
     h_flex()
         .flex_1()
         .min_w_0()
         .items_center()
         .gap_0p5()
+        .bg(surface_with_opacity(cx.theme().input, opacity_percent))
         .border_1()
-        .border_color(cx.theme().border)
+        .border_color(surface_with_opacity(cx.theme().border, opacity_percent))
         .rounded(px(16.0))
         .p(px(2.0))
         .child(
@@ -256,6 +263,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
     let text_filter_tooltip = I18n::translate(cx, "filter_text");
     let image_filter_tooltip = I18n::translate(cx, "filter_image");
     let files_filter_tooltip = I18n::translate(cx, "filter_files");
+    let opacity_percent = board.window_opacity_percent;
 
     let text_button = if board.content_filter == ContentFilter::Text {
         Button::new("filter-text-btn").primary()
@@ -277,8 +285,9 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
 
     h_flex()
         .items_center()
+        .bg(surface_with_opacity(cx.theme().secondary, opacity_percent))
         .border_1()
-        .border_color(cx.theme().border)
+        .border_color(surface_with_opacity(cx.theme().border, opacity_percent))
         .rounded(px(16.0))
         .p(px(2.0))
         .gap(px(1.0))
@@ -320,6 +329,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
 /// Render favorites filter button (separate from other filter buttons, with capsule wrapper)
 fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+    let opacity_percent = board.window_opacity_percent;
 
     let favorites_button = if board.favorites_only {
         Button::new("filter-favorites-btn").primary()
@@ -329,8 +339,9 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
 
     h_flex()
         .items_center()
+        .bg(surface_with_opacity(cx.theme().secondary, opacity_percent))
         .border_1()
-        .border_color(cx.theme().border)
+        .border_color(surface_with_opacity(cx.theme().border, opacity_percent))
         .rounded(px(16.0))
         .p(px(2.0))
         .child(

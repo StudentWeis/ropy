@@ -25,6 +25,7 @@ use gpui_component::{
     ActiveTheme, IndexPath, WindowExt,
     input::InputState,
     select::{SelectEvent, SelectState},
+    slider::{SliderEvent, SliderState},
     v_flex,
 };
 use header::render_header;
@@ -40,6 +41,7 @@ use crate::{
             about::render_about_content, help::render_help_content,
             settings::render_settings_content,
         },
+        surface_with_opacity,
         theme::ThemeId,
     },
     i18n::Language,
@@ -137,8 +139,10 @@ pub struct RopyBoard {
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) settings_max_storage_input: Entity<InputState>,
+    pub(crate) settings_window_opacity_slider: Entity<SliderState>,
     pub(crate) selected_theme: usize, // Index into ThemeId::all()
     pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) window_opacity_percent: u8,
     pub(crate) autostart_enabled: bool,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) pinned: bool,
@@ -174,6 +178,59 @@ impl RopyBoard {
 
     pub(crate) const fn can_toggle_window_pin(&self) -> bool {
         Self::window_pin_available(self.confirm_mode)
+    }
+
+    pub(crate) fn main_panel_surface(&self, color: gpui::Hsla) -> gpui::Hsla {
+        surface_with_opacity(color, self.window_opacity_percent)
+    }
+
+    fn build_window_opacity_slider(
+        opacity_percent: u8,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<SliderState> {
+        let slider = cx.new(|_| {
+            SliderState::new()
+                .min(f32::from(
+                    crate::config::WindowSettings::MIN_OPACITY_PERCENT,
+                ))
+                .max(f32::from(
+                    crate::config::WindowSettings::MAX_OPACITY_PERCENT,
+                ))
+                .step(1.0)
+                .default_value(f32::from(opacity_percent))
+        });
+
+        cx.subscribe_in(
+            &slider,
+            window,
+            |this, _, event: &SliderEvent, window, cx| {
+                let SliderEvent::Change(value) = event;
+                let opacity_percent = value.start().round() as u8;
+                this.window_opacity_percent = opacity_percent;
+                let theme = ThemeId::all()
+                    .get(this.selected_theme)
+                    .cloned()
+                    .unwrap_or_default();
+                // Keep window-level transparency and theme surface alpha in sync for immediate feedback.
+                crate::gui::app::set_app_theme(window, cx, &theme, opacity_percent);
+                crate::gui::app::apply_window_opacity(window, opacity_percent);
+                cx.notify();
+            },
+        )
+        .detach();
+
+        slider
+    }
+
+    pub(crate) fn rebuild_window_opacity_slider(
+        &mut self,
+        opacity_percent: u8,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings_window_opacity_slider =
+            Self::build_window_opacity_slider(opacity_percent, window, cx);
     }
 
     #[allow(clippy::missing_const_for_fn)]
@@ -280,6 +337,7 @@ impl RopyBoard {
             activation_key,
             theme,
             language,
+            window_opacity_percent,
             confirm_mode,
             autostart_enabled,
             auto_check_enabled,
@@ -291,6 +349,7 @@ impl RopyBoard {
                 s.hotkey.activation_key.clone(),
                 s.theme.clone(),
                 s.language.clone(),
+                s.window.opacity_percent,
                 s.confirm.mode,
                 s.autostart.enabled,
                 s.update.auto_check,
@@ -302,6 +361,8 @@ impl RopyBoard {
             cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
         let settings_max_storage_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
+        let settings_window_opacity_slider =
+            Self::build_window_opacity_slider(window_opacity_percent, window, cx);
 
         let selected_theme = ThemeId::all()
             .iter()
@@ -396,8 +457,10 @@ impl RopyBoard {
             settings_activation_key_input,
             settings_max_history_input,
             settings_max_storage_input,
+            settings_window_opacity_slider,
             selected_theme,
             theme_select,
+            window_opacity_percent,
             autostart_enabled,
             confirm_mode,
             pinned: false,
@@ -614,20 +677,23 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_hide_action))
             .on_action(cx.listener(Self::on_quit_action))
             .on_action(cx.listener(Self::on_active_action))
-            .bg(cx.theme().background)
             .size_full()
             .px_4()
             .pb_4();
 
         let body: AnyElement = if self.show_settings {
-            base.on_key_down(cx.listener(Self::on_settings_key_down))
+            base.bg(self.main_panel_surface(cx.theme().background))
+                .on_key_down(cx.listener(Self::on_settings_key_down))
                 .child(render_settings_content(self, cx))
                 .into_any_element()
         } else if self.show_about {
-            base.child(render_about_content(self, cx))
+            base.bg(self.main_panel_surface(cx.theme().background))
+                .child(render_about_content(self, cx))
                 .into_any_element()
         } else if self.show_help {
-            base.child(render_help_content(self, cx)).into_any_element()
+            base.bg(self.main_panel_surface(cx.theme().background))
+                .child(render_help_content(self, cx))
+                .into_any_element()
         } else {
             // Render main clipboard view
             let query = self.search_input.read(cx).value().to_string();
@@ -672,7 +738,8 @@ impl Render for RopyBoard {
                 self.selected_index = 0;
             }
 
-            base.on_action(cx.listener(Self::on_select_prev))
+            base.bg(self.main_panel_surface(cx.theme().background))
+                .on_action(cx.listener(Self::on_select_prev))
                 .on_action(cx.listener(Self::on_select_next))
                 .on_action(cx.listener(Self::on_confirm_selection))
                 .on_action(cx.listener(Self::on_delete_record))
@@ -764,6 +831,17 @@ mod tests {
             ConfirmMode::PasteImmediately,
             false,
         ));
+    }
+
+    #[test]
+    fn test_surface_with_opacity_scales_alpha() {
+        let color = gpui::hsla(0.4, 0.5, 0.6, 1.0);
+        let faded = crate::gui::surface_with_opacity(color, 65);
+
+        assert!((faded.a - 0.65).abs() < 0.000_1);
+        assert!((faded.h - color.h).abs() < f32::EPSILON);
+        assert!((faded.s - color.s).abs() < f32::EPSILON);
+        assert!((faded.l - color.l).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -16,6 +16,7 @@ use gpui_component::{
 use super::{RopyBoard, preview};
 use crate::{
     clipboard::thumb_path_for,
+    gui::surface_with_opacity,
     repository::{ClipboardRecord, models::ContentType},
     utils::{deserialize_file_paths, read_or_recover},
 };
@@ -54,7 +55,13 @@ fn truncate_content_with_lines(content: &str, char_limit: usize, max_lines: usiz
 
     // Then limit character count
     if line_limited_content.chars().count() > char_limit {
-        format!("{}...", line_limited_content.chars().take(char_limit).collect::<String>())
+        format!(
+            "{}...",
+            line_limited_content
+                .chars()
+                .take(char_limit)
+                .collect::<String>()
+        )
     } else if content.lines().count() > max_lines {
         format!("{line_limited_content}...")
     } else {
@@ -126,7 +133,11 @@ fn file_preview_content(record_content: &str) -> String {
     deserialize_file_paths(record_content).join("\n")
 }
 
-fn render_file_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
+fn render_file_record(
+    cx: &App,
+    record: &ClipboardRecord,
+    badge_background: gpui::Hsla,
+) -> AnyElement {
     let files = deserialize_file_paths(&record.content);
     if files.is_empty() {
         return div()
@@ -165,7 +176,7 @@ fn render_file_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
                         .gap_1()
                         .text_xs()
                         .text_color(cx.theme().accent_foreground)
-                        .bg(cx.theme().accent)
+                        .bg(badge_background)
                         .px_1p5()
                         .py_0p5()
                         .rounded_sm()
@@ -235,15 +246,19 @@ struct ItemStyle {
     normal_background: gpui::Hsla,
     border: gpui::Hsla,
     hover_border: gpui::Hsla,
+    meta_background: gpui::Hsla,
+    badge_background: gpui::Hsla,
 }
 
 impl ItemStyle {
-    fn from_app(cx: &App) -> Self {
+    fn from_app(cx: &App, opacity_percent: u8) -> Self {
         Self {
-            selected_background: cx.theme().accent,
-            normal_background: cx.theme().secondary,
-            border: cx.theme().border,
+            selected_background: surface_with_opacity(cx.theme().accent, opacity_percent),
+            normal_background: surface_with_opacity(cx.theme().secondary, opacity_percent),
+            border: surface_with_opacity(cx.theme().border, opacity_percent),
             hover_border: cx.theme().foreground,
+            meta_background: surface_with_opacity(cx.theme().background, opacity_percent),
+            badge_background: surface_with_opacity(cx.theme().accent, opacity_percent),
         }
     }
 }
@@ -256,6 +271,7 @@ struct RenderContext<'a> {
     is_selected: bool,
     show_preview: bool,
     hover_preview_enabled: bool,
+    opacity_percent: u8,
     view: &'a gpui::WeakEntity<RopyBoard>,
 }
 
@@ -263,6 +279,7 @@ fn render_record_body(
     ctx: &RenderContext<'_>,
     preview_data: &PreviewData,
     view_click: gpui::WeakEntity<RopyBoard>,
+    styles: &ItemStyle,
     cx: &App,
 ) -> AnyElement {
     let mut content = div()
@@ -293,13 +310,23 @@ fn render_record_body(
         .child(match ctx.record.content_type {
             ContentType::Text => render_text_record(cx, ctx.record),
             ContentType::Image => render_image_record(ctx.record),
-            ContentType::FilePath => render_file_record(cx, ctx.record),
+            ContentType::FilePath => render_file_record(cx, ctx.record, styles.badge_background),
         })
-        .child(render_record_meta(ctx.index, ctx.record, cx))
+        .child(render_record_meta(
+            ctx.index,
+            ctx.record,
+            styles.meta_background,
+            cx,
+        ))
         .into_any_element()
 }
 
-fn render_record_meta(index: usize, record: &ClipboardRecord, cx: &App) -> gpui::Div {
+fn render_record_meta(
+    index: usize,
+    record: &ClipboardRecord,
+    meta_background: gpui::Hsla,
+    cx: &App,
+) -> gpui::Div {
     h_flex()
         .items_center()
         .gap_1()
@@ -308,7 +335,7 @@ fn render_record_meta(index: usize, record: &ClipboardRecord, cx: &App) -> gpui:
             div()
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
-                .bg(cx.theme().background)
+                .bg(meta_background)
                 .px_1()
                 .py_0()
                 .rounded_sm()
@@ -410,7 +437,7 @@ fn render_selected_preview(
 
 fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> AnyElement {
     let preview_data = PreviewData::new(ctx.record);
-    let styles = ItemStyle::from_app(cx);
+    let styles = ItemStyle::from_app(cx, ctx.opacity_percent);
     let view_click = ctx.view.clone();
     let view_favorite = ctx.view.clone();
     let view_pin = ctx.view.clone();
@@ -447,7 +474,13 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
                     .justify_between()
                     .items_start()
                     .gap_2()
-                    .child(render_record_body(ctx, &preview_data, view_click, cx))
+                    .child(render_record_body(
+                        ctx,
+                        &preview_data,
+                        view_click,
+                        &styles,
+                        cx,
+                    ))
                     .child(render_record_actions(
                         ctx.index,
                         record_id,
@@ -478,6 +511,7 @@ impl RopyBoard {
         let selected_index = self.selected_index;
         let show_preview = self.show_preview;
         let hover_preview_enabled = self.hover_preview_enabled && !self.show_clear_confirm;
+        let opacity_percent = self.window_opacity_percent;
         let view = context.weak_entity();
 
         div()
@@ -503,6 +537,7 @@ impl RopyBoard {
                                 is_selected: index == selected_index,
                                 show_preview,
                                 hover_preview_enabled,
+                                opacity_percent,
                                 view: &view,
                             },
                             window,

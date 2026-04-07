@@ -10,6 +10,7 @@ use gpui_component::{
     h_flex,
     input::Input,
     select::Select,
+    slider::Slider,
     switch::Switch,
     v_flex,
 };
@@ -67,6 +68,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let header = render_settings_header(cx);
     let language_row = render_language_row(board, cx);
     let theme_row = render_theme_row(board, cx);
+    let window_opacity_row = render_window_opacity_row(board, cx);
     let activation_key_row = render_activation_key_row(board, cx);
     let max_history_row = render_max_history_row(board, cx);
     let max_storage_row = render_max_storage_row(board, cx);
@@ -88,6 +90,8 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
             .child(language_row)
             .child(Divider::horizontal())
             .child(theme_row)
+            .child(Divider::horizontal())
+            .child(window_opacity_row)
             .child(Divider::horizontal())
             .child(activation_key_row)
             .child(Divider::horizontal())
@@ -200,6 +204,31 @@ fn render_activation_key_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl
             .items_end()
             .child(render_hotkey_controls(board, cx))
             .child(help_text),
+        cx,
+    )
+}
+
+fn render_window_opacity_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        I18n::translate(cx, "settings_window_opacity"),
+        h_flex()
+            .w(px(220.0))
+            .items_center()
+            .gap_3()
+            .child(
+                Slider::new(&board.settings_window_opacity_slider)
+                    .flex_1()
+                    .bg(cx.theme().accent)
+                    .text_color(cx.theme().accent_foreground),
+            )
+            .child(
+                div()
+                    .w(px(44.0))
+                    .text_right()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!("{}%", board.window_opacity_percent)),
+            ),
         cx,
     )
 }
@@ -491,7 +520,7 @@ pub fn reset_settings_dialog(
     cx: &mut Context<'_, RopyBoard>,
 ) {
     // Reset selections to persisted values from GPUI Global
-    let (lang_idx, theme_idx, autostart, auto_check, confirm_mode, activation_key) =
+    let (lang_idx, theme_idx, autostart, auto_check, confirm_mode, activation_key, window_opacity) =
         crate::config::Settings::read(cx, |s| {
             let lang = Language::all()
                 .iter()
@@ -508,6 +537,7 @@ pub fn reset_settings_dialog(
                 s.update.auto_check,
                 s.confirm.mode,
                 s.hotkey.activation_key.clone(),
+                s.window.opacity_percent,
             )
         });
     board.selected_language = lang_idx;
@@ -515,6 +545,7 @@ pub fn reset_settings_dialog(
     board.autostart_enabled = autostart;
     board.auto_check_enabled = auto_check;
     board.confirm_mode = confirm_mode;
+    board.window_opacity_percent = window_opacity;
     board.pending_hotkey.clone_from(&activation_key);
     board.hotkey_before_recording = activation_key;
     board.hotkey_recording = false;
@@ -535,6 +566,10 @@ pub fn reset_settings_dialog(
     board.settings_max_storage_input.update(cx, |input, cx| {
         input.set_value("", window, cx);
     });
+    board.rebuild_window_opacity_slider(window_opacity, window, cx);
+    let theme = ThemeId::all().get(theme_idx).cloned().unwrap_or_default();
+    crate::gui::app::set_app_theme(window, cx, &theme, window_opacity);
+    crate::gui::app::apply_window_opacity(window, window_opacity);
     board.settings_activation_key_input.update(cx, |input, cx| {
         input.set_value("", window, cx);
     });

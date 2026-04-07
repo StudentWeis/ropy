@@ -53,6 +53,8 @@ impl RopyBoard {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
 
+        let window_opacity_percent = self.window_opacity_percent;
+
         // Validate max_history input from the settings UI.
         let max_history_input = self.settings_max_history_input.read(cx).value().to_string();
 
@@ -107,6 +109,8 @@ impl RopyBoard {
                 s.update.auto_check = auto_check_enabled;
                 s.preview.hover_preview_enabled = hover_preview_enabled;
                 s.confirm.mode = confirm_mode;
+                s.window.opacity_percent = window_opacity_percent;
+                s.window.normalize_opacity();
                 if let Err(e) = s.save() {
                     tracing::warn!(error = %e, "failed to save settings");
                     disk_error = Some(format!("{e}"));
@@ -137,7 +141,8 @@ impl RopyBoard {
         }
 
         // Apply the new theme
-        crate::gui::app::set_app_theme(window, cx, &theme);
+        crate::gui::app::set_app_theme(window, cx, &theme, window_opacity_percent);
+        crate::gui::app::apply_window_opacity(window, window_opacity_percent);
 
         self.settings_max_history_input.update(cx, |input, cx| {
             input.set_placeholder(max_history.to_string(), window, cx);

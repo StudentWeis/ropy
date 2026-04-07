@@ -31,6 +31,7 @@ settings_save = "Save"
 # Settings sections
 settings_language = "Language"
 settings_theme = "Theme"
+settings_window_opacity = "Window Opacity"
 settings_activation_key = "Activation Key"
 settings_hotkey_hint = "Format: control+shift+d or cmd+shift+v"
 settings_hotkey_record_hint = "Press the shortcut now. Esc to cancel, Delete to clear"
