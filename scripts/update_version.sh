@@ -29,7 +29,10 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\")
 # 3. Update CHANGELOG.md using git cliff
 git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 
-# 4. Confirm before push
+# 4. Before update, check everything is clean
+bash scripts/before_update.sh
+
+# 5. Confirm before push
 dist plan
 while true; do
 	read -r -p "Continue? [Y/n] " REPLY

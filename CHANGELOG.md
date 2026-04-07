@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3] - 2026-04-07
+
+### 🚀 Features
+- Add option to clear only ordinary clipboard records by @StudentWeis
+- Add window opacity setting functionality by @StudentWeis
+
+### 🚜 Refactor
+- Adjust preview limits for records list display by @StudentWeis
+- Remove unused clear button and add clear history setting functionality by @StudentWeis
+- Change setting for immediate paste confirmation mode by @StudentWeis
+
+### 📚 Documentation
+- Add contributing guidelines in English and Chinese by @StudentWeis
+- Move testing docs and update references by @StudentWeis
+- Update README images and features description by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Update locale keys for clear history setting across multiple languages by @StudentWeis
+- Update dependencies and use static xz2 by @StudentWeis
+- Reorder target platforms in dist configuration by @StudentWeis
+
 ## [0.4.2] - 2026-04-01
 
 ### 🚀 Features
