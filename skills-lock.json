@@ -40,6 +40,16 @@
       "source": "longbridge/gpui-component",
       "sourceType": "github",
       "computedHash": "85bf74485f9c8d174e0e01f3a95149301023a4ecb71ac8879e216dd710106c29"
+    },
+    "gpui-patterns": {
+      "source": "geoffjay/claude-plugins",
+      "sourceType": "github",
+      "computedHash": "07f66a3384e0c2302e1274539f30a00d3d99c3c1438c714cb9eaa6acae674419"
+    },
+    "gpui-test": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "d389b38b61e995befc2d3037084cd2a151a4247bafb9ffd04c5540d888ea1e64"
     }
   }
 }
