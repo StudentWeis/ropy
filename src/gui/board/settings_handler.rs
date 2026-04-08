@@ -423,6 +423,11 @@ impl RopyBoard {
         let Ok(max_history) =
             Self::parse_max_history_input(&max_history_input, current_max_history)
         else {
+            self.settings_editor
+                .settings_max_history_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -432,6 +437,11 @@ impl RopyBoard {
         };
 
         if !Self::is_valid_storage_pair(max_history, current_max_storage) {
+            self.settings_editor
+                .settings_max_history_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -481,6 +491,11 @@ impl RopyBoard {
         let Ok(max_storage) =
             Self::parse_max_storage_input(&max_storage_input, current_max_storage)
         else {
+            self.settings_editor
+                .settings_max_storage_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -490,6 +505,11 @@ impl RopyBoard {
         };
 
         if !Self::is_valid_storage_pair(current_max_history, max_storage) {
+            self.settings_editor
+                .settings_max_storage_input
+                .update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
             Self::notify_settings_warning(
                 window,
                 cx,

@@ -69,6 +69,7 @@ impl Settings {
         // Validate and reset hotkey if invalid
         settings.validate_hotkey();
         settings.validate_window_opacity();
+        settings.validate_storage();
 
         Ok(settings)
     }
@@ -94,6 +95,14 @@ impl Settings {
 
     fn validate_window_opacity(&mut self) {
         self.window.normalize_opacity();
+    }
+
+    fn validate_storage(&mut self) {
+        self.storage.max_history_records = self.storage.max_history_records.clamp(1, 10_000);
+        self.storage.max_storage_records = self.storage.max_storage_records.clamp(1, 100_000);
+        if self.storage.max_storage_records < self.storage.max_history_records {
+            self.storage.max_storage_records = self.storage.max_history_records;
+        }
     }
 }
 
@@ -483,6 +492,50 @@ max_history_records = 100
         let storage = StorageSettings::default();
         assert_eq!(storage.max_history_records, DEFAULT_MAX_HISTORY_RECORDS);
         assert_eq!(storage.max_storage_records, DEFAULT_MAX_STORAGE_RECORDS);
+    }
+
+    #[test]
+    fn test_validate_storage_clamps_history_to_supported_range() {
+        let mut settings = Settings::default();
+        settings.storage.max_history_records = 0;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_history_records, 1);
+
+        settings.storage.max_history_records = 99_999;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_history_records, 10_000);
+    }
+
+    #[test]
+    fn test_validate_storage_clamps_storage_to_supported_range() {
+        let mut settings = Settings::default();
+        settings.storage.max_history_records = 1;
+        settings.storage.max_storage_records = 0;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_storage_records, 1);
+
+        settings.storage.max_storage_records = 999_999;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_storage_records, 100_000);
+    }
+
+    #[test]
+    fn test_validate_storage_enforces_storage_gte_history() {
+        let mut settings = Settings::default();
+        settings.storage.max_history_records = 500;
+        settings.storage.max_storage_records = 100;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_storage_records, 500);
+    }
+
+    #[test]
+    fn test_validate_storage_preserves_valid_values() {
+        let mut settings = Settings::default();
+        settings.storage.max_history_records = 50;
+        settings.storage.max_storage_records = 1_000;
+        settings.validate_storage();
+        assert_eq!(settings.storage.max_history_records, 50);
+        assert_eq!(settings.storage.max_storage_records, 1_000);
     }
 
     // ── UpdateSettings Tests ──────────────────────────────────────

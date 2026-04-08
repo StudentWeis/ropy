@@ -13,8 +13,7 @@ pub struct LoggingGuard {
 }
 
 fn default_env_filter() -> tracing_subscriber::EnvFilter {
-    tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+    tracing_subscriber::EnvFilter::new("info")
 }
 
 fn default_log_dir() -> PathBuf {
