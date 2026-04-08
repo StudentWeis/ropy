@@ -1,8 +1,6 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
 use std::{
-    cmp::Ordering,
-    collections::HashSet,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -25,11 +23,6 @@ use crate::{
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;
 
-/// Allow the repository to grow slightly past the configured limit so cleanup
-/// can batch deletions instead of scanning on every successful save.
-const CLEANUP_BUFFER_DIVISOR: usize = 10;
-const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
-
 #[derive(Clone, Copy)]
 enum RepositoryBackend {
     Sled,
@@ -38,9 +31,9 @@ enum RepositoryBackend {
 
 pub struct ClipboardRepository {
     backend: Box<dyn StorageBackend>,
-    records: Box<dyn KvTree>,
-    time_index: TimeIndex,
-    favorites: Box<dyn KvTree>,
+    pub(super) records: Box<dyn KvTree>,
+    pub(super) time_index: TimeIndex,
+    pub(super) favorites: Box<dyn KvTree>,
     images_dir: PathBuf,
 }
 
@@ -254,22 +247,6 @@ impl ClipboardRepository {
         }
     }
 
-    /// Get the records for the default board view.
-    ///
-    /// Pinned records stay at the top. Favorited records do not consume the
-    /// ordinary `limit`, but otherwise remain in the default chronological
-    /// ordering with other unpinned records.
-    pub fn get_display_records(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let favorite_ids = self.favorite_id_set()?;
-        let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
-        let mut records = self.load_records(&selected_ids);
-        Self::sort_for_display(&mut records);
-        Ok(records)
-    }
-
     /// Get the total number of records.
     pub fn count(&self) -> usize {
         self.records.len()
@@ -277,40 +254,6 @@ impl ClipboardRepository {
 }
 
 impl ClipboardRepository {
-    /// Return all favorite record IDs.
-    pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
-        let mut ids = Vec::new();
-
-        self.favorites.scan_ascending(&mut |key, _value| {
-            if let Some(id) = Self::decode_u64_key(key) {
-                ids.push(id);
-            }
-            true
-        })?;
-
-        ids.sort_unstable();
-        Ok(ids)
-    }
-
-    /// Toggle the favorite state of a record.
-    ///
-    /// Returns the new favorite state after the operation.
-    pub fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
-        if self.get_by_id(id)?.is_none() {
-            return Err(RepositoryError::Query("record not found".to_string()));
-        }
-
-        let key = id.to_be_bytes();
-        if self.favorites.get(&key)?.is_some() {
-            self.favorites.remove(&key)?;
-            return Ok(false);
-        }
-
-        let favorited_at = Local::now().timestamp_millis().to_be_bytes();
-        self.favorites.insert(&key, &favorited_at)?;
-        Ok(true)
-    }
-
     /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
@@ -360,125 +303,27 @@ impl ClipboardRepository {
         }
         Ok(())
     }
-
-    /// Clear all ordinary records while preserving pinned and favorited ones.
-    pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
-        let total = self.count();
-        let favorite_ids = self.favorite_id_set()?;
-        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
-
-        self.cleanup_old_records_with_ordinary_total(0, ordinary_total, total, &favorite_ids)
-    }
-
-    /// Clean up old records, keeping the most recent `keep_count` records.
-    ///
-    /// Pinned records are never removed.
-    pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
-        let total = self.count();
-        let favorite_ids = self.favorite_id_set()?;
-        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
-        self.cleanup_old_records_with_ordinary_total(
-            keep_count,
-            ordinary_total,
-            total,
-            &favorite_ids,
-        )
-    }
-
-    /// Clean up old records only after the repository has exceeded the
-    /// configured limit by a small buffer.
-    pub fn cleanup_old_records_if_needed(
-        &self,
-        keep_count: usize,
-    ) -> Result<usize, RepositoryError> {
-        let total = self.count();
-        let favorite_ids = self.favorite_id_set()?;
-        let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
-        if ordinary_total <= Self::cleanup_trigger_record_count(keep_count) {
-            return Ok(0);
-        }
-
-        self.cleanup_old_records_with_ordinary_total(
-            keep_count,
-            ordinary_total,
-            total,
-            &favorite_ids,
-        )
-    }
-
-    fn cleanup_old_records_with_ordinary_total(
-        &self,
-        keep_count: usize,
-        ordinary_total: usize,
-        total: usize,
-        favorite_ids: &HashSet<u64>,
-    ) -> Result<usize, RepositoryError> {
-        if ordinary_total <= keep_count {
-            return Ok(0);
-        }
-
-        let candidates = self.time_index.oldest_unpinned(total)?;
-        let mut removed = 0;
-
-        for (ti_key, id) in candidates {
-            if ordinary_total.saturating_sub(removed) <= keep_count {
-                break;
-            }
-            if favorite_ids.contains(&id) {
-                continue;
-            }
-
-            let rec_key = id.to_be_bytes();
-            // Delete associated image files if this is an image record
-            if let Some(value) = self.get_raw(&rec_key)?
-                && let Ok(record) = postcard::from_bytes::<ClipboardRecord>(&value)
-                && record.content_type == ContentType::Image
-            {
-                Self::remove_image_files(&record.content);
-            }
-            self.records.remove(&rec_key)?;
-            self.time_index.remove_raw(&ti_key)?;
-            removed += 1;
-        }
-        Ok(removed)
-    }
-
-    fn cleanup_buffer_record_count(keep_count: usize) -> usize {
-        keep_count
-            .saturating_div(CLEANUP_BUFFER_DIVISOR)
-            .max(MIN_CLEANUP_BUFFER_RECORDS)
-    }
-
-    fn cleanup_trigger_record_count(keep_count: usize) -> usize {
-        keep_count.saturating_add(Self::cleanup_buffer_record_count(keep_count))
-    }
 }
 
 impl ClipboardRepository {
-    pub(crate) fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
-        Self::display_priority(left)
-            .cmp(&Self::display_priority(right))
-            .then_with(|| right.created_at.cmp(&left.created_at))
-    }
-
-    pub(crate) fn sort_for_display(records: &mut [ClipboardRecord]) {
-        records.sort_unstable_by(Self::compare_for_display);
-    }
-
     /// Get raw bytes from the records tree.
-    fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
+    pub(super) fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
         self.records.get(key)
     }
 
     /// Serialize and insert a record into the records tree.
-    fn put_raw(&self, key: &[u8], record: &ClipboardRecord) -> Result<(), RepositoryError> {
+    pub(super) fn put_raw(
+        &self,
+        key: &[u8],
+        record: &ClipboardRecord,
+    ) -> Result<(), RepositoryError> {
         let value = postcard::to_allocvec(record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
         self.records.insert(key, &value)
     }
 
     /// Load multiple records by ID, silently skipping failures.
-    fn load_records(&self, ids: &[u64]) -> Vec<ClipboardRecord> {
+    pub(super) fn load_records(&self, ids: &[u64]) -> Vec<ClipboardRecord> {
         let mut out = Vec::with_capacity(ids.len());
         for &id in ids {
             let key = id.to_be_bytes();
@@ -495,48 +340,13 @@ impl ClipboardRepository {
     }
 
     /// Remove image file and its thumbnail.
-    fn remove_image_files(path: &str) {
+    pub(super) fn remove_image_files(path: &str) {
         let _ = fs::remove_file(path);
         let thumb_path = thumb_path_for(Path::new(path));
         let _ = fs::remove_file(thumb_path);
     }
 
-    fn remove_favorite(&self, id: u64) -> Result<(), RepositoryError> {
-        self.favorites.remove(&id.to_be_bytes())?;
-        Ok(())
-    }
-
-    fn favorite_id_set(&self) -> Result<HashSet<u64>, RepositoryError> {
-        let mut favorite_ids = HashSet::new();
-
-        for id in self.favorite_ids()? {
-            if self.get_raw(&id.to_be_bytes())?.is_some() {
-                favorite_ids.insert(id);
-            }
-        }
-
-        Ok(favorite_ids)
-    }
-
-    fn ordinary_record_count(
-        &self,
-        total: usize,
-        favorite_ids: &HashSet<u64>,
-    ) -> Result<usize, RepositoryError> {
-        let mut special_ids = self
-            .time_index
-            .pinned_ids()?
-            .into_iter()
-            .collect::<HashSet<_>>();
-        special_ids.extend(favorite_ids.iter().copied());
-        Ok(total.saturating_sub(special_ids.len()))
-    }
-
-    const fn display_priority(record: &ClipboardRecord) -> u8 {
-        (!record.pinned) as u8
-    }
-
-    fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
+    pub(super) fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
         let key: [u8; 8] = bytes.try_into().ok()?;
         Some(u64::from_be_bytes(key))
     }

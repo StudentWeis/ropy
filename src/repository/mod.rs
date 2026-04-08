@@ -3,7 +3,10 @@ use std::sync::Arc;
 use gpui::{App, Global, ReadGlobal};
 
 pub mod backend;
+mod cleanup;
+mod display;
 pub mod errors;
+mod favorites;
 #[cfg(test)]
 pub mod memory_backend;
 pub mod models;
