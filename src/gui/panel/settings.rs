@@ -152,10 +152,8 @@ fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = h_flex()
         .justify_between()
         .items_center()
-        .mb_2()
         .px_4()
         .pt_4()
-        .pb_3()
         .child(
             div().w(px(72.0)).flex().items_start().child(
                 Button::new("cancel-button")

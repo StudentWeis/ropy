@@ -1,6 +1,6 @@
 # Contributing to Ropy
 
-[English](README.md) | [简体中文](./doc/CONTRIBUTING/CONTRIBUTING_ZH.md)
+English | [简体中文](./doc/CONTRIBUTING/CONTRIBUTING_ZH.md)
 
 Thank you for considering contributing to Ropy! This document will guide you through adding new themes and language support to the project.
 

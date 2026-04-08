@@ -1,6 +1,6 @@
 # 贡献指南
 
-[English](../../CONTRIBUTING.md) | [简体中文](README.md)
+[English](../../CONTRIBUTING.md) | 简体中文
 
 感谢你考虑为 Ropy 做贡献！本文档将指导你如何为项目添加新的主题和多语言支持。
 
