@@ -1,7 +1,10 @@
-use gpui::Context;
+use gpui::{AppContext as _, Context};
 
 use super::RopyBoard;
-use crate::{config::Settings, updater::models::UpdateStatus};
+use crate::{
+    config::Settings,
+    updater::{errors::UpdateError, models::UpdateStatus},
+};
 
 impl RopyBoard {
     /// Trigger a manual update check in the background
@@ -10,20 +13,12 @@ impl RopyBoard {
         cx.notify();
 
         let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);
-
-        let (result_tx, result_rx) = async_channel::bounded(1);
-
-        std::thread::spawn(move || {
-            let update_result = crate::updater::checker::check_for_update(include_prerelease);
-            let _ = result_tx.send_blocking(update_result);
+        let background_task = cx.background_spawn(async move {
+            crate::updater::checker::check_for_update(include_prerelease)
         });
 
         cx.spawn(async move |this, cx| {
-            let result = result_rx.recv().await.unwrap_or_else(|_| {
-                Err(crate::updater::errors::UpdateError::Network(
-                    "Update check failed".to_string(),
-                ))
-            });
+            let result: Result<_, UpdateError> = background_task.await;
 
             let _ = this.update(cx, |board, cx| {
                 match result {
@@ -53,17 +48,12 @@ impl RopyBoard {
         self.update_manager.status = UpdateStatus::Downloading(0.0);
         cx.notify();
 
+        // Progress channel is still needed because download_and_install reports
+        // incremental progress via an async_channel::Sender<f32>.
         let (progress_tx, progress_rx) = async_channel::unbounded::<f32>();
-        let (result_tx, result_rx) =
-            async_channel::bounded::<Result<(), crate::updater::errors::UpdateError>>(1);
 
-        // Launch the blocking download on a dedicated OS thread.
-        // progress_tx is moved into the thread; when it is dropped
-        // (download completes or fails) the progress channel closes automatically.
-        std::thread::spawn(move || {
-            let update_result =
-                crate::updater::downloader::download_and_install(&release, &progress_tx);
-            let _ = result_tx.send_blocking(update_result);
+        let download_task = cx.background_spawn(async move {
+            crate::updater::downloader::download_and_install(&release, &progress_tx)
         });
 
         cx.spawn(async move |this, cx| {
@@ -78,11 +68,7 @@ impl RopyBoard {
             }
 
             // Download is done – collect the result and update final status
-            let result = result_rx.recv().await.unwrap_or_else(|_| {
-                Err(crate::updater::errors::UpdateError::Network(
-                    "Update installation failed".to_string(),
-                ))
-            });
+            let result: Result<(), UpdateError> = download_task.await;
 
             let _ = this.update(cx, |board, cx| {
                 match result {

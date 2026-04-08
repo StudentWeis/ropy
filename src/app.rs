@@ -36,7 +36,7 @@ fn start_clipboard_event_handler(
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
-    let (notify_tx, notify_rx) = async_channel::unbounded::<ClipboardRecord>();
+    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
 
     // Clone the Arc before moving into the background task, since GPUI
     // globals are not accessible from background threads.
@@ -53,8 +53,8 @@ fn start_clipboard_event_handler(
             };
 
             match result {
-                Ok(record) => {
-                    if let Err(e) = notify_tx.send(record).await {
+                Ok(_record) => {
+                    if let Err(e) = notify_tx.send(()).await {
                         tracing::warn!(error = %e, "failed to notify foreground of new record");
                     }
                 }
@@ -68,7 +68,7 @@ fn start_clipboard_event_handler(
 
     // Process saved records on the foreground thread where GPUI globals are accessible.
     cx.spawn(async move |async_app| {
-        while let Ok(_record) = notify_rx.recv().await {
+        while notify_rx.recv().await.is_ok() {
             let _ = async_app.update(|cx| {
                 let (max_display, max_storage) = Settings::read(cx, |s| {
                     (s.storage.max_history_records, s.storage.max_storage_records)
