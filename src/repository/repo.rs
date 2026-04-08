@@ -40,8 +40,8 @@ pub struct ClipboardRepository {
 impl ClipboardRepository {
     /// Create a new repository using the configured backend.
     ///
-    /// Defaults to sled. Set `ROPY_STORAGE_BACKEND=redb` to opt into redb
-    /// without affecting the existing sled data file.
+    /// Defaults to redb. Set `ROPY_STORAGE_BACKEND=sled` to opt into sled
+    /// without affecting the existing redb data file.
     pub fn new() -> Result<Self, RepositoryError> {
         let backend = Self::configured_backend();
         let db_path = Self::default_db_path(backend)?;
@@ -110,8 +110,8 @@ impl ClipboardRepository {
 
     fn configured_backend() -> RepositoryBackend {
         match env::var("ROPY_STORAGE_BACKEND").ok().as_deref() {
-            Some("redb") => RepositoryBackend::Redb,
-            _ => RepositoryBackend::Sled,
+            Some("sled") => RepositoryBackend::Sled,
+            _ => RepositoryBackend::Redb,
         }
     }
 

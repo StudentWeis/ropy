@@ -178,6 +178,7 @@ pub fn start_window_drag(window: &Window) {
     }
 }
 
+/// Config GPUI to run without a dock icon on macOS
 #[cfg(target_os = "macos")]
 pub fn set_activation_policy_accessory() {
     use objc2::{class, msg_send, runtime::AnyObject};

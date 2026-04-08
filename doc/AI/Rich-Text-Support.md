@@ -10,7 +10,7 @@ Current baseline in the repository as of 2026-04-02:
 - `ClipboardEvent` supports `Text`, `Image`, and `Files`.
 - `CopyRequest` supports `Text`, `Image`, and `Files`.
 - Clipboard listener priority is `Image -> Files -> Text`.
-- The repository defaults to `sled` (`clipboard.db`) and also supports `redb` (`clipboard.redb`).
+- The repository defaults to `redb` (`clipboard.redb`) and also supports `sled` (`clipboard.db`).
 
 Rich text capture, storage, and lossless paste-back are not implemented yet.
 
@@ -112,8 +112,8 @@ Key decisions:
 
 ```text
 ~/.local/share/ropy/
-├── clipboard.db      # default sled backend
-├── clipboard.redb    # optional redb backend
+├── clipboard.redb    # default redb backend
+├── clipboard.db      # optional sled backend
 ├── images/           # existing
 │   ├── {id}.png
 │   └── {id}_thumb.png

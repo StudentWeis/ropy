@@ -201,7 +201,6 @@ pub fn launch() {
     gpui::Application::new()
         .with_assets(crate::gui::Assets)
         .run(move |cx| {
-            // Set activation policy on macOS
             #[cfg(target_os = "macos")]
             crate::gui::set_activation_policy_accessory();
 
