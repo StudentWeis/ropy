@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.4] - 2026-04-08
+
+### 🚀 Features
+- Instantly save configuration by @StudentWeis
+
+### 🐛 Bug Fixes
+- Handle missing OUT_DIR and invalid icon path in Windows resource compilation by @StudentWeis
+- Update search field background color by @StudentWeis
+
+### 💼 Other
+- Upgrade tray-icon, semver, zip versions in Cargo.toml by @StudentWeis
+
+### 🚜 Refactor
+- Add section labels for settings panel by @StudentWeis
+- Move settings editor fields into dedicated struct by @StudentWeis
+
+### 📚 Documentation
+- Add windows installation instructions for ropy by @StudentWeis
+- Add star history chart to READMEs by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Add open directories setting option by @StudentWeis
+
 ## [0.4.3] - 2026-04-07
 
 ### 🚀 Features
