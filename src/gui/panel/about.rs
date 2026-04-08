@@ -38,7 +38,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .ghost()
                     .label(BACK_ARROW)
                     .on_click(cx.listener(|board, _, window, cx| {
-                        board.show_about = false;
+                        board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
                         window.focus(&board.focus_handle);
                         cx.notify();
                     }))

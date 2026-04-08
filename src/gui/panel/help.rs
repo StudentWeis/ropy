@@ -74,7 +74,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
                 .ghost()
                 .label(BACK_ARROW)
                 .on_click(cx.listener(|board, _, window, cx| {
-                    board.show_help = false;
+                    board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
                     window.focus(&board.focus_handle);
                     cx.notify();
                 }))

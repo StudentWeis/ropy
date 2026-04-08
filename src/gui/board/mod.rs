@@ -43,6 +43,19 @@ use crate::{
     utils::read_or_recover,
 };
 
+/// Which panel is currently visible in the main window.
+///
+/// Using an enum instead of multiple boolean flags makes illegal states
+/// (e.g. Settings and About both visible) unrepresentable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ActivePanel {
+    #[default]
+    ClipboardList,
+    Settings,
+    About,
+    Help,
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -57,9 +70,7 @@ pub struct RopyBoard {
     pub(crate) selected_index: usize,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
-    pub(crate) show_settings: bool,
-    pub(crate) show_about: bool,
-    pub(crate) show_help: bool,
+    pub(crate) active_panel: ActivePanel,
     pub(crate) show_preview: bool,
     pub(crate) settings_editor: SettingsEditor,
     pub(crate) confirm_mode: ConfirmMode,
@@ -99,14 +110,14 @@ impl RopyBoard {
 
     #[allow(clippy::needless_pass_by_ref_mut)]
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_settings = true;
+        self.active_panel = ActivePanel::Settings;
         self.settings_editor.settings_window_opacity_slider_visible = false;
         window.focus(&self.focus_handle);
 
         let weak_entity = cx.entity().downgrade();
         window.on_next_frame(move |window, cx| {
             let _ = weak_entity.update(cx, |board, cx| {
-                if !board.show_settings {
+                if board.active_panel != ActivePanel::Settings {
                     return;
                 }
 
@@ -179,7 +190,7 @@ impl RopyBoard {
                 // Do NOT hide while settings panels are open — their popups
                 // (Select dropdowns, overlays) steal focus and would cause the window
                 // to disappear and become un-reopenable.
-                if !this.pinned && !this.show_settings {
+                if !this.pinned && this.active_panel != ActivePanel::Settings {
                     // Clear search input when hiding the window
                     this.clear_search(window, cx);
                     hide_window(window, cx, this.pinned);
@@ -289,9 +300,7 @@ impl RopyBoard {
             filtered_record_indices: Arc::new(initial_filtered_record_indices),
             favorite_ids,
             copy_tx,
-            show_settings: false,
-            show_about: false,
-            show_help: false,
+            active_panel: ActivePanel::default(),
             show_preview: false,
             settings_editor,
             confirm_mode,

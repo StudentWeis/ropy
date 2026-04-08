@@ -626,7 +626,7 @@ pub fn reset_settings_dialog(
     let current_hotkey = board.settings_editor.pending_hotkey.clone();
     board.sync_activation_key_input("", &current_hotkey, window, cx);
 
-    board.show_settings = false;
+    board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
     window.focus(&board.focus_handle);
     cx.notify();
 }

@@ -1,20 +1,14 @@
-## Total
+## General Principles
 
-- Think in terms of first principles.
-- Write code following the principles of Clean Code, DRY and KISS.
-- Follow the TDD (Test-Driven Development) approach, prioritizing writing tests that fail first, then writing implementation code that passes.
+- Reason from first principles — question assumptions before adopting patterns.
+- Follow Clean Code, DRY, and KISS — favor clarity over cleverness.
+- Practice TDD: write a failing test first, then implement the minimal code to make it pass, then refactor.
+- Prefix all shell commands with [rtk](./doc/RTK.md).
 
 ## Development
 
-- Use thiserror to define error types.
-- Use gpui-component to add new UI components.
-- Use scripts/precheck.sh to check code quality and format.
-- I18n is supported, so ensure that all user-facing strings are properly localized.
-
-## Tests
-
-- Look at the [Testing](./doc/TESTING.md) documentation for guidelines on writing tests and ensuring code quality.
-
-## Others
-
-- Use the [rtk](./doc/RTK.md) prefix when executing Shell commands.
+- Define all error types with `thiserror` — avoid manual `impl Display/Error`.
+- Build new UI components using `gpui-component`.
+- Run `scripts/precheck.sh` before committing to verify code quality and formatting.
+- Localize all user-facing strings — no hardcoded display text in source files.
+- Follow the guidelines in [Testing](./doc/TESTING.md) for test structure, naming, and coverage expectations.

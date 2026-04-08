@@ -69,7 +69,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                         .icon(Icon::empty().path("icon/help.svg"))
                         .tooltip(I18n::translate(cx, "help_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
-                            this.show_help = true;
+                            this.active_panel = crate::gui::board::ActivePanel::Help;
                             cx.notify();
                         }))
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
@@ -80,7 +80,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                         .icon(Icon::empty().path("icon/info.svg"))
                         .tooltip(I18n::translate(cx, "about_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
-                            this.show_about = true;
+                            this.active_panel = crate::gui::board::ActivePanel::About;
                             cx.notify();
                         }))
                         .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
