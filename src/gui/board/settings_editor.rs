@@ -27,11 +27,13 @@ pub(crate) struct SettingsEditor {
     pub(crate) selected_language: usize,
     pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) auto_check_enabled: bool,
+    pub(crate) include_prerelease_enabled: bool,
     pub(crate) hover_preview_enabled: bool,
 }
 
 impl SettingsEditor {
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::fn_params_excessive_bools)]
     #[allow(clippy::missing_const_for_fn)]
     pub(super) fn new(
         pending_hotkey: String,
@@ -43,10 +45,11 @@ impl SettingsEditor {
         selected_theme: usize,
         theme_select: Entity<SelectState<Vec<SharedString>>>,
         window_opacity_percent: u8,
-        autostart_enabled: bool,
         selected_language: usize,
         language_select: Entity<SelectState<Vec<SharedString>>>,
+        autostart_enabled: bool,
         auto_check_enabled: bool,
+        include_prerelease_enabled: bool,
         hover_preview_enabled: bool,
     ) -> Self {
         Self {
@@ -65,6 +68,7 @@ impl SettingsEditor {
             selected_language,
             language_select,
             auto_check_enabled,
+            include_prerelease_enabled,
             hover_preview_enabled,
         }
     }

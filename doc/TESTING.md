@@ -1,4 +1,5 @@
-- Use tempfile to create temporary files.
-- Use rstest to perform parameterized tests.
+- Use `tempfile` to create temporary files.
+- Use `rstest` to perform parameterized tests.
 - Use appropriate macros to avoid clippy warnings in test functions.
 - Test functions should follow the `test_<object>_<scenario>_<expected>` naming pattern.
+- Don't write meaningless inevitably correct tests, focus on the execution of the logic.

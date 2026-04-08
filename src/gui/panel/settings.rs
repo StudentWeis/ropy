@@ -124,6 +124,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
     let about_card = card_with_rows(
         vec![
             render_auto_check_row(board, cx).into_any_element(),
+            render_include_prerelease_row(board, cx).into_any_element(),
             render_open_dirs_row(cx).into_any_element(),
         ],
         cx,
@@ -555,36 +556,62 @@ fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
 
+fn render_include_prerelease_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    let toggle = Switch::new("include-prerelease-toggle")
+        .checked(board.settings_editor.include_prerelease_enabled)
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.save_include_prerelease_enabled(
+                !board.settings_editor.include_prerelease_enabled,
+                window,
+                cx,
+            );
+        }));
+    settings_row(I18n::translate(cx, "update_include_prerelease"), toggle, cx)
+}
+
 pub fn reset_settings_dialog(
     board: &mut RopyBoard,
     window: &mut gpui::Window,
     cx: &mut Context<'_, RopyBoard>,
 ) {
     // Reset selections to persisted values from GPUI Global
-    let (lang_idx, theme_idx, autostart, auto_check, confirm_mode, activation_key, window_opacity) =
-        crate::config::Settings::read(cx, |s| {
-            let lang = Language::all()
-                .iter()
-                .position(|lang| lang == &s.language)
-                .unwrap_or(0);
-            let theme = ThemeId::all()
-                .iter()
-                .position(|theme_id| theme_id == &s.theme)
-                .unwrap_or_default();
-            (
-                lang,
-                theme,
-                s.autostart.enabled,
-                s.update.auto_check,
-                s.confirm.mode,
-                s.hotkey.activation_key.clone(),
-                s.window.opacity_percent,
-            )
-        });
+    let (
+        lang_idx,
+        theme_idx,
+        autostart_enabled,
+        auto_check_enabled,
+        include_prerelease_enabled,
+        hover_preview_enabled,
+        confirm_mode,
+        activation_key,
+        window_opacity,
+    ) = crate::config::Settings::read(cx, |s| {
+        let lang = Language::all()
+            .iter()
+            .position(|lang| lang == &s.language)
+            .unwrap_or(0);
+        let theme = ThemeId::all()
+            .iter()
+            .position(|theme_id| theme_id == &s.theme)
+            .unwrap_or_default();
+        (
+            lang,
+            theme,
+            s.autostart.enabled,
+            s.update.auto_check,
+            s.update.include_prerelease,
+            s.preview.hover_preview_enabled,
+            s.confirm.mode,
+            s.hotkey.activation_key.clone(),
+            s.window.opacity_percent,
+        )
+    });
     board.settings_editor.selected_language = lang_idx;
     board.settings_editor.selected_theme = theme_idx;
-    board.settings_editor.autostart_enabled = autostart;
-    board.settings_editor.auto_check_enabled = auto_check;
+    board.settings_editor.autostart_enabled = autostart_enabled;
+    board.settings_editor.auto_check_enabled = auto_check_enabled;
+    board.settings_editor.include_prerelease_enabled = include_prerelease_enabled;
+    board.settings_editor.hover_preview_enabled = hover_preview_enabled;
     board.confirm_mode = confirm_mode;
     board.settings_editor.window_opacity_percent = window_opacity;
     board

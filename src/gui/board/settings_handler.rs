@@ -632,6 +632,28 @@ impl RopyBoard {
         cx.notify();
     }
 
+    pub(crate) fn save_include_prerelease_enabled(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_value = Settings::read(cx, |s| s.update.include_prerelease);
+        if enabled == previous_value {
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.update.include_prerelease = enabled;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.settings_editor.include_prerelease_enabled = enabled;
+        cx.notify();
+    }
+
     pub(crate) fn save_hover_preview_enabled(
         &mut self,
         enabled: bool,

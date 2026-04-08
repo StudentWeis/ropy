@@ -69,6 +69,7 @@ about_xiaohongshu_tooltip = "小红书"
 
 # 更新
 update_auto_check = "自动检查更新"
+update_include_prerelease = "更新时包含预览版"
 update_check_now = "立即检查"
 update_checking = "正在检查更新..."
 update_available = "发现新版本"

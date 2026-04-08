@@ -68,6 +68,7 @@ about_xiaohongshu_tooltip = "Xiaohongshu"
 
 # Update
 update_auto_check = "Auto-check for updates"
+update_include_prerelease = "Include pre-release versions"
 update_check_now = "Check Now"
 update_checking = "Checking for updates..."
 update_available = "New version available"

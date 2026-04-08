@@ -208,6 +208,7 @@ impl RopyBoard {
             confirm_mode,
             autostart_enabled,
             auto_check_enabled,
+            include_prerelease_enabled,
             hover_preview_enabled,
         ) = Settings::read(cx, |s| {
             (
@@ -220,6 +221,7 @@ impl RopyBoard {
                 s.confirm.mode,
                 s.autostart.enabled,
                 s.update.auto_check,
+                s.update.include_prerelease,
                 s.preview.hover_preview_enabled,
             )
         });
@@ -281,10 +283,11 @@ impl RopyBoard {
             selected_theme,
             theme_select,
             window_opacity_percent,
-            autostart_enabled,
             selected_language,
             language_select,
+            autostart_enabled,
             auto_check_enabled,
+            include_prerelease_enabled,
             hover_preview_enabled,
         );
 

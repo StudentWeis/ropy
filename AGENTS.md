@@ -2,6 +2,7 @@
 
 - Reason from first principles — question assumptions before adopting patterns.
 - Follow Clean Code, DRY, and KISS — favor clarity over cleverness.
+- Don't over-abstract and keep it simple.
 - Practice TDD: write a failing test first, then implement the minimal code to make it pass, then refactor.
 - Prefix all shell commands with [rtk](./doc/RTK.md).
 
