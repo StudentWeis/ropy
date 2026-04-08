@@ -11,25 +11,20 @@ impl RopyBoard {
 
         let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);
 
-        cx.spawn(async move |this, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move {
-                    // Use std::thread::spawn to run blocking operation
-                    let (tx, rx) = std::sync::mpsc::channel();
-                    let _handle = std::thread::spawn(move || {
-                        let update_result =
-                            crate::updater::checker::check_for_update(include_prerelease);
-                        let _ = tx.send(update_result);
-                    });
+        let (result_tx, result_rx) = async_channel::bounded(1);
 
-                    rx.recv().unwrap_or_else(|_| {
-                        Err(crate::updater::errors::UpdateError::Network(
-                            "Update check failed".to_string(),
-                        ))
-                    })
-                })
-                .await;
+        std::thread::spawn(move || {
+            let update_result =
+                crate::updater::checker::check_for_update(include_prerelease);
+            let _ = result_tx.send_blocking(update_result);
+        });
+
+        cx.spawn(async move |this, cx| {
+            let result = result_rx.recv().await.unwrap_or_else(|_| {
+                Err(crate::updater::errors::UpdateError::Network(
+                    "Update check failed".to_string(),
+                ))
+            });
 
             let _ = this.update(cx, |board, cx| {
                 match result {

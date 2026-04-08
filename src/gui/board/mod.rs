@@ -101,9 +101,9 @@ impl RopyBoard {
         self.settings_editor.settings_window_opacity_slider_visible = false;
         window.focus(&self.focus_handle);
 
-        let entity = cx.entity();
+        let weak_entity = cx.entity().downgrade();
         window.on_next_frame(move |window, cx| {
-            entity.update(cx, |board, cx| {
+            let _ = weak_entity.update(cx, |board, cx| {
                 if !board.show_settings {
                     return;
                 }

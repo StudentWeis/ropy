@@ -423,37 +423,31 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
 }
 
 fn render_autostart_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let entity = cx.entity();
     let toggle = Switch::new("autostart-toggle")
         .checked(board.settings_editor.autostart_enabled)
-        .on_click(move |_, window, cx| {
-            entity.update(cx, |board, cx| {
-                board.toggle_autostart(window, cx);
-            });
-        });
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.toggle_autostart(window, cx);
+        }));
     settings_row(I18n::translate(cx, "settings_autostart"), toggle, cx)
 }
 
 fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let entity = cx.entity();
     let toggle = Switch::new("confirm-mode-toggle")
         .checked(matches!(
             board.confirm_mode,
             crate::config::ConfirmMode::PasteImmediately
         ))
-        .on_click(move |_, window, cx| {
-            entity.update(cx, |board, cx| {
-                let new_mode = match board.confirm_mode {
-                    crate::config::ConfirmMode::CopyToClipboard => {
-                        crate::config::ConfirmMode::PasteImmediately
-                    }
-                    crate::config::ConfirmMode::PasteImmediately => {
-                        crate::config::ConfirmMode::CopyToClipboard
-                    }
-                };
-                board.save_confirm_mode(new_mode, window, cx);
-            });
-        });
+        .on_click(cx.listener(|board, _, window, cx| {
+            let new_mode = match board.confirm_mode {
+                crate::config::ConfirmMode::CopyToClipboard => {
+                    crate::config::ConfirmMode::PasteImmediately
+                }
+                crate::config::ConfirmMode::PasteImmediately => {
+                    crate::config::ConfirmMode::CopyToClipboard
+                }
+            };
+            board.save_confirm_mode(new_mode, window, cx);
+        }));
     settings_row(
         I18n::translate(cx, "settings_paste_immediately"),
         toggle,
@@ -462,18 +456,15 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
 }
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let entity = cx.entity();
     let toggle = Switch::new("hover-preview-toggle")
         .checked(board.settings_editor.hover_preview_enabled)
-        .on_click(move |_, window, cx| {
-            entity.update(cx, |board, cx| {
-                board.save_hover_preview_enabled(
-                    !board.settings_editor.hover_preview_enabled,
-                    window,
-                    cx,
-                );
-            });
-        });
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.save_hover_preview_enabled(
+                !board.settings_editor.hover_preview_enabled,
+                window,
+                cx,
+            );
+        }));
     settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
 }
 
@@ -556,18 +547,15 @@ fn render_open_dirs_row(cx: &Context<RopyBoard>) -> impl IntoElement {
 }
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let entity = cx.entity();
     let toggle = Switch::new("auto-check-toggle")
         .checked(board.settings_editor.auto_check_enabled)
-        .on_click(move |_, window, cx| {
-            entity.update(cx, |board, cx| {
-                board.save_auto_check_enabled(
-                    !board.settings_editor.auto_check_enabled,
-                    window,
-                    cx,
-                );
-            });
-        });
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.save_auto_check_enabled(
+                !board.settings_editor.auto_check_enabled,
+                window,
+                cx,
+            );
+        }));
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
 
