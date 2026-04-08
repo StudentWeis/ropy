@@ -10,10 +10,6 @@ mod repository;
 mod updater;
 mod utils;
 
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
-
 fn main() {
     let _logging_guard = utils::init_logging();
 
@@ -23,7 +19,5 @@ fn main() {
         return;
     }
 
-    utils::start_heap_profiling();
     app::launch();
-    utils::finish_heap_profiling();
 }

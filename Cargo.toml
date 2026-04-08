@@ -49,8 +49,6 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "std",
     "time",
 ] }
-dhat = { version = "0.3.3", optional = true }
-
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
 
@@ -76,9 +74,6 @@ image = { version = "0.25.10", default-features = false, features = ["ico", "png
 [dev-dependencies]
 rstest = "0.26.1"
 
-[features]
-dhat-heap = ["dep:dhat"]
-
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
@@ -102,10 +97,6 @@ lto = "fat"
 codegen-units = 1
 incremental = false
 panic = "abort"
-
-[profile.dhat]
-inherits = "release"
-debug = 1
 
 # The profile that 'dist' will build with
 [profile.dist]
