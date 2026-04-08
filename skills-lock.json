@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "ff7da0807cf3f35a3e666bf84fdaf8458c34fe734798fdb84a4bdead6b3413a3"
     },
+    "gpui-entity": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "878923ea2fb8a26d69f649e0d068c117b26785b7b6b67e2771220957422e99b4"
+    },
     "gpui-global": {
       "source": "longbridge/gpui-component",
       "sourceType": "github",

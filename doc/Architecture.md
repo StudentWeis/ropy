@@ -41,7 +41,7 @@ The clipboard pipeline is implemented with async channels and background tasks.
 - `writer.rs` serializes clipboard writes behind a single background task, so confirming an item does not create a new clipboard context each time.
 - Consecutive duplicate copies are ignored via `LastCopyState` before they reach storage.
 
-The current end-to-end user flow is implemented for text and images. `ContentType::FilePath` exists in the data model, but it is not fully wired into the board confirm workflow yet.
+The current end-to-end user flow is fully implemented for text, images, and file paths. All content types support search filtering, clipboard operations, preview rendering, and the confirm workflow.
 
 ## Repository Model
 
