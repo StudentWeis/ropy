@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "d69fbee14332710e0ebc1dafb69f49338ac4d0300e1c1e5a8db6b4daf0b20174"
     },
+    "gpui-element": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "bf45833b53728f238b37874b8bb100c6c703b27afdacd5ac20079bf74fd5c800"
+    },
     "gpui-entity": {
       "source": "longbridge/gpui-component",
       "sourceType": "github",
