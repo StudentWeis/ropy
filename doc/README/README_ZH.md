@@ -47,6 +47,17 @@ xattr -rc /Applications/Ropy.app
 sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
 
+### Windows
+
+您可以使用 [Scoop](https://scoop.sh/) 安装 Ropy：
+
+```powershell
+scoop install ropy
+```
+
+> [!NOTE]
+> 如果您通过 Scoop 安装 Ropy，建议禁用 Ropy 内置的自动更新功能，以避免与 Scoop 的包管理产生冲突。您可以在 Ropy 的设置中禁用自动更新。
+
 ### 从源码构建
 
 确保您已安装 Rust（通过 `rustup`）。然后：

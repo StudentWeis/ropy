@@ -45,6 +45,17 @@ xattr -rc /Applications/Ropy.app
 sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
 
+### Windows
+
+You can install Ropy using [Scoop](https://scoop.sh/):
+
+```sh
+scoop install ropy
+```
+
+> [!NOTE]
+> If you install Ropy via Scoop, it is recommended to disable Ropy's built-in auto-update feature to avoid conflicts with Scoop's package management. You can disable auto-updates in Ropy's settings.
+
 ### Build from source
 
 Ensure you have Rust installed (via `rustup`). Then:
