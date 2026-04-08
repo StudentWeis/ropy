@@ -152,7 +152,8 @@ fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = h_flex()
         .justify_between()
         .items_center()
-        .px_4()
+        .pl_1()
+        .pr_4()
         .pt_4()
         .child(
             div().w(px(72.0)).flex().items_start().child(
