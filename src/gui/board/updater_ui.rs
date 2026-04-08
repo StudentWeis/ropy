@@ -14,8 +14,7 @@ impl RopyBoard {
         let (result_tx, result_rx) = async_channel::bounded(1);
 
         std::thread::spawn(move || {
-            let update_result =
-                crate::updater::checker::check_for_update(include_prerelease);
+            let update_result = crate::updater::checker::check_for_update(include_prerelease);
             let _ = result_tx.send_blocking(update_result);
         });
 

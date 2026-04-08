@@ -550,11 +550,7 @@ fn render_auto_check_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
     let toggle = Switch::new("auto-check-toggle")
         .checked(board.settings_editor.auto_check_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
-            board.save_auto_check_enabled(
-                !board.settings_editor.auto_check_enabled,
-                window,
-                cx,
-            );
+            board.save_auto_check_enabled(!board.settings_editor.auto_check_enabled, window, cx);
         }));
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
