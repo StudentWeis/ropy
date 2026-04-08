@@ -1,6 +1,8 @@
 {
     "chat.tools.terminal.autoApprove": {
         "rtk scripts/precheck.sh": true,
-        "rtk ./scripts/precheck.sh": true
+        "rtk ./scripts/precheck.sh": true,
+        "./scripts/precheck.sh": true,
+        "scripts/precheck.sh": true
     }
 }

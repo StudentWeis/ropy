@@ -187,6 +187,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
     )
     .on_click(cx.listener(|this, _, _, cx| {
         this.toggle_case_sensitive_search();
+        this.sync_filtered_records(cx);
         cx.notify();
     }))
     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -203,6 +204,7 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
     )
     .on_click(cx.listener(|this, _, _, cx| {
         this.toggle_whole_word_search();
+        this.sync_filtered_records(cx);
         cx.notify();
     }))
     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -298,6 +300,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_content_filter(ContentFilter::Text);
+                    this.sync_filtered_records(cx);
                     cx.notify();
                 }))
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
@@ -309,6 +312,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_content_filter(ContentFilter::Image);
+                    this.sync_filtered_records(cx);
                     cx.notify();
                 }))
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
@@ -320,6 +324,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_content_filter(ContentFilter::Files);
+                    this.sync_filtered_records(cx);
                     cx.notify();
                 }))
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
@@ -351,6 +356,7 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.toggle_favorites_only();
+                    this.sync_filtered_records(cx);
                     cx.notify();
                 }))
                 .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),

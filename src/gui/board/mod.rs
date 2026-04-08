@@ -23,7 +23,7 @@ use std::{
 
 // Re-export utilities for external use
 pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
-use filtering::ClearConfirmAction;
+use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Window,
 };
@@ -40,6 +40,7 @@ use crate::{
     gui::{hide_window, surface_with_opacity, theme::ThemeId},
     i18n::Language,
     repository::SharedRecords,
+    utils::read_or_recover,
 };
 
 /// `RopyBoard` Main Window Component
@@ -50,6 +51,7 @@ pub struct RopyBoard {
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) _focus_out_subscription: Subscription,
+    pub(crate) _search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) list_state: ListState,
     pub(crate) selected_index: usize,
@@ -184,10 +186,6 @@ impl RopyBoard {
                 }
             });
 
-        // Render a bit beyond the viewport to reduce scroll-time pop-in while
-        // keeping GPUI's lazy list measurement behavior.
-        let list_state = ListState::new(0, ListAlignment::Top, gpui::px(160.));
-
         // Read initial values from GPUI Global settings
         let (
             max_history_records,
@@ -236,8 +234,32 @@ impl RopyBoard {
             .unwrap_or(0);
         let language_select = build_language_select(selected_language, window, cx);
 
-        let search_input = cx.new(|cx| InputState::new(window, cx));
         let favorite_ids = Arc::new(Self::load_favorite_ids(cx));
+        let search_input = cx.new(|cx| InputState::new(window, cx));
+        let initial_filtered_record_indices = {
+            let records = read_or_recover(&records);
+            filter_and_sort_record_indices(
+                &records,
+                "",
+                ContentFilter::default(),
+                SearchOptions::default(),
+                favorite_ids.as_ref(),
+                false,
+            )
+        };
+
+        // Render a bit beyond the viewport to reduce scroll-time pop-in while
+        // keeping GPUI's lazy list measurement behavior.
+        let list_state = ListState::new(
+            initial_filtered_record_indices.len(),
+            ListAlignment::Top,
+            gpui::px(160.),
+        );
+        let search_input_subscription = cx.observe(&search_input, |this, _, cx| {
+            this.sync_filtered_records(cx);
+            cx.notify();
+        });
+
         let settings_editor = SettingsEditor::new(
             activation_key.clone(),
             activation_key,
@@ -259,11 +281,12 @@ impl RopyBoard {
             records,
             focus_handle,
             _focus_out_subscription: focus_out_subscription,
+            _search_input_subscription: search_input_subscription,
             search_input,
             selected_index: 0,
             last_copy,
             list_state,
-            filtered_record_indices: Arc::new(Vec::new()),
+            filtered_record_indices: Arc::new(initial_filtered_record_indices),
             favorite_ids,
             copy_tx,
             show_settings: false,

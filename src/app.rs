@@ -18,8 +18,7 @@ use crate::{
     constants::APP_NAME,
     gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, SharedRecords},
-    utils::write_or_recover,
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
 };
 
 #[cfg(target_os = "linux")]
@@ -32,7 +31,6 @@ pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 /// and does not belong to the clipboard I/O layer alone.
 fn start_clipboard_event_handler(
     clipboard_rx: async_channel::Receiver<ClipboardEvent>,
-    shared_records: SharedRecords,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
@@ -70,28 +68,24 @@ fn start_clipboard_event_handler(
     cx.spawn(async move |async_app| {
         while notify_rx.recv().await.is_ok() {
             let _ = async_app.update(|cx| {
-                let (max_display, max_storage) = Settings::read(cx, |s| {
-                    (s.storage.max_history_records, s.storage.max_storage_records)
-                });
+                let max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
 
                 GlobalRepository::read(cx, |repo| {
-                    if let Some(repo) = repo {
-                        if let Err(e) = repo.cleanup_old_records_if_needed(max_storage) {
-                            tracing::warn!(error = %e, "failed to cleanup old clipboard records");
-                        }
-
-                        match repo.get_display_records(max_display) {
-                            Ok(records) => replace_shared_records(&shared_records, records),
-                            Err(e) => {
-                                tracing::warn!(error = %e, "failed to reload display records");
-                            }
-                        }
+                    if let Some(repo) = repo
+                        && let Err(e) = repo.cleanup_old_records_if_needed(max_storage)
+                    {
+                        tracing::warn!(error = %e, "failed to cleanup old clipboard records");
                     }
                 });
 
                 window_handle
-                    .update(cx, |_, _, cx| {
-                        cx.notify();
+                    .update(cx, |root, _, cx| {
+                        if let Ok(board) = root.view().clone().downcast::<RopyBoard>() {
+                            board.update(cx, |board, cx| {
+                                board.refresh_records_from_repository(cx);
+                                cx.notify();
+                            });
+                        }
                     })
                     .ok();
             });
@@ -120,14 +114,6 @@ fn load_initial_records(
     repository
         .and_then(|repo| repo.get_display_records(max_history_records).ok())
         .unwrap_or_default()
-}
-
-fn replace_shared_records(
-    shared_records: &SharedRecords,
-    records: Vec<crate::repository::ClipboardRecord>,
-) {
-    let mut guard = write_or_recover(shared_records);
-    *guard = records;
 }
 
 /// Synchronize auto-start state with system on application launch
@@ -250,14 +236,9 @@ pub fn launch() {
             let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(cx);
 
-            let window_handle = crate::gui::create_window(
-                cx,
-                shared_records.clone(),
-                last_copy,
-                copy_tx,
-                is_silent,
-            );
-            start_clipboard_event_handler(clipboard_rx, shared_records, window_handle, cx);
+            let window_handle =
+                crate::gui::create_window(cx, shared_records, last_copy, copy_tx, is_silent);
+            start_clipboard_event_handler(clipboard_rx, window_handle, cx);
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
             // Initialize tray from the global I18n, then store the handle in global tray state.
@@ -297,8 +278,6 @@ pub fn launch() {
 #[cfg(test)]
 mod tests {
     use std::{thread, time::Duration};
-
-    use chrono::Local;
 
     use super::*;
 
@@ -359,35 +338,5 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].content, "third");
         assert_eq!(records[1].content, "second");
-    }
-
-    #[test]
-    fn test_replace_shared_records_when_called_replaces_existing_records() {
-        let shared_records = Arc::new(std::sync::RwLock::new(vec![ClipboardRecord {
-            id: 1,
-            content: "old".to_string(),
-            created_at: Local::now(),
-            content_type: crate::repository::ContentType::Text,
-            pinned: false,
-        }]));
-        let new_records = vec![ClipboardRecord {
-            id: 2,
-            content: "new".to_string(),
-            created_at: Local::now(),
-            content_type: crate::repository::ContentType::Text,
-            pinned: true,
-        }];
-
-        replace_shared_records(&shared_records, new_records);
-
-        let record = {
-            let records = crate::utils::read_or_recover(&shared_records);
-            assert_eq!(records.len(), 1);
-            records[0].clone()
-        };
-
-        assert_eq!(record.id, 2);
-        assert_eq!(record.content, "new");
-        assert!(record.pinned);
     }
 }

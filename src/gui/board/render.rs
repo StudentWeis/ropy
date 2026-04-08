@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use gpui::{
     AnyElement, Context, Render, Window,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
@@ -37,49 +35,6 @@ impl Render for RopyBoard {
                 .child(render_help_content(self, cx))
                 .into_any_element()
         } else {
-            // Render main clipboard view
-            let query = self.search_input.read(cx).value().to_string();
-            let new_filtered_record_indices = self.get_filtered_record_indices(&query);
-
-            if new_filtered_record_indices != *self.filtered_record_indices {
-                let old_len = self.filtered_record_indices.len();
-                let new_len = new_filtered_record_indices.len();
-
-                // If we're deleting a record, preserve the scroll position
-                let scroll_position = if self.deleting_record {
-                    Some(self.list_state.logical_scroll_top())
-                } else {
-                    None
-                };
-
-                self.filtered_record_indices = Arc::new(new_filtered_record_indices);
-
-                // Use splice to inform list state about the change instead of reset
-                // This helps preserve scroll position better
-                if self.deleting_record {
-                    self.list_state.splice(0..old_len, new_len);
-
-                    // Restore scroll position
-                    if let Some(scroll_pos) = scroll_position {
-                        self.list_state.scroll_to(scroll_pos);
-                    }
-
-                    // Reset the flag
-                    self.deleting_record = false;
-                } else {
-                    // For other changes (like search), reset the list state
-                    self.list_state.reset(new_len);
-                }
-            }
-
-            if self.selected_index >= self.filtered_record_indices.len()
-                && !self.filtered_record_indices.is_empty()
-            {
-                self.selected_index = self.filtered_record_indices.len() - 1;
-            } else if self.filtered_record_indices.is_empty() {
-                self.selected_index = 0;
-            }
-
             base.bg(self.main_panel_surface(cx.theme().background))
                 .on_action(cx.listener(Self::on_select_prev))
                 .on_action(cx.listener(Self::on_select_next))

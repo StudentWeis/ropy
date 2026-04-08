@@ -4,7 +4,10 @@ use gpui::Context;
 
 use super::{
     RopyBoard,
-    filtering::{ClearConfirmAction, filter_and_sort_record_indices},
+    filtering::{
+        ClearConfirmAction, FilteredRecordsUpdate, filter_and_sort_record_indices,
+        plan_filtered_records_sync,
+    },
     search::ContentFilter,
 };
 use crate::{
@@ -15,6 +18,40 @@ use crate::{
 };
 
 impl RopyBoard {
+    pub(crate) fn sync_filtered_records(&mut self, cx: &Context<Self>) {
+        let query = self.search_input.read(cx).value().to_string();
+        let next_indices = self.get_filtered_record_indices(&query);
+        let plan = plan_filtered_records_sync(
+            self.filtered_record_indices.as_ref(),
+            next_indices,
+            self.selected_index,
+            self.deleting_record,
+        );
+
+        let scroll_position = matches!(plan.list_update, FilteredRecordsUpdate::Splice { .. })
+            .then(|| self.list_state.logical_scroll_top());
+
+        self.filtered_record_indices = Arc::new(plan.indices);
+        self.selected_index = plan.selected_index;
+
+        match plan.list_update {
+            FilteredRecordsUpdate::None => {}
+            FilteredRecordsUpdate::Reset { new_len } => {
+                self.list_state.reset(new_len);
+            }
+            FilteredRecordsUpdate::Splice { old_len, new_len } => {
+                self.list_state.splice(0..old_len, new_len);
+                if let Some(scroll_position) = scroll_position {
+                    self.list_state.scroll_to(scroll_position);
+                }
+            }
+        }
+
+        if plan.clear_deleting_record {
+            self.deleting_record = false;
+        }
+    }
+
     pub(super) fn load_favorite_ids(cx: &gpui::App) -> HashSet<u64> {
         GlobalRepository::read(cx, |repo| {
             repo.and_then(|repo| repo.favorite_ids().ok())
@@ -23,7 +60,7 @@ impl RopyBoard {
         })
     }
 
-    pub(super) fn refresh_records_from_repository(&mut self, cx: &Context<Self>) {
+    pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<Self>) {
         let max_history_records = Settings::read(cx, |s| s.storage.max_history_records);
 
         GlobalRepository::read(cx, |repo| {
@@ -50,6 +87,8 @@ impl RopyBoard {
                 }
             }
         });
+
+        self.sync_filtered_records(cx);
     }
 
     /// Clear clipboard history
@@ -64,6 +103,7 @@ impl RopyBoard {
                         guard.clear();
                     }
                     self.favorite_ids = Arc::new(HashSet::new());
+                    self.sync_filtered_records(cx);
                 }
             }
         });
