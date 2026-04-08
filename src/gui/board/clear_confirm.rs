@@ -9,7 +9,7 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use super::{ClearConfirmAction, RopyBoard};
+use super::{RopyBoard, filtering::ClearConfirmAction};
 use crate::i18n::I18n;
 
 /// Render the clear-all confirmation overlay (backdrop + centered dialog card)

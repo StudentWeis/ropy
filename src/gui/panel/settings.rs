@@ -17,7 +17,7 @@ use gpui_component::{
 
 use crate::{
     gui::{
-        board::{ClearConfirmAction, RopyBoard},
+        board::{RopyBoard, filtering::ClearConfirmAction},
         theme::ThemeId,
     },
     i18n::{I18n, Language},
