@@ -9,6 +9,7 @@
 - Use thiserror to define error types.
 - Use gpui-component to add new UI components.
 - Use scripts/precheck.sh to check code quality and format.
+- I18n is supported, so ensure that all user-facing strings are properly localized.
 
 ## Tests
 

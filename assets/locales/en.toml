@@ -62,6 +62,9 @@ settings_open_config = "Open Config Directory"
 about_title = "About"
 about_version = "Version"
 about_description = "A lightweight clipboard manager built with Rust and GPUI."
+about_license = "MIT License"
+about_github_tooltip = "GitHub"
+about_xiaohongshu_tooltip = "Xiaohongshu"
 
 # Update
 update_auto_check = "Auto-check for updates"

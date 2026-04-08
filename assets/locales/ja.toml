@@ -63,6 +63,9 @@ settings_open_config = "設定ディレクトリを開く"
 about_title = "について"
 about_version = "バージョン"
 about_description = "RustとGPUIで構築された軽量クリップボードマネージャーです。"
+about_license = "MIT ライセンス"
+about_github_tooltip = "GitHub"
+about_xiaohongshu_tooltip = "小红书"
 
 # アップデート
 update_auto_check = "アップデートを自動確認"

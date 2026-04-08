@@ -63,6 +63,9 @@ settings_open_config = "打开配置目录"
 about_title = "关于"
 about_version = "版本"
 about_description = "使用 Rust 和 GPUI 构建的轻量剪贴板管理器。"
+about_license = "MIT 开源协议"
+about_github_tooltip = "GitHub"
+about_xiaohongshu_tooltip = "小红书"
 
 # 更新
 update_auto_check = "自动检查更新"

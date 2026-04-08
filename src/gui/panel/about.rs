@@ -4,7 +4,7 @@ use gpui::{
     px,
 };
 use gpui_component::{
-    ActiveTheme, Sizable,
+    ActiveTheme, Icon, Sizable,
     button::{Button, ButtonVariants},
     h_flex, v_flex,
 };
@@ -12,6 +12,15 @@ use gpui_component::{
 use crate::{
     constants::BACK_ARROW, gui::board::RopyBoard, i18n::I18n, updater::models::UpdateStatus,
 };
+
+/// GitHub repository URL for the application.
+const GITHUB_URL: &str = "https://github.com/StudentWeis/ropy";
+
+/// MIT License URL for the application.
+const LICENSE_URL: &str = "https://github.com/StudentWeis/ropy/blob/main/LICENSE";
+
+/// Xiaohongshu profile URL for the application.
+const XIAOHONGSHU_URL: &str = "https://xhslink.com/m/Ar6O3JkYc0X";
 
 /// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
@@ -80,7 +89,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             )
             // Update section
             .child(render_update_section(board, cx))
-            // Description and GitHub footer
+            // Description
             .child(
                 div()
                     .px_8()
@@ -89,13 +98,38 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .text_color(cx.theme().muted_foreground)
                     .child(I18n::translate(cx, "about_description")),
             )
+            // License
             .child(
-                Button::new("github-button")
+                Button::new("license-button")
+                    .small()
                     .ghost()
-                    .label("GitHub")
+                    .label(I18n::translate(cx, "about_license"))
                     .on_click(|_, _, cx| {
-                        cx.open_url("https://github.com/StudentWeis/ropy");
+                        cx.open_url(LICENSE_URL);
                     }),
+            )
+            // Social links with icons
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("github-button")
+                            .ghost()
+                            .icon(Icon::empty().path("icon/github.svg").size(px(32.0)))
+                            .tooltip(I18n::translate(cx, "about_github_tooltip"))
+                            .on_click(|_, _, cx| {
+                                cx.open_url(GITHUB_URL);
+                            }),
+                    )
+                    .child(
+                        Button::new("xiaohongshu-button")
+                            .ghost()
+                            .icon(Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)))
+                            .tooltip(I18n::translate(cx, "about_xiaohongshu_tooltip"))
+                            .on_click(|_, _, cx| {
+                                cx.open_url(XIAOHONGSHU_URL);
+                            }),
+                    ),
             ),
     )
 }

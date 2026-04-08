@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(theme.id.code(), "nord-light");
         assert_eq!(theme.name, "Nord Light");
         assert_eq!(theme.mode(), ThemeMode::Light);
-        assert_eq!(theme.palette().background, 0x00ec_eff4);
+        assert_eq!(theme.palette().background, 0x00e3_e7ee);
         assert_eq!(theme.palette().primary, 0x005e_81ac);
     }
 
