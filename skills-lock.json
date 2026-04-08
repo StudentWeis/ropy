@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "gpui-action": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "3c1e2d98d316e6bd117e4d2a7dd16862adb14bee22572dbbea0c883a6fc74e93"
+    },
     "gpui-async": {
       "source": "longbridge/gpui-component",
       "sourceType": "github",
@@ -15,6 +20,11 @@
       "source": "longbridge/gpui-component",
       "sourceType": "github",
       "computedHash": "878923ea2fb8a26d69f649e0d068c117b26785b7b6b67e2771220957422e99b4"
+    },
+    "gpui-event": {
+      "source": "longbridge/gpui-component",
+      "sourceType": "github",
+      "computedHash": "c3c75c4c4504192714a95dc19caead36ffa35ac5066634f06be0bce849af9ba6"
     },
     "gpui-focus-handle": {
       "source": "longbridge/gpui-component",
