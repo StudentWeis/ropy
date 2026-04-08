@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.5] - 2026-04-08
+
+### 🚀 Features
+- Add prerelease update option and simplify architecture docs by @StudentWeis
+- Add social media links in about panel by @StudentWeis
+
+### 🚜 Refactor
+- Split large modules into smaller components for better maintainability by @StudentWeis
+- Replace booleans with ActivePanel enum for panel visibility management by @StudentWeis
+- Simplify record filtering logic and improve sync handling by @StudentWeis
+- Remove unused dhat heap profiling code by @StudentWeis
+- Update clipboard event handling to use unit type and improve async task management by @StudentWeis
+- Simplify click event handling in header and updater UI components by @StudentWeis
+- Use weak references and improve async handling in GUI components by @StudentWeis
+- Add storage validation and improve logging setup by @StudentWeis
+- Adjust padding in settings header layout by @StudentWeis
+- Update links in CONTRIBUTING files and adjust settings panel layout by @StudentWeis
+- Update color values in nord-light theme configuration by @StudentWeis
+- Split board module into smaller components by @StudentWeis
+
+### 📚 Documentation
+- Add gpui patterns and testing skills docs by @StudentWeis
+- Add comprehensive GPUI element skill documentation by @StudentWeis
+- Add SKILL.md files for gpui-action and gpui-event skills by @StudentWeis
+- Add comprehensive entity management documentation and project review report by @StudentWeis
+- Update image link for Ropy Dark in README by @StudentWeis
+
 ## [0.4.4] - 2026-04-08
 
 ### 🚀 Features
