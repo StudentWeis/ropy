@@ -11,11 +11,11 @@ set -e
 PID=$(pgrep -x ropy 2>/dev/null || true)
 
 if [ -z "$PID" ]; then
-    echo "ropy is not running. Please start ropy first, then run this script."
-    echo ""
-    echo "Tip: You can start ropy with:"
-    echo "  open target/release/ropy   # or double-click the binary"
-    exit 1
+	echo "ropy is not running. Please start ropy first, then run this script."
+	echo ""
+	echo "Tip: You can start ropy with:"
+	echo "  open target/release/ropy   # or double-click the binary"
+	exit 1
 fi
 
 echo "=== Ropy Memory Profile (PID: $PID) ==="
@@ -33,14 +33,14 @@ echo ""
 echo "--- vmmap Summary ---"
 echo "(Full output saved to $OUTPUT_DIR/vmmap.txt)"
 vmmap --summary "$PID" 2>/dev/null | tee "$OUTPUT_DIR/vmmap_summary.txt"
-vmmap "$PID" > "$OUTPUT_DIR/vmmap.txt" 2>/dev/null
+vmmap "$PID" >"$OUTPUT_DIR/vmmap.txt" 2>/dev/null
 echo ""
 
 # 3. heap analysis - shows heap allocations by type
 echo "--- Heap Summary ---"
 echo "(Full output saved to $OUTPUT_DIR/heap.txt)"
 heap "$PID" 2>/dev/null | head -50 | tee "$OUTPUT_DIR/heap_summary.txt"
-heap "$PID" > "$OUTPUT_DIR/heap.txt" 2>/dev/null
+heap "$PID" >"$OUTPUT_DIR/heap.txt" 2>/dev/null
 echo ""
 
 # 4. malloc history (top allocations)

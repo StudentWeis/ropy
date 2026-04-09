@@ -7,10 +7,10 @@ set -euo pipefail
 # If no binary args are provided, defaults to target/release/ropy
 
 # Determine which command to use for Rust operations
-if command -v rtk &> /dev/null; then
-    CARGO_CMD="rtk cargo"
+if command -v rtk &>/dev/null; then
+	CARGO_CMD="rtk cargo"
 else
-    CARGO_CMD="cargo"
+	CARGO_CMD="cargo"
 fi
 
 $CARGO_CMD build --release

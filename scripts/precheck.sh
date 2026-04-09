@@ -15,3 +15,8 @@ $CARGO_CMD test -- --test-threads=1
 python3 scripts/check/check_i18n.py
 python3 scripts/check/check_icons.py
 python3 scripts/check/check_themes.py
+
+# Format shell scripts with shfmt if it's available
+if command -v shfmt &>/dev/null; then
+	shfmt -w **/*.sh
+fi
