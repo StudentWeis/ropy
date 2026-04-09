@@ -18,6 +18,7 @@ use gpui_component::{
 use crate::{
     gui::{
         board::{RopyBoard, filtering::ClearConfirmAction},
+        panel::common::{panel_back_button, panel_header_with_back},
         theme::ThemeId,
     },
     i18n::{I18n, Language},
@@ -150,41 +151,15 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
 }
 
 fn render_settings_header(cx: &Context<RopyBoard>) -> impl IntoElement {
-    let header = h_flex()
-        .justify_between()
-        .items_center()
-        .pl_1()
-        .pr_4()
-        .pt_4()
-        .child(
-            div().w(px(72.0)).flex().items_start().child(
-                Button::new("cancel-button")
-                    .small()
-                    .ghost()
-                    .label(crate::constants::BACK_ARROW)
-                    .on_click(cx.listener(|board, _click_event, window, cx| {
-                        reset_settings_dialog(board, window, cx);
-                    }))
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-            ),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_center()
-                .text_lg()
-                .text_color(cx.theme().foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(I18n::translate(cx, "settings_title")),
-        )
-        .child(div().w(px(72.0)));
-
-    #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
-        crate::gui::utils::start_window_drag(window);
-    });
-
-    header
+    panel_header_with_back(
+        I18n::translate(cx, "settings_title"),
+        panel_back_button("cancel-button")
+            .on_click(cx.listener(|board, _click_event, window, cx| {
+                reset_settings_dialog(board, window, cx);
+            }))
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        cx,
+    )
 }
 
 fn render_language_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {

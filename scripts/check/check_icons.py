@@ -3,7 +3,8 @@
 Assets icon file checker.
 
 Checks two things:
-  1. Whether every icon file in assets is actually referenced in the Rust source.
+    1. Whether every icon file in assets is actually referenced in the Rust source
+         or explicitly allowlisted for external runtime consumers.
   2. Whether every icon reference in source code exists in the assets directory.
 
 Supported icon formats: svg, png, ico, icns, jpg, jpeg, webp, gif, bmp
@@ -24,6 +25,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 ICON_EXTENSIONS = {".svg", ".png", ".ico", ".icns", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+ALLOWLIST_PATH = Path("scripts/check/icon_allowlist.txt")
 
 
 def collect_asset_icons(assets_dir: Path) -> set[str]:
@@ -41,6 +43,22 @@ def collect_asset_icons(assets_dir: Path) -> set[str]:
             rel_path = icon_path.relative_to(assets_dir)
             # Use forward slashes for consistency
             icons.add(str(rel_path).replace("\\", "/"))
+    return icons
+
+
+def load_allowlisted_icons(config_path: Path) -> set[str]:
+    """Return icon paths explicitly allowlisted for external runtime consumers."""
+    icons: set[str] = set()
+    if not config_path.exists():
+        return icons
+
+    with config_path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            icons.add(line.replace("\\", "/"))
+
     return icons
 
 
@@ -149,7 +167,8 @@ def main() -> int:
         return 1
 
     asset_icons = collect_asset_icons(assets_dir)
-    referenced_icons = collect_referenced_icons(src_dir)
+    allowlisted_icons = load_allowlisted_icons(root / ALLOWLIST_PATH)
+    referenced_icons = collect_referenced_icons(src_dir) | allowlisted_icons
 
     issues = 0  # count of problem categories
     verbose = False  # only print details when issues found
@@ -187,12 +206,18 @@ def main() -> int:
         print()
         print(f"  Total icons in assets: {len(asset_icons)}")
         print(f"  Total icons referenced: {len(referenced_icons)}")
+        if allowlisted_icons:
+            print(f"  Explicit external icon allowances: {len(allowlisted_icons)}")
         print()
         print(_color(f"✗  {issues} issue(s) found.", _RED + _BOLD))
         return 1
     else:
         # Simple summary when everything is OK
-        print(_color(f"✓ icons: {len(asset_icons)} in assets, {len(referenced_icons)} referenced, all OK", _GREEN + _BOLD))
+        summary = f"✓ icons: {len(asset_icons)} in assets, {len(referenced_icons)} referenced"
+        if allowlisted_icons:
+            summary += f", {len(allowlisted_icons)} allowlisted external"
+        summary += ", all OK"
+        print(_color(summary, _GREEN + _BOLD))
         return 0
 
 

@@ -10,7 +10,12 @@ use gpui_component::{
 };
 
 use crate::{
-    constants::BACK_ARROW, gui::board::RopyBoard, i18n::I18n, updater::models::UpdateStatus,
+    gui::{
+        board::RopyBoard,
+        panel::common::{panel_back_button, panel_header_with_back},
+    },
+    i18n::I18n,
+    updater::models::UpdateStatus,
 };
 
 /// GitHub repository URL for the application.
@@ -22,44 +27,44 @@ const LICENSE_URL: &str = "https://github.com/StudentWeis/ropy/blob/main/LICENSE
 /// Xiaohongshu profile URL for the application.
 const XIAOHONGSHU_URL: &str = "https://xhslink.com/m/Ar6O3JkYc0X";
 
+fn render_social_link_button(
+    id: &'static str,
+    icon: Icon,
+    tooltip: String,
+    url: &'static str,
+    cx: &Context<RopyBoard>,
+) -> impl IntoElement {
+    div()
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded_md()
+        .p_1()
+        .child(
+            Button::new(id)
+                .ghost()
+                .icon(icon)
+                .tooltip(tooltip)
+                .on_click(move |_, _, cx| {
+                    cx.open_url(url);
+                }),
+        )
+}
+
 /// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let version = env!("CARGO_PKG_VERSION");
 
-    let header = h_flex()
-        .justify_between()
-        .items_center()
-        .mb_4()
-        .pt_4()
-        .child(
-            div().w(px(72.0)).flex().items_start().child(
-                Button::new("back-button")
-                    .small()
-                    .ghost()
-                    .label(BACK_ARROW)
-                    .on_click(cx.listener(|board, _, window, cx| {
-                        board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
-                        window.focus(&board.focus_handle);
-                        cx.notify();
-                    }))
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-            ),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_center()
-                .text_lg()
-                .text_color(cx.theme().foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(I18n::translate(cx, "about_title")),
-        )
-        .child(div().w(px(72.0)));
-
-    #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
-        crate::gui::utils::start_window_drag(window);
-    });
+    let header = panel_header_with_back(
+        I18n::translate(cx, "about_title"),
+        panel_back_button("back-button")
+            .on_click(cx.listener(|board, _, window, cx| {
+                board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
+                window.focus(&board.focus_handle);
+                cx.notify();
+            }))
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        cx,
+    );
 
     v_flex().size_full().child(header).child(
         v_flex()
@@ -112,38 +117,20 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
             .child(
                 h_flex()
                     .gap_2()
-                    .child(
-                        div()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_md()
-                            .p_1()
-                            .child(
-                                Button::new("github-button")
-                                    .ghost()
-                                    .icon(Icon::empty().path("icon/github.svg").size(px(32.0)))
-                                    .tooltip(I18n::translate(cx, "about_github_tooltip"))
-                                    .on_click(|_, _, cx| {
-                                        cx.open_url(GITHUB_URL);
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_md()
-                            .p_1()
-                            .child(
-                                Button::new("xiaohongshu-button")
-                                    .ghost()
-                                    .icon(Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)))
-                                    .tooltip(I18n::translate(cx, "about_xiaohongshu_tooltip"))
-                                    .on_click(|_, _, cx| {
-                                        cx.open_url(XIAOHONGSHU_URL);
-                                    }),
-                            ),
-                    ),
+                    .child(render_social_link_button(
+                        "github-button",
+                        Icon::empty().path("icon/github.svg").size(px(32.0)),
+                        I18n::translate(cx, "about_github_tooltip"),
+                        GITHUB_URL,
+                        cx,
+                    ))
+                    .child(render_social_link_button(
+                        "xiaohongshu-button",
+                        Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)),
+                        I18n::translate(cx, "about_xiaohongshu_tooltip"),
+                        XIAOHONGSHU_URL,
+                        cx,
+                    )),
             ),
     )
 }

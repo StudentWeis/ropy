@@ -3,13 +3,15 @@ use gpui::{
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
-use gpui_component::{
-    ActiveTheme, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex, v_flex,
-};
+use gpui_component::{ActiveTheme, h_flex, v_flex};
 
-use crate::{constants::BACK_ARROW, gui::board::RopyBoard, i18n::I18n};
+use crate::{
+    gui::{
+        board::RopyBoard,
+        panel::common::{panel_back_button, panel_header_with_back},
+    },
+    i18n::I18n,
+};
 
 /// A single row in the shortcuts table
 struct ShortcutRow {
@@ -67,37 +69,17 @@ const SHORTCUTS: &[ShortcutRow] = &[
 /// Render the help panel (keyboard shortcuts overview)
 #[allow(clippy::too_many_lines)]
 pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
-    let header = h_flex()
-        .justify_between()
-        .items_center()
-        .mb_4()
-        .pt_4()
-        .child(
-            Button::new("help-back-button")
-                .small()
-                .ghost()
-                .label(BACK_ARROW)
-                .on_click(cx.listener(|board, _, window, cx| {
-                    board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
-                    window.focus(&board.focus_handle);
-                    cx.notify();
-                }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
-        )
-        .child(
-            div()
-                .text_lg()
-                .text_color(cx.theme().foreground)
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(I18n::translate(cx, "help_title")),
-        )
-        // Spacer to keep the title centered
-        .child(div().w(px(55.)));
-
-    #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
-        crate::gui::utils::start_window_drag(window);
-    });
+    let header = panel_header_with_back(
+        I18n::translate(cx, "help_title"),
+        panel_back_button("help-back-button")
+            .on_click(cx.listener(|board, _, window, cx| {
+                board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
+                window.focus(&board.focus_handle);
+                cx.notify();
+            }))
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+        cx,
+    );
 
     // Column header row
     let col_header = h_flex()

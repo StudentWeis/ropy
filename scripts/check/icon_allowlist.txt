@@ -1,0 +1,5 @@
+# Icons loaded indirectly by dependencies at runtime.
+# gpui-component Notification::success / ::error / ::warning map to these paths.
+icons/circle-check.svg
+icons/circle-x.svg
+icons/triangle-alert.svg
