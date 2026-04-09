@@ -92,13 +92,14 @@ fn detect_clipboard_payload(ctx: &ClipboardContext) -> Option<ClipboardPayload> 
     let text = files.is_none().then(|| ctx.get_text().ok()).flatten();
     let has_html = text.is_some() && ctx.has(ContentFormat::Html);
     let has_rtf = text.is_some() && ctx.has(ContentFormat::Rtf);
-    let rich_text = text.as_ref().filter(|_| has_html || has_rtf).map(|plain_text| {
-        ClipboardPayload::RichText {
+    let rich_text = text
+        .as_ref()
+        .filter(|_| has_html || has_rtf)
+        .map(|plain_text| ClipboardPayload::RichText {
             plain_text: plain_text.clone(),
             html: has_html.then(|| ctx.get_html().ok()).flatten(),
             rtf: has_rtf.then(|| ctx.get_rich_text().ok()).flatten(),
-        }
-    });
+        });
     let image = (files.is_none() && rich_text.is_none())
         .then(|| {
             ctx.get_image()

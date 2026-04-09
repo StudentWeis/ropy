@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0-alpha] - 2026-04-09
+
+### 🚀 Features
+- Add support for RTF/HTML by @StudentWeis
+
+### 🚜 Refactor
+- Update default clipboard backend from sled to redb by @StudentWeis
+
 ## [0.4.5] - 2026-04-08
 
 ### 🚀 Features
@@ -108,7 +116,7 @@ All notable changes to this project will be documented in this file.
 ### 🚀 Features
 
 - Add search icon by @StudentWeis
-- Enhance thme system and add more themes by @StudentWeis
+- Enhance theme system and add more themes by @StudentWeis
 - Exclude pinned and favorite records from history limits by @StudentWeis
 
 ### 🚜 Refactor
