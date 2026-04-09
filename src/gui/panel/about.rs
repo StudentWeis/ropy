@@ -113,22 +113,36 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                 h_flex()
                     .gap_2()
                     .child(
-                        Button::new("github-button")
-                            .ghost()
-                            .icon(Icon::empty().path("icon/github.svg").size(px(32.0)))
-                            .tooltip(I18n::translate(cx, "about_github_tooltip"))
-                            .on_click(|_, _, cx| {
-                                cx.open_url(GITHUB_URL);
-                            }),
+                        div()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .rounded_md()
+                            .p_1()
+                            .child(
+                                Button::new("github-button")
+                                    .ghost()
+                                    .icon(Icon::empty().path("icon/github.svg").size(px(32.0)))
+                                    .tooltip(I18n::translate(cx, "about_github_tooltip"))
+                                    .on_click(|_, _, cx| {
+                                        cx.open_url(GITHUB_URL);
+                                    }),
+                            ),
                     )
                     .child(
-                        Button::new("xiaohongshu-button")
-                            .ghost()
-                            .icon(Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)))
-                            .tooltip(I18n::translate(cx, "about_xiaohongshu_tooltip"))
-                            .on_click(|_, _, cx| {
-                                cx.open_url(XIAOHONGSHU_URL);
-                            }),
+                        div()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .rounded_md()
+                            .p_1()
+                            .child(
+                                Button::new("xiaohongshu-button")
+                                    .ghost()
+                                    .icon(Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)))
+                                    .tooltip(I18n::translate(cx, "about_xiaohongshu_tooltip"))
+                                    .on_click(|_, _, cx| {
+                                        cx.open_url(XIAOHONGSHU_URL);
+                                    }),
+                            ),
                     ),
             ),
     )
