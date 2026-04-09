@@ -1,5 +1,0 @@
----
-applyTo: "**"
----
-
-Read AGENTS.md.

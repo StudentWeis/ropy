@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-# For distribution
-cargo install cargo-dist
+# Base dependencies
+cargo install cargo-binstall
+
+# Other dependencies
+cargo binstall prek cargo-dist git-cliff
 
 # For pre-commit hooks
 prek install

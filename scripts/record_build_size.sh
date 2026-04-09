@@ -6,7 +6,14 @@ set -euo pipefail
 #   scripts/record_build_size.sh [path/to/binary ...]
 # If no binary args are provided, defaults to target/release/ropy
 
-rtk cargo build --release
+# Determine which command to use for Rust operations
+if command -v rtk &> /dev/null; then
+    CARGO_CMD="rtk cargo"
+else
+    CARGO_CMD="cargo"
+fi
+
+$CARGO_CMD build --release
 
 CSV_FILE="doc/data/build_sizes.csv"
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
