@@ -2,11 +2,7 @@
 
 use std::collections::HashSet;
 
-use super::{
-    errors::RepositoryError,
-    models::{ClipboardRecord, ContentType},
-    repo::ClipboardRepository,
-};
+use super::{errors::RepositoryError, models::ClipboardRecord, repo::ClipboardRepository};
 
 /// Allow the repository to grow slightly past the configured limit so cleanup
 /// can batch deletions instead of scanning on every successful save.
@@ -84,9 +80,8 @@ impl ClipboardRepository {
             let rec_key = id.to_be_bytes();
             if let Some(value) = self.get_raw(&rec_key)?
                 && let Ok(record) = postcard::from_bytes::<ClipboardRecord>(&value)
-                && record.content_type == ContentType::Image
             {
-                Self::remove_image_files(&record.content);
+                Self::remove_record_sidecars(&record);
             }
             self.records.remove(&rec_key)?;
             self.time_index.remove_raw(&ti_key)?;

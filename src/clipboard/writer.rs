@@ -31,6 +31,15 @@ pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
                     set_files(&ctx, &paths);
                     notify_completion(completion);
                 }
+                CopyRequest::RichText {
+                    plain_text,
+                    html,
+                    rtf,
+                    completion,
+                } => {
+                    set_rich_text(&ctx, plain_text, html, rtf);
+                    notify_completion(completion);
+                }
             }
         }
     })
@@ -109,6 +118,31 @@ fn set_files(ctx: &ClipboardContext, paths: &[String]) {
             error = %error,
             fallback_error = %fallback_error,
             "failed to set files to clipboard"
+        );
+    }
+}
+
+fn set_rich_text(
+    ctx: &ClipboardContext,
+    plain_text: String,
+    html: Option<String>,
+    rtf: Option<String>,
+) {
+    let mut contents = vec![ClipboardContent::Text(plain_text.clone())];
+    if let Some(html_content) = html {
+        contents.push(ClipboardContent::Html(html_content));
+    }
+    if let Some(rtf_content) = rtf {
+        contents.push(ClipboardContent::Rtf(rtf_content));
+    }
+
+    if let Err(error) = ctx.set(contents)
+        && let Err(fallback_error) = ctx.set_text(plain_text)
+    {
+        tracing::warn!(
+            error = %error,
+            fallback_error = %fallback_error,
+            "failed to set rich text to clipboard"
         );
     }
 }

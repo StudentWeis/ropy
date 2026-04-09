@@ -5,7 +5,10 @@ mod utils;
 mod writer;
 
 pub use listener::start_clipboard_monitor;
-pub use utils::{save_image, thumb_path_for};
+pub use utils::{
+    load_rich_text_html, load_rich_text_rtf, remove_rich_text_files, save_image,
+    save_rich_text_files_to_dir, thumb_path_for,
+};
 pub use writer::start_clipboard_writer;
 
 pub enum ClipboardEvent {
@@ -13,6 +16,11 @@ pub enum ClipboardEvent {
     /// Image(path, `content_hash`)
     Image(String, u64),
     Files(Vec<String>),
+    RichText {
+        plain_text: String,
+        html: Option<String>,
+        rtf: Option<String>,
+    },
 }
 
 pub enum CopyRequest {
@@ -26,6 +34,12 @@ pub enum CopyRequest {
     },
     Files {
         paths: Vec<String>,
+        completion: Option<CompletionSender<()>>,
+    },
+    RichText {
+        plain_text: String,
+        html: Option<String>,
+        rtf: Option<String>,
         completion: Option<CompletionSender<()>>,
     },
 }
@@ -75,6 +89,29 @@ impl CopyRequest {
             completion: Some(completion),
         }
     }
+
+    pub const fn rich_text(plain_text: String, html: Option<String>, rtf: Option<String>) -> Self {
+        Self::RichText {
+            plain_text,
+            html,
+            rtf,
+            completion: None,
+        }
+    }
+
+    pub const fn rich_text_with_completion(
+        plain_text: String,
+        html: Option<String>,
+        rtf: Option<String>,
+        completion: CompletionSender<()>,
+    ) -> Self {
+        Self::RichText {
+            plain_text,
+            html,
+            rtf,
+            completion: Some(completion),
+        }
+    }
 }
 
 pub enum LastCopyState {
@@ -99,7 +136,9 @@ mod tests {
                 assert_eq!(text, "hello");
                 assert!(completion.is_none());
             }
-            CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+            CopyRequest::Image { .. }
+            | CopyRequest::Files { .. }
+            | CopyRequest::RichText { .. } => {
                 panic!("expected text copy request")
             }
         }
@@ -116,7 +155,9 @@ mod tests {
                 assert_eq!(text, "hello");
                 completion.unwrap().send(()).unwrap();
             }
-            CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+            CopyRequest::Image { .. }
+            | CopyRequest::Files { .. }
+            | CopyRequest::RichText { .. } => {
                 panic!("expected text copy request")
             }
         }
@@ -134,7 +175,7 @@ mod tests {
                 assert_eq!(path, "/tmp/example.png");
                 assert!(completion.is_none());
             }
-            CopyRequest::Text { .. } | CopyRequest::Files { .. } => {
+            CopyRequest::Text { .. } | CopyRequest::Files { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected image copy request")
             }
         }
@@ -152,7 +193,7 @@ mod tests {
                 assert_eq!(path, "/tmp/example.png");
                 completion.unwrap().send(()).unwrap();
             }
-            CopyRequest::Text { .. } | CopyRequest::Files { .. } => {
+            CopyRequest::Text { .. } | CopyRequest::Files { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected image copy request")
             }
         }
@@ -169,7 +210,7 @@ mod tests {
                 assert_eq!(paths, vec!["/tmp/example.txt"]);
                 assert!(completion.is_none());
             }
-            CopyRequest::Text { .. } | CopyRequest::Image { .. } => {
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected files copy request")
             }
         }
@@ -187,8 +228,65 @@ mod tests {
                 assert_eq!(paths, vec!["/tmp/example.txt"]);
                 completion.unwrap().send(()).unwrap();
             }
-            CopyRequest::Text { .. } | CopyRequest::Image { .. } => {
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected files copy request")
+            }
+        }
+
+        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+    }
+
+    #[test]
+    fn test_copy_request_rich_text_constructor_sets_payload_without_completion() {
+        let request = CopyRequest::rich_text(
+            "hello".to_string(),
+            Some("<p>hello</p>".to_string()),
+            Some("{\\rtf1 hello}".to_string()),
+        );
+
+        match request {
+            CopyRequest::RichText {
+                plain_text,
+                html,
+                rtf,
+                completion,
+            } => {
+                assert_eq!(plain_text, "hello");
+                assert_eq!(html.as_deref(), Some("<p>hello</p>"));
+                assert_eq!(rtf.as_deref(), Some("{\\rtf1 hello}"));
+                assert!(completion.is_none());
+            }
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+                panic!("expected rich text copy request")
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_copy_request_rich_text_with_completion_sends_signal() {
+        let (completion_tx, completion_rx) = mpsc::channel();
+        let request = CopyRequest::rich_text_with_completion(
+            "hello".to_string(),
+            Some("<p>hello</p>".to_string()),
+            Some("{\\rtf1 hello}".to_string()),
+            completion_tx,
+        );
+
+        match request {
+            CopyRequest::RichText {
+                plain_text,
+                html,
+                rtf,
+                completion,
+            } => {
+                assert_eq!(plain_text, "hello");
+                assert_eq!(html.as_deref(), Some("<p>hello</p>"));
+                assert_eq!(rtf.as_deref(), Some("{\\rtf1 hello}"));
+                completion.unwrap().send(()).unwrap();
+            }
+            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
+                panic!("expected rich text copy request")
             }
         }
 

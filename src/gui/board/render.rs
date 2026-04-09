@@ -42,6 +42,7 @@ impl Render for RopyBoard {
                 .on_action(cx.listener(Self::on_select_prev))
                 .on_action(cx.listener(Self::on_select_next))
                 .on_action(cx.listener(Self::on_confirm_selection))
+                .on_action(cx.listener(Self::on_confirm_selection_plain_text))
                 .on_action(cx.listener(Self::on_delete_record))
                 .on_key_down(cx.listener(Self::on_key_down))
                 .child(render_header(self, cx))

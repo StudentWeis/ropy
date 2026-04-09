@@ -16,7 +16,10 @@ use crate::{
     clipboard::{self, ClipboardEvent, LastCopyState},
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
-    gui::board::{Active, ConfirmSelection, Hide, Quit, RopyBoard, SelectNext, SelectPrev},
+    gui::board::{
+        Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, RopyBoard, SelectNext,
+        SelectPrev,
+    },
     i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
 };
@@ -48,6 +51,11 @@ fn start_clipboard_event_handler(
                 ClipboardEvent::Text(text) => repo.save_text(text),
                 ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
                 ClipboardEvent::Files(paths) => repo.save_files(&paths),
+                ClipboardEvent::RichText {
+                    plain_text,
+                    html,
+                    rtf,
+                } => repo.save_rich_text(plain_text, html.as_deref(), rtf.as_deref()),
             };
 
             match result {
@@ -169,6 +177,7 @@ fn bind_application_keys(cx: &mut App) {
         KeyBinding::new("up", SelectPrev, None),
         KeyBinding::new("down", SelectNext, None),
         KeyBinding::new("enter", ConfirmSelection, None),
+        KeyBinding::new("shift-enter", ConfirmSelectionPlainText, None),
     ]);
 }
 

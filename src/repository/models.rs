@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct ClipboardRecord {
     /// Unique identifier (content hash)
     pub id: u64,
-    /// Clipboard content
+    /// Plain-text clipboard content used for display, search, and deduplication.
     pub content: String,
     /// Creation time
     pub created_at: DateTime<Local>,
@@ -19,6 +19,9 @@ pub struct ClipboardRecord {
     /// Whether this record is pinned to the top
     #[serde(default)]
     pub pinned: bool,
+    /// Sidecar metadata for rich text payloads, when present.
+    #[serde(default)]
+    pub rich_text_meta: Option<RichTextMeta>,
 }
 
 /// Shared clipboard record list type alias for thread-safe access
@@ -33,6 +36,14 @@ pub enum ContentType {
     Image,
     /// File path
     FilePath,
+    /// Rich text with plain-text summary plus optional HTML / RTF sidecars.
+    RichText,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RichTextMeta {
+    pub html_path: Option<String>,
+    pub rtf_path: Option<String>,
 }
 
 impl ContentType {
@@ -42,6 +53,7 @@ impl ContentType {
             Self::Text => 0,
             Self::Image => 1,
             Self::FilePath => 2,
+            Self::RichText => 3,
         }
     }
 }

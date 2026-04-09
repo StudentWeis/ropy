@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use chrono::{Local, TimeZone};
 
 use super::{
-    clipboard_ops::build_copy_request,
+    clipboard_ops::{ConfirmFormat, build_copy_request, build_copy_request_for_record},
     filtering::filter_and_sort_record_indices,
     search::{ContentFilter, SearchOptions},
     settings_editor::UpdateManager,
@@ -55,6 +55,7 @@ fn test_record(
         content_type,
         pinned,
         created_at,
+        rich_text_meta: None,
     }
 }
 
@@ -246,5 +247,54 @@ fn test_build_copy_request_when_file_payload_is_legacy_string_returns_single_fil
             assert!(completion.is_none());
         }
         _ => panic!("expected files copy request"),
+    }
+}
+
+#[test]
+fn test_build_copy_request_for_record_when_rich_text_returns_rich_text_request() {
+    let record = test_record(
+        7,
+        "Formatted text",
+        ContentType::RichText,
+        false,
+        test_datetime(11),
+    );
+
+    let request = build_copy_request_for_record(&record, ConfirmFormat::Default, None);
+
+    match request {
+        Some(crate::clipboard::CopyRequest::RichText {
+            plain_text,
+            html,
+            rtf,
+            completion,
+        }) => {
+            assert_eq!(plain_text, "Formatted text");
+            assert_eq!(html, None);
+            assert_eq!(rtf, None);
+            assert!(completion.is_none());
+        }
+        _ => panic!("expected rich text copy request"),
+    }
+}
+
+#[test]
+fn test_build_copy_request_for_record_when_rich_text_and_plain_text_mode_returns_text_request() {
+    let record = test_record(
+        8,
+        "Formatted text",
+        ContentType::RichText,
+        false,
+        test_datetime(12),
+    );
+
+    let request = build_copy_request_for_record(&record, ConfirmFormat::PlainText, None);
+
+    match request {
+        Some(crate::clipboard::CopyRequest::Text { text, completion }) => {
+            assert_eq!(text, "Formatted text");
+            assert!(completion.is_none());
+        }
+        _ => panic!("expected plain text copy request"),
     }
 }

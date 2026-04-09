@@ -15,7 +15,7 @@ pub mod repo;
 pub mod sled_backend;
 mod time_index;
 
-pub use models::{ClipboardRecord, ContentType, SharedRecords};
+pub use models::{ClipboardRecord, ContentType, RichTextMeta, SharedRecords};
 pub use repo::ClipboardRepository;
 
 /// GPUI Global wrapper for the clipboard repository.

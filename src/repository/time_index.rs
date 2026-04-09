@@ -364,6 +364,7 @@ mod tests {
             created_at: chrono::Local::now(),
             content_type: ContentType::Text,
             pinned: false,
+            rich_text_meta: None,
         };
 
         index
@@ -388,6 +389,7 @@ mod tests {
             created_at: now,
             content_type: ContentType::Text,
             pinned: false,
+            rich_text_meta: None,
         };
         index.upsert(&record1).expect("Failed to upsert first");
 
@@ -398,6 +400,7 @@ mod tests {
             created_at: later,
             content_type: ContentType::Text,
             pinned: false,
+            rich_text_meta: None,
         };
         index.upsert(&record2).expect("Failed to upsert second");
 
@@ -768,6 +771,7 @@ mod tests {
                     created_at: chrono::Local::now(),
                     content_type: ContentType::Text,
                     pinned: false,
+                    rich_text_meta: None,
                 };
                 idx.upsert(&record).expect("Failed to upsert");
             });

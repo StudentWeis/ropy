@@ -1,6 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use image::{DynamicImage, GenericImageView};
+
+use crate::repository::RichTextMeta;
 
 const THUMBNAIL_MAX_DIMENSION: u32 = 180;
 
@@ -58,11 +63,75 @@ fn save_image_to_dir(
     Some(file_path)
 }
 
+fn rich_text_dir_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("rich_text")
+}
+
+fn rich_text_file_path(data_dir: &Path, record_id: u64, extension: &str) -> PathBuf {
+    rich_text_dir_path(data_dir).join(format!("{record_id}.{extension}"))
+}
+
+fn write_rich_text_file(path: &Path, content: &str) -> Option<String> {
+    let parent = path.parent()?;
+    if !parent.exists() {
+        fs::create_dir_all(parent).ok()?;
+    }
+
+    fs::write(path, content).ok()?;
+    Some(path.to_string_lossy().to_string())
+}
+
+pub fn save_rich_text_files_to_dir(
+    record_id: u64,
+    html: Option<&str>,
+    rtf: Option<&str>,
+    data_dir: &Path,
+) -> Option<RichTextMeta> {
+    let html_path = html.and_then(|content| {
+        let path = rich_text_file_path(data_dir, record_id, "html");
+        write_rich_text_file(&path, content)
+    });
+    let rtf_path = rtf.and_then(|content| {
+        let path = rich_text_file_path(data_dir, record_id, "rtf");
+        write_rich_text_file(&path, content)
+    });
+
+    if html_path.is_none() && rtf_path.is_none() {
+        None
+    } else {
+        Some(RichTextMeta {
+            html_path,
+            rtf_path,
+        })
+    }
+}
+
 pub fn save_image(image: &DynamicImage, image_content_hash: u64) -> Option<String> {
     let data_dir = dirs::data_local_dir()?.join("ropy").join("images");
 
     save_image_to_dir(image, image_content_hash, &data_dir)
         .map(|file_path| file_path.to_string_lossy().to_string())
+}
+
+pub fn load_rich_text_html(meta: &RichTextMeta) -> Option<String> {
+    meta.html_path
+        .as_deref()
+        .and_then(|path| fs::read_to_string(path).ok())
+}
+
+pub fn load_rich_text_rtf(meta: &RichTextMeta) -> Option<String> {
+    meta.rtf_path
+        .as_deref()
+        .and_then(|path| fs::read_to_string(path).ok())
+}
+
+pub fn remove_rich_text_files(meta: &RichTextMeta) {
+    if let Some(path) = meta.html_path.as_deref() {
+        let _ = fs::remove_file(path);
+    }
+    if let Some(path) = meta.rtf_path.as_deref() {
+        let _ = fs::remove_file(path);
+    }
 }
 
 #[cfg(test)]
@@ -77,7 +146,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        THUMBNAIL_MAX_DIMENSION, create_thumbnail, image_path_for_hash, save_image_to_dir,
+        THUMBNAIL_MAX_DIMENSION, create_thumbnail, image_path_for_hash, load_rich_text_html,
+        load_rich_text_rtf, remove_rich_text_files, save_image_to_dir, save_rich_text_files_to_dir,
         thumb_path_for,
     };
 
@@ -172,5 +242,43 @@ mod tests {
             .expect("Failed to read recreated thumbnail modification time");
 
         assert!(thumb_modified <= SystemTime::now());
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_rich_text_files_to_dir_writes_present_payloads() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+
+        let meta = save_rich_text_files_to_dir(
+            42,
+            Some("<p>hello</p>"),
+            Some("{\\rtf1 hello}"),
+            temp_dir.path(),
+        )
+        .expect("Expected rich text metadata");
+
+        assert_eq!(load_rich_text_html(&meta).as_deref(), Some("<p>hello</p>"));
+        assert_eq!(load_rich_text_rtf(&meta).as_deref(), Some("{\\rtf1 hello}"));
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_remove_rich_text_files_deletes_saved_sidecars() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+
+        let meta = save_rich_text_files_to_dir(
+            7,
+            Some("<p>hello</p>"),
+            Some("{\\rtf1 hello}"),
+            temp_dir.path(),
+        )
+        .expect("Expected rich text metadata");
+        let html_path = meta.html_path.clone().expect("Expected html path");
+        let rtf_path = meta.rtf_path.clone().expect("Expected rtf path");
+
+        remove_rich_text_files(&meta);
+
+        assert!(!Path::new(&html_path).exists());
+        assert!(!Path::new(&rtf_path).exists());
     }
 }

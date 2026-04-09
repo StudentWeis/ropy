@@ -133,11 +133,7 @@ fn file_preview_content(record_content: &str) -> String {
     deserialize_file_paths(record_content).join("\n")
 }
 
-fn render_file_record(
-    cx: &App,
-    record: &ClipboardRecord,
-    badge_background: gpui::Hsla,
-) -> AnyElement {
+fn render_file_record(cx: &App, record: &ClipboardRecord) -> AnyElement {
     let files = deserialize_file_paths(&record.content);
     if files.is_empty() {
         return div()
@@ -166,28 +162,10 @@ fn render_file_record(
     v_flex()
         .gap_1()
         .child(
-            h_flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .text_xs()
-                        .text_color(cx.theme().accent_foreground)
-                        .bg(badge_background)
-                        .px_1p5()
-                        .py_0p5()
-                        .rounded_sm()
-                        .child(Icon::empty().path("icon/filter-files.svg").size(px(12.0))),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().secondary_foreground)
-                        .child(title),
-                ),
+            div()
+                .text_sm()
+                .text_color(cx.theme().secondary_foreground)
+                .child(title),
         )
         .child(
             div()
@@ -197,6 +175,34 @@ fn render_file_record(
                 .child(truncate_content(&detail, LIST_CONTENT_PREVIEW_LIMIT)),
         )
         .into_any_element()
+}
+
+fn render_rich_text_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .text_xs()
+        .text_color(cx.theme().accent_foreground)
+        .bg(badge_background)
+        .px_1p5()
+        .py_0p5()
+        .rounded_sm()
+        .child(Icon::empty().path("icon/filter-text.svg").size(px(12.0)))
+}
+
+fn render_file_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .text_xs()
+        .text_color(cx.theme().accent_foreground)
+        .bg(badge_background)
+        .px_1p5()
+        .py_0p5()
+        .rounded_sm()
+        .child(Icon::empty().path("icon/filter-files.svg").size(px(12.0)))
 }
 
 fn create_preview(
@@ -215,7 +221,7 @@ fn create_preview(
             window,
             cx,
         ),
-        ContentType::Text => preview::simple_tooltip(
+        ContentType::Text | ContentType::RichText => preview::simple_tooltip(
             truncate_content_for_preview(record_content, TOOLTIP_CONTENT_PREVIEW_LIMIT),
             window,
             cx,
@@ -289,10 +295,15 @@ fn render_record_body(
         .id(("record-content", ctx.index))
         .on_click({
             let index = ctx.index;
-            move |_event, window, cx| {
+            move |event, window, cx| {
+                let confirm_as_plain_text = event.modifiers().shift;
                 view_click
                     .update(cx, |this, cx| {
-                        this.confirm_record(window, cx, index);
+                        if confirm_as_plain_text {
+                            this.confirm_record_as_plain_text(window, cx, index);
+                        } else {
+                            this.confirm_record(window, cx, index);
+                        }
                     })
                     .ok();
             }
@@ -308,14 +319,15 @@ fn render_record_body(
 
     content
         .child(match ctx.record.content_type {
-            ContentType::Text => render_text_record(cx, ctx.record),
+            ContentType::Text | ContentType::RichText => render_text_record(cx, ctx.record),
             ContentType::Image => render_image_record(ctx.record),
-            ContentType::FilePath => render_file_record(cx, ctx.record, styles.badge_background),
+            ContentType::FilePath => render_file_record(cx, ctx.record),
         })
         .child(render_record_meta(
             ctx.index,
             ctx.record,
             styles.meta_background,
+            styles.badge_background,
             cx,
         ))
         .into_any_element()
@@ -325,9 +337,10 @@ fn render_record_meta(
     index: usize,
     record: &ClipboardRecord,
     meta_background: gpui::Hsla,
+    badge_background: gpui::Hsla,
     cx: &App,
 ) -> gpui::Div {
-    h_flex()
+    let mut meta = h_flex()
         .items_center()
         .gap_1()
         .mt_1()
@@ -346,7 +359,15 @@ fn render_record_meta(
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
                 .child(record.created_at.format("%Y-%m-%d %H:%M:%S").to_string()),
-        )
+        );
+
+    if record.content_type == ContentType::RichText {
+        meta = meta.child(render_rich_text_badge(badge_background, cx));
+    } else if record.content_type == ContentType::FilePath {
+        meta = meta.child(render_file_badge(badge_background, cx));
+    }
+
+    meta
 }
 
 fn render_record_actions(

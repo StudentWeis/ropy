@@ -10,13 +10,13 @@ use chrono::Local;
 use super::{
     backend::{BackendFactory, KvTree, StorageBackend},
     errors::RepositoryError,
-    models::{ClipboardRecord, ContentType},
+    models::{ClipboardRecord, ContentType, RichTextMeta},
     redb_backend::redb_backend_factory,
     sled_backend::sled_backend_factory,
     time_index::TimeIndex,
 };
 use crate::{
-    clipboard::thumb_path_for,
+    clipboard::{remove_rich_text_files, save_rich_text_files_to_dir, thumb_path_for},
     utils::{content_hash, normalize_file_paths, serialize_file_paths},
 };
 
@@ -35,6 +35,7 @@ pub struct ClipboardRepository {
     pub(super) time_index: TimeIndex,
     pub(super) favorites: Box<dyn KvTree>,
     images_dir: PathBuf,
+    rich_text_dir: PathBuf,
 }
 
 impl ClipboardRepository {
@@ -78,9 +79,21 @@ impl ClipboardRepository {
             if images_dir.exists() {
                 fs::remove_dir_all(&images_dir).ok();
             }
+            let rich_text_dir = images_dir
+                .parent()
+                .map_or_else(|| images_dir.join(".."), Path::to_path_buf)
+                .join("rich_text");
+            if rich_text_dir.exists() {
+                fs::remove_dir_all(&rich_text_dir).ok();
+            }
             meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
             backend.flush()?;
         }
+
+        let rich_text_dir = images_dir.parent().map_or_else(
+            || PathBuf::from("rich_text"),
+            |parent| parent.join("rich_text"),
+        );
 
         Ok(Self {
             backend,
@@ -88,6 +101,7 @@ impl ClipboardRepository {
             time_index,
             favorites,
             images_dir,
+            rich_text_dir,
         })
     }
 
@@ -171,6 +185,7 @@ impl ClipboardRepository {
             created_at: now,
             content_type,
             pinned: false,
+            rich_text_meta: None,
         };
         self.put_raw(&key, &record)?;
         self.time_index.upsert(&record)?;
@@ -208,6 +223,7 @@ impl ClipboardRepository {
             created_at: now,
             content_type: ContentType::Image,
             pinned: false,
+            rich_text_meta: None,
         };
         self.put_raw(&key, &record)?;
         self.time_index.upsert(&record)?;
@@ -230,6 +246,43 @@ impl ClipboardRepository {
             .map_err(|error| RepositoryError::Serialization(error.to_string()))?;
 
         self.save(content, ContentType::FilePath)
+    }
+
+    pub fn save_rich_text(
+        &self,
+        plain_text: String,
+        html: Option<&str>,
+        rtf: Option<&str>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
+        let id = content_hash(&plain_text, &ContentType::RichText);
+        let key = id.to_be_bytes();
+        let now = Local::now();
+        let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root());
+
+        if let Some(existing) = self.get_raw(&key)? {
+            let mut record: ClipboardRecord = postcard::from_bytes(&existing)
+                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+            record.created_at = now;
+            if let Some(meta) = rich_text_meta {
+                Self::remove_superseded_rich_text_files(record.rich_text_meta.as_ref(), &meta);
+                record.rich_text_meta = Some(meta);
+            }
+            self.put_raw(&key, &record)?;
+            self.time_index.upsert(&record)?;
+            return Ok(record);
+        }
+
+        let record = ClipboardRecord {
+            id,
+            content: plain_text,
+            created_at: now,
+            content_type: ContentType::RichText,
+            pinned: false,
+            rich_text_meta,
+        };
+        self.put_raw(&key, &record)?;
+        self.time_index.upsert(&record)?;
+        Ok(record)
     }
 }
 
@@ -276,10 +329,8 @@ impl ClipboardRepository {
     /// Delete a single record.
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let record = self.get_by_id(id)?;
-        if let Some(ref rec) = record
-            && rec.content_type == ContentType::Image
-        {
-            Self::remove_image_files(&rec.content);
+        if let Some(ref rec) = record {
+            Self::remove_record_sidecars(rec);
         }
 
         let key = id.to_be_bytes();
@@ -300,6 +351,9 @@ impl ClipboardRepository {
         self.favorites.clear()?;
         if self.images_dir.exists() {
             fs::remove_dir_all(&self.images_dir).ok();
+        }
+        if self.rich_text_dir.exists() {
+            fs::remove_dir_all(&self.rich_text_dir).ok();
         }
         Ok(())
     }
@@ -344,6 +398,39 @@ impl ClipboardRepository {
         let _ = fs::remove_file(path);
         let thumb_path = thumb_path_for(Path::new(path));
         let _ = fs::remove_file(thumb_path);
+    }
+
+    pub(super) fn remove_record_sidecars(record: &ClipboardRecord) {
+        if record.content_type == ContentType::Image {
+            Self::remove_image_files(&record.content);
+        }
+
+        if let Some(meta) = record.rich_text_meta.as_ref() {
+            remove_rich_text_files(meta);
+        }
+    }
+
+    fn remove_superseded_rich_text_files(previous: Option<&RichTextMeta>, next: &RichTextMeta) {
+        let Some(previous) = previous else {
+            return;
+        };
+
+        if let Some(path) = previous.html_path.as_deref()
+            && previous.html_path != next.html_path
+        {
+            let _ = fs::remove_file(path);
+        }
+        if let Some(path) = previous.rtf_path.as_deref()
+            && previous.rtf_path != next.rtf_path
+        {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    pub(super) fn rich_text_root(&self) -> &Path {
+        self.rich_text_dir
+            .parent()
+            .unwrap_or(self.rich_text_dir.as_path())
     }
 
     pub(super) fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
@@ -616,6 +703,68 @@ mod tests {
 
         let deleted_again = repo.delete(record.id).expect("Failed to delete");
         assert!(!deleted_again);
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_save_rich_text_persists_meta_and_sidecar_files() {
+        let (temp_dir, repo) = create_test_repo_with(memory_backend_factory);
+
+        let record = repo
+            .save_rich_text(
+                "hello".to_string(),
+                Some("<p>hello</p>"),
+                Some("{\\rtf1 hello}"),
+            )
+            .expect("Failed to save rich text");
+
+        assert_eq!(record.content_type, ContentType::RichText);
+
+        let meta = record
+            .rich_text_meta
+            .as_ref()
+            .expect("Rich text metadata should be present");
+        let html_path = meta
+            .html_path
+            .as_ref()
+            .expect("HTML path should be present");
+        let rtf_path = meta.rtf_path.as_ref().expect("RTF path should be present");
+
+        assert!(temp_dir.path().join("rich_text").exists());
+        assert_eq!(
+            std::fs::read_to_string(html_path).expect("Failed to read html"),
+            "<p>hello</p>"
+        );
+        assert_eq!(
+            std::fs::read_to_string(rtf_path).expect("Failed to read rtf"),
+            "{\\rtf1 hello}"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn test_delete_when_record_is_rich_text_removes_sidecar_files() {
+        let (_temp_dir, repo) = create_test_repo_with(memory_backend_factory);
+
+        let record = repo
+            .save_rich_text(
+                "hello".to_string(),
+                Some("<p>hello</p>"),
+                Some("{\\rtf1 hello}"),
+            )
+            .expect("Failed to save rich text");
+        let meta = record
+            .rich_text_meta
+            .clone()
+            .expect("Rich text metadata should be present");
+        let html_path = meta.html_path.expect("HTML path should be present");
+        let rtf_path = meta.rtf_path.expect("RTF path should be present");
+
+        repo.delete(record.id)
+            .expect("Failed to delete rich text record");
+
+        assert!(!std::path::Path::new(&html_path).exists());
+        assert!(!std::path::Path::new(&rtf_path).exists());
     }
 
     #[test]
@@ -935,6 +1084,7 @@ mod tests {
             created_at: now,
             content_type: ContentType::Text,
             pinned: false,
+            rich_text_meta: None,
         };
         let key = 1000_u64.to_be_bytes();
         let value = postcard::to_allocvec(&record).expect("failed to serialize");
@@ -1471,6 +1621,7 @@ mod tests {
             created_at: now,
             content_type: ContentType::Text,
             pinned: false,
+            rich_text_meta: None,
         }];
 
         ClipboardRepository::sort_for_display(&mut records);
@@ -1489,6 +1640,7 @@ mod tests {
                 created_at: now - chrono::Duration::seconds(2),
                 content_type: ContentType::Text,
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -1496,6 +1648,7 @@ mod tests {
                 created_at: now - chrono::Duration::seconds(1),
                 content_type: ContentType::Text,
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 3,
@@ -1503,6 +1656,7 @@ mod tests {
                 created_at: now,
                 content_type: ContentType::Text,
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 

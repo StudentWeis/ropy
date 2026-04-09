@@ -92,6 +92,10 @@ fn file_paths_match_query(content: &str, query: &str, options: SearchOptions) ->
         .any(|path| text_matches_query(path, query, options))
 }
 
+const fn is_text_like_record(content_type: &ContentType) -> bool {
+    matches!(content_type, ContentType::Text | ContentType::RichText)
+}
+
 /// Filter records based on search query, content type filter, and favorites toggle.
 ///
 /// `filter` and `favorites_only` are independent dimensions:
@@ -117,7 +121,7 @@ pub(super) fn filter_records_by_query(
             // Apply content type filter
             let passes_type_filter = match filter {
                 ContentFilter::All => true,
-                ContentFilter::Text => record.content_type == ContentType::Text,
+                ContentFilter::Text => is_text_like_record(&record.content_type),
                 ContentFilter::Image => record.content_type == ContentType::Image,
                 ContentFilter::Files => record.content_type == ContentType::FilePath,
             };
@@ -137,7 +141,9 @@ pub(super) fn filter_records_by_query(
             }
 
             match record.content_type {
-                ContentType::Text => text_matches_query(&record.content, query, options),
+                ContentType::Text | ContentType::RichText => {
+                    text_matches_query(&record.content, query, options)
+                }
                 ContentType::FilePath => file_paths_match_query(&record.content, query, options),
                 ContentType::Image => false,
             }
@@ -395,6 +401,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -402,6 +409,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 3,
@@ -409,6 +417,7 @@ mod tests {
                 content_type: ContentType::Image,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ]
     }
@@ -444,6 +453,72 @@ mod tests {
     }
 
     #[test]
+    fn test_filter_all_with_query_matches_rich_text_records() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Hello World".to_string(),
+                content_type: ContentType::RichText,
+                created_at: chrono::Local::now(),
+                pinned: false,
+                rich_text_meta: None,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "image_data".to_string(),
+                content_type: ContentType::Image,
+                created_at: chrono::Local::now(),
+                pinned: false,
+                rich_text_meta: None,
+            },
+        ];
+
+        let result = filter_records_by_query(
+            &records,
+            "world",
+            ContentFilter::All,
+            SearchOptions::default(),
+            &empty_favorites(),
+            false,
+        );
+
+        assert_eq!(result, vec![0]);
+    }
+
+    #[test]
+    fn test_filter_text_includes_rich_text_records() {
+        let records = vec![
+            ClipboardRecord {
+                id: 1,
+                content: "Plain text".to_string(),
+                content_type: ContentType::Text,
+                created_at: chrono::Local::now(),
+                pinned: false,
+                rich_text_meta: None,
+            },
+            ClipboardRecord {
+                id: 2,
+                content: "Formatted text".to_string(),
+                content_type: ContentType::RichText,
+                created_at: chrono::Local::now(),
+                pinned: false,
+                rich_text_meta: None,
+            },
+        ];
+
+        let result = filter_records_by_query(
+            &records,
+            "text",
+            ContentFilter::Text,
+            SearchOptions::default(),
+            &empty_favorites(),
+            false,
+        );
+
+        assert_eq!(result, vec![0, 1]);
+    }
+
+    #[test]
     fn test_search_contains_case_insensitive_matches_all_variants() {
         let records = vec![
             ClipboardRecord {
@@ -452,6 +527,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -459,6 +535,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -482,6 +559,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -489,6 +567,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -516,6 +595,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -523,6 +603,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 3,
@@ -530,6 +611,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -557,6 +639,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -564,6 +647,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -590,6 +674,7 @@ mod tests {
             content_type: ContentType::Text,
             created_at: chrono::Local::now(),
             pinned: false,
+            rich_text_meta: None,
         }];
 
         let result = filter_records_by_query(
@@ -615,6 +700,7 @@ mod tests {
             content_type: ContentType::Text,
             created_at: chrono::Local::now(),
             pinned: false,
+            rich_text_meta: None,
         }];
 
         let result = filter_records_by_query(
@@ -636,6 +722,7 @@ mod tests {
             content_type: ContentType::Image,
             created_at: chrono::Local::now(),
             pinned: false,
+            rich_text_meta: None,
         }];
 
         let result = filter_records_by_query(
@@ -658,6 +745,7 @@ mod tests {
                 content_type: ContentType::FilePath,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -665,6 +753,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -688,6 +777,7 @@ mod tests {
             content_type: ContentType::FilePath,
             created_at: chrono::Local::now(),
             pinned: false,
+            rich_text_meta: None,
         }];
         let favorites = HashSet::from([7]);
 
@@ -781,6 +871,7 @@ mod tests {
                 content_type: ContentType::FilePath,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -788,6 +879,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 
@@ -812,6 +904,7 @@ mod tests {
                 content_type: ContentType::FilePath,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
             ClipboardRecord {
                 id: 2,
@@ -819,6 +912,7 @@ mod tests {
                 content_type: ContentType::Text,
                 created_at: chrono::Local::now(),
                 pinned: false,
+                rich_text_meta: None,
             },
         ];
 

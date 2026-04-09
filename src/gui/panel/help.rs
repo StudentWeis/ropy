@@ -43,6 +43,10 @@ const SHORTCUTS: &[ShortcutRow] = &[
         label_key: "help_confirm",
     },
     ShortcutRow {
+        key: "Shift+Enter",
+        label_key: "help_confirm_plain_text",
+    },
+    ShortcutRow {
         key: "Delete / D",
         label_key: "help_delete",
     },

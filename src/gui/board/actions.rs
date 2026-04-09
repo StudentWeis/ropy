@@ -28,6 +28,7 @@ gpui::actions!(
         SelectPrev,
         SelectNext,
         ConfirmSelection,
+        ConfirmSelectionPlainText,
         DeleteRecord
     ]
 );
@@ -57,6 +58,15 @@ impl RopyBoard {
         cx: &mut Context<Self>,
     ) {
         self.confirm_record(window, cx, self.selected_index);
+    }
+
+    pub fn on_confirm_selection_plain_text(
+        &mut self,
+        _: &ConfirmSelectionPlainText,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.confirm_record_as_plain_text(window, cx, self.selected_index);
     }
 
     pub fn on_delete_record(

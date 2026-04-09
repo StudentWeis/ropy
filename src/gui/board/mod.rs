@@ -22,7 +22,9 @@ use std::{
 };
 
 // Re-export utilities for external use
-pub use actions::{Active, ConfirmSelection, Hide, Quit, SelectNext, SelectPrev};
+pub use actions::{
+    Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, SelectNext, SelectPrev,
+};
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
     AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Window,
