@@ -1,5 +1,5 @@
 use gpui::{
-    Context, SharedString, div,
+    Context, InteractiveElement, SharedString, div,
     prelude::{IntoElement, ParentElement, Styled},
     px,
 };
