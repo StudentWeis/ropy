@@ -50,6 +50,7 @@ sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 You can install Ropy using [Scoop](https://scoop.sh/):
 
 ```sh
+scoop bucket add extras
 scoop install ropy
 ```
 
