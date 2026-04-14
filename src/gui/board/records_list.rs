@@ -469,24 +469,21 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
         v_flex()
             .w_full()
             .p_3()
-            .bg(if ctx.is_selected {
-                styles.selected_background
-            } else {
-                styles.normal_background
-            })
+            .bg(styles.normal_background)
             .rounded_md()
-            .border_1()
             .border_color(if ctx.is_selected {
-                styles.selected_background
+                styles.hover_border
             } else {
                 styles.border
             })
+            .border_1()
             .hover(move |style| {
-                let style = style.border_2().border_color(styles.hover_border);
                 if ctx.is_selected {
-                    style.bg(styles.selected_background)
+                    style
                 } else {
                     style
+                        .bg(styles.selected_background)
+                        .border_color(styles.selected_background)
                 }
             })
             .id(("record", ctx.index))
