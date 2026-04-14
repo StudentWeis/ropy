@@ -585,6 +585,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.autostart_enabled = next_value;
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
 
@@ -607,6 +608,7 @@ impl RopyBoard {
         }
 
         self.set_confirm_mode(confirm_mode, window);
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
 
@@ -629,6 +631,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.auto_check_enabled = enabled;
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
 
@@ -651,6 +654,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.include_prerelease_enabled = enabled;
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
 
@@ -673,6 +677,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.hover_preview_enabled = enabled;
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
 
