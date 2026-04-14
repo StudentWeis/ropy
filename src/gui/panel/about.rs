@@ -32,22 +32,16 @@ fn render_social_link_button(
     icon: Icon,
     tooltip: String,
     url: &'static str,
-    cx: &Context<RopyBoard>,
 ) -> impl IntoElement {
-    div()
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_md()
-        .p_1()
-        .child(
-            Button::new(id)
-                .ghost()
-                .icon(icon)
-                .tooltip(tooltip)
-                .on_click(move |_, _, cx| {
-                    cx.open_url(url);
-                }),
-        )
+    div().rounded_md().p_1().child(
+        Button::new(id)
+            .ghost()
+            .icon(icon)
+            .tooltip(tooltip)
+            .on_click(move |_, _, cx| {
+                cx.open_url(url);
+            }),
+    )
 }
 
 /// Render the about panel content
@@ -122,14 +116,12 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                         Icon::empty().path("icon/github.svg").size(px(32.0)),
                         I18n::translate(cx, "about_github_tooltip"),
                         GITHUB_URL,
-                        cx,
                     ))
                     .child(render_social_link_button(
                         "xiaohongshu-button",
                         Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)),
                         I18n::translate(cx, "about_xiaohongshu_tooltip"),
                         XIAOHONGSHU_URL,
-                        cx,
                     )),
             ),
     )
