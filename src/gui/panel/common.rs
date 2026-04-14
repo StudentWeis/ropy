@@ -1,5 +1,7 @@
+#[cfg(target_os = "windows")]
+use gpui::InteractiveElement;
 use gpui::{
-    Context, InteractiveElement, SharedString, div,
+    Context, SharedString, div,
     prelude::{IntoElement, ParentElement, Styled},
     px,
 };
