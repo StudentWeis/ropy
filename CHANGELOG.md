@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0-beta] - 2026-04-16
+
+### 🚀 Features
+- Add success notification for settings updates by @StudentWeis
+
+### 🐛 Bug Fixes
+- Add InteractiveElement import in common.rs by @ZhBF
+- Add new SVG icons for circle check, circle x, and triangle alert by @StudentWeis
+
+### 💼 Other
+- Remove unused rtk related configurations and scripts by @StudentWeis
+
+### 🚜 Refactor
+- Simplify list item styling logic by @StudentWeis
+- Simplify social link button rendering logic, remove border by @StudentWeis
+- Add cfg target for InteractiveElement import by @StudentWeis
+- Add icon allowlist and common panel components by @StudentWeis
+- Enhance about panel layout with border styling by @StudentWeis
+
+### 📚 Documentation
+- Add scoop extra bucket instruction by @StudentWeis
+
+### 🎨 Styling
+- Remove spaces around redirection operators in shell scripts by @StudentWeis
+
 ## [0.5.0-alpha] - 2026-04-09
 
 ### 🚀 Features

@@ -31,3 +31,4 @@ date,commit,binary,size_bytes,gzip_bytes,delta_bytes,delta_gzip
 2026-04-08T03:02:29Z,b69bbbf,target/release/ropy,11688896,4854310,15440,3527
 2026-04-08T15:02:02Z,df10325,target/release/ropy,11687232,4851377,-1664,-2933
 2026-04-09T03:03:05Z,66e9bc1,target/release/ropy,11693136,4857605,5904,6228
+2026-04-16T09:29:34Z,c98259c,target/release/ropy,11692768,4857677,-368,72
