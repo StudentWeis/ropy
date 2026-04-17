@@ -1,8 +1,7 @@
-use std::str::FromStr;
+use std::{cfg_select, str::FromStr};
 
 use global_hotkey::hotkey::HotKey;
 use gpui::{Context, Focusable, Keystroke, Modifiers, Window};
-use std::cfg_select;
 
 use super::RopyBoard;
 

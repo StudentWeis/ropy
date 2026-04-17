@@ -1,10 +1,13 @@
 use std::{cfg_select, path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
-use gpui::{App, Global, ReadGlobal};
+use gpui::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
 
-use crate::{gui::theme::ThemeId, i18n::Language};
+use crate::{
+    gui::theme::ThemeId,
+    i18n::{I18n, Language},
+};
 
 /// Default maximum number of records to display in the UI
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
@@ -134,11 +137,12 @@ impl LayoutMode {
         [Self::List, Self::Grid]
     }
 
-    pub const fn label_key(self) -> &'static str {
-        match self {
-            Self::List => "settings_layout_list",
-            Self::Grid => "settings_layout_grid",
-        }
+    pub fn label(self, cx: &App) -> SharedString {
+        let label = match self {
+            Self::List => I18n::translate(cx, "settings_layout_list"),
+            Self::Grid => I18n::translate(cx, "settings_layout_grid"),
+        };
+        SharedString::from(label)
     }
 }
 

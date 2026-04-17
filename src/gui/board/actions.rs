@@ -1,12 +1,14 @@
 use gpui::{Context, Focusable, Window};
 
-use crate::config::LayoutMode;
-use crate::gui::{
-    active_window,
-    board::{ActivePanel, RopyBoard},
-    constants::default_window_size,
-    hide_window,
-    panel::settings,
+use crate::{
+    config::LayoutMode,
+    gui::{
+        active_window,
+        board::{ActivePanel, RopyBoard},
+        constants::default_window_size,
+        hide_window,
+        panel::settings,
+    },
 };
 
 impl RopyBoard {

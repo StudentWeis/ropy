@@ -7,11 +7,7 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
-use crate::{
-    config::LayoutMode,
-    gui::theme::ThemeId,
-    i18n::{I18n, Language},
-};
+use crate::{config::LayoutMode, gui::theme::ThemeId, i18n::Language};
 
 #[allow(clippy::redundant_pub_crate)]
 #[allow(clippy::struct_excessive_bools)]
@@ -139,7 +135,7 @@ pub(super) fn build_window_opacity_slider(
 fn layout_mode_items(cx: &App) -> Vec<SharedString> {
     LayoutMode::all()
         .iter()
-        .map(|mode| SharedString::from(I18n::translate(cx, mode.label_key())))
+        .map(|mode| mode.label(cx))
         .collect()
 }
 
