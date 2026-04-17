@@ -6,6 +6,7 @@ use gpui::{
 use gpui_component::{ActiveTheme, h_flex, v_flex};
 
 use crate::{
+    config::LayoutMode,
     gui::{
         board::RopyBoard,
         panel::common::{panel_back_button, panel_header_with_back},
@@ -17,52 +18,74 @@ use crate::{
 struct ShortcutRow {
     key: &'static str,
     label_key: &'static str,
+    grid_only: bool,
 }
 
 const SHORTCUTS: &[ShortcutRow] = &[
     ShortcutRow {
         key: "/",
         label_key: "help_search",
+        grid_only: false,
     },
     ShortcutRow {
         key: "↑ / ↓",
         label_key: "help_nav_up_down",
+        grid_only: false,
     },
     ShortcutRow {
         key: "K / J",
         label_key: "help_nav_up_down",
+        grid_only: false,
+    },
+    ShortcutRow {
+        key: "← / →",
+        label_key: "help_nav_left_right",
+        grid_only: true,
+    },
+    ShortcutRow {
+        key: "H / L",
+        label_key: "help_nav_left_right",
+        grid_only: true,
     },
     ShortcutRow {
         key: "1 – 5",
         label_key: "help_quick_select",
+        grid_only: false,
     },
     ShortcutRow {
         key: "Space",
         label_key: "help_toggle_preview",
+        grid_only: false,
     },
     ShortcutRow {
         key: "Enter",
         label_key: "help_confirm",
+        grid_only: false,
     },
     ShortcutRow {
         key: "Shift+Enter",
         label_key: "help_confirm_plain_text",
+        grid_only: false,
     },
     ShortcutRow {
         key: "Delete / D",
         label_key: "help_delete",
+        grid_only: false,
     },
     ShortcutRow {
         key: "F",
         label_key: "help_favorite",
+        grid_only: false,
     },
     ShortcutRow {
         key: "P",
         label_key: "help_pin",
+        grid_only: false,
     },
     ShortcutRow {
         key: "Esc / Q",
         label_key: "help_hide",
+        grid_only: false,
     },
 ];
 
@@ -110,6 +133,7 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
     // Build shortcut rows
     let rows = SHORTCUTS
         .iter()
+        .filter(|row| board.layout_mode == LayoutMode::Grid || !row.grid_only)
         .filter(|row| board.can_toggle_window_pin() || row.label_key != "help_pin")
         .enumerate()
         .map(|(i, row)| {

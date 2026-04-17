@@ -1,4 +1,4 @@
-use gpui::{AppContext, Context, Entity, SharedString, Window};
+use gpui::{App, AppContext, Context, Entity, SharedString, Window};
 use gpui_component::{
     IndexPath,
     input::InputState,
@@ -7,7 +7,11 @@ use gpui_component::{
 };
 
 use super::RopyBoard;
-use crate::{gui::theme::ThemeId, i18n::Language};
+use crate::{
+    config::LayoutMode,
+    gui::theme::ThemeId,
+    i18n::{I18n, Language},
+};
 
 #[allow(clippy::redundant_pub_crate)]
 #[allow(clippy::struct_excessive_bools)]
@@ -22,6 +26,8 @@ pub(crate) struct SettingsEditor {
     pub(crate) settings_window_opacity_slider_visible: bool,
     pub(crate) selected_theme: usize,
     pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) selected_layout: usize,
+    pub(crate) layout_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) window_opacity_percent: u8,
     pub(crate) autostart_enabled: bool,
     pub(crate) selected_language: usize,
@@ -44,6 +50,8 @@ impl SettingsEditor {
         settings_window_opacity_slider: Entity<SliderState>,
         selected_theme: usize,
         theme_select: Entity<SelectState<Vec<SharedString>>>,
+        selected_layout: usize,
+        layout_select: Entity<SelectState<Vec<SharedString>>>,
         window_opacity_percent: u8,
         selected_language: usize,
         language_select: Entity<SelectState<Vec<SharedString>>>,
@@ -63,6 +71,8 @@ impl SettingsEditor {
             settings_window_opacity_slider_visible: false,
             selected_theme,
             theme_select,
+            selected_layout,
+            layout_select,
             window_opacity_percent,
             autostart_enabled,
             selected_language,
@@ -124,6 +134,62 @@ pub(super) fn build_window_opacity_slider(
     .detach();
 
     slider
+}
+
+fn layout_mode_items(cx: &App) -> Vec<SharedString> {
+    LayoutMode::all()
+        .iter()
+        .map(|mode| SharedString::from(I18n::translate(cx, mode.label_key())))
+        .collect()
+}
+
+pub(super) fn sync_layout_select_items(
+    layout_select: &Entity<SelectState<Vec<SharedString>>>,
+    selected_layout: usize,
+    window: &mut Window,
+    cx: &mut Context<RopyBoard>,
+) {
+    let items = layout_mode_items(cx);
+    layout_select.update(cx, |state, cx| {
+        state.set_items(items.clone(), window, cx);
+        state.set_selected_index(
+            Some(IndexPath::default().row(selected_layout)),
+            window,
+            cx,
+        );
+    });
+}
+
+/// Build the layout select dropdown and subscribe to its change events.
+pub(super) fn build_layout_select(
+    selected_layout: usize,
+    window: &mut Window,
+    cx: &mut Context<RopyBoard>,
+) -> Entity<SelectState<Vec<SharedString>>> {
+    let layout_select = cx.new(|cx| {
+        SelectState::new(
+            layout_mode_items(cx),
+            Some(IndexPath::default().row(selected_layout)),
+            window,
+            cx,
+        )
+    });
+    cx.subscribe_in(
+        &layout_select,
+        window,
+        |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
+            if let SelectEvent::Confirm(Some(val)) = event {
+                let options = layout_mode_items(cx);
+                if let Some(idx) = options.iter().position(|item| item.as_ref() == val.as_ref()) {
+                    this.settings_editor.selected_layout = idx;
+                    this.save_selected_layout(window, cx);
+                }
+            }
+        },
+    )
+    .detach();
+
+    layout_select
 }
 
 /// Build the theme select dropdown and subscribe to its change events.

@@ -17,8 +17,8 @@ use crate::{
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
     gui::board::{
-        Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, RopyBoard, SelectNext,
-        SelectPrev,
+        Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, RopyBoard, SelectLeft,
+        SelectNext, SelectPrev, SelectRight,
     },
     i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
@@ -174,6 +174,8 @@ fn bind_application_keys(cx: &mut App) {
         KeyBinding::new("cmd-q", Quit, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("alt-f4", Quit, None),
+        KeyBinding::new("left", SelectLeft, None),
+        KeyBinding::new("right", SelectRight, None),
         KeyBinding::new("up", SelectPrev, None),
         KeyBinding::new("down", SelectNext, None),
         KeyBinding::new("enter", ConfirmSelection, None),

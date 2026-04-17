@@ -1,5 +1,6 @@
 use gpui::{Context, Focusable, Window};
 
+use crate::config::LayoutMode;
 use crate::gui::{
     active_window,
     board::{ActivePanel, RopyBoard},
@@ -25,6 +26,8 @@ gpui::actions!(
         Hide,
         Quit,
         Active,
+        SelectLeft,
+        SelectRight,
         SelectPrev,
         SelectNext,
         ConfirmSelection,
@@ -33,11 +36,61 @@ gpui::actions!(
     ]
 );
 
+pub(super) fn horizontal_grid_target_index(
+    selected_index: usize,
+    record_count: usize,
+    move_right: bool,
+    layout_mode: LayoutMode,
+) -> Option<usize> {
+    if layout_mode != LayoutMode::Grid || record_count == 0 {
+        return None;
+    }
+
+    if move_right {
+        let next_index = selected_index + 1;
+        if selected_index % 2 == 0 && next_index < record_count {
+            Some(next_index)
+        } else {
+            None
+        }
+    } else if selected_index % 2 == 1 {
+        Some(selected_index - 1)
+    } else {
+        None
+    }
+}
+
 impl RopyBoard {
+    fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<Self>) {
+        let count = self.filtered_record_len();
+        let Some(next_index) = horizontal_grid_target_index(
+            self.selected_index,
+            count,
+            move_right,
+            self.layout_mode,
+        ) else {
+            return;
+        };
+
+        self.selected_index = next_index;
+        self.list_state
+            .scroll_to_reveal_item(self.selected_list_index());
+        cx.notify();
+    }
+
+    pub fn on_select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_grid_horizontal(false, cx);
+    }
+
+    pub fn on_select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_grid_horizontal(true, cx);
+    }
+
     pub fn on_select_prev(&mut self, _: &SelectPrev, _: &mut Window, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.list_state.scroll_to_reveal_item(self.selected_index);
+            self.list_state
+                .scroll_to_reveal_item(self.selected_list_index());
             cx.notify();
         }
     }
@@ -46,7 +99,8 @@ impl RopyBoard {
         let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
-            self.list_state.scroll_to_reveal_item(self.selected_index);
+            self.list_state
+                .scroll_to_reveal_item(self.selected_list_index());
             cx.notify();
         }
     }
@@ -96,7 +150,8 @@ impl RopyBoard {
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
         }
-        self.list_state.scroll_to_reveal_item(self.selected_index);
+        self.list_state
+            .scroll_to_reveal_item(self.selected_list_index());
         self.active_panel = ActivePanel::ClipboardList;
         self.show_clear_confirm = false;
         window.resize(default_window_size());
@@ -193,6 +248,12 @@ impl RopyBoard {
             }
             "k" => {
                 self.on_select_prev(&SelectPrev, window, cx);
+            }
+            "h" => {
+                self.on_select_left(&SelectLeft, window, cx);
+            }
+            "l" => {
+                self.on_select_right(&SelectRight, window, cx);
             }
             "d" => {
                 self.on_delete_record(&DeleteRecord, window, cx);

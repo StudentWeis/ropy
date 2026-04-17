@@ -91,6 +91,7 @@ pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> im
         vec![
             render_language_row(board, cx).into_any_element(),
             render_theme_row(board, cx).into_any_element(),
+            render_layout_row(board, cx).into_any_element(),
             render_window_opacity_row(board, cx).into_any_element(),
         ],
         cx,
@@ -181,6 +182,18 @@ fn render_theme_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElem
             div()
                 .w(px(148.0))
                 .child(Select::new(&board.settings_editor.theme_select).small()),
+        ),
+        cx,
+    )
+}
+
+fn render_layout_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+    settings_row(
+        I18n::translate(cx, "settings_layout"),
+        h_flex().flex_1().justify_end().child(
+            div()
+                .w(px(148.0))
+                .child(Select::new(&board.settings_editor.layout_select).small()),
         ),
         cx,
     )
@@ -553,6 +566,8 @@ pub fn reset_settings_dialog(
     let (
         lang_idx,
         theme_idx,
+        layout_idx,
+        layout_mode,
         autostart_enabled,
         auto_check_enabled,
         include_prerelease_enabled,
@@ -569,9 +584,15 @@ pub fn reset_settings_dialog(
             .iter()
             .position(|theme_id| theme_id == &s.theme)
             .unwrap_or_default();
+        let layout = crate::config::LayoutMode::all()
+            .iter()
+            .position(|layout_mode| layout_mode == &s.layout.mode)
+            .unwrap_or_default();
         (
             lang,
             theme,
+            layout,
+            s.layout.mode,
             s.autostart.enabled,
             s.update.auto_check,
             s.update.include_prerelease,
@@ -583,11 +604,13 @@ pub fn reset_settings_dialog(
     });
     board.settings_editor.selected_language = lang_idx;
     board.settings_editor.selected_theme = theme_idx;
+    board.settings_editor.selected_layout = layout_idx;
     board.settings_editor.autostart_enabled = autostart_enabled;
     board.settings_editor.auto_check_enabled = auto_check_enabled;
     board.settings_editor.include_prerelease_enabled = include_prerelease_enabled;
     board.settings_editor.hover_preview_enabled = hover_preview_enabled;
     board.confirm_mode = confirm_mode;
+    board.layout_mode = layout_mode;
     board.settings_editor.window_opacity_percent = window_opacity;
     board
         .settings_editor
@@ -606,6 +629,7 @@ pub fn reset_settings_dialog(
     board.settings_editor.theme_select.update(cx, |state, cx| {
         state.set_selected_index(Some(IndexPath::default().row(theme_idx)), window, cx);
     });
+    board.sync_layout_select_items(window, cx);
 
     // Clear input fields
     board

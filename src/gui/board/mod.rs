@@ -23,7 +23,8 @@ use std::{
 
 // Re-export utilities for external use
 pub use actions::{
-    Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, SelectNext, SelectPrev,
+    Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, SelectLeft, SelectNext,
+    SelectPrev, SelectRight,
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
@@ -32,13 +33,13 @@ use gpui::{
 use gpui_component::input::InputState;
 pub use search::{ContentFilter, SearchOptions};
 use settings_editor::{
-    SettingsEditor, UpdateManager, build_language_select, build_theme_select,
-    build_window_opacity_slider,
+    SettingsEditor, UpdateManager, build_language_select, build_layout_select,
+    build_theme_select, build_window_opacity_slider,
 };
 
 use crate::{
     clipboard::LastCopyState,
-    config::{ConfirmMode, Settings},
+    config::{ConfirmMode, LayoutMode, Settings},
     gui::{hide_window, surface_with_opacity, theme::ThemeId},
     i18n::Language,
     repository::SharedRecords,
@@ -76,6 +77,7 @@ pub struct RopyBoard {
     pub(crate) show_preview: bool,
     pub(crate) settings_editor: SettingsEditor,
     pub(crate) confirm_mode: ConfirmMode,
+    pub(crate) layout_mode: LayoutMode,
     pub(crate) pinned: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
     /// Track if we're in a delete operation to preserve scroll position
@@ -108,6 +110,14 @@ impl RopyBoard {
 
     pub(crate) fn main_panel_surface(&self, color: gpui::Hsla) -> gpui::Hsla {
         surface_with_opacity(color, self.settings_editor.window_opacity_percent)
+    }
+
+    pub(crate) const fn visible_list_len(&self, record_count: usize) -> usize {
+        records_list::visible_list_len(record_count, self.layout_mode)
+    }
+
+    pub(crate) const fn selected_list_index(&self) -> usize {
+        records_list::list_row_for_selected_index(self.selected_index, self.layout_mode)
     }
 
     #[allow(clippy::needless_pass_by_ref_mut)]
@@ -207,6 +217,7 @@ impl RopyBoard {
             theme,
             language,
             window_opacity_percent,
+            layout_mode,
             confirm_mode,
             autostart_enabled,
             auto_check_enabled,
@@ -220,6 +231,7 @@ impl RopyBoard {
                 s.theme.clone(),
                 s.language.clone(),
                 s.window.opacity_percent,
+                s.layout.mode,
                 s.confirm.mode,
                 s.autostart.enabled,
                 s.update.auto_check,
@@ -242,6 +254,12 @@ impl RopyBoard {
             .position(|theme_id| theme_id == &theme)
             .unwrap_or_default();
         let theme_select = build_theme_select(selected_theme, window, cx);
+
+        let selected_layout = LayoutMode::all()
+            .iter()
+            .position(|mode| mode == &layout_mode)
+            .unwrap_or_default();
+        let layout_select = build_layout_select(selected_layout, window, cx);
 
         let selected_language = Language::all()
             .iter()
@@ -266,7 +284,7 @@ impl RopyBoard {
         // Render a bit beyond the viewport to reduce scroll-time pop-in while
         // keeping GPUI's lazy list measurement behavior.
         let list_state = ListState::new(
-            initial_filtered_record_indices.len(),
+            records_list::visible_list_len(initial_filtered_record_indices.len(), layout_mode),
             ListAlignment::Top,
             gpui::px(160.),
         );
@@ -284,6 +302,8 @@ impl RopyBoard {
             settings_window_opacity_slider,
             selected_theme,
             theme_select,
+            selected_layout,
+            layout_select,
             window_opacity_percent,
             selected_language,
             language_select,
@@ -309,6 +329,7 @@ impl RopyBoard {
             show_preview: false,
             settings_editor,
             confirm_mode,
+            layout_mode,
             pinned: false,
             hotkey_tx: None,
             deleting_record: false,

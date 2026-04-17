@@ -22,6 +22,7 @@ pub struct Settings {
     pub storage: StorageSettings,
     pub theme: ThemeId,
     pub window: WindowSettings,
+    pub layout: LayoutSettings,
     pub autostart: AutoStartSettings,
     pub language: Language,
     pub update: UpdateSettings,
@@ -118,6 +119,32 @@ impl ConfirmMode {
     pub const fn requires_clipboard_completion(self) -> bool {
         matches!(self, Self::PasteImmediately)
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutMode {
+    #[default]
+    List,
+    Grid,
+}
+
+impl LayoutMode {
+    pub const fn all() -> [Self; 2] {
+        [Self::List, Self::Grid]
+    }
+
+    pub const fn label_key(self) -> &'static str {
+        match self {
+            Self::List => "settings_layout_list",
+            Self::Grid => "settings_layout_grid",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LayoutSettings {
+    pub mode: LayoutMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -301,6 +328,7 @@ mod tests {
         settings.update.include_prerelease = true;
         settings.preview.hover_preview_enabled = false;
         settings.confirm.mode = ConfirmMode::PasteImmediately;
+        settings.layout.mode = LayoutMode::Grid;
         settings.window.opacity_percent = 72;
 
         // Save to file
@@ -321,6 +349,7 @@ mod tests {
         assert!(loaded.update.include_prerelease);
         assert!(!loaded.preview.hover_preview_enabled);
         assert_eq!(loaded.confirm.mode, ConfirmMode::PasteImmediately);
+        assert_eq!(loaded.layout.mode, LayoutMode::Grid);
         assert_eq!(loaded.window.opacity_percent, 72);
     }
 
@@ -485,6 +514,31 @@ max_history_records = 100
         assert!(matches!(default, ConfirmMode::CopyToClipboard));
     }
 
+    #[test]
+    fn test_layout_mode_default() {
+        assert_eq!(LayoutMode::default(), LayoutMode::List);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn test_layout_mode_serialization_round_trip() {
+        let mut settings = Settings::default();
+        settings.layout.mode = LayoutMode::Grid;
+
+        let toml = toml::to_string_pretty(&settings).unwrap();
+        assert!(toml.contains("[layout]"));
+        assert!(toml.contains("mode = \"grid\""));
+
+        let loaded: Settings = toml::from_str(&toml).unwrap();
+        assert_eq!(loaded.layout.mode, LayoutMode::Grid);
+    }
+
+    #[test]
+    fn test_layout_settings_default() {
+        let layout = LayoutSettings::default();
+        assert_eq!(layout.mode, LayoutMode::List);
+    }
+
     // ── StorageSettings Tests ─────────────────────────────────────
 
     #[test]
@@ -640,6 +694,7 @@ max_history_records = 100
         assert!(toml.contains("[update]"), "Missing [update] section");
         assert!(toml.contains("[preview]"), "Missing [preview] section");
         assert!(toml.contains("[confirm]"), "Missing [confirm] section");
+        assert!(toml.contains("[layout]"), "Missing [layout] section");
         assert!(toml.contains("[window]"), "Missing [window] section");
         // Note: [theme] and [language] are serialized as inline tables, not section headers
         assert!(toml.contains("theme"), "Missing theme field");

@@ -39,6 +39,8 @@ impl Render for RopyBoard {
                 .into_any_element(),
             ActivePanel::ClipboardList => base
                 .bg(self.main_panel_surface(cx.theme().background))
+                .on_action(cx.listener(Self::on_select_left))
+                .on_action(cx.listener(Self::on_select_right))
                 .on_action(cx.listener(Self::on_select_prev))
                 .on_action(cx.listener(Self::on_select_next))
                 .on_action(cx.listener(Self::on_confirm_selection))

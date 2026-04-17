@@ -20,6 +20,7 @@ use crate::{
 impl RopyBoard {
     pub(crate) fn sync_filtered_records(&mut self, cx: &Context<Self>) {
         let query = self.search_input.read(cx).value().to_string();
+        let previous_visible_len = self.visible_list_len(self.filtered_record_indices.len());
         let next_indices = self.get_filtered_record_indices(&query);
         let plan = plan_filtered_records_sync(
             self.filtered_record_indices.as_ref(),
@@ -27,6 +28,7 @@ impl RopyBoard {
             self.selected_index,
             self.deleting_record,
         );
+        let next_visible_len = self.visible_list_len(plan.indices.len());
 
         let scroll_position = matches!(plan.list_update, FilteredRecordsUpdate::Splice { .. })
             .then(|| self.list_state.logical_scroll_top());
@@ -36,11 +38,11 @@ impl RopyBoard {
 
         match plan.list_update {
             FilteredRecordsUpdate::None => {}
-            FilteredRecordsUpdate::Reset { new_len } => {
-                self.list_state.reset(new_len);
+            FilteredRecordsUpdate::Reset { .. } => {
+                self.list_state.reset(next_visible_len);
             }
-            FilteredRecordsUpdate::Splice { old_len, new_len } => {
-                self.list_state.splice(0..old_len, new_len);
+            FilteredRecordsUpdate::Splice { .. } => {
+                self.list_state.splice(0..previous_visible_len, next_visible_len);
                 if let Some(scroll_position) = scroll_position {
                     self.list_state.scroll_to(scroll_position);
                 }
