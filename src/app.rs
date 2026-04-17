@@ -5,7 +5,10 @@
 //! subsystems.  It intentionally lives outside `gui` so that the GUI module
 //! can focus solely on rendering.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    cfg_select,
+    sync::{Arc, Mutex},
+};
 
 use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
 use gpui_component::Root;
@@ -168,12 +171,14 @@ fn setup_hotkey_listener(
 }
 
 fn bind_application_keys(cx: &mut App) {
+    let quit_key_binding = cfg_select! {
+        target_os = "macos" => { KeyBinding::new("cmd-q", Quit, None) },
+        _ => { KeyBinding::new("alt-f4", Quit, None) },
+    };
+
     cx.bind_keys([
         KeyBinding::new("escape", Hide, None),
-        #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-q", Quit, None),
-        #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("alt-f4", Quit, None),
+        quit_key_binding,
         KeyBinding::new("left", SelectLeft, None),
         KeyBinding::new("right", SelectRight, None),
         KeyBinding::new("up", SelectPrev, None),

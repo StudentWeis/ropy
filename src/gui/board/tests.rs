@@ -93,16 +93,34 @@ fn test_update_manager_new_starts_idle() {
 
 #[test]
 fn test_horizontal_grid_target_index_moves_within_row_only() {
-    assert_eq!(horizontal_grid_target_index(0, 6, true, LayoutMode::Grid), Some(1));
-    assert_eq!(horizontal_grid_target_index(1, 6, true, LayoutMode::Grid), None);
-    assert_eq!(horizontal_grid_target_index(1, 6, false, LayoutMode::Grid), Some(0));
-    assert_eq!(horizontal_grid_target_index(2, 6, false, LayoutMode::Grid), None);
+    assert_eq!(
+        horizontal_grid_target_index(0, 6, true, LayoutMode::Grid),
+        Some(1)
+    );
+    assert_eq!(
+        horizontal_grid_target_index(1, 6, true, LayoutMode::Grid),
+        None
+    );
+    assert_eq!(
+        horizontal_grid_target_index(1, 6, false, LayoutMode::Grid),
+        Some(0)
+    );
+    assert_eq!(
+        horizontal_grid_target_index(2, 6, false, LayoutMode::Grid),
+        None
+    );
 }
 
 #[test]
 fn test_horizontal_grid_target_index_respects_missing_right_cell_and_list_mode() {
-    assert_eq!(horizontal_grid_target_index(4, 5, true, LayoutMode::Grid), None);
-    assert_eq!(horizontal_grid_target_index(0, 5, true, LayoutMode::List), None);
+    assert_eq!(
+        horizontal_grid_target_index(4, 5, true, LayoutMode::Grid),
+        None
+    );
+    assert_eq!(
+        horizontal_grid_target_index(0, 5, true, LayoutMode::List),
+        None
+    );
 }
 
 #[test]

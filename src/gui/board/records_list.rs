@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use gpui::{
     AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img, list,
@@ -333,14 +337,118 @@ struct RenderContext<'a> {
     view: &'a gpui::WeakEntity<RopyBoard>,
 }
 
+struct RecordsListState {
+    filtered_record_indices: Arc<Vec<usize>>,
+    records: crate::repository::SharedRecords,
+    favorite_ids: Arc<HashSet<u64>>,
+    selected_index: usize,
+    layout_mode: LayoutMode,
+    show_preview: bool,
+    hover_preview_enabled: bool,
+    opacity_percent: u8,
+    view: gpui::WeakEntity<RopyBoard>,
+}
+
+impl RecordsListState {
+    fn from_board(board: &RopyBoard, context: &Context<'_, RopyBoard>) -> Self {
+        Self {
+            filtered_record_indices: board.filtered_record_indices.clone(),
+            records: board.records.clone(),
+            favorite_ids: board.favorite_ids.clone(),
+            selected_index: board.selected_index,
+            layout_mode: board.layout_mode,
+            show_preview: board.show_preview,
+            hover_preview_enabled: board.settings_editor.hover_preview_enabled
+                && !board.show_clear_confirm,
+            opacity_percent: board.settings_editor.window_opacity_percent,
+            view: context.weak_entity(),
+        }
+    }
+
+    fn render_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+        if self.layout_mode == LayoutMode::Grid {
+            self.render_grid_row(index, window, cx)
+        } else {
+            self.render_list_row(index, window, cx)
+        }
+    }
+
+    fn render_list_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+        let Some(record) = self.record_for_filtered_index(index) else {
+            return div().into_any_element();
+        };
+
+        render_list_item(&self.render_context(index, &record), window, cx)
+    }
+
+    fn render_grid_row(&self, row_index: usize, window: &Window, cx: &mut App) -> AnyElement {
+        let first_index = row_start_index(row_index, LayoutMode::Grid);
+        let Some(first_record) = self.record_for_filtered_index(first_index) else {
+            return div().into_any_element();
+        };
+
+        let second_index = first_index + 1;
+        let second_record = self.record_for_filtered_index(second_index);
+
+        let mut row =
+            div()
+                .flex()
+                .flex_row()
+                .w_full()
+                .gap_2()
+                .pb_2()
+                .child(div().flex_1().min_w_0().child(render_list_item(
+                    &self.render_context(first_index, &first_record),
+                    window,
+                    cx,
+                )));
+
+        if let Some(second_record) = second_record {
+            row = row.child(div().flex_1().min_w_0().child(render_list_item(
+                &self.render_context(second_index, &second_record),
+                window,
+                cx,
+            )));
+        } else {
+            row = row.child(div().flex_1());
+        }
+
+        row.into_any_element()
+    }
+
+    fn record_for_filtered_index(&self, filtered_index: usize) -> Option<ClipboardRecord> {
+        let record_index = self.filtered_record_indices.get(filtered_index).copied()?;
+        let guard = read_or_recover(&self.records);
+        guard.get(record_index).cloned()
+    }
+
+    fn render_context<'a>(
+        &'a self,
+        index: usize,
+        record: &'a ClipboardRecord,
+    ) -> RenderContext<'a> {
+        RenderContext {
+            index,
+            record,
+            is_favorite: self.favorite_ids.contains(&record.id),
+            is_selected: index == self.selected_index,
+            layout_mode: self.layout_mode,
+            show_preview: self.show_preview,
+            hover_preview_enabled: self.hover_preview_enabled,
+            opacity_percent: self.opacity_percent,
+            view: &self.view,
+        }
+    }
+}
+
 fn render_record_body(
     ctx: &RenderContext<'_>,
     preview_data: &PreviewData,
-    view_click: gpui::WeakEntity<RopyBoard>,
     styles: &ItemStyle,
     cx: &App,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
+    let view_click = ctx.view.clone();
     let mut content = div()
         .flex_1()
         .min_w_0()
@@ -435,58 +543,43 @@ fn render_record_meta(
     meta
 }
 
-fn render_grid_record_header(
-    ctx: &RenderContext<'_>,
-    styles: &ItemStyle,
-    record_id: u64,
-    view_favorite: gpui::WeakEntity<RopyBoard>,
-    view_pin: gpui::WeakEntity<RopyBoard>,
-    view_delete: gpui::WeakEntity<RopyBoard>,
-    cx: &App,
-) -> gpui::Div {
+fn render_grid_record_header(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> gpui::Div {
     h_flex()
         .w_full()
         .justify_between()
         .items_start()
         .gap_2()
-        .child(
-            div().flex_1().min_w_0().child(render_record_meta(
-                ctx.index,
-                ctx.record,
-                styles.meta_background,
-                styles.badge_background,
-                false,
-                false,
-                cx,
-            )),
-        )
-        .child(render_record_actions(
+        .child(div().flex_1().min_w_0().child(render_record_meta(
             ctx.index,
-            record_id,
-            ctx.is_favorite,
-            ctx.record.pinned,
-            view_favorite,
-            view_pin,
-            view_delete,
-            true,
-        ))
+            ctx.record,
+            styles.meta_background,
+            styles.badge_background,
+            false,
+            false,
+            cx,
+        )))
+        .child(render_record_actions(ctx))
 }
 
-fn render_record_actions(
-    index: usize,
-    record_id: u64,
-    is_favorite: bool,
-    is_pinned: bool,
-    view_favorite: gpui::WeakEntity<RopyBoard>,
-    view_pin: gpui::WeakEntity<RopyBoard>,
-    view_delete: gpui::WeakEntity<RopyBoard>,
-    compact: bool,
-) -> AnyElement {
+fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
+    let compact = ctx.layout_mode == LayoutMode::Grid;
+    let index = ctx.index;
+    let record_id = ctx.record.id;
+    let view_favorite = ctx.view.clone();
+    let view_pin = ctx.view.clone();
+    let view_delete = ctx.view.clone();
+
     let favorite_button = {
-        let button = if is_favorite {
-            Button::new(("favorite-btn", index)).xsmall().primary().label("★")
+        let button = if ctx.is_favorite {
+            Button::new(("favorite-btn", index))
+                .xsmall()
+                .primary()
+                .label("★")
         } else {
-            Button::new(("favorite-btn", index)).xsmall().ghost().label("☆")
+            Button::new(("favorite-btn", index))
+                .xsmall()
+                .ghost()
+                .label("☆")
         };
         button.on_click(move |_event, _window, cx| {
             view_favorite
@@ -499,7 +592,7 @@ fn render_record_actions(
     };
 
     let pin_button = {
-        let button = if is_pinned {
+        let button = if ctx.record.pinned {
             Button::new(("pin-btn", index)).xsmall().primary()
         } else {
             Button::new(("pin-btn", index)).xsmall().ghost()
@@ -568,106 +661,67 @@ fn render_selected_preview(
     .with_priority(1)
 }
 
+fn decorate_record_card(
+    card: gpui::Div,
+    ctx: &RenderContext<'_>,
+    styles: &ItemStyle,
+) -> AnyElement {
+    card.bg(styles.normal_background)
+        .rounded_md()
+        .border_color(if ctx.is_selected {
+            styles.hover_border
+        } else {
+            styles.border
+        })
+        .border_1()
+        .hover(move |style| {
+            if ctx.is_selected {
+                style
+            } else {
+                style
+                    .bg(styles.selected_background)
+                    .border_color(styles.selected_background)
+            }
+        })
+        .id(("record", ctx.index))
+        .into_any_element()
+}
+
 fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let preview_data = PreviewData::new(ctx.record);
     let styles = ItemStyle::from_app(cx, ctx.opacity_percent);
-    let view_click = ctx.view.clone();
-    let view_favorite = ctx.view.clone();
-    let view_pin = ctx.view.clone();
-    let view_delete = ctx.view.clone();
-    let record_id = ctx.record.id;
 
     let card = if compact {
-        v_flex()
-            .w_full()
-            .h(px(GRID_CARD_HEIGHT))
-            .px_2()
-            .py_1()
-            .bg(styles.normal_background)
-            .rounded_md()
-            .border_color(if ctx.is_selected {
-                styles.hover_border
-            } else {
-                styles.border
-            })
-            .border_1()
-            .hover(move |style| {
-                if ctx.is_selected {
-                    style
-                } else {
-                    style
-                        .bg(styles.selected_background)
-                        .border_color(styles.selected_background)
-                }
-            })
-            .id(("record", ctx.index))
-            .child(
-                v_flex()
-                    .w_full()
-                    .gap_1()
-                    .child(render_grid_record_header(
-                        ctx,
-                        &styles,
-                        record_id,
-                        view_favorite,
-                        view_pin,
-                        view_delete,
-                        cx,
-                    ))
-                    .child(render_record_body(
-                        ctx,
-                        &preview_data,
-                        view_click,
-                        &styles,
-                        cx,
-                    )),
-            )
+        decorate_record_card(
+            v_flex()
+                .w_full()
+                .h(px(GRID_CARD_HEIGHT))
+                .px_2()
+                .py_1()
+                .child(
+                    v_flex()
+                        .w_full()
+                        .gap_1()
+                        .child(render_grid_record_header(ctx, &styles, cx))
+                        .child(render_record_body(ctx, &preview_data, &styles, cx)),
+                ),
+            ctx,
+            &styles,
+        )
     } else {
-        v_flex()
-            .w_full()
-            .p_3()
-            .bg(styles.normal_background)
-            .rounded_md()
-            .border_color(if ctx.is_selected {
-                styles.hover_border
-            } else {
-                styles.border
-            })
-            .border_1()
-            .hover(move |style| {
-                if ctx.is_selected {
-                    style
-                } else {
-                    style
-                        .bg(styles.selected_background)
-                        .border_color(styles.selected_background)
-                }
-            })
-            .id(("record", ctx.index))
-            .child(
+        decorate_record_card(
+            v_flex().w_full().p_3().child(
                 h_flex()
                     .justify_between()
                     .items_start()
                     .gap_2()
-                    .child(render_record_body(
-                        ctx,
-                        &preview_data,
-                        view_click,
-                        &styles,
-                        cx,
-                    ))
-                    .child(render_record_actions(
-                        ctx.index,
-                        record_id,
-                        ctx.is_favorite,
-                        ctx.record.pinned,
-                        view_favorite,
-                        view_pin,
-                        view_delete,
-                        false,
-                    )),
-            )
+                    .child(render_record_body(ctx, &preview_data, &styles, cx))
+                    .child(render_record_actions(ctx)),
+            ),
+            ctx,
+            &styles,
+        )
     };
 
     let mut item = if compact {
@@ -682,97 +736,11 @@ fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> A
 
     item.into_any_element()
 }
-
-fn render_grid_row(
-    row_index: usize,
-    filtered_record_indices: &[usize],
-    records: &crate::repository::SharedRecords,
-    favorite_ids: &std::collections::HashSet<u64>,
-    selected_index: usize,
-    show_preview: bool,
-    hover_preview_enabled: bool,
-    opacity_percent: u8,
-    view: &gpui::WeakEntity<RopyBoard>,
-    window: &Window,
-    cx: &mut App,
-) -> AnyElement {
-    let first_index = row_start_index(row_index, LayoutMode::Grid);
-    let second_index = first_index + 1;
-    let guard = read_or_recover(records);
-
-    let Some(first_record_index) = filtered_record_indices.get(first_index).copied() else {
-        return div().into_any_element();
-    };
-    let Some(first_record) = guard.get(first_record_index) else {
-        return div().into_any_element();
-    };
-
-    let mut row = div()
-        .flex()
-        .flex_row()
-        .w_full()
-        .gap_2()
-        .pb_2()
-        .child(
-            div().flex_1().min_w_0().child(render_list_item(
-                &RenderContext {
-                    index: first_index,
-                    record: first_record,
-                    is_favorite: favorite_ids.contains(&first_record.id),
-                    is_selected: first_index == selected_index,
-                    layout_mode: LayoutMode::Grid,
-                    show_preview,
-                    hover_preview_enabled,
-                    opacity_percent,
-                    view,
-                },
-                window,
-                cx,
-            )),
-        );
-
-    if let Some(second_record_index) = filtered_record_indices.get(second_index).copied()
-        && let Some(second_record) = guard.get(second_record_index)
-    {
-        row = row.child(
-            div().flex_1().min_w_0().child(render_list_item(
-                &RenderContext {
-                    index: second_index,
-                    record: second_record,
-                    is_favorite: favorite_ids.contains(&second_record.id),
-                    is_selected: second_index == selected_index,
-                    layout_mode: LayoutMode::Grid,
-                    show_preview,
-                    hover_preview_enabled,
-                    opacity_percent,
-                    view,
-                },
-                window,
-                cx,
-            )),
-        );
-    } else {
-        row = row.child(div().flex_1());
-    }
-
-    row.into_any_element()
-}
-
 impl RopyBoard {
-    #[allow(clippy::significant_drop_tightening)]
     pub fn render_records_list(&self, context: &Context<'_, Self>) -> impl IntoElement {
-        let filtered_record_indices = self.filtered_record_indices.clone();
-        let records = self.records.clone();
-        let favorite_ids = self.favorite_ids.clone();
         let list_state = self.list_state.clone();
         let scrollbar_state = list_state.clone();
-        let selected_index = self.selected_index;
-        let layout_mode = self.layout_mode;
-        let show_preview = self.show_preview;
-        let hover_preview_enabled =
-            self.settings_editor.hover_preview_enabled && !self.show_clear_confirm;
-        let opacity_percent = self.settings_editor.window_opacity_percent;
-        let view = context.weak_entity();
+        let state = RecordsListState::from_board(self, context);
 
         div()
             .relative()
@@ -780,45 +748,7 @@ impl RopyBoard {
             .flex_1()
             .child(
                 list(list_state, move |index, window, cx| {
-                    if layout_mode == LayoutMode::Grid {
-                        return render_grid_row(
-                            index,
-                            filtered_record_indices.as_ref(),
-                            &records,
-                            favorite_ids.as_ref(),
-                            selected_index,
-                            show_preview,
-                            hover_preview_enabled,
-                            opacity_percent,
-                            &view,
-                            window,
-                            cx,
-                        );
-                    }
-
-                    let Some(record_index) = filtered_record_indices.get(index).copied() else {
-                        return div().into_any_element();
-                    };
-                    let guard = read_or_recover(&records);
-                    let Some(record) = guard.get(record_index) else {
-                        return div().into_any_element();
-                    };
-
-                    render_list_item(
-                        &RenderContext {
-                            index,
-                            record,
-                            is_favorite: favorite_ids.contains(&record.id),
-                            is_selected: index == selected_index,
-                            layout_mode: LayoutMode::List,
-                            show_preview,
-                            hover_preview_enabled,
-                            opacity_percent,
-                            view: &view,
-                        },
-                        window,
-                        cx,
-                    )
+                    state.render_row(index, window, cx)
                 })
                 .size_full(),
             )

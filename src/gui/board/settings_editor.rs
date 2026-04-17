@@ -152,11 +152,7 @@ pub(super) fn sync_layout_select_items(
     let items = layout_mode_items(cx);
     layout_select.update(cx, |state, cx| {
         state.set_items(items.clone(), window, cx);
-        state.set_selected_index(
-            Some(IndexPath::default().row(selected_layout)),
-            window,
-            cx,
-        );
+        state.set_selected_index(Some(IndexPath::default().row(selected_layout)), window, cx);
     });
 }
 
@@ -180,7 +176,10 @@ pub(super) fn build_layout_select(
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
             if let SelectEvent::Confirm(Some(val)) = event {
                 let options = layout_mode_items(cx);
-                if let Some(idx) = options.iter().position(|item| item.as_ref() == val.as_ref()) {
+                if let Some(idx) = options
+                    .iter()
+                    .position(|item| item.as_ref() == val.as_ref())
+                {
                     this.settings_editor.selected_layout = idx;
                     this.save_selected_layout(window, cx);
                 }

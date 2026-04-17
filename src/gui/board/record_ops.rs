@@ -42,7 +42,8 @@ impl RopyBoard {
                 self.list_state.reset(next_visible_len);
             }
             FilteredRecordsUpdate::Splice { .. } => {
-                self.list_state.splice(0..previous_visible_len, next_visible_len);
+                self.list_state
+                    .splice(0..previous_visible_len, next_visible_len);
                 if let Some(scroll_position) = scroll_position {
                     self.list_state.scroll_to(scroll_position);
                 }

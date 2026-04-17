@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use global_hotkey::hotkey::HotKey;
 use gpui::{Context, Focusable, Keystroke, Modifiers, Window};
+use std::cfg_select;
 
 use super::RopyBoard;
 
@@ -19,14 +20,12 @@ fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
 
     let mut parts = Vec::with_capacity(6);
 
-    #[cfg(target_os = "macos")]
     if keystroke.modifiers.platform {
-        parts.push("cmd");
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    if keystroke.modifiers.platform {
-        parts.push("super");
+        let platform_token = cfg_select! {
+            target_os = "macos" => { "cmd" },
+            _ => { "super" },
+        };
+        parts.push(platform_token);
     }
 
     if keystroke.modifiers.control {
@@ -67,14 +66,9 @@ const fn has_supported_modifier(modifiers: Modifiers) -> bool {
 }
 
 const fn control_token() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        "control"
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        "ctrl"
+    cfg_select! {
+        target_os = "macos" => { "control" },
+        _ => { "ctrl" },
     }
 }
 

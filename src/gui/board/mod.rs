@@ -33,8 +33,8 @@ use gpui::{
 use gpui_component::input::InputState;
 pub use search::{ContentFilter, SearchOptions};
 use settings_editor::{
-    SettingsEditor, UpdateManager, build_language_select, build_layout_select,
-    build_theme_select, build_window_opacity_slider,
+    SettingsEditor, UpdateManager, build_language_select, build_layout_select, build_theme_select,
+    build_window_opacity_slider,
 };
 
 use crate::{

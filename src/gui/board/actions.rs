@@ -48,12 +48,12 @@ pub(super) fn horizontal_grid_target_index(
 
     if move_right {
         let next_index = selected_index + 1;
-        if selected_index % 2 == 0 && next_index < record_count {
+        if selected_index.is_multiple_of(2) && next_index < record_count {
             Some(next_index)
         } else {
             None
         }
-    } else if selected_index % 2 == 1 {
+    } else if !selected_index.is_multiple_of(2) {
         Some(selected_index - 1)
     } else {
         None
@@ -63,12 +63,9 @@ pub(super) fn horizontal_grid_target_index(
 impl RopyBoard {
     fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<Self>) {
         let count = self.filtered_record_len();
-        let Some(next_index) = horizontal_grid_target_index(
-            self.selected_index,
-            count,
-            move_right,
-            self.layout_mode,
-        ) else {
+        let Some(next_index) =
+            horizontal_grid_target_index(self.selected_index, count, move_right, self.layout_mode)
+        else {
             return;
         };
 
@@ -237,11 +234,9 @@ impl RopyBoard {
                 self.show_preview = !self.show_preview;
                 cx.notify();
             }
-            "p" => {
-                if self.can_toggle_window_pin() {
-                    self.toggle_window_pin(window);
-                    cx.notify();
-                }
+            "p" if self.can_toggle_window_pin() => {
+                self.toggle_window_pin(window);
+                cx.notify();
             }
             "j" => {
                 self.on_select_next(&SelectNext, window, cx);
@@ -261,11 +256,9 @@ impl RopyBoard {
             "q" => {
                 self.on_hide_action(&Hide, window, cx);
             }
-            "f" => {
-                if let Some(id) = self.filtered_record_id_at(self.selected_index) {
-                    self.toggle_record_favorite(id, cx);
-                    cx.notify();
-                }
+            "f" if let Some(id) = self.filtered_record_id_at(self.selected_index) => {
+                self.toggle_record_favorite(id, cx);
+                cx.notify();
             }
             "1" => {
                 self.confirm_record(window, cx, 0);

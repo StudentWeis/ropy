@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{cfg_select, path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
 use gpui::{App, Global, ReadGlobal};
@@ -187,12 +187,10 @@ pub struct HotkeySettings {
 impl Default for HotkeySettings {
     fn default() -> Self {
         Self {
-            #[cfg(target_os = "macos")]
-            activation_key: "control+shift+d".to_string(),
-            #[cfg(target_os = "windows")]
-            activation_key: "ctrl+shift+d".to_string(),
-            #[cfg(target_os = "linux")]
-            activation_key: "ctrl+shift+d".to_string(),
+            activation_key: cfg_select! {
+                target_os = "macos" => { "control+shift+d".to_string() },
+                _ => { "ctrl+shift+d".to_string() },
+            },
         }
     }
 }
@@ -280,6 +278,18 @@ mod tests {
         );
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
         assert_eq!(settings.window.opacity_percent, 100);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_default_hotkey_settings_on_macos() {
+        assert_eq!(HotkeySettings::default().activation_key, "control+shift+d");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn test_default_hotkey_settings_on_non_macos() {
+        assert_eq!(HotkeySettings::default().activation_key, "ctrl+shift+d");
     }
 
     #[test]

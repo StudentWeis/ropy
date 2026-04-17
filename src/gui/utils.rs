@@ -1,3 +1,5 @@
+use std::cfg_select;
+
 use gpui::{Context, Hsla, Window, hsla};
 
 pub fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
@@ -83,14 +85,18 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    cx.hide();
-
-    #[cfg(target_os = "linux")]
-    if let Some(x11) = crate::app::X11_INSTANCE.get() {
-        if let Err(e) = x11.hide_window() {
-            tracing::warn!(error = %e, "failed to hide window");
+    cfg_select! {
+        target_os = "macos" => {
+            cx.hide();
         }
+        target_os = "linux" => {
+            if let Some(x11) = crate::app::X11_INSTANCE.get()
+                && let Err(e) = x11.hide_window()
+            {
+                tracing::warn!(error = %e, "failed to hide window");
+            }
+        }
+        _ => {}
     }
 }
 
@@ -111,14 +117,18 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    cx.activate(true);
-
-    #[cfg(target_os = "linux")]
-    if let Some(x11) = crate::app::X11_INSTANCE.get() {
-        if let Err(e) = x11.display_and_activate_window() {
-            tracing::warn!(error = %e, "failed to activate window");
+    cfg_select! {
+        target_os = "macos" => {
+            cx.activate(true);
         }
+        target_os = "linux" => {
+            if let Some(x11) = crate::app::X11_INSTANCE.get()
+                && let Err(e) = x11.display_and_activate_window()
+            {
+                tracing::warn!(error = %e, "failed to activate window");
+            }
+        }
+        _ => {}
     }
 }
 
@@ -146,12 +156,10 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
     }
 
     #[cfg(target_os = "linux")]
+    if let Some(x11) = crate::app::X11_INSTANCE.get()
+        && let Err(e) = x11.set_always_on_top(pinned)
     {
-        if let Some(x11) = crate::app::X11_INSTANCE.get() {
-            if let Err(e) = x11.set_always_on_top(pinned) {
-                tracing::warn!(error = %e, "failed to set always on top");
-            }
-        }
+        tracing::warn!(error = %e, "failed to set always on top");
     }
 }
 

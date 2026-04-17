@@ -1,4 +1,4 @@
-use std::{thread, time::Duration};
+use std::{cfg_select, thread, time::Duration};
 
 use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use thiserror::Error;
@@ -42,10 +42,10 @@ const fn paste_delay() -> Duration {
 }
 
 const fn paste_modifier_key() -> Key {
-    #[cfg(target_os = "macos")]
-    return Key::Meta;
-    #[cfg(not(target_os = "macos"))]
-    return Key::Control;
+    cfg_select! {
+        target_os = "macos" => { Key::Meta },
+        _ => { Key::Control },
+    }
 }
 
 #[cfg(test)]
