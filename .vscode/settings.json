@@ -4,5 +4,6 @@
         "rtk ./scripts/precheck.sh": true,
         "./scripts/precheck.sh": true,
         "scripts/precheck.sh": true
-    }
+    },
+    "evenBetterToml.schema.enabled": false
 }
