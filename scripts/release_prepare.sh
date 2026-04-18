@@ -22,6 +22,9 @@ if [[ -z "$release_version" ]]; then
 	exit 1
 fi
 
+# Sync version to [package.metadata.bundle.bin.ropy]
+perl -i -0777 -pe "s/(\[package\.metadata\.bundle\.bin\.ropy\]\n(?:.*\n)*?version\s*=\s*\").*?\"/\${1}$release_version\"/m" Cargo.toml
+
 # Check code formatting, linting, and tests before release
 ./scripts/precheck.sh
 ./scripts/record_build_size.sh

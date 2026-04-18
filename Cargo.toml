@@ -1,6 +1,6 @@
 [package]
 name = "ropy"
-version = "0.5.0-beta"
+version = "0.5.0-rc.1"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 authors = ["Student Wei <studentweis@gmail.com>"]
@@ -8,6 +8,7 @@ repository = "https://github.com/StudentWeis/ropy"
 keywords = ["clipboard", "gpui", "productivity"]
 categories = ["productivity"]
 license = "MIT"
+publish = false
 
 [dependencies]
 clipboard-rs = "0.3.4"
@@ -112,16 +113,13 @@ panic = "abort"
 inherits = "release"
 lto = "thin"
 
+[package.metadata.dist]
+dist = true
+
 [package.metadata.release]
 tag-name = "{{version}}"
 pre-release-commit-message = "chore(release): release {{crate_name}} {{version}}"
 pre-release-hook = ["bash", "scripts/release_prepare.sh"]
-
-[[package.metadata.release.pre-release-replacements]]
-file = "Cargo.toml"
-search = '(\[package\.metadata\.bundle\.bin\.ropy\]\n(?:.*\n)*?version\s*=\s*")[^"]*"'
-replace = '${1}{{version}}"'
-exactly = 1
 
 [package.metadata.bundle]
 name = "Ropy"
@@ -133,7 +131,7 @@ osx_minimum_system_version = "10.15"
 # macOS specific settings
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
-version = "0.5.0-beta"
+version = "0.5.0-rc.1"
 copyright = "Copyright 2026 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"

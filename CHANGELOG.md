@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0-rc.1] - 2026-04-18
+
+### 🚀 Features
+- Implement grid layout for records with masonry placement and enhance search functionality by @StudentWeis
+- Enhance Windows support with additional UI features and improve window geometry handling by @StudentWeis
+- Add layout mode selection with list/grid options by @StudentWeis
+
+### 🐛 Bug Fixes
+- Add auto-hide behavior for secondary panels and corresponding tests by @StudentWeis
+
+### 💼 Other
+- Add release management script and config updates by @StudentWeis
+
+### 🚜 Refactor
+- Improve code structure and add tests for repository modules by @StudentWeis
+- Remove unused panel auto-hide logic by @StudentWeis
+- Update imports and method calls for consistency by @StudentWeis
+- Update Rust toolchain to 1.95.0 and refactor hotkey handling with cfg_select by @StudentWeis
+
+### 📚 Documentation
+- Add SKILL.md files for gpui layout, style, performance, and styling skills by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Add symbolic links for claude skills and docs by @StudentWeis
+- Update dependencies and improve formatting in Cargo.toml and Cargo.lock by @StudentWeis
+
 ## [0.5.0-beta] - 2026-04-16
 
 ### 🚀 Features
