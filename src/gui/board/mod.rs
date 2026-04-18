@@ -28,7 +28,8 @@ pub use actions::{
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, Subscription, Window,
+    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ScrollHandle,
+    Subscription, Window,
 };
 use gpui_component::input::InputState;
 pub use search::{ContentFilter, SearchOptions};
@@ -59,6 +60,17 @@ pub enum ActivePanel {
     Help,
 }
 
+pub(super) fn search_query_changed(previous_query: &str, next_query: &str) -> bool {
+    previous_query != next_query
+}
+
+pub(super) const fn search_query_should_reveal_selection(
+    previous_query: &str,
+    next_query: &str,
+) -> bool {
+    previous_query.is_empty() && !next_query.is_empty()
+}
+
 /// `RopyBoard` Main Window Component
 #[allow(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
@@ -69,7 +81,10 @@ pub struct RopyBoard {
     pub(crate) _focus_out_subscription: Subscription,
     pub(crate) _search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
+    pub(crate) last_search_query: String,
     pub(crate) list_state: ListState,
+    pub(crate) grid_scroll_handle: ScrollHandle,
+    pub(crate) grid_auto_reveal_suppressed: bool,
     pub(crate) selected_index: usize,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
@@ -118,6 +133,32 @@ impl RopyBoard {
 
     pub(crate) const fn selected_list_index(&self) -> usize {
         records_list::list_row_for_selected_index(self.selected_index, self.layout_mode)
+    }
+
+    pub(crate) fn reveal_selected_record(&self) {
+        if self.filtered_record_indices.is_empty() {
+            return;
+        }
+
+        match self.layout_mode {
+            LayoutMode::List => self.list_state.scroll_to_reveal_item(self.selected_list_index()),
+            LayoutMode::Grid => {
+                if !self.grid_auto_reveal_suppressed {
+                    self.grid_scroll_handle.scroll_to_item(self.selected_index);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn force_reveal_selected_record(&mut self) {
+        self.grid_auto_reveal_suppressed = false;
+        self.reveal_selected_record();
+    }
+
+    pub(crate) fn suppress_grid_auto_reveal(&mut self) {
+        if self.layout_mode == LayoutMode::Grid {
+            self.grid_auto_reveal_suppressed = true;
+        }
     }
 
     #[allow(clippy::needless_pass_by_ref_mut)]
@@ -289,7 +330,20 @@ impl RopyBoard {
             gpui::px(160.),
         );
         let search_input_subscription = cx.observe(&search_input, |this, _, cx| {
-            this.sync_filtered_records(cx);
+            let next_query = this.search_input.read(cx).value().to_string();
+            if !search_query_changed(&this.last_search_query, &next_query) {
+                return;
+            }
+
+            let reveal_selection =
+                search_query_should_reveal_selection(&this.last_search_query, &next_query);
+            this.last_search_query = next_query;
+
+            if reveal_selection {
+                this.sync_filtered_records_and_reveal(cx);
+            } else {
+                this.sync_filtered_records(cx);
+            }
             cx.notify();
         });
 
@@ -319,6 +373,9 @@ impl RopyBoard {
             _focus_out_subscription: focus_out_subscription,
             _search_input_subscription: search_input_subscription,
             search_input,
+            last_search_query: String::new(),
+            grid_scroll_handle: ScrollHandle::new(),
+            grid_auto_reveal_suppressed: false,
             selected_index: 0,
             last_copy,
             list_state,

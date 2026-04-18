@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
 use chrono::{Local, TimeZone};
+use gpui::{Bounds, Pixels, point, px, size};
 
 use super::{
     actions::horizontal_grid_target_index,
     clipboard_ops::{ConfirmFormat, build_copy_request, build_copy_request_for_record},
     filtering::filter_and_sort_record_indices,
+    search_query_changed, search_query_should_reveal_selection,
     search::{ContentFilter, SearchOptions},
     settings_editor::UpdateManager,
 };
@@ -92,35 +94,63 @@ fn test_update_manager_new_starts_idle() {
 }
 
 #[test]
-fn test_horizontal_grid_target_index_moves_within_row_only() {
+fn test_search_query_changed_only_when_query_text_differs() {
+    assert!(!search_query_changed("abc", "abc"));
+    assert!(search_query_changed("", "a"));
+    assert!(search_query_changed("a", "ab"));
+    assert!(search_query_changed("ab", ""));
+}
+
+#[test]
+fn test_search_query_should_reveal_selection_only_on_first_non_empty_query() {
+    assert!(search_query_should_reveal_selection("", "a"));
+    assert!(!search_query_should_reveal_selection("a", "ab"));
+    assert!(!search_query_should_reveal_selection("ab", "abc"));
+    assert!(!search_query_should_reveal_selection("abc", ""));
+}
+
+#[test]
+fn test_horizontal_grid_target_index_moves_to_nearest_card_in_adjacent_column() {
+    let item_bounds = vec![
+        test_bounds(0.0, 0.0, 100.0, 120.0),
+        test_bounds(108.0, 0.0, 100.0, 80.0),
+        test_bounds(0.0, 128.0, 100.0, 100.0),
+        test_bounds(108.0, 88.0, 100.0, 120.0),
+    ];
+
     assert_eq!(
-        horizontal_grid_target_index(0, 6, true, LayoutMode::Grid),
+        horizontal_grid_target_index(0, &item_bounds, true, LayoutMode::Grid),
         Some(1)
     );
     assert_eq!(
-        horizontal_grid_target_index(1, 6, true, LayoutMode::Grid),
-        None
+        horizontal_grid_target_index(2, &item_bounds, true, LayoutMode::Grid),
+        Some(3)
     );
     assert_eq!(
-        horizontal_grid_target_index(1, 6, false, LayoutMode::Grid),
-        Some(0)
-    );
-    assert_eq!(
-        horizontal_grid_target_index(2, 6, false, LayoutMode::Grid),
-        None
+        horizontal_grid_target_index(3, &item_bounds, false, LayoutMode::Grid),
+        Some(2)
     );
 }
 
 #[test]
-fn test_horizontal_grid_target_index_respects_missing_right_cell_and_list_mode() {
+fn test_horizontal_grid_target_index_respects_missing_column_and_list_mode() {
+    let single_column_bounds = vec![
+        test_bounds(0.0, 0.0, 100.0, 120.0),
+        test_bounds(0.0, 128.0, 100.0, 100.0),
+    ];
+
     assert_eq!(
-        horizontal_grid_target_index(4, 5, true, LayoutMode::Grid),
+        horizontal_grid_target_index(0, &single_column_bounds, true, LayoutMode::Grid),
         None
     );
     assert_eq!(
-        horizontal_grid_target_index(0, 5, true, LayoutMode::List),
+        horizontal_grid_target_index(0, &single_column_bounds, true, LayoutMode::List),
         None
     );
+}
+
+fn test_bounds(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {
+    Bounds::new(point(px(x), px(y)), size(px(width), px(height)))
 }
 
 #[test]

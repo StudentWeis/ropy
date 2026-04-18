@@ -49,7 +49,7 @@ impl Render for RopyBoard {
                 .on_key_down(cx.listener(Self::on_key_down))
                 .child(render_header(self, cx))
                 .child(render_search_input(self, cx))
-                .child(self.render_records_list(cx))
+                .child(self.render_records_list(window, cx))
                 .into_any_element(),
         };
 

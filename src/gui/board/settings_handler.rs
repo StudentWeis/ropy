@@ -293,10 +293,7 @@ impl RopyBoard {
         self.layout_mode = next_layout;
         self.list_state
             .reset(self.visible_list_len(self.filtered_record_indices.len()));
-        if !self.filtered_record_indices.is_empty() {
-            self.list_state
-                .scroll_to_reveal_item(self.selected_list_index());
-        }
+        self.force_reveal_selected_record();
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }

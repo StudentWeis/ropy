@@ -33,7 +33,8 @@ git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
 perl -i -pe 's/<!-- \d+ -->//g' CHANGELOG.md
 
 # 4. Before update, check everything is clean
-bash scripts/before_update.sh
+./scripts/precheck.sh
+./scripts/record_build_size.sh
 
 # 5. Confirm and publish
 dist plan

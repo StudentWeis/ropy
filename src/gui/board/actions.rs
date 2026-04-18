@@ -1,4 +1,4 @@
-use gpui::{Context, Focusable, Window};
+use gpui::{Bounds, Context, Focusable, Pixels, Window};
 
 use crate::{
     config::LayoutMode,
@@ -41,6 +41,59 @@ gpui::actions!(
 
 pub(super) fn horizontal_grid_target_index(
     selected_index: usize,
+    item_bounds: &[Bounds<Pixels>],
+    move_right: bool,
+    layout_mode: LayoutMode,
+) -> Option<usize> {
+    if layout_mode != LayoutMode::Grid {
+        return None;
+    }
+
+    let selected_bounds = item_bounds.get(selected_index)?;
+    let selected_center_x = bounds_center_x(selected_bounds);
+    let selected_center_y = bounds_center_y(selected_bounds);
+
+    item_bounds
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != selected_index)
+        .filter(|(_, bounds)| {
+            let center_x = bounds_center_x(bounds);
+            if move_right {
+                center_x > selected_center_x
+            } else {
+                center_x < selected_center_x
+            }
+        })
+        .min_by(|(_, left_bounds), (_, right_bounds)| {
+            let left_dx = (bounds_center_x(left_bounds) - selected_center_x).abs();
+            let right_dx = (bounds_center_x(right_bounds) - selected_center_x).abs();
+
+            left_dx.total_cmp(&right_dx).then_with(|| {
+                let left_vertical_distance =
+                    (bounds_center_y(left_bounds) - selected_center_y).abs();
+                let right_vertical_distance =
+                    (bounds_center_y(right_bounds) - selected_center_y).abs();
+                left_vertical_distance.total_cmp(&right_vertical_distance)
+            })
+        })
+        .map(|(index, _)| index)
+}
+
+fn bounds_center_x(bounds: &Bounds<Pixels>) -> f32 {
+    let left: f32 = bounds.left().into();
+    let width: f32 = bounds.size.width.into();
+    left + width / 2.0
+}
+
+fn bounds_center_y(bounds: &Bounds<Pixels>) -> f32 {
+    let top: f32 = bounds.top().into();
+    let height: f32 = bounds.size.height.into();
+    top + height / 2.0
+}
+
+fn fallback_horizontal_grid_target_index(
+    selected_index: usize,
     record_count: usize,
     move_right: bool,
     layout_mode: LayoutMode,
@@ -66,15 +119,34 @@ pub(super) fn horizontal_grid_target_index(
 impl RopyBoard {
     fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<Self>) {
         let count = self.filtered_record_len();
-        let Some(next_index) =
-            horizontal_grid_target_index(self.selected_index, count, move_right, self.layout_mode)
-        else {
+        let item_bounds = (0..count)
+            .map(|index| self.grid_scroll_handle.bounds_for_item(index))
+            .collect::<Option<Vec<_>>>();
+
+        let next_index = item_bounds
+            .as_deref()
+            .and_then(|bounds| {
+                horizontal_grid_target_index(
+                    self.selected_index,
+                    bounds,
+                    move_right,
+                    self.layout_mode,
+                )
+            })
+            .or_else(|| {
+                fallback_horizontal_grid_target_index(
+                    self.selected_index,
+                    count,
+                    move_right,
+                    self.layout_mode,
+                )
+            });
+        let Some(next_index) = next_index else {
             return;
         };
 
         self.selected_index = next_index;
-        self.list_state
-            .scroll_to_reveal_item(self.selected_list_index());
+        self.force_reveal_selected_record();
         cx.notify();
     }
 
@@ -89,8 +161,7 @@ impl RopyBoard {
     pub fn on_select_prev(&mut self, _: &SelectPrev, _: &mut Window, cx: &mut Context<Self>) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.list_state
-                .scroll_to_reveal_item(self.selected_list_index());
+            self.force_reveal_selected_record();
             cx.notify();
         }
     }
@@ -99,8 +170,7 @@ impl RopyBoard {
         let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
-            self.list_state
-                .scroll_to_reveal_item(self.selected_list_index());
+            self.force_reveal_selected_record();
             cx.notify();
         }
     }
@@ -137,6 +207,7 @@ impl RopyBoard {
             {
                 self.selected_index -= 1;
             }
+            self.force_reveal_selected_record();
             cx.notify();
         }
     }
@@ -150,8 +221,7 @@ impl RopyBoard {
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
         }
-        self.list_state
-            .scroll_to_reveal_item(self.selected_list_index());
+        self.force_reveal_selected_record();
         self.active_panel = ActivePanel::ClipboardList;
         self.show_clear_confirm = false;
         reset_window_geometry_for_activation(window, default_window_size());
