@@ -8,6 +8,7 @@ use crate::{
         constants::default_window_size,
         hide_window,
         panel::settings,
+        reset_window_geometry_for_activation,
     },
 };
 
@@ -153,7 +154,7 @@ impl RopyBoard {
             .scroll_to_reveal_item(self.selected_list_index());
         self.active_panel = ActivePanel::ClipboardList;
         self.show_clear_confirm = false;
-        window.resize(default_window_size());
+        reset_window_geometry_for_activation(window, default_window_size());
         active_window(window, cx);
     }
 
