@@ -28,8 +28,8 @@ pub use actions::{
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ScrollHandle,
-    Subscription, Window,
+    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ScrollHandle, Subscription,
+    Window,
 };
 use gpui_component::input::InputState;
 pub use search::{ContentFilter, SearchOptions};
@@ -145,7 +145,9 @@ impl RopyBoard {
         }
 
         match self.layout_mode {
-            LayoutMode::List => self.list_state.scroll_to_reveal_item(self.selected_list_index()),
+            LayoutMode::List => self
+                .list_state
+                .scroll_to_reveal_item(self.selected_list_index()),
             LayoutMode::Grid => {
                 if !self.grid_auto_reveal_suppressed {
                     self.grid_scroll_handle.scroll_to_item(self.selected_index);

@@ -8,8 +8,8 @@ use super::{
     actions::horizontal_grid_target_index,
     clipboard_ops::{ConfirmFormat, build_copy_request, build_copy_request_for_record},
     filtering::filter_and_sort_record_indices,
-    search_query_changed, search_query_should_reveal_selection,
     search::{ContentFilter, SearchOptions},
+    search_query_changed, search_query_should_reveal_selection,
     settings_editor::UpdateManager,
 };
 use crate::{
@@ -26,10 +26,7 @@ fn test_focus_out_auto_hide_for_pin_state_matches_expected(
     #[case] pinned: bool,
     #[case] expected: bool,
 ) {
-    assert_eq!(
-        RopyBoard::should_auto_hide_on_focus_out(pinned),
-        expected
-    );
+    assert_eq!(RopyBoard::should_auto_hide_on_focus_out(pinned), expected);
 }
 
 #[test]

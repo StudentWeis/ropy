@@ -5,8 +5,8 @@ use std::{
 };
 
 use gpui::{
-    AnyElement, AnyView, App, Context, RenderOnce, ScrollHandle, Window, anchored, deferred,
-    div, img, list,
+    AnyElement, AnyView, App, Context, RenderOnce, ScrollHandle, Window, anchored, deferred, div,
+    img, list,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
@@ -212,7 +212,11 @@ fn render_image_record(record: &ClipboardRecord, compact: bool) -> AnyElement {
     } else {
         path
     };
-    let max_height = if compact { GRID_IMAGE_MAX_HEIGHT } else { 100.0 };
+    let max_height = if compact {
+        GRID_IMAGE_MAX_HEIGHT
+    } else {
+        100.0
+    };
 
     img(display_path).max_h(px(max_height)).into_any_element()
 }
@@ -955,17 +959,13 @@ fn render_list_item_with_grid_height(
         );
 
         decorate_record_card(
-            card_shell
-                .overflow_hidden()
-                .px_2()
-                .py_1()
-                .child(
-                    v_flex()
-                        .w_full()
-                        .gap_1()
-                        .child(render_grid_record_header(ctx, &styles, cx))
-                        .child(render_record_body(ctx, &preview_data, &styles, cx)),
-                ),
+            card_shell.overflow_hidden().px_2().py_1().child(
+                v_flex()
+                    .w_full()
+                    .gap_1()
+                    .child(render_grid_record_header(ctx, &styles, cx))
+                    .child(render_record_body(ctx, &preview_data, &styles, cx)),
+            ),
             ctx,
             &styles,
         )
@@ -997,11 +997,7 @@ fn render_list_item_with_grid_height(
     item.into_any_element()
 }
 impl RopyBoard {
-    pub fn render_records_list(
-        &self,
-        window: &Window,
-        context: &Context<'_, Self>,
-    ) -> AnyElement {
+    pub fn render_records_list(&self, window: &Window, context: &Context<'_, Self>) -> AnyElement {
         if self.layout_mode == LayoutMode::Grid {
             return GridMasonry {
                 state: RecordsListState::from_board(self, context),
@@ -1037,12 +1033,14 @@ impl RopyBoard {
                             .scrollbar_show(ScrollbarShow::Scrolling),
                     ),
             )
-                    .into_any_element()
+            .into_any_element()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Local, TimeZone};
+
     use super::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_CONTENT_PREVIEW_MAX_LINES,
         MasonryPlacement, build_masonry_layout, estimated_grid_card_height,
@@ -1050,8 +1048,10 @@ mod tests {
         list_row_for_selected_index, masonry_placement_is_visible, truncate_content,
         truncate_content_for_grid, visible_list_len,
     };
-    use crate::{config::LayoutMode, repository::{ClipboardRecord, models::ContentType}};
-    use chrono::{Local, TimeZone};
+    use crate::{
+        config::LayoutMode,
+        repository::{ClipboardRecord, models::ContentType},
+    };
 
     fn test_record(content: &str, content_type: ContentType) -> ClipboardRecord {
         ClipboardRecord {
