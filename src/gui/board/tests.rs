@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use chrono::{Local, TimeZone};
 use gpui::{Bounds, Pixels, point, px, size};
+use rstest::rstest;
 
 use super::{
     actions::horizontal_grid_target_index,
@@ -13,10 +14,27 @@ use super::{
 };
 use crate::{
     config::{ConfirmMode, LayoutMode},
-    gui::board::RopyBoard,
+    gui::board::{ActivePanel, RopyBoard},
     repository::{ClipboardRecord, models::ContentType},
     updater::models::UpdateStatus,
 };
+
+#[rstest]
+#[case(ActivePanel::ClipboardList, false, true)]
+#[case(ActivePanel::ClipboardList, true, false)]
+#[case(ActivePanel::Settings, false, false)]
+#[case(ActivePanel::About, false, false)]
+#[case(ActivePanel::Help, false, false)]
+fn test_focus_out_auto_hide_for_panel_and_pin_state_matches_expected(
+    #[case] active_panel: ActivePanel,
+    #[case] pinned: bool,
+    #[case] expected: bool,
+) {
+    assert_eq!(
+        RopyBoard::should_auto_hide_on_focus_out(active_panel, pinned),
+        expected
+    );
+}
 
 #[test]
 fn test_open_settings_panel_hides_opacity_slider_until_next_frame() {

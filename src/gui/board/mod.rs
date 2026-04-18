@@ -60,6 +60,17 @@ pub enum ActivePanel {
     Help,
 }
 
+impl ActivePanel {
+    /// Secondary panels can tear down or replace the currently focused element.
+    /// Auto-hiding on those focus transfers would close the window while switching panels.
+    pub(crate) const fn allows_focus_out_auto_hide(self) -> bool {
+        match self {
+            Self::ClipboardList => true,
+            Self::Settings | Self::About | Self::Help => false,
+        }
+    }
+}
+
 pub(super) fn search_query_changed(previous_query: &str, next_query: &str) -> bool {
     previous_query != next_query
 }
@@ -111,6 +122,13 @@ pub struct RopyBoard {
 }
 
 impl RopyBoard {
+    pub(crate) const fn should_auto_hide_on_focus_out(
+        active_panel: ActivePanel,
+        pinned: bool,
+    ) -> bool {
+        !pinned && active_panel.allows_focus_out_auto_hide()
+    }
+
     pub(crate) const fn window_pin_available(confirm_mode: ConfirmMode) -> bool {
         matches!(confirm_mode, ConfirmMode::CopyToClipboard)
     }
@@ -240,10 +258,11 @@ impl RopyBoard {
         let focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window.
-                // Do NOT hide while settings panels are open — their popups
-                // (Select dropdowns, overlays) steal focus and would cause the window
-                // to disappear and become un-reopenable.
-                if !this.pinned && this.active_panel != ActivePanel::Settings {
+                // Do NOT hide while a secondary panel is open. Switching panels can
+                // replace the currently focused element and would otherwise close the
+                // window immediately (for example, when the search box is focused and
+                // the user opens About or Help).
+                if Self::should_auto_hide_on_focus_out(this.active_panel, this.pinned) {
                     // Clear search input when hiding the window
                     this.clear_search(window, cx);
                     hide_window(window, cx, this.pinned);
