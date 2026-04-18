@@ -64,12 +64,13 @@ use {
     windows_sys::Win32::{
         Foundation::{POINT, RECT},
         Graphics::Gdi::{
-            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+            ClientToScreen, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+            MonitorFromWindow,
         },
         UI::{
             HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI},
             WindowsAndMessaging::{
-                ClientToScreen, GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE,
+                GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE,
                 SWP_NOACTIVATE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
                 USER_DEFAULT_SCREEN_DPI,
             },
