@@ -18,14 +18,15 @@
 </p>
 
 <p align="center">
-<img src="https://www.imgur.la/images/2026/04/02/pic_1775108102590.png" alt="Ropy Dark" width="80%">
+<img src="https://www.imgur.la/images/2026/04/08/pic_1775632236468.png" alt="Ropy" width="80%">
 </p>
 
 ## 特性
 
 - 使用 Zed 的 GPUI 构建的原生桌面应用。
 - 跨平台支持：Windows、macOS 和 Linux（X11）。
-- 追踪文本、图片和文件路径剪贴板历史，并基于内容进行去重。
+- 追踪文本、富文本（HTML/RTF）、图片和文件路径剪贴板历史，并基于内容进行去重。
+- 支持列表和网格布局模式切换，灵活浏览历史记录。
 - 支持使用大小写敏感和整词匹配选项搜索已加载的历史记录。
 - 支持收藏和置顶记录；自动清理时会保留已置顶和已收藏的内容。
 - 支持预览文本和图片，并可配置悬浮预览延迟。
@@ -52,6 +53,7 @@ sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
 您可以使用 [Scoop](https://scoop.sh/) 安装 Ropy：
 
 ```powershell
+scoop bucket add extras
 scoop install ropy
 ```
 
@@ -75,6 +77,8 @@ cargo build --release
 - 使用全局快捷键或托盘图标打开历史窗口。
 - 按 `/` 聚焦搜索，然后使用大小写敏感、整词匹配和类型筛选来优化结果。
 - 使用 `Up`/`Down` 或 `J`/`K` 在条目间移动，按 `Enter` 或 `1`-`5` 确认选择。
+- 按 `Shift+Enter` 以纯文本格式粘贴富文本记录。
+- 在网格模式下，使用 `H`/`L` 在列之间移动。
 - 按 `Space` 切换预览，按 `F` 收藏选中的记录，按 `Delete` 或 `D` 删除它。
 - 使用行内操作置顶记录，使其排除在存储清理之外。
 - 在设置中选择 `copy_to_clipboard` 或 `paste_immediately` 确认模式。
@@ -95,7 +99,8 @@ cargo build --release
 - GUI 组件：[gpui-component](https://github.com/longbridge/gpui-component)
 - 全局快捷键：[global-hotkey](https://github.com/tauri-apps/global-hotkey)
 - 托盘图标辅助：[tray-icon](https://github.com/tauri-apps/tray-icon)
-- 嵌入式数据库：[sled](https://github.com/spacejam/sled)
+- 嵌入式数据库（默认）：[redb](https://github.com/cberner/redb)
+- 嵌入式数据库（旧版）：[sled](https://github.com/spacejam/sled)
 - 配置管理：[config-rs](https://github.com/rust-cli/config-rs)
 
 ## Star 历史
