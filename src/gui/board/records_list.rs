@@ -18,7 +18,11 @@ use gpui_component::{
     v_flex,
 };
 
-use super::{RopyBoard, preview};
+use super::{
+    RopyBoard,
+    color::{ClipboardColor, parse_clipboard_color},
+    preview,
+};
 use crate::{
     clipboard::thumb_path_for,
     config::LayoutMode,
@@ -35,6 +39,8 @@ const GRID_CONTENT_PREVIEW_MAX_LINES: usize = 5;
 const GRID_CARD_MIN_HEIGHT: f32 = 112.0;
 const GRID_CARD_MAX_HEIGHT: f32 = 168.0;
 const GRID_IMAGE_MAX_HEIGHT: f32 = 96.0;
+const GRID_COLOR_SWATCH_HEIGHT: f32 = 60.0;
+const GRID_COLOR_SWATCH_GAP: f32 = 8.0;
 const GRID_OVERSCAN_PX: f32 = 240.0;
 const GRID_ESTIMATED_CARD_CHROME_HEIGHT: f32 = 48.0;
 const GRID_ESTIMATED_TEXT_LINE_HEIGHT: f32 = 18.0;
@@ -44,6 +50,7 @@ const GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS: f32 = 16.0;
 const BOARD_HORIZONTAL_PADDING: f32 = 32.0;
 const SCROLLBAR_OVERLAY_RIGHT_OFFSET: f32 = -10.0;
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 80;
+const LIST_COLOR_SWATCH_SIZE_PX: f32 = 16.0;
 const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 500;
 
 pub(super) const fn visible_list_len(record_count: usize, layout_mode: LayoutMode) -> usize {
@@ -67,22 +74,6 @@ pub(super) const fn list_row_for_selected_index(
         LayoutMode::List => selected_index,
         LayoutMode::Grid => selected_index / GRID_COLUMN_COUNT,
     }
-}
-
-fn get_hex_color(content: &str) -> Option<gpui::Rgba> {
-    let hex = content.strip_prefix('#')?;
-    let value = match hex.len() {
-        3 if hex.chars().all(|ch| ch.is_ascii_hexdigit()) => {
-            let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
-            let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
-            let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
-            ((u32::from(r) * 17) << 16) | ((u32::from(g) * 17) << 8) | (u32::from(b) * 17)
-        }
-        6 if hex.chars().all(|ch| ch.is_ascii_hexdigit()) => u32::from_str_radix(hex, 16).ok()?,
-        _ => return None,
-    };
-
-    Some(gpui::rgb(value))
 }
 
 fn truncate_content(content: &str, limit: usize) -> String {
@@ -168,6 +159,13 @@ fn estimated_grid_text_lines(content: &str) -> usize {
     )
 }
 
+fn estimated_grid_color_body_height(content: &str) -> f32 {
+    GRID_ESTIMATED_TEXT_LINE_HEIGHT.mul_add(
+        estimated_grid_text_lines(content) as f32,
+        GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP,
+    )
+}
+
 fn estimated_grid_file_detail_lines(record_content: &str) -> usize {
     let files = deserialize_file_paths(record_content);
     let detail = if files.len() <= 1 {
@@ -190,7 +188,11 @@ fn estimated_grid_file_detail_lines(record_content: &str) -> usize {
 fn estimated_grid_card_height(record: &ClipboardRecord) -> f32 {
     let body_height = match record.content_type {
         ContentType::Text | ContentType::RichText => {
-            estimated_grid_text_lines(&record.content) as f32 * GRID_ESTIMATED_TEXT_LINE_HEIGHT
+            if parse_clipboard_color(&record.content).is_some() {
+                estimated_grid_color_body_height(&record.content)
+            } else {
+                estimated_grid_text_lines(&record.content) as f32 * GRID_ESTIMATED_TEXT_LINE_HEIGHT
+            }
         }
         ContentType::Image => GRID_IMAGE_MAX_HEIGHT,
         ContentType::FilePath => GRID_ESTIMATED_FILE_DETAIL_LINE_HEIGHT.mul_add(
@@ -221,6 +223,22 @@ fn render_image_record(record: &ClipboardRecord, compact: bool) -> AnyElement {
     img(display_path).max_h(px(max_height)).into_any_element()
 }
 
+fn render_color_swatch(color: ClipboardColor, compact: bool, cx: &App) -> gpui::Div {
+    let swatch = div()
+        .bg(color.to_gpui_rgba())
+        .border_1()
+        .border_color(cx.theme().border);
+
+    if compact {
+        swatch.w_full().h(px(GRID_COLOR_SWATCH_HEIGHT)).rounded_md()
+    } else {
+        swatch
+            .w(px(LIST_COLOR_SWATCH_SIZE_PX))
+            .h(px(LIST_COLOR_SWATCH_SIZE_PX))
+            .rounded_sm()
+    }
+}
+
 fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyElement {
     // Remove leading blank lines and spaces
     let trimmed_content = record.content.trim_start();
@@ -232,26 +250,29 @@ fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         truncate_content_for_list(trimmed_content, LIST_CONTENT_PREVIEW_LIMIT)
     };
     let text_element = div()
+        .w_full()
+        .min_w_0()
         .text_sm()
         .text_color(cx.theme().secondary_foreground)
         .line_height(gpui::relative(if compact { 1.35 } else { 1.5 }))
         .child(text);
 
-    if let Some(color) = get_hex_color(&record.content) {
-        h_flex()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .w_4()
-                    .h_4()
-                    .rounded_sm()
-                    .bg(color)
-                    .border_1()
-                    .border_color(cx.theme().border),
-            )
-            .child(text_element)
-            .into_any_element()
+    if let Some(color) = parse_clipboard_color(&record.content) {
+        if compact {
+            v_flex()
+                .w_full()
+                .gap(px(GRID_COLOR_SWATCH_GAP))
+                .child(render_color_swatch(color, true, cx))
+                .child(text_element)
+                .into_any_element()
+        } else {
+            h_flex()
+                .items_center()
+                .gap_2()
+                .child(render_color_swatch(color, false, cx))
+                .child(text_element)
+                .into_any_element()
+        }
     } else {
         text_element.into_any_element()
     }
@@ -1042,11 +1063,12 @@ mod tests {
     use chrono::{Local, TimeZone};
 
     use super::{
-        GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_CONTENT_PREVIEW_MAX_LINES,
+        GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
+        GRID_COLOR_SWATCH_HEIGHT, GRID_CONTENT_PREVIEW_MAX_LINES, GRID_ESTIMATED_TEXT_LINE_HEIGHT,
         MasonryPlacement, build_masonry_layout, estimated_grid_card_height,
-        estimated_grid_text_lines, file_display_name, file_preview_content, get_hex_color,
-        list_row_for_selected_index, masonry_placement_is_visible, truncate_content,
-        truncate_content_for_grid, visible_list_len,
+        estimated_grid_color_body_height, estimated_grid_text_lines, file_display_name,
+        file_preview_content, list_row_for_selected_index, masonry_placement_is_visible,
+        truncate_content, truncate_content_for_grid, visible_list_len,
     };
     use crate::{
         config::LayoutMode,
@@ -1111,6 +1133,27 @@ mod tests {
     }
 
     #[test]
+    fn test_estimated_grid_color_body_height_adds_large_swatch_space() {
+        let content = "#A1B2C3";
+        let expected = GRID_ESTIMATED_TEXT_LINE_HEIGHT.mul_add(
+            estimated_grid_text_lines(content) as f32,
+            GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP,
+        );
+
+        assert!((estimated_grid_color_body_height(content) - expected).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_estimated_grid_card_height_when_color_record_uses_taller_layout() {
+        let color_record = test_record("#A1B2C3", ContentType::Text);
+        let plain_record = test_record("hello", ContentType::Text);
+
+        assert!(
+            estimated_grid_card_height(&color_record) > estimated_grid_card_height(&plain_record)
+        );
+    }
+
+    #[test]
     fn test_build_masonry_layout_places_items_in_shorter_column() {
         let layout = build_masonry_layout(&[100.0, 60.0, 80.0], 2, 120.0, 8.0, 8.0);
 
@@ -1162,19 +1205,6 @@ mod tests {
 
         assert!(masonry_placement_is_visible(&visible, 0.0, 240.0));
         assert!(!masonry_placement_is_visible(&hidden, 0.0, 240.0));
-    }
-
-    #[test]
-    fn get_hex_color_accepts_short_and_long_hex_values() {
-        assert_eq!(get_hex_color("#abc"), Some(gpui::rgb(0xAA_BB_CC)));
-        assert_eq!(get_hex_color("#A1b2C3"), Some(gpui::rgb(0xA1_B2_C3)));
-    }
-
-    #[test]
-    fn get_hex_color_rejects_invalid_hex_values() {
-        assert_eq!(get_hex_color("abc"), None);
-        assert_eq!(get_hex_color("#abcd"), None);
-        assert_eq!(get_hex_color("#12x456"), None);
     }
 
     #[test]

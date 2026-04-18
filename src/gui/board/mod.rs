@@ -1,6 +1,7 @@
 mod actions;
 mod clear_confirm;
 mod clipboard_ops;
+mod color;
 pub(super) mod filtering;
 mod header;
 mod hotkey_record_handler;
