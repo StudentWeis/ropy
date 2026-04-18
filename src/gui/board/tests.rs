@@ -14,24 +14,20 @@ use super::{
 };
 use crate::{
     config::{ConfirmMode, LayoutMode},
-    gui::board::{ActivePanel, RopyBoard},
+    gui::board::RopyBoard,
     repository::{ClipboardRecord, models::ContentType},
     updater::models::UpdateStatus,
 };
 
 #[rstest]
-#[case(ActivePanel::ClipboardList, false, true)]
-#[case(ActivePanel::ClipboardList, true, false)]
-#[case(ActivePanel::Settings, false, false)]
-#[case(ActivePanel::About, false, false)]
-#[case(ActivePanel::Help, false, false)]
-fn test_focus_out_auto_hide_for_panel_and_pin_state_matches_expected(
-    #[case] active_panel: ActivePanel,
+#[case(false, true)]
+#[case(true, false)]
+fn test_focus_out_auto_hide_for_pin_state_matches_expected(
     #[case] pinned: bool,
     #[case] expected: bool,
 ) {
     assert_eq!(
-        RopyBoard::should_auto_hide_on_focus_out(active_panel, pinned),
+        RopyBoard::should_auto_hide_on_focus_out(pinned),
         expected
     );
 }
