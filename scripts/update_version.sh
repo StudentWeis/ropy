@@ -1,61 +1,61 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check if a version argument is provided
-if [ -z "$1" ]; then
-	echo "Usage: $0 <new_version>"
-	echo "Example: $0 0.1.2"
+usage() {
+	cat <<'EOF'
+Usage: scripts/update_version.sh <level|version> [cargo-release args...]
+
+Examples:
+  scripts/update_version.sh patch                        # dry-run patch bump
+  scripts/update_version.sh 0.6.0 --execute              # release 0.6.0
+  scripts/update_version.sh 0.6.0-beta --execute          # pre-release
+  scripts/update_version.sh rc --execute --no-confirm     # release candidate
+
+This wrapper delegates to cargo release.
+Dry-run mode is the default and automatically adds --no-verify to avoid
+leaving Cargo.lock behind in repositories that do not track lockfiles.
+EOF
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ "$#" -eq 0 ]; then
+	usage >&2
 	exit 1
 fi
 
-NEW_VERSION=$1
-CARGO_TOML="Cargo.toml"
+case "$1" in
+-h | --help)
+	usage
+	exit 0
+	;;
+esac
 
-# Check if Cargo.toml exists
-if [ ! -f "$CARGO_TOML" ]; then
-	echo "Error: $CARGO_TOML file not found"
-	exit 1
-fi
+cd "$REPO_ROOT"
 
-echo "Updating version to: $NEW_VERSION ..."
+release_args=("$@")
+execute_requested=false
+no_verify_requested=false
 
-# Use perl for replacement because it is more reliable in handling multiline patterns and cross-platform (macOS/Linux) than sed
-# 1. Replace version under [package]
-perl -i -0777 -pe "s/(\[package\]\n(?:.*\n)*?version\s*=\s*\").*?\"/\${1}$NEW_VERSION\"/m" "$CARGO_TOML"
-
-# 2. Replace version under [package.metadata.bundle]
-perl -i -0777 -pe "s/(\[package\.metadata\.bundle\]\n(?:.*\n)*?version\s*=\s*\").*?\"/\${1}$NEW_VERSION\"/m" "$CARGO_TOML"
-
-# 3. Update CHANGELOG.md using git cliff
-git cliff --unreleased --tag $NEW_VERSION --prepend CHANGELOG.md
-# Remove HTML comment markers (e.g., <!-- 0 -->) from CHANGELOG.md
-# These markers are added by git-cliff as placeholders for version numbers
-perl -i -pe 's/<!-- \d+ -->//g' CHANGELOG.md
-
-# 4. Before update, check everything is clean
-./scripts/precheck.sh
-./scripts/record_build_size.sh
-
-# 5. Confirm and publish
-dist plan
-while true; do
-	read -r -p "Continue? [Y/n] " REPLY
-	REPLY=${REPLY:-Y}
-	case "$REPLY" in
-	[Yy]*)
-		git add -A
-		git commit -m "chore: update version to $NEW_VERSION"
-		git push
-		git tag "$NEW_VERSION"
-		git push --tags
-		break
+for arg in "${release_args[@]}"; do
+	case "$arg" in
+	-x | --execute)
+		execute_requested=true
 		;;
-	[Nn]*)
-		echo "Release aborted by user."
-		exit 0
+	--no-verify)
+		no_verify_requested=true
 		;;
-	*) echo "Please answer Y or n." ;;
 	esac
 done
 
-echo "Update completed!"
+if [ "$execute_requested" = false ] && [ "$no_verify_requested" = false ]; then
+	release_args+=("--no-verify")
+fi
+
+if [ "$execute_requested" = false ]; then
+	echo "Running cargo release dry-run (release preparation hook will skip mutations)."
+fi
+
+echo "Running: cargo release ${release_args[*]}"
+exec cargo release "${release_args[@]}"

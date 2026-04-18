@@ -4,6 +4,22 @@ English | [简体中文](./doc/CONTRIBUTING/CONTRIBUTING_ZH.md)
 
 Thank you for considering contributing to Ropy! This document will guide you through adding new themes and language support to the project.
 
+## Release
+
+Releases are managed by `cargo-release`. Run `scripts/update_version.sh` to trigger the flow:
+
+```bash
+scripts/update_version.sh patch                   # dry-run a patch bump
+scripts/update_version.sh 0.6.0 --execute         # release 0.6.0
+scripts/update_version.sh 0.6.0-beta --execute    # pre-release
+```
+
+The release pipeline (`cargo release`) automatically:
+1. Bumps the version in `Cargo.toml` `[package]`.
+2. Syncs the version to `[package.metadata.bundle.bin.ropy]` via `pre-release-replacements`.
+3. Runs `scripts/release_prepare.sh` (pre-release hook) which executes `precheck.sh`, `record_build_size.sh`, generates the changelog with `git-cliff`, and verifies `dist plan`.
+4. Commits, tags, and pushes — triggering the GitHub Actions release workflow.
+
 ## Adding a New Theme
 
 Ropy uses TOML configuration files to define themes. Theme files are located in the `assets/themes/` directory.
