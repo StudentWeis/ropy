@@ -70,8 +70,8 @@ use {
         UI::{
             HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI},
             WindowsAndMessaging::{
-                GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE,
-                SWP_NOACTIVATE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
+                GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE, SWP_NOACTIVATE,
+                SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
                 USER_DEFAULT_SCREEN_DPI,
             },
         },
