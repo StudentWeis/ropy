@@ -111,7 +111,6 @@ panic = "abort"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-opt-level = "z"
 lto = "thin"
 
 [package.metadata.dist]
