@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Application lifecycle management and subsystem orchestration.
 //!
 //! This module is the top-level coordinator that wires together the clipboard
@@ -303,7 +304,6 @@ mod tests {
 
     use super::*;
 
-    #[allow(clippy::expect_used)]
     fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository) {
         use crate::repository::memory_backend::memory_backend_factory;
 
@@ -341,7 +341,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_load_initial_records_when_repository_exists_respects_limit() {
         let (_temp_dir, repo) = create_test_repo();
 

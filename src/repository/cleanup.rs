@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Cleanup strategies for the clipboard repository.
 
 use std::collections::HashSet;
@@ -161,7 +162,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_when_all_favorited_removes_none() {
         let repo = create_test_repo();
 
@@ -185,7 +185,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_when_mixed_pinned_and_favorited_preserves_both() {
         let repo = create_test_repo();
 
@@ -212,7 +211,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_if_needed_when_below_trigger_removes_none() {
         let repo = create_test_repo();
 
@@ -228,7 +226,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_if_needed_when_above_trigger_trims_to_keep_count() {
         let repo = create_test_repo();
 
@@ -244,7 +241,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_if_needed_when_favorited_records_present_excludes_from_ordinary_count()
      {
         let repo = create_test_repo();
@@ -271,7 +267,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear_ordinary_records_when_empty_repo_returns_zero() {
         let repo = create_test_repo();
 
@@ -282,7 +277,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear_ordinary_records_when_all_ordinary_removes_all() {
         let repo = create_test_repo();
         save_numbered_records(&repo, 5);

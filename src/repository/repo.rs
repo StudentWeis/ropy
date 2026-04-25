@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Clipboard repository for storing and retrieving clipboard records.
 
 use std::{
@@ -459,7 +460,6 @@ mod tests {
     #[case(sled_backend_factory)]
     #[case(redb_backend_factory)]
     #[case(memory_backend_factory)]
-    #[allow(clippy::expect_used)]
     fn test_save_and_get_text(#[case] factory: BackendFactory) {
         let (_temp_dir, repo) = create_test_repo_with(factory);
 
@@ -477,7 +477,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records() {
         let repo = create_test_repo();
 
@@ -495,7 +494,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_when_favorites_present_keep_default_time_order() {
         let repo = create_test_repo();
 
@@ -543,7 +541,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_returns_41() {
         let repo = create_test_repo();
 
@@ -581,7 +578,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_returns_43() {
         let repo = create_test_repo();
 
@@ -619,7 +615,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_when_newest_records_are_favorited_still_returns_43() {
         let repo = create_test_repo();
 
@@ -661,7 +656,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_delete() {
         let repo = create_test_repo();
 
@@ -679,7 +673,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_rich_text_persists_meta_and_sidecar_files() {
         let (temp_dir, repo) = create_test_repo_with(memory_backend_factory);
 
@@ -715,7 +708,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_delete_when_record_is_rich_text_removes_sidecar_files() {
         let (_temp_dir, repo) = create_test_repo_with(memory_backend_factory);
 
@@ -741,7 +733,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear() {
         let repo = create_test_repo();
 
@@ -755,7 +746,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
         let repo = create_test_repo();
 
@@ -825,7 +815,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
         let repo = create_test_repo();
 
@@ -863,7 +852,6 @@ mod tests {
     #[case(sled_backend_factory)]
     #[case(redb_backend_factory)]
     #[case(memory_backend_factory)]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records(#[case] factory: BackendFactory) {
         let (_temp_dir, repo) = create_test_repo_with(factory);
 
@@ -887,7 +875,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_dedup_same_content() {
         let repo = create_test_repo();
 
@@ -908,7 +895,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_dedup_aba_pattern() {
         let repo = create_test_repo();
 
@@ -928,7 +914,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_content_hash_deterministic() {
         // Verify that the same content always maps to the same id
         let repo = create_test_repo();
@@ -946,7 +931,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_toggle_pin() {
         let repo = create_test_repo();
         let record = repo
@@ -971,7 +955,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_pinned_records_appear_first() {
         let repo = create_test_repo();
 
@@ -993,7 +976,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_multiple_pinned_ordering() {
         let repo = create_test_repo();
 
@@ -1015,7 +997,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_skips_pinned() {
         let repo = create_test_repo();
 
@@ -1045,7 +1026,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_binary_serialization_round_trip() {
         // Verify records survive a postcard serialization round-trip via the
         // internal records tree.
@@ -1074,7 +1054,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
         let repo = create_test_repo();
 
@@ -1098,7 +1077,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_favorite_toggle_record_updates_membership() {
         let repo = create_test_repo();
         let record = repo
@@ -1131,7 +1109,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_records() {
         let repo = create_test_repo();
 
@@ -1159,7 +1136,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_delete_favorite_record_removes_membership() {
         let repo = create_test_repo();
         let record = repo
@@ -1185,7 +1161,6 @@ mod tests {
     // ── Boundary and Edge Case Tests ──────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_by_id_nonexistent() {
         let repo = create_test_repo();
 
@@ -1195,7 +1170,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_by_id_zero() {
         let repo = create_test_repo();
 
@@ -1205,7 +1179,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_by_id_u64_max() {
         let repo = create_test_repo();
 
@@ -1215,7 +1188,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_zero_limit() {
         let repo = create_test_repo();
 
@@ -1228,7 +1200,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_large_limit() {
         let repo = create_test_repo();
 
@@ -1244,7 +1215,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_empty_repo() {
         let repo = create_test_repo();
 
@@ -1253,7 +1223,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_count_empty() {
         let repo = create_test_repo();
 
@@ -1261,7 +1230,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_zero_keep() {
         let repo = create_test_repo();
 
@@ -1274,7 +1242,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_greater_than_total() {
         let repo = create_test_repo();
 
@@ -1287,7 +1254,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_cleanup_old_records_equal_to_total() {
         let repo = create_test_repo();
 
@@ -1344,7 +1310,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_toggle_pin_nonexistent() {
         let repo = create_test_repo();
 
@@ -1358,7 +1323,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_delete_nonexistent() {
         let repo = create_test_repo();
 
@@ -1368,7 +1332,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_empty_content() {
         let repo = create_test_repo();
 
@@ -1385,7 +1348,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_very_long_content() {
         let repo = create_test_repo();
 
@@ -1404,7 +1366,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_unicode_content() {
         let repo = create_test_repo();
 
@@ -1428,7 +1389,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_different_content_types() {
         let repo = create_test_repo();
 
@@ -1449,7 +1409,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_repository_save_files_normalizes_and_persists_file_payload() {
         let repo = create_test_repo();
 
@@ -1468,7 +1427,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
         let repo = create_test_repo();
 
@@ -1484,7 +1442,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_image_from_path_basic() {
         let repo = create_test_repo();
 
@@ -1502,7 +1459,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_image_from_path_dedup() {
         let repo = create_test_repo();
 
@@ -1531,7 +1487,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear_empty_repo() {
         let repo = create_test_repo();
 
@@ -1541,7 +1496,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_multiple_operations_sequence() {
         let repo = create_test_repo();
 
@@ -1577,7 +1531,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_sort_for_display_empty() {
         let mut records: Vec<ClipboardRecord> = vec![];
         ClipboardRepository::sort_for_display(&mut records);
@@ -1585,7 +1538,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_sort_for_display_single() {
         let now = chrono::Local::now();
         let mut records = vec![ClipboardRecord {
@@ -1603,7 +1555,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_sort_for_display_all_same_pinned_state() {
         let now = chrono::Local::now();
         let mut records = vec![
@@ -1644,7 +1595,6 @@ mod tests {
     // ── Error Handling Tests ──────────────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_concurrent_save_and_delete() {
         let repo = create_test_repo();
         let repo = std::sync::Arc::new(repo);
@@ -1681,7 +1631,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_after_clear() {
         let repo = create_test_repo();
 
@@ -1698,7 +1647,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_double_toggle_pin() {
         let repo = create_test_repo();
 
@@ -1731,7 +1679,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_get_display_records_with_pinned_and_limit() {
         let repo = create_test_repo();
 

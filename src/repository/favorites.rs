@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Favorite record management for the clipboard repository.
 
 use std::collections::HashSet;
@@ -68,7 +69,6 @@ mod tests {
     use crate::repository::test_helpers::create_test_repo;
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_favorite_ids_when_empty_returns_empty_vec() {
         let repo = create_test_repo();
 
@@ -78,7 +78,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_favorite_ids_returns_sorted_ids() {
         let repo = create_test_repo();
 
@@ -104,7 +103,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_toggle_favorite_when_record_not_found_returns_error() {
         let repo = create_test_repo();
 
@@ -114,7 +112,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_toggle_favorite_twice_returns_to_unfavorited() {
         let repo = create_test_repo();
 
@@ -133,7 +130,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_favorite_id_set_filters_stale_entries() {
         let repo = create_test_repo();
 
@@ -157,7 +153,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_favorite_removes_entry() {
         let repo = create_test_repo();
 
@@ -175,7 +170,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_favorite_when_not_favorited_succeeds_silently() {
         let repo = create_test_repo();
 
