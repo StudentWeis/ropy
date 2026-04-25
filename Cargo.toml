@@ -102,7 +102,7 @@ missing_panics_doc = "allow"
 derive_partial_eq_without_eq = "allow"
 
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = "fat"
 codegen-units = 1
 incremental = false
@@ -111,6 +111,7 @@ panic = "abort"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
+opt-level = "z"
 lto = "thin"
 
 [package.metadata.dist]
