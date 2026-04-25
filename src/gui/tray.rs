@@ -3,9 +3,11 @@ use gpui::AppContext;
 use gpui::{App, BorrowAppContext, Global, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 use tray_icon::{
-    Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
+    Icon, TrayIcon, TrayIconBuilder,
     menu::{Menu, MenuId, MenuItem},
 };
+#[cfg(not(target_os = "linux"))]
+use tray_icon::TrayIconEvent;
 
 use crate::{constants::APP_NAME, i18n::I18n};
 
@@ -132,49 +134,62 @@ pub fn start_tray_handler(
     window_handle: WindowHandle<Root>,
 ) -> Option<TrayIcon> {
     let (tx, rx) = async_channel::unbounded();
+    let tray = spawn_tray_platform(i18n, cx, tx);
+    spawn_tray_event_loop(cx, rx, window_handle);
+    tray
+}
 
-    #[cfg(target_os = "linux")]
-    let bg_executor = cx.background_executor().clone();
+#[cfg(not(target_os = "linux"))]
+fn spawn_tray_platform(
+    i18n: &I18n,
+    _cx: &App,
+    tx: async_channel::Sender<TrayEvent>,
+) -> Option<TrayIcon> {
+    start_tray_handler_inner(i18n, tx)
+}
 
-    #[cfg(not(target_os = "linux"))]
-    let tray = start_tray_handler_inner(i18n, tx);
+#[cfg(target_os = "linux")]
+fn spawn_tray_platform(
+    i18n: &I18n,
+    cx: &App,
+    tx: async_channel::Sender<TrayEvent>,
+) -> Option<TrayIcon> {
+    // On Linux the tray must be initialized on the GTK thread. We cannot
+    // return the TrayIcon out of the spawned task, so we leak it there and
+    // report `None` back to the caller.
+    let i18n = i18n.clone();
+    cx.background_spawn(async move {
+        if let Err(e) = gtk::init() {
+            tracing::error!(error = %e, "failed to init gtk modules; tray disabled");
+            return;
+        }
+        if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
+            Box::leak(Box::new(tray));
+        }
+        gtk::main();
+    })
+    .detach();
+    None
+}
 
-    #[cfg(target_os = "linux")]
-    let tray = {
-        let i18n = i18n.clone();
-        // On Linux, tray must be initialized on the GTK thread.
-        // We cannot return the TrayIcon from the spawned task, so we
-        // leak it there and return None to the caller.
-        cx.background_spawn(async move {
-            gtk::init().expect("Failed to init gtk modules");
-            if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
-                Box::leak(Box::new(tray));
-            }
-            gtk::main();
-        })
-        .detach();
-        None
-    };
-
-    cx.spawn(async move |async_app: &mut gpui::AsyncApp| {
+fn spawn_tray_event_loop(
+    cx: &App,
+    rx: async_channel::Receiver<TrayEvent>,
+    window_handle: WindowHandle<Root>,
+) {
+    cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
                 TrayEvent::Show => {
-                    let _ = async_app.update(move |cx| {
-                        crate::gui::tray::send_active_action(window_handle, cx);
-                    });
+                    let _ = async_app.update(|cx| send_active_action(window_handle, cx));
                 }
                 TrayEvent::Quit => {
-                    let _ = async_app.update(move |cx: &mut gpui::App| {
-                        cx.quit();
-                    });
+                    let _ = async_app.update(|cx| cx.quit());
                 }
             }
         }
     })
     .detach();
-
-    tray
 }
 
 /// Start the system tray handler
@@ -186,9 +201,9 @@ pub fn start_tray_handler_inner(
         Ok((tray, show_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
 
-            spawn_tray_menu_event_forwarder(tx.clone(), show_id, quit_id);
             #[cfg(not(target_os = "linux"))]
-            spawn_tray_icon_event_forwarder(tx);
+            spawn_tray_icon_event_forwarder(tx.clone());
+            spawn_tray_menu_event_forwarder(tx, show_id, quit_id);
 
             Some(tray)
         }
@@ -223,6 +238,7 @@ fn spawn_tray_menu_event_forwarder(
     });
 }
 
+#[cfg(not(target_os = "linux"))]
 fn spawn_tray_icon_event_forwarder(tx: async_channel::Sender<TrayEvent>) {
     let receiver = TrayIconEvent::receiver().clone();
     super::utils::spawn_event_forwarder("tray-icon-event-forwarder", tx, move |forward| {
@@ -248,6 +264,7 @@ fn tray_event_from_menu_event(
     }
 }
 
+#[cfg(not(target_os = "linux"))]
 fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
     if let TrayIconEvent::Click { button, .. } = event
         && *button == tray_icon::MouseButton::Left
@@ -330,6 +347,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(target_os = "linux"))]
     #[rstest]
     #[case(
         TrayIconEvent::Click {

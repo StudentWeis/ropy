@@ -284,8 +284,15 @@ pub fn launch() {
             // Initialize X11 control
             #[cfg(target_os = "linux")]
             if env::var("DISPLAY").is_ok() {
-                let x11 = X11_INSTANCE.get_or_init(|| X11::new().expect("Failed to connect x11rb"));
-                let _ = x11.active_window();
+                match X11::new() {
+                    Ok(x11_new) => {
+                        let x11 = X11_INSTANCE.get_or_init(|| x11_new);
+                        let _ = x11.active_window();
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "failed to connect x11rb; skipping X11 init");
+                    }
+                }
             }
         });
 }

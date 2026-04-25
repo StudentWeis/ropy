@@ -22,6 +22,16 @@ jobs:
       - name: Install nightly rustfmt
         run: rustup toolchain install nightly --profile minimal --component rustfmt
 
+      - name: Install clippy for the pinned stable toolchain
+        # rust-toolchain.toml pins the stable channel, and rustup auto-installs
+        # cargo/rustc on first use — but clippy is *not* auto-fetched, so the
+        # `cargo clippy` step in scripts/precheck.sh fails on a fresh runner.
+        # `rustup show active-toolchain` triggers the auto-install of the pinned
+        # toolchain, then we add clippy to it explicitly.
+        run: |
+          rustup show active-toolchain
+          rustup component add clippy
+
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update

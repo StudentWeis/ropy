@@ -89,7 +89,7 @@ impl X11 {
             32,
             self.window_id,
             self.net_wm_state,
-            [if enable { 1 } else { 0 }, status, 0, 0, 0],
+            [u32::from(enable), status, 0, 0, 0],
         );
 
         self.connection.send_event(
