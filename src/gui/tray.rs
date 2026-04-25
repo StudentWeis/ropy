@@ -132,49 +132,59 @@ pub fn start_tray_handler(
     window_handle: WindowHandle<Root>,
 ) -> Option<TrayIcon> {
     let (tx, rx) = async_channel::unbounded();
+    let tray = spawn_tray_platform(i18n, cx, tx);
+    spawn_tray_event_loop(cx, rx, window_handle);
+    tray
+}
 
-    #[cfg(target_os = "linux")]
-    let bg_executor = cx.background_executor().clone();
+#[cfg(not(target_os = "linux"))]
+fn spawn_tray_platform(
+    i18n: &I18n,
+    _cx: &App,
+    tx: async_channel::Sender<TrayEvent>,
+) -> Option<TrayIcon> {
+    start_tray_handler_inner(i18n, tx)
+}
 
-    #[cfg(not(target_os = "linux"))]
-    let tray = start_tray_handler_inner(i18n, tx);
+#[cfg(target_os = "linux")]
+fn spawn_tray_platform(
+    i18n: &I18n,
+    cx: &App,
+    tx: async_channel::Sender<TrayEvent>,
+) -> Option<TrayIcon> {
+    // On Linux the tray must be initialized on the GTK thread. We cannot
+    // return the TrayIcon out of the spawned task, so we leak it there and
+    // report `None` back to the caller.
+    let i18n = i18n.clone();
+    cx.background_spawn(async move {
+        gtk::init().expect("Failed to init gtk modules");
+        if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
+            Box::leak(Box::new(tray));
+        }
+        gtk::main();
+    })
+    .detach();
+    None
+}
 
-    #[cfg(target_os = "linux")]
-    let tray = {
-        let i18n = i18n.clone();
-        // On Linux, tray must be initialized on the GTK thread.
-        // We cannot return the TrayIcon from the spawned task, so we
-        // leak it there and return None to the caller.
-        cx.background_spawn(async move {
-            gtk::init().expect("Failed to init gtk modules");
-            if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
-                Box::leak(Box::new(tray));
-            }
-            gtk::main();
-        })
-        .detach();
-        None
-    };
-
-    cx.spawn(async move |async_app: &mut gpui::AsyncApp| {
+fn spawn_tray_event_loop(
+    cx: &App,
+    rx: async_channel::Receiver<TrayEvent>,
+    window_handle: WindowHandle<Root>,
+) {
+    cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
                 TrayEvent::Show => {
-                    let _ = async_app.update(move |cx| {
-                        crate::gui::tray::send_active_action(window_handle, cx);
-                    });
+                    let _ = async_app.update(|cx| send_active_action(window_handle, cx));
                 }
                 TrayEvent::Quit => {
-                    let _ = async_app.update(move |cx: &mut gpui::App| {
-                        cx.quit();
-                    });
+                    let _ = async_app.update(|cx| cx.quit());
                 }
             }
         }
     })
     .detach();
-
-    tray
 }
 
 /// Start the system tray handler
