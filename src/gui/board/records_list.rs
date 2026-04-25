@@ -32,21 +32,21 @@ use crate::{
 };
 
 const GRID_COLUMN_COUNT: usize = 2;
-const GRID_COLUMN_GAP: f32 = 8.0;
-const GRID_ROW_GAP: f32 = 8.0;
-const GRID_CONTENT_PREVIEW_LIMIT: usize = 120;
-const GRID_CONTENT_PREVIEW_MAX_LINES: usize = 5;
-const GRID_CARD_MIN_HEIGHT: f32 = 112.0;
-const GRID_CARD_MAX_HEIGHT: f32 = 168.0;
-const GRID_IMAGE_MAX_HEIGHT: f32 = 96.0;
-const GRID_COLOR_SWATCH_HEIGHT: f32 = 60.0;
-const GRID_COLOR_SWATCH_GAP: f32 = 8.0;
+const GRID_COLUMN_GAP: f32 = 6.0;
+const GRID_ROW_GAP: f32 = 6.0;
+const GRID_CONTENT_PREVIEW_LIMIT: usize = 96;
+const GRID_CONTENT_PREVIEW_MAX_LINES: usize = 4;
+const GRID_CARD_MIN_HEIGHT: f32 = 96.0;
+const GRID_CARD_MAX_HEIGHT: f32 = 144.0;
+const GRID_IMAGE_MAX_HEIGHT: f32 = 80.0;
+const GRID_COLOR_SWATCH_HEIGHT: f32 = 48.0;
+const GRID_COLOR_SWATCH_GAP: f32 = 6.0;
 const GRID_OVERSCAN_PX: f32 = 240.0;
-const GRID_ESTIMATED_CARD_CHROME_HEIGHT: f32 = 48.0;
-const GRID_ESTIMATED_TEXT_LINE_HEIGHT: f32 = 18.0;
-const GRID_ESTIMATED_FILE_TITLE_HEIGHT: f32 = 18.0;
-const GRID_ESTIMATED_FILE_DETAIL_LINE_HEIGHT: f32 = 16.0;
-const GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS: f32 = 16.0;
+const GRID_ESTIMATED_CARD_CHROME_HEIGHT: f32 = 40.0;
+const GRID_ESTIMATED_TEXT_LINE_HEIGHT: f32 = 16.0;
+const GRID_ESTIMATED_FILE_TITLE_HEIGHT: f32 = 16.0;
+const GRID_ESTIMATED_FILE_DETAIL_LINE_HEIGHT: f32 = 15.0;
+const GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS: f32 = 11.0;
 const BOARD_HORIZONTAL_PADDING: f32 = 32.0;
 const SCROLLBAR_OVERLAY_RIGHT_OFFSET: f32 = -10.0;
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 80;
@@ -252,10 +252,14 @@ fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
     let text_element = div()
         .w_full()
         .min_w_0()
-        .text_sm()
         .text_color(cx.theme().secondary_foreground)
-        .line_height(gpui::relative(if compact { 1.35 } else { 1.5 }))
+        .line_height(gpui::relative(if compact { 1.25 } else { 1.5 }))
         .child(text);
+    let text_element = if compact {
+        text_element.text_xs()
+    } else {
+        text_element.text_sm()
+    };
 
     if let Some(color) = parse_clipboard_color(&record.content) {
         if compact {
@@ -799,7 +803,7 @@ fn render_grid_record_header(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &A
         .w_full()
         .justify_between()
         .items_start()
-        .gap_2()
+        .gap_1()
         .child(div().flex_1().min_w_0().child(render_record_meta(
             ctx.index,
             ctx.record,
@@ -987,7 +991,7 @@ fn render_list_item_with_grid_height(
         );
 
         decorate_record_card(
-            card_shell.overflow_hidden().px_2().py_1().child(
+            card_shell.overflow_hidden().px_1p5().py_1().child(
                 v_flex()
                     .w_full()
                     .gap_1()
@@ -1071,11 +1075,12 @@ mod tests {
 
     use super::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
-        GRID_COLOR_SWATCH_HEIGHT, GRID_CONTENT_PREVIEW_MAX_LINES, GRID_ESTIMATED_TEXT_LINE_HEIGHT,
-        MasonryPlacement, build_masonry_layout, estimated_grid_card_height,
-        estimated_grid_color_body_height, estimated_grid_text_lines, file_display_name,
-        file_preview_content, list_row_for_selected_index, masonry_placement_is_visible,
-        truncate_content, truncate_content_for_grid, visible_list_len,
+        GRID_COLOR_SWATCH_HEIGHT, GRID_COLUMN_COUNT, GRID_CONTENT_PREVIEW_MAX_LINES,
+        GRID_ESTIMATED_TEXT_LINE_HEIGHT, MasonryPlacement, build_masonry_layout,
+        estimated_grid_card_height, estimated_grid_color_body_height, estimated_grid_text_lines,
+        file_display_name, file_preview_content, list_row_for_selected_index,
+        masonry_placement_is_visible, truncate_content, truncate_content_for_grid,
+        visible_list_len,
     };
     use crate::{
         config::LayoutMode,
@@ -1107,17 +1112,17 @@ mod tests {
     }
 
     #[test]
-    fn test_truncate_content_for_grid_allows_up_to_five_lines() {
-        let content = "1\n2\n3\n4\n5";
+    fn test_truncate_content_for_grid_allows_up_to_four_lines() {
+        let content = "1\n2\n3\n4";
 
         assert_eq!(truncate_content_for_grid(content, 120), content);
     }
 
     #[test]
-    fn test_truncate_content_for_grid_truncates_after_five_lines() {
-        let content = "1\n2\n3\n4\n5\n6";
+    fn test_truncate_content_for_grid_truncates_after_four_lines() {
+        let content = "1\n2\n3\n4\n5";
 
-        assert_eq!(truncate_content_for_grid(content, 120), "1\n2\n3\n4\n5...");
+        assert_eq!(truncate_content_for_grid(content, 120), "1\n2\n3\n4...");
     }
 
     #[test]
@@ -1158,6 +1163,11 @@ mod tests {
         assert!(
             estimated_grid_card_height(&color_record) > estimated_grid_card_height(&plain_record)
         );
+    }
+
+    #[test]
+    fn test_grid_layout_remains_two_columns() {
+        assert_eq!(GRID_COLUMN_COUNT, 2);
     }
 
     #[test]
