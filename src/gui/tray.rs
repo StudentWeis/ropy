@@ -2,12 +2,12 @@
 use gpui::AppContext;
 use gpui::{App, BorrowAppContext, Global, ReadGlobal, WindowHandle};
 use gpui_component::Root;
+#[cfg(not(target_os = "linux"))]
+use tray_icon::TrayIconEvent;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
     menu::{Menu, MenuId, MenuItem},
 };
-#[cfg(not(target_os = "linux"))]
-use tray_icon::TrayIconEvent;
 
 use crate::{constants::APP_NAME, i18n::I18n};
 
