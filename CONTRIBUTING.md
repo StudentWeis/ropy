@@ -172,15 +172,11 @@ See the [Testing Documentation](./doc/TESTING.md) for guidelines on writing and 
 
 ## Submitting Changes
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Create a Pull Request
+Ropy follows an **Issue → Branch → PR → Squash Merge** workflow, executed via the local `gh` CLI. The complete, copy-paste-ready SOP lives in the [`ropy-contribution-flow`](./.claude/skills/ropy-contribution-flow/SKILL.md) skill — it is the single source of truth for branch naming, commit conventions, the `scripts/precheck.sh` gate, and the PR self-check. Both human and AI contributors should follow it.
 
 ## Reporting Issues
 
-If you find a bug or have a feature suggestion, please submit it on the [Issues](https://github.com/StudentWeis/ropy/issues) page.
+If you find a bug or have a feature suggestion, please submit it on the [Issues](https://github.com/StudentWeis/ropy/issues) page using the matching template.
 
 Thank you for your contribution!
 

@@ -1,0 +1,49 @@
+name: Refactor / Tech Debt
+description: Propose internal cleanup, refactoring, or technical-debt repayment with no user-visible change.
+title: "refactor: <short summary>"
+labels: ["refactor"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What is the code doing today, and why is it problematic?
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: Target State
+      description: What should the code look like after this refactor?
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Why is this worth doing now? Cite concrete pain (e.g., duplication, coupling, test difficulty).
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - gui
+        - repository
+        - clipboard
+        - updater
+        - i18n
+        - config
+        - gpui
+        - other / cross-cutting
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety Net
+      options:
+        - label: Existing tests cover the affected behavior
+        - label: New tests will be added as part of this refactor
+        - label: This refactor is purely mechanical (no behavior change)

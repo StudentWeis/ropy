@@ -156,15 +156,11 @@ Ropy 支持多语言国际化（i18n）。语言文件同样使用 TOML 格式�
 
 ## 提交规范
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+Ropy 采用 **Issue → 分支 → PR → Squash Merge** 的工作流，全程通过本地 `gh` CLI 完成。完整、可直接复制执行的 SOP 收敛在 [`ropy-contribution-flow`](../../.claude/skills/ropy-contribution-flow/SKILL.md) skill 中 —— 那里是分支命名、commit 规范、`scripts/precheck.sh` 检查、PR 自检清单的唯一权威来源。无论人类还是 AI 贡献者，都请遵循该 skill。
 
 ## 问题反馈
 
-如果你发现 bug 或有功能建议，请在 [Issues](https://github.com/StudentWeis/ropy/issues) 页面提交。
+如果你发现 bug 或有功能建议，请在 [Issues](https://github.com/StudentWeis/ropy/issues) 页面选择对应模板提交。
 
 感谢你的贡献！
 
