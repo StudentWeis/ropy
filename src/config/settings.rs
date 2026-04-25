@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{cfg_select, path::PathBuf, str::FromStr};
 
 use config::{Config, ConfigError, File};
@@ -326,7 +327,6 @@ mod tests {
     // ── Round-trip Tests ──────────────────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_load_round_trip() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("config.toml");
@@ -368,7 +368,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_load_preserves_hotkey() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("config.toml");
@@ -388,7 +387,6 @@ mod tests {
     // ── Hotkey Validation Tests ───────────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_validate_hotkey_valid() {
         let mut settings = Settings::default();
         settings.hotkey.activation_key = "ctrl+shift+v".to_string();
@@ -400,7 +398,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_validate_hotkey_empty() {
         let mut settings = Settings::default();
         settings.hotkey.activation_key = String::new();
@@ -472,7 +469,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_load_config_with_extra_fields() {
         // Verify that a fully-serialized Settings round-trips correctly.
         // Settings::load() uses config-rs which ignores unknown fields at runtime.

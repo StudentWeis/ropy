@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Lightweight secondary index keyed by timestamp for efficient
 //! chronological queries without full record deserialization.
 //!
@@ -223,9 +224,7 @@ impl TimeIndex {
     ) {
         let key = Self::encode_key(timestamp_millis, id);
         let val = Self::encode_value(pinned, content_type);
-        #[allow(clippy::expect_used)]
         self.entries.insert(&key, &val).expect("test insert failed");
-        #[allow(clippy::expect_used)]
         self.id_lookup
             .insert(&id.to_be_bytes(), &timestamp_millis.to_be_bytes())
             .expect("test lookup insert failed");
@@ -245,7 +244,6 @@ mod tests {
         redb_backend::redb_backend_factory, sled_backend::sled_backend_factory,
     };
 
-    #[allow(clippy::expect_used)]
     fn create_test_time_index_with(factory: BackendFactory) -> (tempfile::TempDir, TimeIndex) {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test_time_index.db");
@@ -260,13 +258,11 @@ mod tests {
         (temp_dir, index)
     }
 
-    #[allow(clippy::expect_used)]
     fn create_test_time_index() -> TimeIndex {
         let (_temp_dir, index) = create_test_time_index_with(memory_backend_factory);
         index
     }
 
-    #[allow(clippy::expect_used)]
     fn select_display_ids_without_favorites(index: &TimeIndex, limit: usize) -> Vec<u64> {
         index
             .select_display_ids(limit, &HashSet::new())
@@ -322,7 +318,6 @@ mod tests {
         assert_eq!(val, [1, 2]); // pinned, file_path tag = 2
     }
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_decode_entry_valid() {
         let key = TimeIndex::encode_key(12345_i64, 67890_u64);
         let value = TimeIndex::encode_value(true, &ContentType::Image);
@@ -355,7 +350,6 @@ mod tests {
     #[case(sled_backend_factory)]
     #[case(redb_backend_factory)]
     #[case(memory_backend_factory)]
-    #[allow(clippy::expect_used)]
     fn test_upsert_new_record(#[case] factory: BackendFactory) {
         let (_temp_dir, index) = create_test_time_index_with(factory);
         let record = ClipboardRecord {
@@ -376,7 +370,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_upsert_updates_timestamp() {
         let index = create_test_time_index();
         let now = chrono::Local::now();
@@ -411,7 +404,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove() {
         let index = create_test_time_index();
         let timestamp = chrono::Local::now().timestamp_millis();
@@ -428,7 +420,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_nonexistent() {
         let index = create_test_time_index();
 
@@ -439,7 +430,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_update_pinned() {
         let index = create_test_time_index();
         let timestamp = chrono::Local::now().timestamp_millis();
@@ -462,7 +452,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_clear() {
         let index = create_test_time_index();
 
@@ -484,7 +473,6 @@ mod tests {
     // ── Query Tests ───────────────────────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_empty() {
         let index = create_test_time_index();
 
@@ -496,7 +484,6 @@ mod tests {
     #[case(sled_backend_factory)]
     #[case(redb_backend_factory)]
     #[case(memory_backend_factory)]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_ordering(#[case] factory: BackendFactory) {
         let (_temp_dir, index) = create_test_time_index_with(factory);
 
@@ -511,7 +498,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_with_limit() {
         let index = create_test_time_index();
 
@@ -526,7 +512,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_pinned_always_included() {
         let index = create_test_time_index();
 
@@ -552,7 +537,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_only_pinned() {
         let index = create_test_time_index();
 
@@ -564,7 +548,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_limit_zero() {
         let index = create_test_time_index();
 
@@ -577,7 +560,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_when_favorites_present_keep_default_time_order() {
         let index = create_test_time_index();
 
@@ -595,7 +577,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_select_display_ids_when_limit_zero_returns_pinned_and_favorites() {
         let index = create_test_time_index();
 
@@ -612,7 +593,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_oldest_unpinned_empty() {
         let index = create_test_time_index();
 
@@ -621,7 +601,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_oldest_unpinned_basic() {
         let index = create_test_time_index();
 
@@ -638,7 +617,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_oldest_unpinned_skips_pinned() {
         let index = create_test_time_index();
 
@@ -653,7 +631,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_oldest_unpinned_with_limit() {
         let index = create_test_time_index();
 
@@ -670,7 +647,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_oldest_unpinned_returns_encoded_key() {
         let index = create_test_time_index();
 
@@ -691,7 +667,6 @@ mod tests {
     // ── remove_by_id Tests ────────────────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_by_id() {
         let index = create_test_time_index();
 
@@ -706,7 +681,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_by_id_nonexistent() {
         let index = create_test_time_index();
 
@@ -722,7 +696,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_by_id_multiple_same_id() {
         // This shouldn't happen in practice, but test the behavior
         let index = create_test_time_index();
@@ -741,7 +714,6 @@ mod tests {
     // ── Edge Cases and Error Handling ─────────────────────────────
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_decode_entry_corrupted_data() {
         let key = TimeIndex::encode_key(12345_i64, 67890_u64);
 
@@ -756,7 +728,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_concurrent_upserts() {
         let index = create_test_time_index();
         let index = std::sync::Arc::new(index);
@@ -787,7 +758,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_large_number_of_records() {
         let index = create_test_time_index();
         let count = 1000;
@@ -817,7 +787,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_different_content_types() {
         let index = create_test_time_index();
         let now = chrono::Local::now().timestamp_millis();
@@ -833,7 +802,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_raw() {
         let index = create_test_time_index();
         let timestamp = chrono::Local::now().timestamp_millis();

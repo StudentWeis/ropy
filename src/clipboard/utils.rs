@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -184,7 +185,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_image_to_dir_when_image_exists_skips_rewrite() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let image = DynamicImage::new_rgba8(400, 100);
@@ -221,7 +221,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_image_to_dir_when_thumbnail_missing_recreates_thumbnail() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let image = DynamicImage::new_rgba8(400, 100);
@@ -245,7 +244,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_save_rich_text_files_to_dir_writes_present_payloads() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
 
@@ -262,7 +260,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_remove_rich_text_files_deletes_saved_sidecars() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
 

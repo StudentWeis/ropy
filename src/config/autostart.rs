@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::env;
 
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -132,7 +133,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
     fn test_sync_state() {
         let manager = AutoStartManager::new("RopyTest").expect("Failed to create manager");
 
