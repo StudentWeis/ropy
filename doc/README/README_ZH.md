@@ -99,8 +99,7 @@ cargo build --release
 - GUI 组件：[gpui-component](https://github.com/longbridge/gpui-component)
 - 全局快捷键：[global-hotkey](https://github.com/tauri-apps/global-hotkey)
 - 托盘图标辅助：[tray-icon](https://github.com/tauri-apps/tray-icon)
-- 嵌入式数据库（默认）：[redb](https://github.com/cberner/redb)
-- 嵌入式数据库（旧版）：[sled](https://github.com/spacejam/sled)
+- 嵌入式数据库：[redb](https://github.com/cberner/redb)
 - 配置管理：[config-rs](https://github.com/rust-cli/config-rs)
 
 ## Star 历史

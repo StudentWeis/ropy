@@ -25,13 +25,13 @@ pub struct IndexEntry {
 /// A lightweight secondary index that maps `(timestamp, id)` to
 /// `(pinned, content_type)`, enabling chronological queries and
 /// type-based filtering without touching the main record store.
-pub struct TimeIndex {
-    entries: Box<dyn KvTree>,
-    id_lookup: Box<dyn KvTree>,
+pub struct TimeIndex<T: KvTree> {
+    entries: T,
+    id_lookup: T,
 }
 
-impl TimeIndex {
-    pub fn new(entries: Box<dyn KvTree>, id_lookup: Box<dyn KvTree>) -> Self {
+impl<T: KvTree> TimeIndex<T> {
+    pub const fn new(entries: T, id_lookup: T) -> Self {
         Self { entries, id_lookup }
     }
 
@@ -213,7 +213,7 @@ impl TimeIndex {
 }
 
 #[cfg(test)]
-impl TimeIndex {
+impl<T: KvTree> TimeIndex<T> {
     /// Direct insert for test setup (bypasses `upsert` scan).
     pub fn insert_raw(
         &self,
@@ -235,16 +235,20 @@ impl TimeIndex {
 mod tests {
     use std::collections::HashSet;
 
-    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::*;
     use crate::repository::{
-        backend::BackendFactory, memory_backend::memory_backend_factory,
-        redb_backend::redb_backend_factory, sled_backend::sled_backend_factory,
+        backend::{BackendFactory, StorageBackend},
+        memory_backend::{MemoryTreeHandle, memory_backend_factory},
+        redb_backend::redb_backend_factory,
     };
 
-    fn create_test_time_index_with(factory: BackendFactory) -> (tempfile::TempDir, TimeIndex) {
+    type MemoryTimeIndex = TimeIndex<MemoryTreeHandle>;
+
+    fn create_test_time_index_with<B: StorageBackend>(
+        factory: BackendFactory<B>,
+    ) -> (tempfile::TempDir, TimeIndex<B::Tree>) {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test_time_index.db");
         let backend = factory(&db_path).expect("Failed to open backend");
@@ -258,12 +262,15 @@ mod tests {
         (temp_dir, index)
     }
 
-    fn create_test_time_index() -> TimeIndex {
+    fn create_test_time_index() -> MemoryTimeIndex {
         let (_temp_dir, index) = create_test_time_index_with(memory_backend_factory);
         index
     }
 
-    fn select_display_ids_without_favorites(index: &TimeIndex, limit: usize) -> Vec<u64> {
+    fn select_display_ids_without_favorites<T: KvTree>(
+        index: &TimeIndex<T>,
+        limit: usize,
+    ) -> Vec<u64> {
         index
             .select_display_ids(limit, &HashSet::new())
             .expect("Failed to select")
@@ -273,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_encode_key_basic() {
-        let key = TimeIndex::encode_key(1_234_567_890_123_i64, 9_876_543_210_u64);
+        let key = MemoryTimeIndex::encode_key(1_234_567_890_123_i64, 9_876_543_210_u64);
         // Verify key is 16 bytes
         assert_eq!(key.len(), 16);
         // Verify timestamp is in first 8 bytes (big-endian)
@@ -285,7 +292,7 @@ mod tests {
     #[test]
     fn test_encode_key_negative_timestamp() {
         // Negative timestamp (before epoch)
-        let key = TimeIndex::encode_key(-1_i64, 1_u64);
+        let key = MemoryTimeIndex::encode_key(-1_i64, 1_u64);
         assert_eq!(key.len(), 16);
         // First byte should be 0xFF for negative numbers in two's complement
         assert_eq!(key[0], 0xFF);
@@ -293,64 +300,61 @@ mod tests {
 
     #[test]
     fn test_encode_key_zero_values() {
-        let key = TimeIndex::encode_key(0_i64, 0_u64);
+        let key = MemoryTimeIndex::encode_key(0_i64, 0_u64);
         assert_eq!(key, [0u8; 16]);
     }
 
     #[test]
     fn test_encode_value_text() {
-        let val = TimeIndex::encode_value(false, &ContentType::Text);
+        let val = MemoryTimeIndex::encode_value(false, &ContentType::Text);
         assert_eq!(val, [0, 0]); // not pinned, text tag = 0
 
-        let val_pinned = TimeIndex::encode_value(true, &ContentType::Text);
+        let val_pinned = MemoryTimeIndex::encode_value(true, &ContentType::Text);
         assert_eq!(val_pinned, [1, 0]); // pinned, text tag = 0
     }
 
     #[test]
     fn test_encode_value_image() {
-        let val = TimeIndex::encode_value(false, &ContentType::Image);
+        let val = MemoryTimeIndex::encode_value(false, &ContentType::Image);
         assert_eq!(val, [0, 1]); // not pinned, image tag = 1
     }
 
     #[test]
     fn test_encode_value_file_path() {
-        let val = TimeIndex::encode_value(true, &ContentType::FilePath);
+        let val = MemoryTimeIndex::encode_value(true, &ContentType::FilePath);
         assert_eq!(val, [1, 2]); // pinned, file_path tag = 2
     }
     #[test]
     fn test_decode_entry_valid() {
-        let key = TimeIndex::encode_key(12345_i64, 67890_u64);
-        let value = TimeIndex::encode_value(true, &ContentType::Image);
+        let key = MemoryTimeIndex::encode_key(12345_i64, 67890_u64);
+        let value = MemoryTimeIndex::encode_value(true, &ContentType::Image);
 
-        let entry = TimeIndex::decode_entry(&key, &value).expect("Should decode successfully");
+        let entry =
+            MemoryTimeIndex::decode_entry(&key, &value).expect("Should decode successfully");
         assert_eq!(entry.id, 67890);
         assert!(entry.is_pinned);
     }
     #[test]
     fn test_decode_entry_invalid_key_length() {
         let short_key = [1u8; 8];
-        let value = TimeIndex::encode_value(false, &ContentType::Text);
+        let value = MemoryTimeIndex::encode_value(false, &ContentType::Text);
 
-        let result = TimeIndex::decode_entry(&short_key, &value);
+        let result = MemoryTimeIndex::decode_entry(&short_key, &value);
         assert!(result.is_none());
     }
 
     #[test]
     fn test_decode_entry_empty_value() {
-        let key = TimeIndex::encode_key(12345_i64, 67890_u64);
+        let key = MemoryTimeIndex::encode_key(12345_i64, 67890_u64);
         let empty_value: &[u8] = &[];
 
-        let result = TimeIndex::decode_entry(&key, empty_value);
+        let result = MemoryTimeIndex::decode_entry(&key, empty_value);
         assert!(result.is_none());
     }
 
     // ── CRUD Tests ────────────────────────────────────────────────
 
-    #[rstest]
-    #[case(sled_backend_factory)]
-    #[case(redb_backend_factory)]
-    #[case(memory_backend_factory)]
-    fn test_upsert_new_record(#[case] factory: BackendFactory) {
+    fn assert_upsert_new_record_with<B: StorageBackend>(factory: BackendFactory<B>) {
         let (_temp_dir, index) = create_test_time_index_with(factory);
         let record = ClipboardRecord {
             id: 1,
@@ -367,6 +371,16 @@ mod tests {
 
         let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, vec![1]);
+    }
+
+    #[test]
+    fn test_upsert_new_record_redb() {
+        assert_upsert_new_record_with(redb_backend_factory);
+    }
+
+    #[test]
+    fn test_upsert_new_record_memory() {
+        assert_upsert_new_record_with(memory_backend_factory);
     }
 
     #[test]
@@ -480,11 +494,7 @@ mod tests {
         assert!(ids.is_empty());
     }
 
-    #[rstest]
-    #[case(sled_backend_factory)]
-    #[case(redb_backend_factory)]
-    #[case(memory_backend_factory)]
-    fn test_select_display_ids_ordering(#[case] factory: BackendFactory) {
+    fn assert_select_display_ids_ordering_with<B: StorageBackend>(factory: BackendFactory<B>) {
         let (_temp_dir, index) = create_test_time_index_with(factory);
 
         // Insert in non-chronological order
@@ -495,6 +505,16 @@ mod tests {
         let ids = select_display_ids_without_favorites(&index, 10);
         // Should be in reverse chronological order (newest first)
         assert_eq!(ids, vec![3, 2, 1]);
+    }
+
+    #[test]
+    fn test_select_display_ids_ordering_redb() {
+        assert_select_display_ids_ordering_with(redb_backend_factory);
+    }
+
+    #[test]
+    fn test_select_display_ids_ordering_memory() {
+        assert_select_display_ids_ordering_with(memory_backend_factory);
     }
 
     #[test]
@@ -715,13 +735,13 @@ mod tests {
 
     #[test]
     fn test_decode_entry_corrupted_data() {
-        let key = TimeIndex::encode_key(12345_i64, 67890_u64);
+        let key = MemoryTimeIndex::encode_key(12345_i64, 67890_u64);
 
         // Valid key but value with only pinned flag (missing content type)
         let corrupted_value = [1u8]; // Just pinned flag, no content type
 
         // Should still decode (content type is in second byte, but we don't check length)
-        let entry = TimeIndex::decode_entry(&key, &corrupted_value);
+        let entry = MemoryTimeIndex::decode_entry(&key, &corrupted_value);
         // Implementation doesn't validate value length, so this returns Some
         assert!(entry.is_some());
         assert!(entry.expect("Should have entry").is_pinned);
@@ -808,7 +828,7 @@ mod tests {
 
         index.insert_raw(timestamp, 1, false, &ContentType::Text);
 
-        let key = TimeIndex::encode_key(timestamp, 1);
+        let key = MemoryTimeIndex::encode_key(timestamp, 1);
         index.remove_raw(&key).expect("Failed to remove raw");
 
         assert_eq!(index.entries.len(), 0);

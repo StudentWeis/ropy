@@ -49,8 +49,10 @@ impl RedbBackend {
 }
 
 impl StorageBackend for RedbBackend {
-    fn open_tree(&self, name: &str) -> Result<Box<dyn KvTree>, RepositoryError> {
-        Ok(Box::new(RedbTree::open(self.db.clone(), name.to_string())?))
+    type Tree = RedbTree;
+
+    fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError> {
+        RedbTree::open(self.db.clone(), name.to_string())
     }
 
     fn flush(&self) -> Result<(), RepositoryError> {
@@ -60,11 +62,11 @@ impl StorageBackend for RedbBackend {
 }
 
 /// Factory function that creates a [`RedbBackend`].
-pub fn redb_backend_factory(db_path: &PathBuf) -> Result<Box<dyn StorageBackend>, RepositoryError> {
-    Ok(Box::new(RedbBackend::open(db_path)?))
+pub fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, RepositoryError> {
+    RedbBackend::open(db_path)
 }
 
-struct RedbTree {
+pub struct RedbTree {
     db: Arc<Database>,
     name: String,
     len: Arc<AtomicUsize>,

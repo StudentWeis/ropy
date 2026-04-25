@@ -15,7 +15,6 @@ clipboard-rs = "0.3.4"
 gpui = { version = "0.2.2", default-features = false }
 gpui-component = { version = "0.5.1", default-features = false }
 global-hotkey = "0.7.0"
-sled = "0.34.7"
 redb = "4.1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

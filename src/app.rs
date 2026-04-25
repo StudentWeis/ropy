@@ -25,7 +25,7 @@ use crate::{
         SelectNext, SelectPrev, SelectRight,
     },
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
+    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, backend::StorageBackend},
 };
 
 #[cfg(target_os = "linux")]
@@ -119,8 +119,8 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
     }
 }
 
-fn load_initial_records(
-    repository: Option<&Arc<ClipboardRepository>>,
+fn load_initial_records<B: StorageBackend>(
+    repository: Option<&Arc<ClipboardRepository<B>>>,
     max_history_records: usize,
 ) -> Vec<ClipboardRecord> {
     repository
@@ -303,10 +303,9 @@ mod tests {
     use std::{thread, time::Duration};
 
     use super::*;
+    use crate::repository::memory_backend::{MemoryBackend, memory_backend_factory};
 
-    fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository) {
-        use crate::repository::memory_backend::memory_backend_factory;
-
+    fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository<MemoryBackend>) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("test.db");
         let repo = ClipboardRepository::init(
@@ -335,7 +334,8 @@ mod tests {
 
     #[test]
     fn test_load_initial_records_when_repository_is_missing_returns_empty() {
-        let records = load_initial_records(None, 10);
+        let records =
+            load_initial_records::<crate::repository::redb_backend::RedbBackend>(None, 10);
 
         assert!(records.is_empty());
     }

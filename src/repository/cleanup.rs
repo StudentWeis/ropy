@@ -3,14 +3,20 @@
 
 use std::collections::HashSet;
 
-use super::{errors::RepositoryError, models::ClipboardRecord, repo::ClipboardRepository};
+use super::{
+    backend::{KvTree, StorageBackend},
+    errors::RepositoryError,
+    models::ClipboardRecord,
+    redb_backend::RedbBackend,
+    repo::ClipboardRepository,
+};
 
 /// Allow the repository to grow slightly past the configured limit so cleanup
 /// can batch deletions instead of scanning on every successful save.
 const CLEANUP_BUFFER_DIVISOR: usize = 10;
 const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Clear all ordinary records while preserving pinned and favorited ones.
     pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
         let total = self.count();
@@ -44,7 +50,9 @@ impl ClipboardRepository {
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
-        if ordinary_total <= Self::cleanup_trigger_record_count(keep_count) {
+        if ordinary_total
+            <= ClipboardRepository::<RedbBackend>::cleanup_trigger_record_count(keep_count)
+        {
             return Ok(0);
         }
 
@@ -91,16 +99,6 @@ impl ClipboardRepository {
         Ok(removed)
     }
 
-    pub(super) fn cleanup_buffer_record_count(keep_count: usize) -> usize {
-        keep_count
-            .saturating_div(CLEANUP_BUFFER_DIVISOR)
-            .max(MIN_CLEANUP_BUFFER_RECORDS)
-    }
-
-    fn cleanup_trigger_record_count(keep_count: usize) -> usize {
-        keep_count.saturating_add(Self::cleanup_buffer_record_count(keep_count))
-    }
-
     fn ordinary_record_count(
         &self,
         total: usize,
@@ -113,6 +111,18 @@ impl ClipboardRepository {
             .collect::<HashSet<_>>();
         special_ids.extend(favorite_ids.iter().copied());
         Ok(total.saturating_sub(special_ids.len()))
+    }
+}
+
+impl ClipboardRepository<RedbBackend> {
+    pub(super) fn cleanup_buffer_record_count(keep_count: usize) -> usize {
+        keep_count
+            .saturating_div(CLEANUP_BUFFER_DIVISOR)
+            .max(MIN_CLEANUP_BUFFER_RECORDS)
+    }
+
+    fn cleanup_trigger_record_count(keep_count: usize) -> usize {
+        keep_count.saturating_add(Self::cleanup_buffer_record_count(keep_count))
     }
 }
 

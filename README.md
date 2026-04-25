@@ -97,8 +97,7 @@ cargo build --release
 - GUI components: [gpui-component](https://github.com/longbridge/gpui-component)
 - Global hotkey: [global-hotkey](https://github.com/tauri-apps/global-hotkey)
 - Tray icon helper: [tray-icon](https://github.com/tauri-apps/tray-icon)
-- Embedded DB (default): [redb](https://github.com/cberner/redb)
-- Embedded DB (legacy): [sled](https://github.com/spacejam/sled)
+- Embedded DB: [redb](https://github.com/cberner/redb)
 - Configuration: [config-rs](https://github.com/rust-cli/config-rs)
 
 ## Star History

@@ -66,20 +66,16 @@ records_list/
 
 ---
 
-### 1.4 Two Storage Backends (sled + redb) — sled is Legacy 📌 Medium
+### 1.4 Storage Backend Consolidation ✅ Completed
 
-**Facts:**
-- `Cargo.toml` includes both `sled = "0.34.7"` and `redb = "4.1.0"`.
-- The backend is selected at runtime via `ROPY_STORAGE_BACKEND` env var.
-- sled 0.34 has been unmaintained for years and has never reached 1.0.
+**Current state:**
+- `Cargo.toml` keeps only `redb = "4.1.0"`.
+- `ClipboardRepository::new` always opens `clipboard.redb`.
+- The legacy storage backend module and runtime backend switch are gone.
+- `ClipboardRepository` and `TimeIndex` now use concrete backend/tree types, with the in-memory backend retained only for tests.
 
-**Problems:**
-- Increased binary size, compile time, and code complexity for a path nobody uses in production.
-- Every `save`/`get`/`delete` pays a `Box<dyn KvTree>` vtable dispatch.
-
-**Recommended fix:**
-1. Schedule a breaking-change release to remove `sled_backend.rs` and the `RepositoryBackend` enum.
-2. Once sled is removed, make `ClipboardRepository` generic over `B: StorageBackend`. Tests use `MemoryBackend<B>`; production uses `RedbBackend` — zero vtable overhead.
+**Follow-up:**
+- If profiling still shows storage overhead, the next step is microbenchmarking redb transactions themselves rather than removing trait objects.
 
 ---
 
@@ -122,46 +118,11 @@ if images_dir.exists() {
 }
 ```
 
----
-
-### 2.3 `#[allow(clippy::expect_used)]` on 113 Functions ♻️ Low
-
-**Facts:**
-- All 113 occurrences are inside `#[cfg(test)]` blocks — this is acceptable.
-- However, they appear as per-function attributes (e.g., 20+ times in `cleanup.rs` alone).
-
-**Recommended fix:**
-Add a single module-level attribute at the top of each test-heavy file instead of repeating per function:
-```rust
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
-```
-
----
-
 ## 3. Performance
 
-### 3.1 Release Profile Optimises for Size, Not Speed ⚠️ Medium
+### 3.2 Storage Dispatch Cleanup ✅ Completed
 
-**Facts (`Cargo.toml`):**
-```toml
-[profile.release]
-opt-level = "z"   # minimum size
-lto = "fat"
-codegen-units = 1
-```
-
-**Problem:** `opt-level = "z"` meaningfully degrades runtime performance on hot paths (masonry layout, text measurement, clipboard polling). A clipboard manager UX is more sensitive to latency than binary size.
-
-**Recommended fix:**
-- Switch `[profile.release]` to `opt-level = 3`.
-- Keep `opt-level = "z"` in `[profile.dist]` (already exists) which is what `cargo dist` uses for distribution builds.
-- Or at minimum: benchmark `"s"` vs `"z"` vs `3` before choosing.
-
----
-
-### 3.2 Dynamic Dispatch on Every DB Operation 📌 Low (blocked by 1.4)
-
-As noted in §1.4, removing sled enables making `ClipboardRepository` generic. Until then, every storage call pays vtable cost. Defer this until sled is removed.
+The repository storage path now uses concrete backend and tree types, so the old database-layer vtable cost is gone from the hot save/get/delete path.
 
 ---
 
@@ -214,7 +175,7 @@ cargo test -- --test-threads=1
 | 5.1 | `src/config/settings.rs` (730 lines) | Struct definitions, validation, and default impls mixed together | Split into `settings/mod.rs` + `settings/validate.rs` |
 | 5.2 | `src/gui/board/settings_handler.rs` (950 lines) | 20+ `save_xxx` methods in one file | Group into `settings_handler/{hotkey,layout,storage,theme,update}.rs` |
 | 5.3 | `records_list.rs:79–118` | 5 thin `truncate_*` wrappers that each call the same core function | Consolidate into a single `truncate(content, limit, options)` |
-| 5.4 | CI / `precheck.sh` | `cargo-machete` not run — unused dependencies undetected | Add `cargo machete` to precheck; expected savings after sled removal |
+| 5.4 | CI / `precheck.sh` | `cargo-machete` not run — unused dependencies undetected | Add `cargo machete` to precheck to catch dead dependencies earlier |
 
 ---
 
@@ -228,7 +189,7 @@ cargo test -- --test-threads=1
 
 ### Tier 2 — One release cycle
 5. **Perf**: Change `[profile.release]` to `opt-level = 3`
-6. **Refactor**: Remove sled backend; make `ClipboardRepository` generic
+6. **Refactor**: Consider a generic `ClipboardRepository` to trim remaining storage vtable overhead
 7. **Refactor**: Extract `BoardUiState` sub-structs from `RopyBoard`
 8. **CI**: Add `cargo llvm-cov` coverage reporting
 

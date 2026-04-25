@@ -29,14 +29,16 @@ fn recover_lock<T>(result: LockResult<T>) -> T {
 }
 
 impl StorageBackend for MemoryBackend {
-    fn open_tree(&self, name: &str) -> Result<Box<dyn KvTree>, RepositoryError> {
+    type Tree = MemoryTreeHandle;
+
+    fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError> {
         let trees_lock = self.trees.lock();
         let mut trees = recover_lock(trees_lock);
         let tree = trees
             .entry(name.to_string())
             .or_insert_with(|| Arc::new(MemoryTree::default()))
             .clone();
-        Ok(Box::new(MemoryTreeHandle(tree)))
+        Ok(MemoryTreeHandle(tree))
     }
 
     fn flush(&self) -> Result<(), RepositoryError> {
@@ -45,10 +47,8 @@ impl StorageBackend for MemoryBackend {
 }
 
 #[allow(clippy::unnecessary_wraps)]
-pub fn memory_backend_factory(
-    _db_path: &PathBuf,
-) -> Result<Box<dyn StorageBackend>, RepositoryError> {
-    Ok(Box::new(MemoryBackend::new()))
+pub fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
+    Ok(MemoryBackend::new())
 }
 
 #[derive(Default)]
@@ -57,7 +57,7 @@ struct MemoryTree {
 }
 
 #[derive(Clone)]
-struct MemoryTreeHandle(Arc<MemoryTree>);
+pub struct MemoryTreeHandle(Arc<MemoryTree>);
 
 impl KvTree for MemoryTreeHandle {
     fn insert(&self, key: &[u8], value: &[u8]) -> Result<(), RepositoryError> {

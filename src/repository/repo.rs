@@ -2,7 +2,7 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -12,8 +12,7 @@ use super::{
     backend::{BackendFactory, KvTree, StorageBackend},
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType, RichTextMeta},
-    redb_backend::redb_backend_factory,
-    sled_backend::sled_backend_factory,
+    redb_backend::{RedbBackend, redb_backend_factory},
     time_index::TimeIndex,
 };
 use crate::{
@@ -24,47 +23,47 @@ use crate::{
 /// Schema version for the database. Bump this when the key format changes.
 const SCHEMA_VERSION: u64 = 3;
 
-#[derive(Clone, Copy)]
-enum RepositoryBackend {
-    Sled,
-    Redb,
-}
-
-pub struct ClipboardRepository {
-    backend: Box<dyn StorageBackend>,
-    pub(super) records: Box<dyn KvTree>,
-    pub(super) time_index: TimeIndex,
-    pub(super) favorites: Box<dyn KvTree>,
+pub struct ClipboardRepository<B: StorageBackend = RedbBackend> {
+    backend: B,
+    pub(super) records: B::Tree,
+    pub(super) time_index: TimeIndex<B::Tree>,
+    pub(super) favorites: B::Tree,
     images_dir: PathBuf,
     rich_text_dir: PathBuf,
 }
 
-impl ClipboardRepository {
-    /// Create a new repository using the configured backend.
-    ///
-    /// Defaults to redb. Set `ROPY_STORAGE_BACKEND=sled` to opt into sled
-    /// without affecting the existing redb data file.
+impl ClipboardRepository<RedbBackend> {
+    /// Create a new repository backed by redb.
     pub fn new() -> Result<Self, RepositoryError> {
-        let backend = Self::configured_backend();
-        let db_path = Self::default_db_path(backend)?;
+        let db_path = Self::default_db_path()?;
         let images_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
             .join("images");
-        Self::init(&db_path, images_dir, Self::backend_factory(backend))
+        Self::init(&db_path, images_dir, redb_backend_factory)
     }
 
+    fn default_db_path() -> Result<PathBuf, RepositoryError> {
+        Ok(dirs::data_local_dir()
+            .ok_or(RepositoryError::DataDirNotFound)?
+            .join("ropy")
+            .join("clipboard.redb"))
+    }
+}
+
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Initialize repository with explicit paths and a pluggable backend factory.
     ///
-    /// Use [`sled_backend_factory`] for the default sled-based storage, or
-    /// provide a custom factory to use a different database engine.
+    /// Tests use this to inject the in-memory backend while production stays on redb.
     pub fn init(
         db_path: &PathBuf,
         images_dir: PathBuf,
-        factory: BackendFactory,
+        factory: BackendFactory<B>,
     ) -> Result<Self, RepositoryError> {
-        let backend = factory(db_path)?;
+        Self::from_backend(factory(db_path)?, images_dir)
+    }
 
+    pub fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
         let meta = backend.open_tree("meta")?;
         let records = backend.open_tree("clipboard_records")?;
         let time_index = TimeIndex::new(
@@ -73,7 +72,7 @@ impl ClipboardRepository {
         );
         let favorites = backend.open_tree("favorites")?;
 
-        if Self::needs_schema_migration(meta.as_ref())? {
+        if Self::needs_schema_migration(&meta)? {
             records.clear()?;
             time_index.clear()?;
             favorites.clear()?;
@@ -111,33 +110,7 @@ impl ClipboardRepository {
         self.backend.flush()
     }
 
-    fn default_db_path(backend: RepositoryBackend) -> Result<PathBuf, RepositoryError> {
-        let file_name = match backend {
-            RepositoryBackend::Sled => "clipboard.db",
-            RepositoryBackend::Redb => "clipboard.redb",
-        };
-
-        Ok(dirs::data_local_dir()
-            .ok_or(RepositoryError::DataDirNotFound)?
-            .join("ropy")
-            .join(file_name))
-    }
-
-    fn configured_backend() -> RepositoryBackend {
-        match env::var("ROPY_STORAGE_BACKEND").ok().as_deref() {
-            Some("sled") => RepositoryBackend::Sled,
-            _ => RepositoryBackend::Redb,
-        }
-    }
-
-    const fn backend_factory(backend: RepositoryBackend) -> BackendFactory {
-        match backend {
-            RepositoryBackend::Sled => sled_backend_factory,
-            RepositoryBackend::Redb => redb_backend_factory,
-        }
-    }
-
-    fn needs_schema_migration(meta: &dyn KvTree) -> Result<bool, RepositoryError> {
+    fn needs_schema_migration(meta: &impl KvTree) -> Result<bool, RepositoryError> {
         match meta.get(b"schema_version")? {
             Some(v) if v.len() == 8 => {
                 let stored =
@@ -151,13 +124,13 @@ impl ClipboardRepository {
     }
 }
 
-impl Drop for ClipboardRepository {
+impl<B: StorageBackend> Drop for ClipboardRepository<B> {
     fn drop(&mut self) {
         self.flush().ok();
     }
 }
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Save a clipboard record.
     ///
     /// Uses content hash as the key for deduplication.
@@ -287,7 +260,7 @@ impl ClipboardRepository {
     }
 }
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Get a record by ID.
     pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
@@ -307,7 +280,7 @@ impl ClipboardRepository {
     }
 }
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Toggle the pin state of a record.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
@@ -360,7 +333,7 @@ impl ClipboardRepository {
     }
 }
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Get raw bytes from the records tree.
     pub(super) fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
         self.records.get(key)
@@ -448,19 +421,15 @@ mod tests {
 
     use super::*;
     use crate::repository::{
+        backend::StorageBackend,
         memory_backend::memory_backend_factory,
         redb_backend::redb_backend_factory,
-        sled_backend::sled_backend_factory,
         test_helpers::{
             create_test_repo, create_test_repo_with, load_display_records, save_numbered_records,
         },
     };
 
-    #[rstest]
-    #[case(sled_backend_factory)]
-    #[case(redb_backend_factory)]
-    #[case(memory_backend_factory)]
-    fn test_save_and_get_text(#[case] factory: BackendFactory) {
+    fn assert_save_and_get_text_with<B: StorageBackend>(factory: BackendFactory<B>) {
         let (_temp_dir, repo) = create_test_repo_with(factory);
 
         let record = repo
@@ -474,6 +443,16 @@ mod tests {
             .unwrap_or_else(|error| panic!("Failed to get by id: {error}"))
             .unwrap_or_else(|| panic!("Record not found"));
         assert_eq!(retrieved.content, "Hello, World!");
+    }
+
+    #[test]
+    fn test_save_and_get_text_redb() {
+        assert_save_and_get_text_with(redb_backend_factory);
+    }
+
+    #[test]
+    fn test_save_and_get_text_memory() {
+        assert_save_and_get_text_with(memory_backend_factory);
     }
 
     #[test]
@@ -848,11 +827,7 @@ mod tests {
         );
     }
 
-    #[rstest]
-    #[case(sled_backend_factory)]
-    #[case(redb_backend_factory)]
-    #[case(memory_backend_factory)]
-    fn test_cleanup_old_records(#[case] factory: BackendFactory) {
+    fn assert_cleanup_old_records_with<B: StorageBackend>(factory: BackendFactory<B>) {
         let (_temp_dir, repo) = create_test_repo_with(factory);
 
         for i in 1..=10 {
@@ -872,6 +847,16 @@ mod tests {
         let recent = load_display_records(&repo, 5);
         assert_eq!(recent[0].content, "Record 10");
         assert_eq!(recent[4].content, "Record 6");
+    }
+
+    #[test]
+    fn test_cleanup_old_records_redb() {
+        assert_cleanup_old_records_with(redb_backend_factory);
+    }
+
+    #[test]
+    fn test_cleanup_old_records_memory() {
+        assert_cleanup_old_records_with(memory_backend_factory);
     }
 
     #[test]
