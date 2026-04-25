@@ -103,10 +103,11 @@ derive_partial_eq_without_eq = "allow"
 
 [profile.release]
 opt-level = 3
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 incremental = false
 panic = "abort"
+strip = true
 
 # The profile that 'dist' will build with — must stay identical to release
 [profile.dist]
