@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0-rc.2] - 2026-04-25
+
+### 🐛 Bug Fixes
+- Move record click handler to card level (#56) by @StudentWeis in [#56](https://github.com/StudentWeis/ropy/pull/56)
+
+### 💼 Other
+- Upgrade tray-icon dependency to v0.22.1 by @StudentWeis
+
+### 🚜 Refactor
+- Genericize repository storage (#54) by @StudentWeis in [#54](https://github.com/StudentWeis/ropy/pull/54)
+- Replace per-function expect_used allow with module-level cfg_attr by @StudentWeis in [#51](https://github.com/StudentWeis/ropy/pull/51)
+- Split start_tray_handler into focused helpers (#48) by @StudentWeis in [#48](https://github.com/StudentWeis/ropy/pull/48)
+
+### 📚 Documentation
+- Update README with new features and layout options by @StudentWeis
+
+### ⚡ Performance
+- Use opt-level 3 in release profile for better runtime performance (#52) by @StudentWeis in [#52](https://github.com/StudentWeis/ropy/pull/52)
+
+### ⚙️ Miscellaneous Tasks
+- Drop pr-title workflow, bump checkout to v6, slim contribution skill by @StudentWeis in [#49](https://github.com/StudentWeis/ropy/pull/49)
+- Add contribution workflow and issue templates for Ropy by @StudentWeis
+- Update dependencies for improved stability and performance by @StudentWeis
+
 ## [0.5.0-rc.1] - 2026-04-18
 
 ### 🚀 Features
