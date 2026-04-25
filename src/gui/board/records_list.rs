@@ -711,27 +711,11 @@ fn render_record_body(
     cx: &App,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
-    let view_click = ctx.view.clone();
-    let mut content = div()
-        .flex_1()
-        .min_w_0()
-        .cursor_pointer()
-        .id(("record-content", ctx.index))
-        .on_click({
-            let index = ctx.index;
-            move |event, window, cx| {
-                let confirm_as_plain_text = event.modifiers().shift;
-                view_click
-                    .update(cx, |this, cx| {
-                        if confirm_as_plain_text {
-                            this.confirm_record_as_plain_text(window, cx, index);
-                        } else {
-                            this.confirm_record(window, cx, index);
-                        }
-                    })
-                    .ok();
-            }
-        });
+    // Click handling lives on the whole card (see `decorate_record_card`) so
+    // short records have a large, stable hit area that isn't shadowed by the
+    // hover-preview tooltip popover. An `id` is still required here to turn
+    // the div into a stateful element so the hover tooltip can be attached.
+    let mut content = div().flex_1().min_w_0().id(("record-content", ctx.index));
 
     if !ctx.show_preview && ctx.hover_preview_enabled {
         let preview_content_type = preview_data.content_type.clone();
@@ -836,6 +820,9 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
     let view_pin = ctx.view.clone();
     let view_delete = ctx.view.clone();
 
+    // Each action button swallows its own mouse-down so the surrounding card's
+    // `on_click` (which confirms the record) does not also fire when the user
+    // clicks favorite / pin / delete.
     let favorite_button = {
         let button = if ctx.is_favorite {
             Button::new(("favorite-btn", index))
@@ -848,14 +835,16 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
                 .ghost()
                 .label("☆")
         };
-        button.on_click(move |_event, _window, cx| {
-            view_favorite
-                .update(cx, |this, cx| {
-                    this.toggle_record_favorite(record_id, cx);
-                    cx.notify();
-                })
-                .ok();
-        })
+        button
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(move |_event, _window, cx| {
+                view_favorite
+                    .update(cx, |this, cx| {
+                        this.toggle_record_favorite(record_id, cx);
+                        cx.notify();
+                    })
+                    .ok();
+            })
     };
 
     let pin_button = {
@@ -866,6 +855,7 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         };
         button
             .icon(Icon::empty().path("icon/record-pin.svg"))
+            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(move |_event, _window, cx| {
                 view_pin
                     .update(cx, |this, cx| {
@@ -880,6 +870,7 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         .xsmall()
         .ghost()
         .label("×")
+        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(move |_event, _window, cx| {
             view_delete
                 .update(cx, |this, cx| {
@@ -933,6 +924,9 @@ fn decorate_record_card(
     ctx: &RenderContext<'_>,
     styles: &ItemStyle,
 ) -> AnyElement {
+    let view_click = ctx.view.clone();
+    let index = ctx.index;
+
     card.bg(styles.normal_background)
         .rounded_md()
         .border_color(if ctx.is_selected {
@@ -950,7 +944,20 @@ fn decorate_record_card(
                     .border_color(styles.selected_background)
             }
         })
+        .cursor_pointer()
         .id(("record", ctx.index))
+        .on_click(move |event, window, cx| {
+            let confirm_as_plain_text = event.modifiers().shift;
+            view_click
+                .update(cx, |this, cx| {
+                    if confirm_as_plain_text {
+                        this.confirm_record_as_plain_text(window, cx, index);
+                    } else {
+                        this.confirm_record(window, cx, index);
+                    }
+                })
+                .ok();
+        })
         .into_any_element()
 }
 
