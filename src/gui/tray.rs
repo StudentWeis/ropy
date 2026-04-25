@@ -159,7 +159,10 @@ fn spawn_tray_platform(
     // report `None` back to the caller.
     let i18n = i18n.clone();
     cx.background_spawn(async move {
-        gtk::init().expect("Failed to init gtk modules");
+        if let Err(e) = gtk::init() {
+            tracing::error!(error = %e, "failed to init gtk modules; tray disabled");
+            return;
+        }
         if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
             Box::leak(Box::new(tray));
         }
@@ -198,9 +201,9 @@ pub fn start_tray_handler_inner(
         Ok((tray, show_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
 
-            spawn_tray_menu_event_forwarder(tx.clone(), show_id, quit_id);
             #[cfg(not(target_os = "linux"))]
-            spawn_tray_icon_event_forwarder(tx);
+            spawn_tray_icon_event_forwarder(tx.clone());
+            spawn_tray_menu_event_forwarder(tx, show_id, quit_id);
 
             Some(tray)
         }
