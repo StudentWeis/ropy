@@ -233,6 +233,7 @@ fn spawn_tray_menu_event_forwarder(
     });
 }
 
+#[cfg(not(target_os = "linux"))]
 fn spawn_tray_icon_event_forwarder(tx: async_channel::Sender<TrayEvent>) {
     let receiver = TrayIconEvent::receiver().clone();
     super::utils::spawn_event_forwarder("tray-icon-event-forwarder", tx, move |forward| {
@@ -258,6 +259,7 @@ fn tray_event_from_menu_event(
     }
 }
 
+#[cfg(not(target_os = "linux"))]
 fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
     if let TrayIconEvent::Click { button, .. } = event
         && *button == tray_icon::MouseButton::Left
@@ -340,6 +342,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(target_os = "linux"))]
     #[rstest]
     #[case(
         TrayIconEvent::Click {
