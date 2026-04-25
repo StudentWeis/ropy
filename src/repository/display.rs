@@ -2,9 +2,12 @@
 
 use std::cmp::Ordering;
 
-use super::{errors::RepositoryError, models::ClipboardRecord, repo::ClipboardRepository};
+use super::{
+    backend::StorageBackend, errors::RepositoryError, models::ClipboardRecord,
+    redb_backend::RedbBackend, repo::ClipboardRepository,
+};
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Get the records for the default board view.
     ///
     /// Pinned records stay at the top. Favorited records do not consume the
@@ -17,10 +20,12 @@ impl ClipboardRepository {
         let favorite_ids = self.favorite_id_set()?;
         let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
         let mut records = self.load_records(&selected_ids);
-        Self::sort_for_display(&mut records);
+        ClipboardRepository::<RedbBackend>::sort_for_display(&mut records);
         Ok(records)
     }
+}
 
+impl ClipboardRepository<RedbBackend> {
     pub(crate) fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
         Self::display_priority(left)
             .cmp(&Self::display_priority(right))

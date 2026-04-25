@@ -27,7 +27,4 @@ pub enum RepositoryError {
     /// Delete error
     #[error("Delete error: {0}")]
     Delete(String),
-    /// Flush error
-    #[error("Flush error: {0}")]
-    Flush(String),
 }

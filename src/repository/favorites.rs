@@ -5,9 +5,13 @@ use std::collections::HashSet;
 
 use chrono::Local;
 
-use super::{errors::RepositoryError, repo::ClipboardRepository};
+use super::{
+    backend::{KvTree, StorageBackend},
+    errors::RepositoryError,
+    repo::ClipboardRepository,
+};
 
-impl ClipboardRepository {
+impl<B: StorageBackend> ClipboardRepository<B> {
     /// Return all favorite record IDs.
     pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut ids = Vec::new();

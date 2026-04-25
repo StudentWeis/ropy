@@ -12,7 +12,6 @@ pub mod memory_backend;
 pub mod models;
 pub mod redb_backend;
 pub mod repo;
-pub mod sled_backend;
 #[cfg(test)]
 mod test_helpers;
 mod time_index;

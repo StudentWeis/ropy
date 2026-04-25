@@ -2,8 +2,8 @@
 //!
 //! This module defines the [`StorageBackend`] trait that decouples the
 //! repository's business logic from any concrete database implementation.
-//! To swap the underlying database (e.g. from `sled` to `redb`), implement
-//! this trait and pass it to [`ClipboardRepository`](super::ClipboardRepository).
+//! Production uses `redb`; tests can inject the in-memory backend through
+//! this trait and the repository test helpers.
 
 use std::path::PathBuf;
 
@@ -48,8 +48,11 @@ pub trait KvTree: Send + Sync {
 /// The top-level storage backend that manages multiple named trees and
 /// database-level operations (flush, schema migration, etc.).
 pub trait StorageBackend: Send + Sync {
+    /// Concrete tree handle returned by this backend.
+    type Tree: KvTree;
+
     /// Open (or create) a named tree / namespace.
-    fn open_tree(&self, name: &str) -> Result<Box<dyn KvTree>, RepositoryError>;
+    fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError>;
 
     /// Flush all pending writes to durable storage.
     fn flush(&self) -> Result<(), RepositoryError>;
@@ -57,6 +60,6 @@ pub trait StorageBackend: Send + Sync {
 
 /// Factory function type for creating a [`StorageBackend`] from a path.
 ///
-/// Different backends can provide their own factory that is passed to
-/// [`ClipboardRepository::init`](super::ClipboardRepository::init).
-pub type BackendFactory = fn(&PathBuf) -> Result<Box<dyn StorageBackend>, RepositoryError>;
+/// Tests provide a factory to [`ClipboardRepository::init`](super::ClipboardRepository::init)
+/// so they can exercise the repository against different storage adapters.
+pub type BackendFactory<B> = fn(&PathBuf) -> Result<B, RepositoryError>;
