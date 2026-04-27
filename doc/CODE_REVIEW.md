@@ -66,19 +66,6 @@ records_list/
 
 ---
 
-### 1.4 Storage Backend Consolidation ✅ Completed
-
-**Current state:**
-- `Cargo.toml` keeps only `redb = "4.1.0"`.
-- `ClipboardRepository::new` always opens `clipboard.redb`.
-- The legacy storage backend module and runtime backend switch are gone.
-- `ClipboardRepository` and `TimeIndex` now use concrete backend/tree types, with the in-memory backend retained only for tests.
-
-**Follow-up:**
-- If profiling still shows storage overhead, the next step is microbenchmarking redb transactions themselves rather than removing trait objects.
-
----
-
 ## 2. Correctness / Robustness
 
 ### 2.1 Unbounded Channels in Clipboard Event Pipeline ⚠️ Medium
@@ -117,14 +104,6 @@ if images_dir.exists() {
     }
 }
 ```
-
-## 3. Performance
-
-### 3.2 Storage Dispatch Cleanup ✅ Completed
-
-The repository storage path now uses concrete backend and tree types, so the old database-layer vtable cost is gone from the hot save/get/delete path.
-
----
 
 ## 4. Testability / CI Quality
 
