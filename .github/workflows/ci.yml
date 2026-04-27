@@ -52,6 +52,11 @@ jobs:
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+
       - name: Run precheck (CI mode)
         run: ./scripts/precheck.sh --check
 
