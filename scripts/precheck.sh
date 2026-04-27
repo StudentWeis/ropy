@@ -28,7 +28,7 @@ fi
 
 $CARGO_CMD check --all-targets --all-features
 $CARGO_CMD clippy --all-targets --all-features -- -D warnings
-$CARGO_CMD test -- --test-threads=1
+$CARGO_CMD test
 
 python3 scripts/check/check_i18n.py
 python3 scripts/check/check_icons.py

@@ -82,6 +82,7 @@ image = { version = "0.25.10", default-features = false, features = [
 
 [dev-dependencies]
 rstest = "0.26.1"
+serial_test = "3.2.0"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
@@ -108,7 +109,7 @@ incremental = false
 panic = "abort"
 strip = true
 
-# The profile that 'dist' will build with — must stay identical to release
+# The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
 

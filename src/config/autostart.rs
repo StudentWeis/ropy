@@ -114,9 +114,17 @@ impl AutoStartManager {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
+    // These tests touch OS-level auto-launch state (macOS LaunchAgents,
+    // Linux `.desktop` entries, Windows registry). Running them in parallel
+    // can race on that shared global state, so they are serialised explicitly
+    // while the rest of the suite runs in parallel.
+
     #[test]
+    #[serial(autostart)]
     fn test_autostart_manager_creation() {
         use crate::constants::APP_NAME;
         let manager = AutoStartManager::new(APP_NAME);
@@ -124,6 +132,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(autostart)]
     #[allow(clippy::unwrap_used)]
     fn test_get_app_path() {
         let path = AutoStartManager::get_app_path();
@@ -133,6 +142,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(autostart)]
     fn test_sync_state() {
         let manager = AutoStartManager::new("RopyTest").expect("Failed to create manager");
 

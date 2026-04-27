@@ -139,24 +139,6 @@ cargo llvm-cov --lcov --output-path lcov.info
 # upload to Codecov or print diff in PR comment
 ```
 
----
-
-### 4.2 All 363 Tests Run Single-Threaded ♻️ Low
-
-**Facts (`scripts/precheck.sh`):**
-```bash
-cargo test -- --test-threads=1
-```
-
-**Problem:** Only tests that share global state (filesystem paths, env vars, global hotkey) actually need serial execution.
-
-**Recommended fix:**
-- Add `serial_test` crate as a dev-dependency.
-- Annotate only the genuinely stateful tests with `#[serial]`.
-- Remove `--test-threads=1` from `precheck.sh` to unlock parallel execution for the majority.
-
----
-
 ### 4.3 `doc/TESTING.md` is Only 5 Lines ♻️ Low
 
 **Facts:** `AGENTS.md` points to `doc/TESTING.md` as the authoritative testing guide, but it contains only a bullet list with no examples.
@@ -176,23 +158,3 @@ cargo test -- --test-threads=1
 | 5.2 | `src/gui/board/settings_handler.rs` (950 lines) | 20+ `save_xxx` methods in one file | Group into `settings_handler/{hotkey,layout,storage,theme,update}.rs` |
 | 5.3 | `records_list.rs:79–118` | 5 thin `truncate_*` wrappers that each call the same core function | Consolidate into a single `truncate(content, limit, options)` |
 | 5.4 | CI / `precheck.sh` | `cargo-machete` not run — unused dependencies undetected | Add `cargo machete` to precheck to catch dead dependencies earlier |
-
----
-
-## Recommended Execution Order
-
-### Tier 1 — Low risk, high return (no API changes)
-1. **Refactor**: Split `repo.rs` tests into `src/repository/tests/` subdirectory
-2. **Refactor**: Extract `metrics.rs` and `masonry.rs` from `records_list.rs`
-3. **Style**: Replace per-function `#[allow(clippy::expect_used)]` with module-level `cfg_attr`
-4. **CI**: Remove `--test-threads=1`; add `serial_test` where needed
-
-### Tier 2 — One release cycle
-5. **Perf**: Change `[profile.release]` to `opt-level = 3`
-6. **Refactor**: Consider a generic `ClipboardRepository` to trim remaining storage vtable overhead
-7. **Refactor**: Extract `BoardUiState` sub-structs from `RopyBoard`
-8. **CI**: Add `cargo llvm-cov` coverage reporting
-
-### Tier 3 — Requires design discussion
-9. **Perf**: Bounded channels + notification coalescing in clipboard event pipeline
-10. **Docs**: Expand `doc/TESTING.md` with templates and examples
