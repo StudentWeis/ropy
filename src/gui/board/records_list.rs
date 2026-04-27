@@ -50,8 +50,10 @@ const GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS: f32 = 11.0;
 const BOARD_HORIZONTAL_PADDING: f32 = 32.0;
 const SCROLLBAR_OVERLAY_RIGHT_OFFSET: f32 = -10.0;
 const LIST_CONTENT_PREVIEW_LIMIT: usize = 80;
+const LIST_CONTENT_PREVIEW_MAX_LINES: usize = 3;
 const LIST_COLOR_SWATCH_SIZE_PX: f32 = 16.0;
 const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 500;
+const TOOLTIP_CONTENT_PREVIEW_MAX_LINES: usize = 10;
 
 pub(super) const fn visible_list_len(record_count: usize, layout_mode: LayoutMode) -> usize {
     match layout_mode {
@@ -76,20 +78,41 @@ pub(super) const fn list_row_for_selected_index(
     }
 }
 
-fn truncate_content(content: &str, limit: usize) -> String {
-    if content.chars().count() > limit {
-        format!("{}...", content.chars().take(limit).collect::<String>())
-    } else {
-        content.to_string()
+/// Configuration for [`truncate`].
+#[derive(Debug, Clone, Copy, Default)]
+struct TruncateOptions {
+    /// Optional upper bound on the number of lines to keep. `None` applies no
+    /// line limit, so only the character limit trims the result.
+    max_lines: Option<usize>,
+}
+
+impl TruncateOptions {
+    const fn with_max_lines(max_lines: usize) -> Self {
+        Self {
+            max_lines: Some(max_lines),
+        }
     }
 }
 
-fn truncate_content_with_lines(content: &str, char_limit: usize, max_lines: usize) -> String {
-    // First limit to max lines
+/// Truncate `content` to at most `char_limit` characters and, when requested,
+/// at most `options.max_lines` lines. Appends an ellipsis when either bound
+/// causes the result to drop trailing content.
+fn truncate(content: &str, char_limit: usize, options: TruncateOptions) -> String {
+    let Some(max_lines) = options.max_lines else {
+        // No line limit: trim by character count only.
+        return if content.chars().count() > char_limit {
+            format!(
+                "{}...",
+                content.chars().take(char_limit).collect::<String>()
+            )
+        } else {
+            content.to_string()
+        };
+    };
+
     let lines: Vec<&str> = content.lines().take(max_lines).collect();
     let line_limited_content = lines.join("\n");
 
-    // Then limit character count
     if line_limited_content.chars().count() > char_limit {
         format!(
             "{}...",
@@ -103,18 +126,6 @@ fn truncate_content_with_lines(content: &str, char_limit: usize, max_lines: usiz
     } else {
         line_limited_content
     }
-}
-
-fn truncate_content_for_list(content: &str, limit: usize) -> String {
-    truncate_content_with_lines(content, limit, 3)
-}
-
-fn truncate_content_for_grid(content: &str, limit: usize) -> String {
-    truncate_content_with_lines(content, limit, GRID_CONTENT_PREVIEW_MAX_LINES)
-}
-
-fn truncate_content_for_preview(content: &str, limit: usize) -> String {
-    truncate_content_with_lines(content, limit, 10)
 }
 
 fn estimated_text_units(content: &str) -> f32 {
@@ -154,7 +165,11 @@ fn estimated_wrapped_line_count(content: &str, max_lines: usize) -> usize {
 
 fn estimated_grid_text_lines(content: &str) -> usize {
     estimated_wrapped_line_count(
-        &truncate_content_for_grid(content.trim_start(), GRID_CONTENT_PREVIEW_LIMIT),
+        &truncate(
+            content.trim_start(),
+            GRID_CONTENT_PREVIEW_LIMIT,
+            TruncateOptions::with_max_lines(GRID_CONTENT_PREVIEW_MAX_LINES),
+        ),
         GRID_CONTENT_PREVIEW_MAX_LINES,
     )
 }
@@ -180,7 +195,11 @@ fn estimated_grid_file_detail_lines(record_content: &str) -> usize {
     };
 
     estimated_wrapped_line_count(
-        &truncate_content(&detail, GRID_CONTENT_PREVIEW_LIMIT),
+        &truncate(
+            &detail,
+            GRID_CONTENT_PREVIEW_LIMIT,
+            TruncateOptions::default(),
+        ),
         GRID_CONTENT_PREVIEW_MAX_LINES.saturating_sub(1),
     )
 }
@@ -245,9 +264,17 @@ fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
 
     // Truncate content with line limit for list display
     let text = if compact {
-        truncate_content_for_grid(trimmed_content, GRID_CONTENT_PREVIEW_LIMIT)
+        truncate(
+            trimmed_content,
+            GRID_CONTENT_PREVIEW_LIMIT,
+            TruncateOptions::with_max_lines(GRID_CONTENT_PREVIEW_MAX_LINES),
+        )
     } else {
-        truncate_content_for_list(trimmed_content, LIST_CONTENT_PREVIEW_LIMIT)
+        truncate(
+            trimmed_content,
+            LIST_CONTENT_PREVIEW_LIMIT,
+            TruncateOptions::with_max_lines(LIST_CONTENT_PREVIEW_MAX_LINES),
+        )
     };
     let text_element = div()
         .w_full()
@@ -333,13 +360,14 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
                 .line_height(gpui::relative(1.4))
-                .child(truncate_content(
+                .child(truncate(
                     &detail,
                     if compact {
                         GRID_CONTENT_PREVIEW_LIMIT
                     } else {
                         LIST_CONTENT_PREVIEW_LIMIT
                     },
+                    TruncateOptions::default(),
                 )),
         )
         .into_any_element()
@@ -382,15 +410,20 @@ fn create_preview(
     match content_type {
         ContentType::Image => preview::image_tooltip(record_content, window, cx),
         ContentType::FilePath => preview::simple_tooltip(
-            truncate_content_for_preview(
+            truncate(
                 &file_preview_content(record_content),
                 TOOLTIP_CONTENT_PREVIEW_LIMIT,
+                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
             ),
             window,
             cx,
         ),
         ContentType::Text | ContentType::RichText => preview::simple_tooltip(
-            truncate_content_for_preview(record_content, TOOLTIP_CONTENT_PREVIEW_LIMIT),
+            truncate(
+                record_content,
+                TOOLTIP_CONTENT_PREVIEW_LIMIT,
+                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
+            ),
             window,
             cx,
         ),
@@ -1076,11 +1109,10 @@ mod tests {
     use super::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
         GRID_COLOR_SWATCH_HEIGHT, GRID_COLUMN_COUNT, GRID_CONTENT_PREVIEW_MAX_LINES,
-        GRID_ESTIMATED_TEXT_LINE_HEIGHT, MasonryPlacement, build_masonry_layout,
+        GRID_ESTIMATED_TEXT_LINE_HEIGHT, MasonryPlacement, TruncateOptions, build_masonry_layout,
         estimated_grid_card_height, estimated_grid_color_body_height, estimated_grid_text_lines,
         file_display_name, file_preview_content, list_row_for_selected_index,
-        masonry_placement_is_visible, truncate_content, truncate_content_for_grid,
-        visible_list_len,
+        masonry_placement_is_visible, truncate, visible_list_len,
     };
     use crate::{
         config::LayoutMode,
@@ -1102,27 +1134,29 @@ mod tests {
     }
 
     #[test]
-    fn truncate_content_preserves_short_text() {
-        assert_eq!(truncate_content("abc", 5), "abc");
+    fn test_truncate_without_max_lines_preserves_short_text() {
+        assert_eq!(truncate("abc", 5, TruncateOptions::default()), "abc");
     }
 
     #[test]
-    fn truncate_content_appends_ellipsis_for_long_text() {
-        assert_eq!(truncate_content("abcdef", 3), "abc...");
+    fn test_truncate_without_max_lines_appends_ellipsis_for_long_text() {
+        assert_eq!(truncate("abcdef", 3, TruncateOptions::default()), "abc...");
     }
 
     #[test]
-    fn test_truncate_content_for_grid_allows_up_to_four_lines() {
+    fn test_truncate_with_grid_max_lines_allows_up_to_four_lines() {
         let content = "1\n2\n3\n4";
+        let options = TruncateOptions::with_max_lines(GRID_CONTENT_PREVIEW_MAX_LINES);
 
-        assert_eq!(truncate_content_for_grid(content, 120), content);
+        assert_eq!(truncate(content, 120, options), content);
     }
 
     #[test]
-    fn test_truncate_content_for_grid_truncates_after_four_lines() {
+    fn test_truncate_with_grid_max_lines_truncates_after_four_lines() {
         let content = "1\n2\n3\n4\n5";
+        let options = TruncateOptions::with_max_lines(GRID_CONTENT_PREVIEW_MAX_LINES);
 
-        assert_eq!(truncate_content_for_grid(content, 120), "1\n2\n3\n4...");
+        assert_eq!(truncate(content, 120, options), "1\n2\n3\n4...");
     }
 
     #[test]
