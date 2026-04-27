@@ -109,7 +109,7 @@ incremental = false
 panic = "abort"
 strip = true
 
-# The profile that 'dist' will build with — must stay identical to release
+# The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
 
