@@ -356,7 +356,7 @@ fn render_rich_text_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
         .px_1p5()
         .py_0p5()
         .rounded_sm()
-        .child(Icon::empty().path("icon/filter-text.svg").size(px(12.0)))
+        .child(Icon::empty().path("icons/filter-text.svg").size(px(12.0)))
 }
 
 fn render_file_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
@@ -370,7 +370,7 @@ fn render_file_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
         .px_1p5()
         .py_0p5()
         .rounded_sm()
-        .child(Icon::empty().path("icon/filter-files.svg").size(px(12.0)))
+        .child(Icon::empty().path("icons/filter-files.svg").size(px(12.0)))
 }
 
 fn create_preview(
@@ -858,7 +858,7 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
             Button::new(("pin-btn", index)).xsmall().ghost()
         };
         button
-            .icon(Icon::empty().path("icon/record-pin.svg"))
+            .icon(Icon::empty().path("icons/record-pin.svg"))
             .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(move |_event, _window, cx| {
                 view_pin

@@ -113,13 +113,13 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
                     .gap_2()
                     .child(render_social_link_button(
                         "github-button",
-                        Icon::empty().path("icon/github.svg").size(px(32.0)),
+                        Icon::empty().path("icons/github.svg").size(px(32.0)),
                         I18n::translate(cx, "about_github_tooltip"),
                         GITHUB_URL,
                     ))
                     .child(render_social_link_button(
                         "xiaohongshu-button",
-                        Icon::empty().path("icon/xiaohongshu.svg").size(px(32.0)),
+                        Icon::empty().path("icons/xiaohongshu.svg").size(px(32.0)),
                         I18n::translate(cx, "about_xiaohongshu_tooltip"),
                         XIAOHONGSHU_URL,
                     )),
