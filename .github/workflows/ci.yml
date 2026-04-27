@@ -52,16 +52,13 @@ jobs:
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
 
-      - name: Run precheck (CI mode)
-        run: ./scripts/precheck.sh --check
-
       - name: Install cargo-machete
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-machete
 
-      - name: Check for unused dependencies
-        run: cargo machete
+      - name: Run precheck (CI mode)
+        run: ./scripts/precheck.sh --check
 
   cross-build:
     name: Cross-platform build (${{ matrix.os }})
