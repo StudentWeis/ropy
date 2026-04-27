@@ -55,6 +55,14 @@ jobs:
       - name: Run precheck (CI mode)
         run: ./scripts/precheck.sh --check
 
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+
+      - name: Check for unused dependencies
+        run: cargo machete
+
   cross-build:
     name: Cross-platform build (${{ matrix.os }})
     needs: precheck
