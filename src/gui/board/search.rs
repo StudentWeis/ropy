@@ -220,7 +220,7 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
 fn render_search_icon() -> impl IntoElement {
     div()
         .pl_2()
-        .child(Icon::empty().path("icon/search.svg").size(px(16.0)))
+        .child(Icon::empty().path("icons/search.svg").size(px(16.0)))
 }
 
 /// Render the search input box
@@ -301,7 +301,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         .gap(px(1.0))
         .child(
             text_button
-                .icon(Icon::empty().path("icon/filter-text.svg"))
+                .icon(Icon::empty().path("icons/filter-text.svg"))
                 .tooltip(text_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -313,7 +313,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         )
         .child(
             image_button
-                .icon(Icon::empty().path("icon/filter-image.svg"))
+                .icon(Icon::empty().path("icons/filter-image.svg"))
                 .tooltip(image_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -325,7 +325,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         )
         .child(
             files_button
-                .icon(Icon::empty().path("icon/filter-files.svg"))
+                .icon(Icon::empty().path("icons/filter-files.svg"))
                 .tooltip(files_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -357,7 +357,7 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
         .p(px(2.0))
         .child(
             favorites_button
-                .icon(Icon::empty().path("icon/filter-star.svg"))
+                .icon(Icon::empty().path("icons/filter-star.svg"))
                 .tooltip(favorites_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {

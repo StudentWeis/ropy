@@ -50,7 +50,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                         Button::new("pin-button").ghost().opacity(0.5_f32)
                     }
                     .when(can_toggle_window_pin, |button| button.opacity(1.0_f32))
-                    .icon(Icon::empty().path("icon/pin-to-top.svg"))
+                    .icon(Icon::empty().path("icons/pin-to-top.svg"))
                     .tooltip(pin_tooltip)
                     .on_click(
                         cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
@@ -66,7 +66,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .child(
                     Button::new("help-button")
                         .ghost()
-                        .icon(Icon::empty().path("icon/help.svg"))
+                        .icon(Icon::empty().path("icons/help.svg"))
                         .tooltip(I18n::translate(cx, "help_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::Help;
@@ -77,7 +77,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .child(
                     Button::new("about-button")
                         .ghost()
-                        .icon(Icon::empty().path("icon/info.svg"))
+                        .icon(Icon::empty().path("icons/info.svg"))
                         .tooltip(I18n::translate(cx, "about_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::About;
@@ -88,7 +88,7 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                 .child(
                     Button::new("settings-button")
                         .ghost()
-                        .icon(Icon::empty().path("icon/settings.svg"))
+                        .icon(Icon::empty().path("icons/settings.svg"))
                         .tooltip(I18n::translate(cx, "settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.open_settings_panel(window, cx);

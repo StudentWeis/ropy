@@ -301,7 +301,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .xsmall()
                 .compact()
                 .rounded(px(4.0))
-                .icon(Icon::empty().path("icon/hotkey-record.svg").size(px(14.0)))
+                .icon(Icon::empty().path("icons/hotkey-record.svg").size(px(14.0)))
                 .tooltip(record_tooltip)
                 .on_click(cx.listener(|board, _, window, cx| {
                     if board.settings_editor.hotkey_recording {
@@ -317,7 +317,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                 .xsmall()
                 .compact()
                 .rounded(px(4.0))
-                .icon(Icon::empty().path("icon/check.svg").size(px(14.0)))
+                .icon(Icon::empty().path("icons/check.svg").size(px(14.0)))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_hotkey(cx, window);
                 }))
@@ -358,7 +358,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                     .xsmall()
                     .compact()
                     .rounded(px(4.0))
-                    .icon(Icon::empty().path("icon/check.svg").size(px(14.0)))
+                    .icon(Icon::empty().path("icons/check.svg").size(px(14.0)))
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.save_max_history(cx, window);
                     }))
@@ -401,7 +401,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl In
                     .xsmall()
                     .compact()
                     .rounded(px(4.0))
-                    .icon(Icon::empty().path("icon/check.svg").size(px(14.0)))
+                    .icon(Icon::empty().path("icons/check.svg").size(px(14.0)))
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.save_max_storage(cx, window);
                     }))
