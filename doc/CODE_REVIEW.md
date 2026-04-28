@@ -1,17 +1,3 @@
-# Code Review — Improvement Opportunities
-
-> Generated: 2026-04-25
-> Reviewer: AI code audit (full static analysis of `src/`)
-> Basis: project structure, line counts, `#[allow(clippy::...)]` annotations, profiling of hot paths, and architectural patterns.
-
----
-
-## Summary
-
-The codebase is **well-structured overall** — strong test coverage (363 test cases across 36 files), clean backend abstraction, and a clear contribution SOP. The areas below are about reducing accidental complexity that has accumulated as the feature set grew.
-
----
-
 ## 1. Structural / Architecture
 
 ### 1.1 `src/repository/repo.rs` — 1762-line God File ⚠️ High Priority
@@ -29,29 +15,6 @@ The codebase is **well-structured overall** — strong test coverage (363 test c
   - `tests/save_tests.rs`, `tests/pin_tests.rs`, `tests/dedup_tests.rs`, `tests/display_tests.rs`
 - Extract sidecar file-system logic (`save_image_from_path`, `save_rich_text` FS side-effects) into a new `sidecar.rs`, leaving `repo.rs` responsible only for DB encode/decode.
 
----
-
-### 1.2 `src/gui/board/records_list.rs` — 1253 lines, 3 concerns mixed ⚠️ High Priority
-
-**Facts:**
-- Contains 7 pure `truncate_*` / `estimated_*` text-metric functions.
-- Contains 8+ per-record renderers (`render_image_record`, `render_text_record`, `render_file_record`, etc.).
-- Contains grid geometry helpers (`build_masonry_layout`, `grid_card_width`, `masonry_placement_is_visible`).
-
-**Problems:**
-- Layout, measurement, and rendering are tangled — adding a new `ContentType` UI requires reading the whole file.
-- The pure metric functions are untested (buried in a render-heavy file, easy to overlook).
-
-**Recommended fix — split into sub-modules:**
-```
-records_list/
-  mod.rs        — assembly logic only
-  metrics.rs    — truncate_*, estimated_*, visible_list_len (pure functions, easy to unit-test)
-  masonry.rs    — grid layout geometry
-  row.rs        — single-row render
-```
-
----
 
 ### 1.3 `RopyBoard` God Struct — 27 fields, 3× `allow(struct_excessive_bools)` ⚠️ Medium
 
@@ -117,23 +80,3 @@ Add a CI step (can be non-blocking initially):
 cargo llvm-cov --lcov --output-path lcov.info
 # upload to Codecov or print diff in PR comment
 ```
-
-### 4.3 `doc/TESTING.md` is Only 5 Lines ♻️ Low
-
-**Facts:** `AGENTS.md` points to `doc/TESTING.md` as the authoritative testing guide, but it contains only a bullet list with no examples.
-
-**Recommended fix:** Expand with:
-- A minimal `rstest` parametrised test template.
-- A `test_<object>_<scenario>_<expected>` naming example.
-- Guidance on when `tempfile` vs `MemoryBackend` is appropriate.
-
----
-
-## 5. Small, High ROI Cleanups
-
-| # | Location | Issue | Fix |
-|---|----------|-------|-----|
-| 5.1 | `src/config/settings.rs` (730 lines) | Struct definitions, validation, and default impls mixed together | Split into `settings/mod.rs` + `settings/validate.rs` |
-| 5.2 | `src/gui/board/settings_handler.rs` (950 lines) | 20+ `save_xxx` methods in one file | Group into `settings_handler/{hotkey,layout,storage,theme,update}.rs` |
-| 5.3 | `records_list.rs:79–118` | 5 thin `truncate_*` wrappers that each call the same core function | Consolidate into a single `truncate(content, limit, options)` |
-| 5.4 | CI / `precheck.sh` | `cargo-machete` not run — unused dependencies undetected | Add `cargo machete` to precheck to catch dead dependencies earlier |
