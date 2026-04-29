@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0-rc.3] - 2026-04-29
+
+### 🚀 Features
+- Make grid layout more compact (#58) by @StudentWeis in [#58](https://github.com/StudentWeis/ropy/pull/58)
+
+### 🚜 Refactor
+- Split records list modules (#67) by @StudentWeis in [#67](https://github.com/StudentWeis/ropy/pull/67)
+- Apply §5 high-ROI cleanups from CODE_REVIEW.md (#65) by @StudentWeis in [#65](https://github.com/StudentWeis/ropy/pull/65)
+- Consolidate assets/icon into assets/icons (#63) by @StudentWeis in [#63](https://github.com/StudentWeis/ropy/pull/63)
+- Parallelize test suite, serialize only stateful autostart tests (#61) by @StudentWeis in [#61](https://github.com/StudentWeis/ropy/pull/61)
+
+### 📚 Documentation
+- Remove outdated code review content by @StudentWeis
+- Remove completed storage backend consolidation section from CODE_REVIEW.md by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Update skill doc with git prune command by @StudentWeis
+
 ## [0.5.0-rc.2] - 2026-04-25
 
 ### 🐛 Bug Fixes
