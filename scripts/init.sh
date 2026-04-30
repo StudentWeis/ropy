@@ -5,7 +5,7 @@ set -e
 cargo install cargo-binstall
 
 # Other dependencies
-cargo binstall prek cargo-dist cargo-release git-cliff cargo-machete
+cargo binstall prek cargo-dist cargo-release git-cliff cargo-machete cargo-outdated
 
 # For pre-commit hooks
 prek install

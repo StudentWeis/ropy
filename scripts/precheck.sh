@@ -30,6 +30,7 @@ $CARGO_CMD check --all-targets --all-features
 $CARGO_CMD clippy --all-targets --all-features -- -D warnings
 $CARGO_CMD test
 
+# Check unused dependencies
 if command -v cargo-machete &>/dev/null; then
 	$CARGO_CMD machete
 fi

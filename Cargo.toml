@@ -29,7 +29,7 @@ thiserror = "2.0.18"
 config = { version = "0.15.22", default-features = false, features = ["toml"] }
 toml = "1.1.2"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-tray-icon = "0.22.1"
+tray-icon = "0.23.0"
 auto-launch = "0.6.0"
 raw-window-handle = "0.6.2"
 async-channel = "2.5.0"
