@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-05-06
+
+### 🎯 Key Updates Since 0.5.0-alpha
+
+- **UI Layout Upgrade**: Added grid/list dual layout mode with Masonry waterfall layout and more compact cards
+- **Storage Architecture Refactor**: Genericized Repository storage layer, switched default backend from sled to redb
+- **Format Expansion**: Added RTF/HTML format support
+- **Developer Experience**: Upgraded Rust toolchain to 1.95.0, optimized CI/CD workflows
+
 ## [0.5.0-rc.3] - 2026-04-29
 
 ### 🚀 Features
