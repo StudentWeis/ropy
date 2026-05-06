@@ -85,20 +85,20 @@ rstest = "0.26.1"
 serial_test = "3.4.0"
 
 [lints.clippy]
-all = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
-cargo = { level = "warn", priority = -1 }
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
 multiple_crate_versions = "allow"
-allow_attributes = "warn"
-dbg_macro = "warn"
-todo = "warn"
-panic = "warn"
-unwrap_used = "warn"
-expect_used = "warn"
-print_stdout = "warn"
-print_stderr = "warn"
-undocumented_unsafe_blocks = "warn"
+allow_attributes = "deny"
+dbg_macro = "deny"
+todo = "deny"
+panic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+undocumented_unsafe_blocks = "deny"
 
 [profile.release]
 opt-level = 3

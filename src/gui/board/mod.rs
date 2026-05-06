@@ -201,7 +201,10 @@ impl RopyBoard {
             });
     }
 
-    #[expect(unused_variables, clippy::missing_const_for_fn)]
+    #[cfg_attr(
+        target_os = "macos",
+        expect(unused_variables, clippy::missing_const_for_fn)
+    )]
     pub(crate) fn set_window_pinned(&mut self, window: &Window, pinned: bool) {
         self.pinned = Self::resolve_window_pin_state(self.confirm_mode, pinned);
         #[cfg(not(target_os = "macos"))]

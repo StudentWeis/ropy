@@ -353,7 +353,7 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
 
 /// Toggle the always-on-top Z-order on platforms that expose it
 /// (macOS uses the `AppKit` equivalent at the GPUI level instead).
-#[allow(unused_variables)]
+#[cfg_attr(target_os = "linux", expect(unused_variables))]
 #[cfg(not(target_os = "macos"))]
 pub fn set_always_on_top(window: &Window, pinned: bool) {
     #[cfg(target_os = "windows")]

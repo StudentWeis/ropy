@@ -27,7 +27,7 @@ if [[ $CHECK_ONLY -eq 0 ]]; then
 fi
 
 $CARGO_CMD check --all-targets --all-features
-$CARGO_CMD clippy --all-targets --all-features -- -D warnings
+$CARGO_CMD clippy --all-targets --all-features
 $CARGO_CMD test
 
 # Check unused dependencies
