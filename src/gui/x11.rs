@@ -27,8 +27,15 @@ impl std::fmt::Debug for X11 {
     }
 }
 
-#[allow(clippy::missing_errors_doc)]
 impl X11 {
+    /// Creates a new X11 instance by connecting to the X server and finding
+    /// the current process's window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Cannot connect to the X server.
+    /// - Cannot find the window belonging to the current process.
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
 
@@ -114,10 +121,20 @@ impl X11 {
         Ok(())
     }
 
+    /// Sets the always-on-top state for the window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window state cannot be updated.
     pub fn set_always_on_top(&self, always_on_top: bool) -> Result<(), Box<dyn Error>> {
         self.send_wm_state_and_sync(self.net_wm_state_above, always_on_top, self.root_id)
     }
 
+    /// Displays the window and activates it (brings to foreground).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window cannot be displayed/activated.
     pub fn display_and_activate_window(&self) -> Result<(), Box<dyn Error>> {
         self.display_window()?;
         self.active_window()?;
@@ -125,6 +142,11 @@ impl X11 {
         Ok(())
     }
 
+    /// Displays (maps) the window without activating it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window cannot be mapped.
     pub fn display_window(&self) -> Result<(), Box<dyn Error>> {
         self.connection.map_window(self.window_id)?;
         self.connection.sync()?;
@@ -132,6 +154,11 @@ impl X11 {
         Ok(())
     }
 
+    /// Activates the window (brings to foreground) by sending a _NET_ACTIVE_WINDOW client message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window cannot be activated.
     pub fn active_window(&self) -> Result<(), Box<dyn Error>> {
         let event = ClientMessageEvent::new(
             32,
@@ -153,6 +180,11 @@ impl X11 {
         Ok(())
     }
 
+    /// Hides (unmaps) the window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window cannot be unmapped.
     pub fn hide_window(&self) -> Result<(), Box<dyn Error>> {
         self.connection.unmap_window(self.window_id)?;
         self.connection.sync()?;
