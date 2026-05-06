@@ -39,7 +39,10 @@ fn render_social_link_button(
     )
 }
 
-pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+pub(crate) fn render_about_content(
+    board: &RopyBoard,
+    cx: &Context<'_, RopyBoard>,
+) -> impl IntoElement {
     let version = env!("CARGO_PKG_VERSION");
 
     let header = panel_header_with_back(
@@ -121,7 +124,7 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
     )
 }
 
-fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
+fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let status_text: gpui::SharedString = match &board.update_manager.status {
         UpdateStatus::Idle => I18n::translate(cx, "update_check_now").into(),
         UpdateStatus::Checking => I18n::translate(cx, "update_checking").into(),

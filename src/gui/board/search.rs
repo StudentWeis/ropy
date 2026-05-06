@@ -26,7 +26,7 @@ use crate::{
 /// the favorites toggle (`favorites_only`) so users can combine them – e.g.
 /// "show only favorited images".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ContentFilter {
+pub(crate) enum ContentFilter {
     /// Show all content types
     #[default]
     All,
@@ -39,7 +39,7 @@ pub enum ContentFilter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SearchOptions {
+pub(crate) struct SearchOptions {
     pub(crate) case_sensitive: bool,
     pub(crate) whole_word: bool,
 }
@@ -386,7 +386,6 @@ pub(super) fn render_search_input(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repository::{ClipboardRecord, models::ContentType};
 
     fn empty_favorites() -> HashSet<u64> {
         HashSet::new()

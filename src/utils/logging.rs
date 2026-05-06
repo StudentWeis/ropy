@@ -8,7 +8,7 @@ use tracing_subscriber::fmt;
 
 use crate::config::Settings;
 
-pub struct LoggingGuard {
+pub(crate) struct LoggingGuard {
     _file_guard: tracing_appender::non_blocking::WorkerGuard,
 }
 
@@ -26,14 +26,14 @@ fn default_log_dir() -> PathBuf {
 }
 
 /// Returns the directory where log files are stored.
-pub fn log_dir() -> PathBuf {
+pub(crate) fn log_dir() -> PathBuf {
     default_log_dir()
 }
 
 fn build_file_subscriber(
     writer: impl for<'a> fmt::MakeWriter<'a> + Send + Sync + 'static,
 ) -> impl tracing::Subscriber + Send + Sync {
-    tracing_subscriber::fmt()
+    fmt()
         .with_env_filter(default_env_filter())
         .json()
         .flatten_event(true)
@@ -53,7 +53,7 @@ fn build_file_subscriber(
 /// Returns a guard that must be kept alive for the program lifetime, otherwise
 /// buffered logs may be dropped.
 #[must_use]
-pub fn init() -> Option<LoggingGuard> {
+pub(crate) fn init() -> Option<LoggingGuard> {
     let _ = tracing_log::LogTracer::init();
 
     let log_dir = default_log_dir();

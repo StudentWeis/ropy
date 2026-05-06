@@ -14,7 +14,7 @@ use super::{errors::UpdateError, models::ReleaseInfo};
 ///
 /// `progress_tx` is an `async_channel` sender that reports download progress
 /// (values between 0.0 and 1.0) to the UI thread.
-pub fn download_and_install(
+pub(crate) fn download_and_install(
     release: &ReleaseInfo,
     progress_tx: &async_channel::Sender<f32>,
 ) -> Result<(), UpdateError> {

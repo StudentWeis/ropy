@@ -6,7 +6,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ClipboardRecord {
+pub(crate) struct ClipboardRecord {
     /// Content hash; doubles as the deduplication key in the records tree.
     pub id: u64,
     /// Plain-text payload used for display, search, and dedup. Non-text
@@ -23,10 +23,10 @@ pub struct ClipboardRecord {
     pub rich_text_meta: Option<RichTextMeta>,
 }
 
-pub type SharedRecords = Arc<RwLock<Vec<ClipboardRecord>>>;
+pub(crate) type SharedRecords = Arc<RwLock<Vec<ClipboardRecord>>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ContentType {
+pub(crate) enum ContentType {
     Text,
     /// Image payload; the actual bytes live on disk under the per-record
     /// sidecar directory, and `content` carries the file path.
@@ -38,7 +38,7 @@ pub enum ContentType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RichTextMeta {
+pub(crate) struct RichTextMeta {
     pub html_path: Option<String>,
     pub rtf_path: Option<String>,
 }

@@ -1,3 +1,9 @@
+//! Build script for Ropy.
+//!
+//! Handles platform-specific build tasks such as:
+//! - Injecting the build target triple for auto-update platform detection
+//! - Converting the logo PNG to ICO format on Windows
+
 fn main() {
     // Inject the build target triple for auto-update platform detection
     println!(

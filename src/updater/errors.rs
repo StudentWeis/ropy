@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum UpdateError {
+pub(crate) enum UpdateError {
     #[error("network request failed: {0}")]
     Network(String),
 

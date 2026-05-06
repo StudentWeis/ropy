@@ -17,25 +17,25 @@ static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 /// values keep working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
-pub struct ThemeId(String);
+pub(crate) struct ThemeId(String);
 
 impl ThemeId {
-    pub fn new(code: impl Into<String>) -> Self {
+    pub(crate) fn new(code: impl Into<String>) -> Self {
         Self(normalize_theme_code(&code.into()))
     }
 
-    pub fn code(&self) -> &str {
+    pub(crate) fn code(&self) -> &str {
         &self.0
     }
 
-    pub fn display_name(&self) -> String {
+    pub(crate) fn display_name(&self) -> String {
         cached_display_names()
             .get(self.code())
             .cloned()
             .unwrap_or_else(|| self.0.clone())
     }
 
-    pub fn all() -> Vec<Self> {
+    pub(crate) fn all() -> Vec<Self> {
         let mut codes: Vec<String> = ThemeAssets::iter()
             .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
             .collect();
@@ -64,13 +64,13 @@ impl<'de> Deserialize<'de> for ThemeId {
 /// pick the right base styles before our palette is layered on top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ThemeMode {
+pub(crate) enum ThemeMode {
     Light,
     Dark,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ThemeDefinition {
+pub(crate) struct ThemeDefinition {
     id: ThemeId,
     name: String,
     mode: ThemeMode,
@@ -78,7 +78,7 @@ pub struct ThemeDefinition {
 }
 
 impl ThemeDefinition {
-    pub fn load(theme_id: &ThemeId) -> Result<Self, ThemeError> {
+    pub(crate) fn load(theme_id: &ThemeId) -> Result<Self, ThemeError> {
         let file_name = format!("{}.toml", theme_id.code());
         let file = ThemeAssets::get(&file_name)
             .ok_or_else(|| ThemeError::NotFound(theme_id.code().to_string()))?;
@@ -97,7 +97,7 @@ impl ThemeDefinition {
         Self::try_from_raw(theme_id.clone(), raw)
     }
 
-    pub fn load_or_default(theme_id: &ThemeId) -> Self {
+    pub(crate) fn load_or_default(theme_id: &ThemeId) -> Self {
         Self::load(theme_id).unwrap_or_else(|error| {
             tracing::warn!(
                 error = %error,
@@ -116,11 +116,11 @@ impl ThemeDefinition {
         })
     }
 
-    pub const fn mode(&self) -> ThemeMode {
+    pub(crate) const fn mode(&self) -> ThemeMode {
         self.mode
     }
 
-    pub const fn palette(&self) -> &ThemePalette {
+    pub(crate) const fn palette(&self) -> &ThemePalette {
         &self.palette
     }
 
@@ -199,7 +199,7 @@ impl ThemeDefinition {
 
 /// Palette values copied into `gpui-component::theme::Theme` at apply time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ThemePalette {
+pub(crate) struct ThemePalette {
     pub background: u32,
     pub foreground: u32,
     pub secondary: u32,
@@ -226,7 +226,7 @@ pub struct ThemePalette {
 }
 
 #[derive(Debug, Error)]
-pub enum ThemeError {
+pub(crate) enum ThemeError {
     #[error("theme '{0}' was not found")]
     NotFound(String),
     #[error("theme '{theme_id}' contains invalid UTF-8")]

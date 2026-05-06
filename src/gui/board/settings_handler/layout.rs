@@ -9,7 +9,7 @@ use crate::{
 };
 
 impl RopyBoard {
-    pub(crate) fn save_selected_layout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn save_selected_layout(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let previous_layout = Settings::read(cx, |s| s.layout.mode);
         let next_layout = LayoutMode::all()
             .get(self.settings_editor.selected_layout)

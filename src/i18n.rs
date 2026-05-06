@@ -3,20 +3,23 @@ use std::collections::HashMap;
 use gpui::{App, Global, ReadGlobal};
 use language::LocaleAssets;
 
-mod error;
-mod language;
-mod translations;
+/// I18n loading and parse error types.
+pub mod error;
+/// Supported locale identifiers and discovery helpers.
+pub mod language;
+/// Translation map loading and lookup.
+pub mod translations;
 
-pub use error::I18nError;
-pub use language::Language;
-pub use translations::Translations;
+pub(crate) use error::I18nError;
+pub(crate) use language::Language;
+pub(crate) use translations::Translations;
 
 /// I18n manager for handling translations.
 ///
 /// Registered as a GPUI [`Global`] so translations are accessible from any
 /// context via [`I18n::global`] or [`I18n::translate`].
 #[derive(Debug, Clone)]
-pub struct I18n {
+pub(crate) struct I18n {
     current_language: Language,
     translations: Translations,
 }
@@ -28,7 +31,7 @@ impl I18n {
     ///
     /// If the locale file for `language` is not found, falls back to the
     /// first language returned by [`Language::all()`].
-    pub fn new(language: Language) -> Result<Self, I18nError> {
+    pub(crate) fn new(language: Language) -> Result<Self, I18nError> {
         let translations = Self::load_language(&language)?;
         Ok(Self {
             current_language: language,
@@ -59,7 +62,7 @@ impl I18n {
     }
 
     /// Change the current language.
-    pub fn set_language(&mut self, language: Language) -> Result<(), I18nError> {
+    pub(crate) fn set_language(&mut self, language: Language) -> Result<(), I18nError> {
         let translations = Self::load_language(&language)?;
         self.current_language = language;
         self.translations = translations;
@@ -67,19 +70,19 @@ impl I18n {
     }
 
     /// Get a translated string by key (instance method).
-    pub fn t(&self, key: &str) -> String {
+    pub(crate) fn t(&self, key: &str) -> String {
         self.translations.get(key)
     }
 
     // ── Global convenience API ────────────────────────────────────
 
     /// Get a translated string from the global I18n.
-    pub fn translate(cx: &App, key: &str) -> String {
+    pub(crate) fn translate(cx: &App, key: &str) -> String {
         Self::global(cx).t(key)
     }
 
     /// Get a reference to the global I18n instance.
-    pub fn load_i18n(language: Language) -> Self {
+    pub(crate) fn load_i18n(language: Language) -> Self {
         Self::new(language).unwrap_or_else(|e| {
             tracing::warn!(error = %e, "failed to load i18n; falling back to default");
             Self::default()

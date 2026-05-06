@@ -1,7 +1,7 @@
 //! Repository error types.
 
 #[derive(Debug, thiserror::Error)]
-pub enum RepositoryError {
+pub(crate) enum RepositoryError {
     #[error("Data directory not found")]
     DataDirNotFound,
     #[error("Database open failed: {0}")]

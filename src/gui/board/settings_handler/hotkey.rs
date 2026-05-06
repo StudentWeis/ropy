@@ -10,7 +10,10 @@ use super::RopyBoard;
 use crate::{config::Settings, i18n::I18n};
 
 impl RopyBoard {
-    pub(crate) fn hotkey_placeholder_text(hotkey: &str, cx: &Context<Self>) -> gpui::SharedString {
+    pub(crate) fn hotkey_placeholder_text(
+        hotkey: &str,
+        cx: &Context<'_, Self>,
+    ) -> gpui::SharedString {
         if hotkey.trim().is_empty() {
             I18n::translate(cx, "settings_hotkey_empty").into()
         } else {
@@ -55,7 +58,7 @@ impl RopyBoard {
     pub(crate) fn refresh_activation_key_placeholder(
         &self,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let placeholder = Self::hotkey_placeholder_text(&current_hotkey, cx);
@@ -72,7 +75,7 @@ impl RopyBoard {
         value: &str,
         placeholder_hotkey: &str,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let next_value = value.to_string();
         let placeholder = Self::hotkey_placeholder_text(placeholder_hotkey, cx);
@@ -89,7 +92,7 @@ impl RopyBoard {
         &self,
         candidate: &str,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let value = if candidate.trim() == current_hotkey.trim() {
@@ -101,7 +104,7 @@ impl RopyBoard {
         self.sync_activation_key_input(value, &current_hotkey, window, cx);
     }
 
-    pub(crate) fn resolve_activation_key_input(&self, cx: &Context<Self>) -> String {
+    pub(crate) fn resolve_activation_key_input(&self, cx: &Context<'_, Self>) -> String {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let input_value = self
             .settings_editor
@@ -117,14 +120,14 @@ impl RopyBoard {
         )
     }
 
-    pub(crate) fn has_pending_hotkey(&self, cx: &Context<Self>) -> bool {
+    pub(crate) fn has_pending_hotkey(&self, cx: &Context<'_, Self>) -> bool {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let candidate_hotkey = self.resolve_activation_key_input(cx);
 
         Self::normalize_hotkey_for_save(&candidate_hotkey, &current_hotkey) != current_hotkey
     }
 
-    pub(crate) fn save_hotkey(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn save_hotkey(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let activation_key = Self::normalize_hotkey_for_save(
             &self.resolve_activation_key_input(cx),

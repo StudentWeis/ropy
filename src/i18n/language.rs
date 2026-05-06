@@ -18,23 +18,23 @@ static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 /// existing `config.toml` files fully compatible.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Language(String);
+pub(crate) struct Language(String);
 
 impl Language {
     /// Create a language from a locale code string.
-    pub fn new(code: impl Into<String>) -> Self {
+    pub(crate) fn new(code: impl Into<String>) -> Self {
         Self(code.into())
     }
 
     /// Return the locale code (e.g. `"en"`, `"zh-CN"`).
-    pub fn code(&self) -> &str {
+    pub(crate) fn code(&self) -> &str {
         &self.0
     }
 
     /// Return the human-readable display name read from the `language_name`
     /// key inside the corresponding TOML file.  Falls back to the locale code
     /// if the file or key is absent.
-    pub fn display_name(&self) -> String {
+    pub(crate) fn display_name(&self) -> String {
         cached_display_names()
             .get(self.code())
             .cloned()
@@ -44,7 +44,7 @@ impl Language {
     /// Return all languages discovered from `assets/locales/*.toml`, sorted
     /// alphabetically by locale code.  No code change is required when new
     /// TOML files are added to the directory.
-    pub fn all() -> Vec<Self> {
+    pub(crate) fn all() -> Vec<Self> {
         let mut codes: Vec<String> = LocaleAssets::iter()
             .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
             .collect();

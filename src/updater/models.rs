@@ -5,14 +5,14 @@ use serde::Deserialize;
 /// Subset of GitHub's Release JSON we actually consume — extra fields are
 /// ignored so upstream additions can't break deserialization.
 #[derive(Debug, Clone, Deserialize)]
-pub struct GitHubRelease {
+pub(crate) struct GitHubRelease {
     pub tag_name: String,
     pub body: Option<String>,
     pub assets: Vec<GitHubAsset>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct GitHubAsset {
+pub(crate) struct GitHubAsset {
     pub name: String,
     pub browser_download_url: String,
     pub size: u64,
@@ -21,7 +21,7 @@ pub struct GitHubAsset {
 /// Release information already resolved to the current target triple, ready
 /// for the UI and the downloader without re-parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseInfo {
+pub(crate) struct ReleaseInfo {
     pub version: String,
     pub release_notes: String,
     pub download_url: String,
@@ -32,7 +32,7 @@ pub struct ReleaseInfo {
 /// Update lifecycle state shared with the UI as a `Global`. Variants are
 /// observable, hence `PartialEq` for cheap change detection.
 #[derive(Debug, Clone, PartialEq)]
-pub enum UpdateStatus {
+pub(crate) enum UpdateStatus {
     Idle,
     Checking,
     Available(ReleaseInfo),

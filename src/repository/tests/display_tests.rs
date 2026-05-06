@@ -373,7 +373,7 @@ fn test_concurrent_save_and_delete() {
     for i in 0..10 {
         let r = repo.clone();
         let handle =
-            std::thread::spawn(move || r.save_text(format!("thread {i}")).expect("Failed to save"));
+            thread::spawn(move || r.save_text(format!("thread {i}")).expect("Failed to save"));
         handles.push(handle);
     }
 
@@ -387,7 +387,7 @@ fn test_concurrent_save_and_delete() {
 
     let repo2 = repo.clone();
     let ids_to_delete = ids[..5].to_vec();
-    let handle = std::thread::spawn(move || {
+    let handle = thread::spawn(move || {
         for id in ids_to_delete {
             repo2.delete(id).expect("Failed to delete");
         }

@@ -10,7 +10,7 @@ impl RopyBoard {
         &mut self,
         enabled: bool,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let previous_value = Settings::read(cx, |s| s.update.auto_check);
         if enabled == previous_value {
@@ -33,7 +33,7 @@ impl RopyBoard {
         &mut self,
         enabled: bool,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let previous_value = Settings::read(cx, |s| s.update.include_prerelease);
         if enabled == previous_value {

@@ -1,17 +1,20 @@
 use std::sync::mpsc::Sender as CompletionSender;
 
-mod listener;
-mod utils;
-mod writer;
+/// Clipboard event monitoring and ingestion.
+pub mod listener;
+/// Clipboard asset persistence helpers.
+pub mod utils;
+/// Clipboard write-back pipeline.
+pub mod writer;
 
-pub use listener::start_clipboard_monitor;
-pub use utils::{
+pub(crate) use listener::start_clipboard_monitor;
+pub(crate) use utils::{
     load_rich_text_html, load_rich_text_rtf, remove_rich_text_files, save_image,
     save_rich_text_files_to_dir, thumb_path_for,
 };
-pub use writer::start_clipboard_writer;
+pub(crate) use writer::start_clipboard_writer;
 
-pub enum ClipboardEvent {
+pub(crate) enum ClipboardEvent {
     Text(String),
     /// Image(path, `content_hash`)
     Image(String, u64),
@@ -23,7 +26,7 @@ pub enum ClipboardEvent {
     },
 }
 
-pub enum CopyRequest {
+pub(crate) enum CopyRequest {
     Text {
         text: String,
         completion: Option<CompletionSender<()>>,
@@ -45,42 +48,48 @@ pub enum CopyRequest {
 }
 
 impl CopyRequest {
-    pub const fn text(text: String) -> Self {
+    pub(crate) const fn text(text: String) -> Self {
         Self::Text {
             text,
             completion: None,
         }
     }
 
-    pub const fn text_with_completion(text: String, completion: CompletionSender<()>) -> Self {
+    pub(crate) const fn text_with_completion(
+        text: String,
+        completion: CompletionSender<()>,
+    ) -> Self {
         Self::Text {
             text,
             completion: Some(completion),
         }
     }
 
-    pub const fn image(path: String) -> Self {
+    pub(crate) const fn image(path: String) -> Self {
         Self::Image {
             path,
             completion: None,
         }
     }
 
-    pub const fn image_with_completion(path: String, completion: CompletionSender<()>) -> Self {
+    pub(crate) const fn image_with_completion(
+        path: String,
+        completion: CompletionSender<()>,
+    ) -> Self {
         Self::Image {
             path,
             completion: Some(completion),
         }
     }
 
-    pub const fn files(paths: Vec<String>) -> Self {
+    pub(crate) const fn files(paths: Vec<String>) -> Self {
         Self::Files {
             paths,
             completion: None,
         }
     }
 
-    pub const fn files_with_completion(
+    pub(crate) const fn files_with_completion(
         paths: Vec<String>,
         completion: CompletionSender<()>,
     ) -> Self {
@@ -90,7 +99,11 @@ impl CopyRequest {
         }
     }
 
-    pub const fn rich_text(plain_text: String, html: Option<String>, rtf: Option<String>) -> Self {
+    pub(crate) const fn rich_text(
+        plain_text: String,
+        html: Option<String>,
+        rtf: Option<String>,
+    ) -> Self {
         Self::RichText {
             plain_text,
             html,
@@ -99,7 +112,7 @@ impl CopyRequest {
         }
     }
 
-    pub const fn rich_text_with_completion(
+    pub(crate) const fn rich_text_with_completion(
         plain_text: String,
         html: Option<String>,
         rtf: Option<String>,
@@ -114,7 +127,7 @@ impl CopyRequest {
     }
 }
 
-pub enum LastCopyState {
+pub(crate) enum LastCopyState {
     Text(String),
     Image(u64),
     Files(u64),

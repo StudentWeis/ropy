@@ -1,4 +1,5 @@
-mod actions;
+/// Action definitions and keyboard handlers for the board.
+pub mod actions;
 mod clear_confirm;
 mod clipboard_ops;
 mod color;
@@ -9,7 +10,8 @@ mod preview;
 mod record_ops;
 mod records_list;
 mod render;
-mod search;
+/// Search filters and query options for the board.
+pub mod search;
 mod settings_editor;
 mod settings_handler;
 mod updater_ui;
@@ -23,7 +25,7 @@ use std::{
 };
 
 // Re-export utilities for external use
-pub use actions::{
+pub(crate) use actions::{
     Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, SelectLeft, SelectNext,
     SelectPrev, SelectRight,
 };
@@ -33,7 +35,7 @@ use gpui::{
     Window,
 };
 use gpui_component::input::InputState;
-pub use search::{ContentFilter, SearchOptions};
+pub(crate) use search::{ContentFilter, SearchOptions};
 use settings_editor::{
     SettingsEditor, UpdateManager, build_language_select, build_layout_select, build_theme_select,
     build_window_opacity_slider,
@@ -53,7 +55,7 @@ use crate::{
 /// Using an enum instead of multiple boolean flags makes illegal states
 /// (e.g. Settings and About both visible) unrepresentable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ActivePanel {
+pub(crate) enum ActivePanel {
     #[default]
     ClipboardList,
     Settings,
@@ -74,7 +76,7 @@ pub(super) const fn search_query_should_reveal_selection(
 
 /// `RopyBoard` Main Window Component
 #[expect(clippy::struct_excessive_bools)]
-pub struct RopyBoard {
+pub(crate) struct RopyBoard {
     pub(crate) records: SharedRecords,
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
@@ -169,7 +171,7 @@ impl RopyBoard {
     }
 
     #[expect(clippy::needless_pass_by_ref_mut)]
-    pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.active_panel = ActivePanel::Settings;
         self.settings_editor.settings_window_opacity_slider_visible = false;
         window.focus(&self.focus_handle);
@@ -192,7 +194,7 @@ impl RopyBoard {
         &self,
         opacity_percent: u8,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.settings_editor
             .settings_window_opacity_slider
@@ -226,22 +228,22 @@ impl RopyBoard {
         }
     }
 
-    pub fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
+    pub(crate) fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
         self.hotkey_tx = Some(tx);
     }
 
     /// Rebuild the tray menu with current i18n translations.
-    pub(crate) fn update_tray_menu(cx: &Context<Self>) {
+    pub(crate) fn update_tray_menu(cx: &Context<'_, Self>) {
         crate::gui::tray::TrayState::refresh_menu(cx);
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn new(
+    pub(crate) fn new(
         records: SharedRecords,
         last_copy: Arc<Mutex<LastCopyState>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle);

@@ -16,7 +16,7 @@ use std::cfg_select;
 
 use gpui::{Context, Hsla, Pixels, Size, Window, hsla};
 
-pub fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
+pub(crate) fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
     hsla(
         color.h,
         color.s,
@@ -30,7 +30,7 @@ pub fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
 /// async receiver is gone, signalling the loop to break — without that
 /// signal the OS callback would keep buffering events for a consumer
 /// that no longer exists.
-pub fn spawn_event_forwarder<T, F>(
+pub(crate) fn spawn_event_forwarder<T, F>(
     thread_name: &str,
     sender: async_channel::Sender<T>,
     receive_loop: F,
@@ -271,7 +271,10 @@ fn reset_window_geometry_with_current_monitor_dpi(
     }
 }
 
-pub fn reset_window_geometry_for_activation(window: &mut Window, logical_size: Size<Pixels>) {
+pub(crate) fn reset_window_geometry_for_activation(
+    window: &mut Window,
+    logical_size: Size<Pixels>,
+) {
     #[cfg(target_os = "windows")]
     if let Ok(window_handle) = HasWindowHandle::window_handle(window)
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
@@ -289,7 +292,7 @@ pub fn reset_window_geometry_for_activation(window: &mut Window, logical_size: S
 /// Hide (without destroying) the active window using the platform-native
 /// path so subsequent `active_window` calls can restore it.
 #[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
-pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
+pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: bool) {
     if pinned {
         return;
     }
@@ -322,7 +325,7 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
 /// Restore the window and pull it to the foreground, mirroring the user's
 /// expectation that activating from the tray / hotkey gives focus.
 #[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
-pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
+pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
     #[cfg(target_os = "windows")]
     if let Ok(window_handle) = HasWindowHandle::window_handle(window)
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
@@ -405,7 +408,7 @@ pub fn start_window_drag(window: &Window) {
 /// Promote the macOS process to "accessory" so we live in the menu bar
 /// only — no Dock tile and no Cmd-Tab entry, matching the tray-app UX.
 #[cfg(target_os = "macos")]
-pub fn set_activation_policy_accessory() {
+pub(crate) fn set_activation_policy_accessory() {
     use objc2::{class, msg_send, runtime::AnyObject};
     // SAFETY: `+[NSApplication sharedApplication]` is the canonical
     // singleton accessor and lives for the whole process; the only

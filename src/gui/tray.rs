@@ -17,14 +17,14 @@ const TRAY_QUIT_ID: &str = "tray_quit";
 const TRAY_ICON_SIZE: u32 = 32;
 
 #[derive(Default)]
-pub struct TrayState {
+pub(crate) struct TrayState {
     tray_icon: Option<TrayIcon>,
 }
 
 impl Global for TrayState {}
 
 impl TrayState {
-    pub fn register(cx: &mut App) {
+    pub(crate) fn register(cx: &mut App) {
         cx.set_global(Self::default());
     }
 
@@ -47,13 +47,13 @@ impl TrayState {
     /// On Linux, tray initialization happens on the GTK thread and the icon is
     /// intentionally leaked there, so this remains `None` and menu refreshes are
     /// a no-op.
-    pub fn install(cx: &mut App, tray_icon: Option<TrayIcon>) {
+    pub(crate) fn install(cx: &mut App, tray_icon: Option<TrayIcon>) {
         cx.update_global::<Self, _>(|state: &mut Self, _cx| {
             state.replace(tray_icon);
         });
     }
 
-    pub fn refresh_menu(cx: &App) {
+    pub(crate) fn refresh_menu(cx: &App) {
         let i18n = I18n::global(cx);
         if let Err(e) = Self::global(cx).rebuild_menu(i18n) {
             tracing::warn!(error = %e, "failed to rebuild tray menu");
@@ -61,7 +61,7 @@ impl TrayState {
     }
 }
 
-pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
+pub(crate) fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
     let show_item = MenuItem::with_id(TRAY_SHOW_ID, i18n.t("tray_show"), true, None);
     let quit_item = MenuItem::with_id(TRAY_QUIT_ID, i18n.t("tray_quit"), true, None);
 
@@ -71,7 +71,9 @@ pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> 
     Ok(tray_menu)
 }
 
-pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
+pub(crate) fn init_tray(
+    i18n: &I18n,
+) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
     let tray_menu = build_tray_menu(i18n)?;
     let show_id = MenuId::new(TRAY_SHOW_ID);
     let quit_id = MenuId::new(TRAY_QUIT_ID);
@@ -119,12 +121,12 @@ fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::Image
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrayEvent {
+pub(crate) enum TrayEvent {
     Show,
     Quit,
 }
 
-pub fn start_tray_handler(
+pub(crate) fn start_tray_handler(
     i18n: &I18n,
     cx: &App,
     window_handle: WindowHandle<Root>,
@@ -188,7 +190,7 @@ fn spawn_tray_event_loop(
     .detach();
 }
 
-pub fn start_tray_handler_inner(
+pub(crate) fn start_tray_handler_inner(
     i18n: &I18n,
     tx: async_channel::Sender<TrayEvent>,
 ) -> Option<TrayIcon> {
@@ -209,7 +211,7 @@ pub fn start_tray_handler_inner(
     }
 }
 
-pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
+pub(crate) fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut App) {
     window_handle
         .update(cx, |_, window: &mut gpui::Window, cx| {
             window.dispatch_action(Box::new(crate::gui::board::Active), cx);

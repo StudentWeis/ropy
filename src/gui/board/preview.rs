@@ -15,7 +15,7 @@ const IMAGE_TOOLTIP_MAX_HEIGHT_PX: f32 = 400.0;
 
 /// Build a text tooltip whose width is capped against the current window so
 /// long lines wrap instead of being clipped.
-pub fn simple_tooltip(content: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
+pub(super) fn simple_tooltip(content: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let content = content.into();
     let window_width = window.bounds().size.width;
     let max_width = (window_width - px(TOOLTIP_HORIZONTAL_MARGIN_PX)).into();
@@ -29,7 +29,11 @@ struct TooltipView {
 }
 
 impl Render for TooltipView {
-    fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+    fn render(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut gpui::Context<'_, Self>,
+    ) -> impl IntoElement {
         div()
             .flex()
             .flex_row()
@@ -57,7 +61,11 @@ impl Render for TooltipView {
 
 /// Build an image tooltip scaled to fit within the current window while
 /// respecting an absolute maximum so previews stay readable on large screens.
-pub fn image_tooltip(image_path: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
+pub(super) fn image_tooltip(
+    image_path: impl Into<String>,
+    window: &Window,
+    cx: &mut App,
+) -> AnyView {
     let image_path = image_path.into();
     let window_width = window.bounds().size.width;
     let window_height = window.bounds().size.height;
@@ -79,7 +87,7 @@ fn calculate_image_size(
     max_w: gpui::Pixels,
     max_h: gpui::Pixels,
 ) -> (gpui::Pixels, gpui::Pixels) {
-    if let Ok(reader) = ImageReader::open(path).and_then(image::ImageReader::with_guessed_format)
+    if let Ok(reader) = ImageReader::open(path).and_then(ImageReader::with_guessed_format)
         && let Ok(dims) = reader.into_dimensions()
     {
         #[expect(
@@ -104,7 +112,11 @@ struct ImageTooltipView {
 }
 
 impl Render for ImageTooltipView {
-    fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+    fn render(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut gpui::Context<'_, Self>,
+    ) -> impl IntoElement {
         div().flex().flex_row().min_w_0().child(
             div()
                 .bg(cx.theme().popover)

@@ -27,7 +27,7 @@ use crate::{
 
 #[derive(RustEmbed)]
 #[folder = "assets"]
-pub struct Assets;
+pub(crate) struct Assets;
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
@@ -42,7 +42,7 @@ impl AssetSource for Assets {
 }
 
 /// Create the main application window.
-pub fn create_window(
+pub(crate) fn create_window(
     cx: &mut App,
     shared_records: SharedRecords,
     last_copy: Arc<Mutex<LastCopyState>>,
@@ -84,12 +84,12 @@ const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgro
     }
 }
 
-pub fn apply_window_opacity(window: &gpui::Window, opacity_percent: u8) {
+pub(crate) fn apply_window_opacity(window: &gpui::Window, opacity_percent: u8) {
     window.set_background_appearance(background_appearance_for_opacity(opacity_percent));
 }
 
 /// Set the application theme from a bundled theme definition.
-pub fn set_app_theme(
+pub(crate) fn set_app_theme(
     window: &mut gpui::Window,
     cx: &mut App,
     theme_id: &ThemeId,

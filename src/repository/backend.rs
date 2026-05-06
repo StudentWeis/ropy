@@ -12,7 +12,7 @@ use super::errors::RepositoryError;
 /// A named, ordered key-value store with forward and reverse iteration.
 /// Each "tree" is a logical namespace (e.g. `clipboard_records`,
 /// `time_index`, `favorites`).
-pub trait KvTree: Send + Sync {
+pub(crate) trait KvTree: Send + Sync {
     fn insert(&self, key: &[u8], value: &[u8]) -> Result<(), RepositoryError>;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError>;
@@ -39,7 +39,7 @@ pub trait KvTree: Send + Sync {
 
 /// Top-level backend managing multiple [`KvTree`]s and database-level
 /// operations (flush, schema migration, etc.).
-pub trait StorageBackend: Send + Sync {
+pub(crate) trait StorageBackend: Send + Sync {
     type Tree: KvTree;
 
     fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError>;
@@ -49,4 +49,4 @@ pub trait StorageBackend: Send + Sync {
 
 /// Factory used by [`ClipboardRepository::init`](super::ClipboardRepository::init)
 /// so tests can swap in alternative backends (e.g. the in-memory adapter).
-pub type BackendFactory<B> = fn(&PathBuf) -> Result<B, RepositoryError>;
+pub(crate) type BackendFactory<B> = fn(&PathBuf) -> Result<B, RepositoryError>;

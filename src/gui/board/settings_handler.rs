@@ -21,7 +21,7 @@ impl RopyBoard {
     fn push_settings_notification(
         window: &mut Window,
         notification: Notification,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         window.push_notification(
             notification
@@ -33,7 +33,7 @@ impl RopyBoard {
 
     fn notify_settings_warning(
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
         message: impl Into<gpui::SharedString>,
     ) {
         Self::push_settings_notification(window, Notification::warning(message.into()), cx);
@@ -41,7 +41,7 @@ impl RopyBoard {
 
     fn notify_settings_success(
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
         message: impl Into<gpui::SharedString>,
     ) {
         Self::push_settings_notification(window, Notification::success(message.into()), cx);
@@ -49,7 +49,7 @@ impl RopyBoard {
 
     fn notify_settings_save_failed(
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
         error_message: &str,
     ) {
         let message = format!(
@@ -61,7 +61,7 @@ impl RopyBoard {
     }
 
     fn persist_settings_update(
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
         updater: impl FnOnce(&mut Settings),
     ) -> Result<(), String> {
         let mut result = Ok(());
@@ -88,7 +88,7 @@ impl RopyBoard {
         &mut self,
         theme_idx: usize,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.settings_editor.selected_theme = theme_idx;
         self.settings_editor.theme_select.update(cx, |state, cx| {
@@ -104,7 +104,7 @@ impl RopyBoard {
         &mut self,
         language_idx: usize,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.settings_editor.selected_language = language_idx;
         self.settings_editor
@@ -122,13 +122,13 @@ impl RopyBoard {
         &mut self,
         layout_idx: usize,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.settings_editor.selected_layout = layout_idx;
         self.sync_layout_select_items(window, cx);
     }
 
-    pub(crate) fn sync_layout_select_items(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn sync_layout_select_items(&self, window: &mut Window, cx: &mut Context<'_, Self>) {
         settings_editor::sync_layout_select_items(
             &self.settings_editor.layout_select,
             self.settings_editor.selected_layout,
@@ -137,7 +137,7 @@ impl RopyBoard {
         );
     }
 
-    pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let previous_value = Settings::read(cx, |s| s.autostart.enabled);
         let next_value = !self.settings_editor.autostart_enabled;
 
@@ -174,7 +174,7 @@ impl RopyBoard {
         &mut self,
         confirm_mode: ConfirmMode,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let previous_mode = Settings::read(cx, |s| s.confirm.mode);
         if confirm_mode == previous_mode {
@@ -197,7 +197,7 @@ impl RopyBoard {
         &mut self,
         enabled: bool,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         let previous_value = Settings::read(cx, |s| s.preview.hover_preview_enabled);
         if enabled == previous_value {

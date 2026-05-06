@@ -139,7 +139,11 @@ fn is_modifier_key(key: &str) -> bool {
 }
 
 impl RopyBoard {
-    pub(crate) fn start_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn start_hotkey_recording(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         self.settings_editor.hotkey_before_recording = self.resolve_activation_key_input(cx);
         self.settings_editor.hotkey_recording = true;
         self.refresh_activation_key_placeholder(window, cx);
@@ -152,7 +156,11 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn clear_hotkey_candidate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn clear_hotkey_candidate(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         self.settings_editor.hotkey_recording = false;
         self.settings_editor.pending_hotkey.clear();
         self.sync_activation_key_input_from_candidate("", window, cx);
@@ -165,7 +173,11 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn cancel_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn cancel_hotkey_recording(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         self.settings_editor.hotkey_recording = false;
         self.settings_editor
             .pending_hotkey
@@ -185,7 +197,7 @@ impl RopyBoard {
         &mut self,
         event: &gpui::KeyDownEvent,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         if !self.settings_editor.hotkey_recording {
             return;

@@ -31,7 +31,9 @@ fn expected_asset_name(target: &str) -> String {
 ///
 /// Returns `Ok(Some(ReleaseInfo))` when a newer version is found,
 /// `Ok(None)` when we are up-to-date, or an `Err` on failure.
-pub fn check_for_update(include_prerelease: bool) -> Result<Option<ReleaseInfo>, UpdateError> {
+pub(crate) fn check_for_update(
+    include_prerelease: bool,
+) -> Result<Option<ReleaseInfo>, UpdateError> {
     let release = fetch_latest_release(include_prerelease)?;
     let latest_version = parse_version(&release.tag_name)?;
     let current_version =

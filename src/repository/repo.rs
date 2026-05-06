@@ -25,7 +25,7 @@ use crate::{
 /// database on startup so stale records can't be misinterpreted.
 const SCHEMA_VERSION: u64 = 3;
 
-pub struct ClipboardRepository<B: StorageBackend = RedbBackend> {
+pub(crate) struct ClipboardRepository<B: StorageBackend = RedbBackend> {
     backend: B,
     pub(super) records: B::Tree,
     pub(super) time_index: TimeIndex<B::Tree>,
@@ -35,7 +35,7 @@ pub struct ClipboardRepository<B: StorageBackend = RedbBackend> {
 }
 
 impl ClipboardRepository<RedbBackend> {
-    pub fn new() -> Result<Self, RepositoryError> {
+    pub(crate) fn new() -> Result<Self, RepositoryError> {
         let db_path = Self::default_db_path()?;
         let images_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
@@ -56,7 +56,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Build a repository against an explicitly chosen backend. Tests use
     /// this seam to inject the in-memory backend; production goes through
     /// [`ClipboardRepository::new`].
-    pub fn init(
+    pub(crate) fn init(
         db_path: &PathBuf,
         images_dir: PathBuf,
         factory: BackendFactory<B>,
@@ -64,7 +64,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Self::from_backend(factory(db_path)?, images_dir)
     }
 
-    pub fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
+    pub(crate) fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
         let meta = backend.open_tree("meta")?;
         let records = backend.open_tree("clipboard_records")?;
         let time_index = TimeIndex::new(
@@ -97,7 +97,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         })
     }
 
-    pub fn flush(&self) -> Result<(), RepositoryError> {
+    pub(crate) fn flush(&self) -> Result<(), RepositoryError> {
         self.backend.flush()
     }
 
@@ -125,7 +125,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Insert or refresh a record keyed by its content hash. A duplicate
     /// hash bumps `created_at` only — the existing payload is preserved so
     /// re-copies surface at the top of the board without churning storage.
-    pub fn save(
+    pub(crate) fn save(
         &self,
         content: String,
         content_type: ContentType,
@@ -159,7 +159,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Persist an image record whose payload already lives at `file_path`.
     /// On a duplicate hash the new file is deleted to avoid leaking sidecar
     /// blobs, and only `created_at` is bumped on the existing record.
-    pub fn save_image_from_path(
+    pub(crate) fn save_image_from_path(
         &self,
         file_path: String,
         image_content_hash: u64,
@@ -193,13 +193,13 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(record)
     }
 
-    pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
+    pub(crate) fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)
     }
 
     /// Normalize and persist a file list. Errors when the list is empty so
     /// callers don't accidentally insert a record with no payload.
-    pub fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
+    pub(crate) fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
         let normalized = normalize_file_paths(paths);
         if normalized.is_empty() {
             return Err(RepositoryError::Query("file list is empty".to_string()));
@@ -211,7 +211,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         self.save(content, ContentType::FilePath)
     }
 
-    pub fn save_rich_text(
+    pub(crate) fn save_rich_text(
         &self,
         plain_text: String,
         html: Option<&str>,
@@ -250,7 +250,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
+    pub(crate) fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
         match self.get_raw(&key)? {
             Some(value) => {
@@ -262,13 +262,13 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         }
     }
 
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.records.len()
     }
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
+    pub(crate) fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let mut record = self
             .get_by_id(id)?
             .ok_or_else(|| RepositoryError::Query("record not found".to_string()))?;
@@ -286,7 +286,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(())
     }
 
-    pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
+    pub(crate) fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let record = self.get_by_id(id)?;
         if let Some(ref rec) = record {
             remove_record_sidecars(rec);
@@ -304,7 +304,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 
     /// Wipe every record and its on-disk sidecars (images + rich text).
-    pub fn clear(&self) -> Result<(), RepositoryError> {
+    pub(crate) fn clear(&self) -> Result<(), RepositoryError> {
         self.records.clear()?;
         self.time_index.clear()?;
         self.favorites.clear()?;

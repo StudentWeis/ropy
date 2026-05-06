@@ -8,7 +8,7 @@ use super::CopyRequest;
 /// All copy operations funnel through the returned channel so we don't pay
 /// the cost of recreating the context (and re-acquiring platform handles)
 /// on every write.
-pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
+pub(crate) fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
     let (tx, rx) = async_channel::unbounded();
 
     cx.background_spawn(async move {
@@ -52,7 +52,7 @@ pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
 fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {
     ImageReader::open(path)
         .map_err(image::ImageError::from)
-        .and_then(image::ImageReader::decode)
+        .and_then(ImageReader::decode)
 }
 
 fn set_text(ctx: &ClipboardContext, text: String) {

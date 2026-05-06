@@ -257,7 +257,7 @@ fn is_silent_launch(args: &[String]) -> bool {
 }
 
 /// Entry point: initialize all subsystems and launch the application.
-pub fn launch() {
+pub(crate) fn launch() {
     let args: Vec<String> = std::env::args().collect();
     let is_silent = is_silent_launch(&args);
 

@@ -13,7 +13,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Pinned records stay at the top. Favorited records do not consume the
     /// ordinary `limit`, but otherwise remain in the default chronological
     /// ordering with other unpinned records.
-    pub fn get_display_records(
+    pub(crate) fn get_display_records(
         &self,
         limit: usize,
     ) -> Result<Vec<ClipboardRecord>, RepositoryError> {

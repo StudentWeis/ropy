@@ -18,15 +18,15 @@ use crate::{
 };
 
 impl RopyBoard {
-    pub(crate) fn sync_filtered_records(&mut self, cx: &Context<Self>) {
+    pub(crate) fn sync_filtered_records(&mut self, cx: &Context<'_, Self>) {
         self.sync_filtered_records_internal(cx, false);
     }
 
-    pub(crate) fn sync_filtered_records_and_reveal(&mut self, cx: &Context<Self>) {
+    pub(crate) fn sync_filtered_records_and_reveal(&mut self, cx: &Context<'_, Self>) {
         self.sync_filtered_records_internal(cx, true);
     }
 
-    fn sync_filtered_records_internal(&mut self, cx: &Context<Self>, reveal_selection: bool) {
+    fn sync_filtered_records_internal(&mut self, cx: &Context<'_, Self>, reveal_selection: bool) {
         let query = self.search_input.read(cx).value().to_string();
         let previous_visible_len = self.visible_list_len(self.filtered_record_indices.len());
         let next_indices = self.get_filtered_record_indices(&query);
@@ -75,7 +75,7 @@ impl RopyBoard {
         })
     }
 
-    pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<Self>) {
+    pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<'_, Self>) {
         let max_history_records = Settings::read(cx, |s| s.storage.max_history_records);
 
         GlobalRepository::read(cx, |repo| {
@@ -109,7 +109,7 @@ impl RopyBoard {
     /// Wipe everything — including pinned and favorited records — used by
     /// the "clear all" path. Most callers want
     /// [`Self::clear_ordinary_history`] instead.
-    pub(crate) fn clear_history(&mut self, cx: &Context<Self>) {
+    pub(crate) fn clear_history(&mut self, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
                 if let Err(e) = repo.clear() {
@@ -127,7 +127,7 @@ impl RopyBoard {
     }
 
     /// Default "clear history" path: pinned and favorited records survive.
-    pub(crate) fn clear_ordinary_history(&mut self, cx: &Context<Self>) {
+    pub(crate) fn clear_ordinary_history(&mut self, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
                 if let Err(e) = repo.clear_ordinary_records() {
@@ -142,14 +142,14 @@ impl RopyBoard {
     pub(in crate::gui) fn open_clear_confirm(
         &mut self,
         action: ClearConfirmAction,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.clear_confirm_action = action;
         self.show_clear_confirm = true;
         cx.notify();
     }
 
-    pub(crate) fn confirm_clear_action(&mut self, cx: &Context<Self>) {
+    pub(crate) fn confirm_clear_action(&mut self, cx: &Context<'_, Self>) {
         match self.clear_confirm_action {
             ClearConfirmAction::AllHistory => self.clear_history(cx),
             ClearConfirmAction::OrdinaryRecords => self.clear_ordinary_history(cx),
@@ -165,7 +165,7 @@ impl RopyBoard {
         *guard = LastCopyState::Text(String::new());
     }
 
-    pub fn delete_record(&mut self, id: u64, cx: &Context<Self>) {
+    pub(crate) fn delete_record(&mut self, id: u64, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
                 if let Err(e) = repo.delete(id) {
@@ -178,7 +178,7 @@ impl RopyBoard {
         });
     }
 
-    pub fn toggle_record_favorite(&mut self, id: u64, cx: &Context<Self>) {
+    pub(crate) fn toggle_record_favorite(&mut self, id: u64, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
                 return;
@@ -194,7 +194,7 @@ impl RopyBoard {
         });
     }
 
-    pub fn toggle_record_pin(&mut self, id: u64, cx: &Context<Self>) {
+    pub(crate) fn toggle_record_pin(&mut self, id: u64, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
                 return;

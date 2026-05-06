@@ -12,7 +12,7 @@ use crate::gui::panel::{
 };
 
 impl Render for RopyBoard {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let base = v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)

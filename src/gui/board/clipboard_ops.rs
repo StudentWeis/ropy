@@ -118,14 +118,14 @@ impl RopyBoard {
     /// Confirm selection: copy record to clipboard and hide.
     /// The clipboard listener will re-capture the copy event and the
     /// repository layer handles deduplication via content hash upsert.
-    pub(crate) fn confirm_record(&self, window: &mut Window, cx: &Context<Self>, index: usize) {
+    pub(crate) fn confirm_record(&self, window: &mut Window, cx: &Context<'_, Self>, index: usize) {
         self.confirm_record_with_format(window, cx, index, ConfirmFormat::Default);
     }
 
     pub(crate) fn confirm_record_as_plain_text(
         &self,
         window: &mut Window,
-        cx: &Context<Self>,
+        cx: &Context<'_, Self>,
         index: usize,
     ) {
         self.confirm_record_with_format(window, cx, index, ConfirmFormat::PlainText);
@@ -134,7 +134,7 @@ impl RopyBoard {
     fn confirm_record_with_format(
         &self,
         window: &mut Window,
-        cx: &Context<Self>,
+        cx: &Context<'_, Self>,
         index: usize,
         confirm_format: ConfirmFormat,
     ) {

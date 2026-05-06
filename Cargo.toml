@@ -84,12 +84,50 @@ image = { version = "0.25.10", default-features = false, features = [
 rstest = "0.26.1"
 serial_test = "3.4.0"
 
+[lints.rust]
+# Code quality
+missing_debug_implementations = "deny"
+missing_docs = "warn"
+unreachable_pub = "deny"
+unnameable_types = "deny"
+
+# Unsafe discipline
+unsafe_op_in_unsafe_fn = "deny"
+missing_unsafe_on_extern = "deny"
+unsafe_attr_outside_unsafe = "deny"
+
+# Import & path hygiene
+absolute_paths_not_starting_with_crate = "deny"
+redundant_imports = "deny"
+unused_qualifications = "deny"
+
+# Lifetime & type clarity
+elided_lifetimes_in_paths = "deny"
+single_use_lifetimes = "deny"
+redundant_lifetimes = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+
+# Future compatibility & edition hygiene
+keyword_idents_2024 = "deny"
+rust_2024_incompatible_pat = "deny"
+rust_2024_prelude_collisions = "deny"
+
+# Unused items
+unused_import_braces = "deny"
+unused_lifetimes = "deny"
+unused_macro_rules = "deny"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
+
+# Cargo lints
 cargo = { level = "deny", priority = -1 }
 multiple_crate_versions = "allow"
+
+# Restriction lints
 allow_attributes = "deny"
 dbg_macro = "deny"
 todo = "deny"
@@ -100,6 +138,7 @@ print_stdout = "deny"
 print_stderr = "deny"
 undocumented_unsafe_blocks = "deny"
 mod_module_files = "deny"
+empty_drop = "deny"
 
 [profile.release]
 opt-level = 3

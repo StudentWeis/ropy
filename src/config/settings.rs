@@ -20,7 +20,7 @@ const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
 const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Settings {
+pub(crate) struct Settings {
     pub hotkey: HotkeySettings,
     pub storage: StorageSettings,
     pub theme: ThemeId,
@@ -34,13 +34,13 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn config_dir() -> Result<PathBuf, ConfigError> {
+    pub(crate) fn config_dir() -> Result<PathBuf, ConfigError> {
         dirs::config_dir()
             .map(|dir| dir.join("ropy"))
             .ok_or_else(|| ConfigError::NotFound("Config directory not found".to_string()))
     }
 
-    pub fn config_file() -> Result<PathBuf, ConfigError> {
+    pub(crate) fn config_file() -> Result<PathBuf, ConfigError> {
         Ok(Self::config_dir()?.join("config.toml"))
     }
 
@@ -48,7 +48,7 @@ impl Settings {
     /// `Default` instance so partial files keep working across upgrades,
     /// and clamping each value group via [`validate`] so out-of-range
     /// values on disk can't propagate into the running app.
-    pub fn load() -> Result<Self, ConfigError> {
+    pub(crate) fn load() -> Result<Self, ConfigError> {
         let config_dir = Self::config_dir()?;
         let config_file = config_dir.join("config");
 
@@ -79,7 +79,7 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn save(&self) -> Result<(), ConfigError> {
+    pub(crate) fn save(&self) -> Result<(), ConfigError> {
         let config_file = Self::config_file()?;
         let toml_string =
             toml::to_string_pretty(self).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
@@ -91,32 +91,32 @@ impl Settings {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum ConfirmMode {
+pub(crate) enum ConfirmMode {
     #[default]
     CopyToClipboard,
     PasteImmediately,
 }
 
 impl ConfirmMode {
-    pub const fn requires_clipboard_completion(self) -> bool {
+    pub(crate) const fn requires_clipboard_completion(self) -> bool {
         matches!(self, Self::PasteImmediately)
     }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum LayoutMode {
+pub(crate) enum LayoutMode {
     #[default]
     List,
     Grid,
 }
 
 impl LayoutMode {
-    pub const fn all() -> [Self; 2] {
+    pub(crate) const fn all() -> [Self; 2] {
         [Self::List, Self::Grid]
     }
 
-    pub fn label(self, cx: &App) -> SharedString {
+    pub(crate) fn label(self, cx: &App) -> SharedString {
         let label = match self {
             Self::List => I18n::translate(cx, "settings_layout_list"),
             Self::Grid => I18n::translate(cx, "settings_layout_grid"),
@@ -126,17 +126,17 @@ impl LayoutMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct LayoutSettings {
+pub(crate) struct LayoutSettings {
     pub mode: LayoutMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ConfirmSettings {
+pub(crate) struct ConfirmSettings {
     pub mode: ConfirmMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WindowSettings {
+pub(crate) struct WindowSettings {
     /// Allowed range is [`MIN_OPACITY_PERCENT`..=`MAX_OPACITY_PERCENT`];
     /// values outside that band are clamped at load time.
     pub opacity_percent: u8,
@@ -151,10 +151,10 @@ impl Default for WindowSettings {
 }
 
 impl WindowSettings {
-    pub const MIN_OPACITY_PERCENT: u8 = MIN_WINDOW_OPACITY_PERCENT;
-    pub const MAX_OPACITY_PERCENT: u8 = MAX_WINDOW_OPACITY_PERCENT;
+    pub(crate) const MIN_OPACITY_PERCENT: u8 = MIN_WINDOW_OPACITY_PERCENT;
+    pub(crate) const MAX_OPACITY_PERCENT: u8 = MAX_WINDOW_OPACITY_PERCENT;
 
-    pub fn normalize_opacity(&mut self) {
+    pub(crate) fn normalize_opacity(&mut self) {
         self.opacity_percent = self
             .opacity_percent
             .clamp(MIN_WINDOW_OPACITY_PERCENT, MAX_WINDOW_OPACITY_PERCENT);
@@ -162,7 +162,7 @@ impl WindowSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HotkeySettings {
+pub(crate) struct HotkeySettings {
     /// `+`-separated chord parsed by `global_hotkey` (e.g. `cmd+shift+v`).
     /// Invalid values are reset to the default by [`validate_hotkey`].
     pub activation_key: String,
@@ -180,7 +180,7 @@ impl Default for HotkeySettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageSettings {
+pub(crate) struct StorageSettings {
     /// Soft cap on records visible in the board (1 – 10,000). Records past
     /// this point are kept on disk but hidden until older entries are
     /// pinned / cleared.
@@ -201,12 +201,12 @@ impl Default for StorageSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AutoStartSettings {
+pub(crate) struct AutoStartSettings {
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateSettings {
+pub(crate) struct UpdateSettings {
     pub auto_check: bool,
     pub include_prerelease: bool,
 }
@@ -221,7 +221,7 @@ impl Default for UpdateSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreviewSettings {
+pub(crate) struct PreviewSettings {
     pub hover_preview_enabled: bool,
 }
 
@@ -238,7 +238,7 @@ impl Global for Settings {}
 impl Settings {
     /// Closure-style accessor to the global instance — keeps call sites
     /// from holding a borrow of `cx` longer than the field they need.
-    pub fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
+    pub(crate) fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
         reader(Self::global(cx))
     }
 }

@@ -20,7 +20,7 @@ const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 impl<B: StorageBackend> ClipboardRepository<B> {
     /// "Clear history" without losing user-curated records: pinned and
     /// favorited entries survive.
-    pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
+    pub(crate) fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
@@ -30,7 +30,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     /// Trim ordinary records down to the most recent `keep_count`. Pinned
     /// entries are skipped so users can't lose deliberately-kept records.
-    pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
+    pub(crate) fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
@@ -46,7 +46,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// until ordinary record count exceeds `keep_count` by the buffer, so
     /// the common save → cleanup pair doesn't pay for an iteration on
     /// every insert.
-    pub fn cleanup_old_records_if_needed(
+    pub(crate) fn cleanup_old_records_if_needed(
         &self,
         keep_count: usize,
     ) -> Result<usize, RepositoryError> {

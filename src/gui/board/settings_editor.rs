@@ -96,7 +96,7 @@ impl UpdateManager {
 pub(super) fn build_window_opacity_slider(
     opacity_percent: u8,
     window: &Window,
-    cx: &mut Context<RopyBoard>,
+    cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SliderState> {
     let slider = cx.new(|_| {
         SliderState::new()
@@ -147,7 +147,7 @@ pub(super) fn sync_layout_select_items(
     layout_select: &Entity<SelectState<Vec<SharedString>>>,
     selected_layout: usize,
     window: &mut Window,
-    cx: &mut Context<RopyBoard>,
+    cx: &mut Context<'_, RopyBoard>,
 ) {
     let items = layout_mode_items(cx);
     layout_select.update(cx, |state, cx| {
@@ -159,7 +159,7 @@ pub(super) fn sync_layout_select_items(
 pub(super) fn build_layout_select(
     selected_layout: usize,
     window: &mut Window,
-    cx: &mut Context<RopyBoard>,
+    cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
     let layout_select = cx.new(|cx| {
         SelectState::new(
@@ -193,7 +193,7 @@ pub(super) fn build_layout_select(
 pub(super) fn build_theme_select(
     selected_theme: usize,
     window: &mut Window,
-    cx: &mut Context<RopyBoard>,
+    cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
     let theme_items: Vec<SharedString> = ThemeId::all()
         .iter()
@@ -231,7 +231,7 @@ pub(super) fn build_theme_select(
 pub(super) fn build_language_select(
     selected_language: usize,
     window: &mut Window,
-    cx: &mut Context<RopyBoard>,
+    cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
     let language_items: Vec<SharedString> = Language::all()
         .iter()

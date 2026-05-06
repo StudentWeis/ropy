@@ -26,13 +26,13 @@ const DB_CACHE_CAPACITY: usize = 8 * 1024 * 1024;
 type RedbTableDefinition<'a> = TableDefinition<'a, &'static [u8], &'static [u8]>;
 
 /// A [`StorageBackend`] backed by the redb embedded database.
-pub struct RedbBackend {
+pub(crate) struct RedbBackend {
     db: Arc<Database>,
 }
 
 impl RedbBackend {
     /// Open a redb database at the given path with tuned defaults.
-    pub fn open(db_path: &PathBuf) -> Result<Self, RepositoryError> {
+    pub(crate) fn open(db_path: &PathBuf) -> Result<Self, RepositoryError> {
         if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|error| RepositoryError::DatabaseOpen(error.to_string()))?;
@@ -62,11 +62,11 @@ impl StorageBackend for RedbBackend {
 }
 
 /// Factory function that creates a [`RedbBackend`].
-pub fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, RepositoryError> {
+pub(crate) fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, RepositoryError> {
     RedbBackend::open(db_path)
 }
 
-pub struct RedbTree {
+pub(crate) struct RedbTree {
     db: Arc<Database>,
     name: String,
     len: Arc<AtomicUsize>,
@@ -123,7 +123,7 @@ impl RedbTree {
         &self,
         error_mapper: fn(String) -> RepositoryError,
         operation: impl FnOnce(
-            &mut redb::Table<&'static [u8], &'static [u8]>,
+            &mut redb::Table<'_, &'static [u8], &'static [u8]>,
         ) -> Result<R, RepositoryError>,
     ) -> Result<R, RepositoryError> {
         let _guard = self

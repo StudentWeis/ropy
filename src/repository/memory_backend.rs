@@ -14,12 +14,12 @@ use super::{
 };
 
 #[derive(Default)]
-pub struct MemoryBackend {
+pub(crate) struct MemoryBackend {
     trees: Mutex<HashMap<String, Arc<MemoryTree>>>,
 }
 
 impl MemoryBackend {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 }
@@ -47,7 +47,7 @@ impl StorageBackend for MemoryBackend {
 }
 
 #[expect(clippy::unnecessary_wraps)]
-pub fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
+pub(crate) fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
     Ok(MemoryBackend::new())
 }
 
@@ -57,7 +57,7 @@ struct MemoryTree {
 }
 
 #[derive(Clone)]
-pub struct MemoryTreeHandle(Arc<MemoryTree>);
+pub(crate) struct MemoryTreeHandle(Arc<MemoryTree>);
 
 impl KvTree for MemoryTreeHandle {
     fn insert(&self, key: &[u8], value: &[u8]) -> Result<(), RepositoryError> {

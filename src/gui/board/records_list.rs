@@ -18,7 +18,11 @@ use crate::config::LayoutMode;
 const SCROLLBAR_OVERLAY_RIGHT_OFFSET: f32 = -10.0;
 
 impl RopyBoard {
-    pub fn render_records_list(&self, window: &Window, context: &Context<'_, Self>) -> AnyElement {
+    pub(crate) fn render_records_list(
+        &self,
+        window: &Window,
+        context: &Context<'_, Self>,
+    ) -> AnyElement {
         if self.layout_mode == LayoutMode::Grid {
             return GridMasonry::new(
                 RecordsListState::from_board(self, context),

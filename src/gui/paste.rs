@@ -6,14 +6,14 @@ use thiserror::Error;
 const PASTE_DELAY_MS: u64 = 50;
 
 #[derive(Debug, Error)]
-pub enum PasteError {
+pub(super) enum PasteError {
     #[error("failed to initialize input simulator: {0}")]
     Initialize(String),
     #[error("failed to send paste shortcut: {0}")]
     Shortcut(String),
 }
 
-pub fn trigger_paste() -> Result<(), PasteError> {
+pub(super) fn trigger_paste() -> Result<(), PasteError> {
     // Give the previous application a brief moment to regain focus after the popup hides.
     thread::sleep(paste_delay());
 

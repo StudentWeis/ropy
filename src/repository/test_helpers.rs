@@ -14,7 +14,7 @@ use super::{
 
 type MemoryClipboardRepository = ClipboardRepository<MemoryBackend>;
 
-pub fn create_test_repo_with<B: StorageBackend>(
+pub(super) fn create_test_repo_with<B: StorageBackend>(
     factory: BackendFactory<B>,
 ) -> (tempfile::TempDir, ClipboardRepository<B>) {
     let temp_dir = tempdir().expect("Failed to create temp dir");
@@ -24,12 +24,12 @@ pub fn create_test_repo_with<B: StorageBackend>(
     (temp_dir, repo)
 }
 
-pub fn create_test_repo() -> MemoryClipboardRepository {
+pub(super) fn create_test_repo() -> MemoryClipboardRepository {
     let (_temp_dir, repo) = create_test_repo_with(memory_backend_factory);
     repo
 }
 
-pub fn load_display_records<B: StorageBackend>(
+pub(super) fn load_display_records<B: StorageBackend>(
     repo: &ClipboardRepository<B>,
     limit: usize,
 ) -> Vec<ClipboardRecord> {
@@ -37,7 +37,10 @@ pub fn load_display_records<B: StorageBackend>(
         .expect("Failed to get display records")
 }
 
-pub fn save_numbered_records<B: StorageBackend>(repo: &ClipboardRepository<B>, count: usize) {
+pub(super) fn save_numbered_records<B: StorageBackend>(
+    repo: &ClipboardRepository<B>,
+    count: usize,
+) {
     for i in 1..=count {
         repo.save_text(format!("Record {i}"))
             .expect("Failed to save");

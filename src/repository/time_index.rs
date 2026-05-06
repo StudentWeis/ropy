@@ -15,9 +15,8 @@ use super::{
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
 };
-
 /// Metadata extracted from a single time index entry.
-pub struct IndexEntry {
+pub(super) struct IndexEntry {
     pub id: u64,
     pub is_pinned: bool,
 }
@@ -25,13 +24,13 @@ pub struct IndexEntry {
 /// A lightweight secondary index that maps `(timestamp, id)` to
 /// `(pinned, content_type)`, enabling chronological queries and
 /// type-based filtering without touching the main record store.
-pub struct TimeIndex<T: KvTree> {
+pub(super) struct TimeIndex<T: KvTree> {
     entries: T,
     id_lookup: T,
 }
 
 impl<T: KvTree> TimeIndex<T> {
-    pub const fn new(entries: T, id_lookup: T) -> Self {
+    pub(super) const fn new(entries: T, id_lookup: T) -> Self {
         Self { entries, id_lookup }
     }
 
@@ -39,7 +38,7 @@ impl<T: KvTree> TimeIndex<T> {
     ///
     /// Removes any stale entry with the same `id` before inserting
     /// the new one (timestamp may have changed on dedup upsert).
-    pub fn upsert(&self, record: &ClipboardRecord) -> Result<(), RepositoryError> {
+    pub(super) fn upsert(&self, record: &ClipboardRecord) -> Result<(), RepositoryError> {
         self.remove_by_id(record.id)?;
         let key = Self::encode_key(record.created_at.timestamp_millis(), record.id);
         let val = Self::encode_value(record.pinned, &record.content_type);
@@ -55,7 +54,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Remove the entry that matches the given `(timestamp_millis, id)` pair.
-    pub fn remove(&self, timestamp_millis: i64, id: u64) -> Result<(), RepositoryError> {
+    pub(super) fn remove(&self, timestamp_millis: i64, id: u64) -> Result<(), RepositoryError> {
         let key = Self::encode_key(timestamp_millis, id);
         self.entries.remove(&key)?;
         self.id_lookup.remove(&id.to_be_bytes())?;
@@ -63,7 +62,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Update the pinned flag for an existing entry (key stays the same).
-    pub fn update_pinned(
+    pub(super) fn update_pinned(
         &self,
         timestamp_millis: i64,
         id: u64,
@@ -76,7 +75,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Clear all entries.
-    pub fn clear(&self) -> Result<(), RepositoryError> {
+    pub(super) fn clear(&self) -> Result<(), RepositoryError> {
         self.entries.clear()?;
         self.id_lookup.clear()
     }
@@ -86,7 +85,7 @@ impl<T: KvTree> TimeIndex<T> {
     /// Pinned records are always included first. Among unpinned records, all
     /// favorited records are included without consuming the ordinary `limit`,
     /// and up to `limit` ordinary records are appended in newest-first order.
-    pub fn select_display_ids(
+    pub(super) fn select_display_ids(
         &self,
         limit: usize,
         favorite_ids: &HashSet<u64>,
@@ -116,7 +115,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Collect all pinned record IDs in newest-first order.
-    pub fn pinned_ids(&self) -> Result<Vec<u64>, RepositoryError> {
+    pub(super) fn pinned_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut pinned = Vec::new();
 
         self.entries.scan_descending(&mut |key, value| {
@@ -137,7 +136,10 @@ impl<T: KvTree> TimeIndex<T> {
     ///
     /// Returns `(encoded_key, record_id)` pairs sorted oldest-first
     /// (natural iteration order).
-    pub fn oldest_unpinned(&self, max: usize) -> Result<Vec<([u8; 16], u64)>, RepositoryError> {
+    pub(super) fn oldest_unpinned(
+        &self,
+        max: usize,
+    ) -> Result<Vec<([u8; 16], u64)>, RepositoryError> {
         let mut result = Vec::new();
 
         self.entries.scan_ascending(&mut |key, value| {
@@ -204,7 +206,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Delete a raw encoded key from the underlying tree.
-    pub fn remove_raw(&self, key: &[u8; 16]) -> Result<(), RepositoryError> {
+    pub(super) fn remove_raw(&self, key: &[u8; 16]) -> Result<(), RepositoryError> {
         self.entries.remove(key.as_ref())?;
         let id = u64::from_be_bytes(key[8..].try_into().unwrap_or_default());
         self.id_lookup.remove(&id.to_be_bytes())?;
@@ -214,8 +216,7 @@ impl<T: KvTree> TimeIndex<T> {
 
 #[cfg(test)]
 impl<T: KvTree> TimeIndex<T> {
-    /// Direct insert for test setup (bypasses `upsert` scan).
-    pub fn insert_raw(
+    pub(super) fn insert_raw(
         &self,
         timestamp_millis: i64,
         id: u64,
@@ -237,8 +238,6 @@ impl<T: KvTree> TimeIndex<T> {
     reason = "test fixtures use small loop indices that fit in any integer width"
 )]
 mod tests {
-    use std::collections::HashSet;
-
     use tempfile::tempdir;
 
     use super::*;

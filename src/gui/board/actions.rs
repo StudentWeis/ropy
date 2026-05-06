@@ -14,7 +14,7 @@ use crate::{
 
 impl RopyBoard {
     /// Clear the search input content and blur it
-    pub(crate) fn clear_search(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn clear_search(&self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.search_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
@@ -45,7 +45,7 @@ mod generated_actions {
     );
 }
 
-pub use generated_actions::*;
+pub(crate) use generated_actions::*;
 
 pub(super) fn horizontal_grid_target_index(
     selected_index: usize,
@@ -125,7 +125,7 @@ fn fallback_horizontal_grid_target_index(
 }
 
 impl RopyBoard {
-    fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<Self>) {
+    fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<'_, Self>) {
         let count = self.filtered_record_len();
         let item_bounds = (0..count)
             .map(|index| self.grid_scroll_handle.bounds_for_item(index))
@@ -158,15 +158,30 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub fn on_select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_select_left(
+        &mut self,
+        _: &SelectLeft,
+        _: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         self.move_grid_horizontal(false, cx);
     }
 
-    pub fn on_select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_select_right(
+        &mut self,
+        _: &SelectRight,
+        _: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         self.move_grid_horizontal(true, cx);
     }
 
-    pub fn on_select_prev(&mut self, _: &SelectPrev, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_select_prev(
+        &mut self,
+        _: &SelectPrev,
+        _: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.force_reveal_selected_record();
@@ -174,7 +189,12 @@ impl RopyBoard {
         }
     }
 
-    pub fn on_select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_select_next(
+        &mut self,
+        _: &SelectNext,
+        _: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
@@ -183,29 +203,29 @@ impl RopyBoard {
         }
     }
 
-    pub fn on_confirm_selection(
+    pub(crate) fn on_confirm_selection(
         &mut self,
         _: &ConfirmSelection,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.confirm_record(window, cx, self.selected_index);
     }
 
-    pub fn on_confirm_selection_plain_text(
+    pub(crate) fn on_confirm_selection_plain_text(
         &mut self,
         _: &ConfirmSelectionPlainText,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         self.confirm_record_as_plain_text(window, cx, self.selected_index);
     }
 
-    pub fn on_delete_record(
+    pub(crate) fn on_delete_record(
         &mut self,
         _: &DeleteRecord,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         if let Some(id) = self.filtered_record_id_at(self.selected_index) {
             self.delete_record(id, cx);
@@ -220,7 +240,12 @@ impl RopyBoard {
         }
     }
 
-    pub fn on_active_action(&mut self, _: &Active, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_active_action(
+        &mut self,
+        _: &Active,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey_recording {
             return;
         }
@@ -236,7 +261,12 @@ impl RopyBoard {
         active_window(window, cx);
     }
 
-    pub fn on_hide_action(&mut self, _: &Hide, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_hide_action(
+        &mut self,
+        _: &Hide,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey_recording {
             self.cancel_hotkey_recording(window, cx);
             return;
@@ -277,7 +307,12 @@ impl RopyBoard {
     }
 
     #[expect(clippy::unused_self)]
-    pub fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_quit_action(
+        &mut self,
+        _: &Quit,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         cx.quit();
     }
 
@@ -289,11 +324,11 @@ impl RopyBoard {
     /// would conflict with normal text input when the search `InputState` is
     /// focused. The focus-guard below ensures these shortcuts are only active
     /// when the main board — not the search input — has focus.
-    pub fn on_key_down(
+    pub(crate) fn on_key_down(
         &mut self,
         event: &gpui::KeyDownEvent,
         window: &mut Window,
-        cx: &mut Context<Self>,
+        cx: &mut Context<'_, Self>,
     ) {
         // Block keyboard shortcuts while the clear-confirm dialog is open
         if self.show_clear_confirm {

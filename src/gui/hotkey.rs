@@ -17,7 +17,7 @@ struct HotkeyListenerState<Manager> {
 /// Registers the configured hotkey and invokes the provided callback when the hotkey is pressed.
 /// The callback receives an `&AsyncApp` so callers can update the UI without creating their own.
 /// Returns a sender to update the hotkey string dynamically.
-pub fn start_hotkey_listener<F>(
+pub(crate) fn start_hotkey_listener<F>(
     initial_hotkey: String,
     cx: &App,
     on_hotkey: F,

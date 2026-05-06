@@ -6,7 +6,7 @@ use super::RopyBoard;
 use crate::{config::Settings, i18n::I18n, repository::GlobalRepository};
 
 impl RopyBoard {
-    pub(crate) fn has_pending_max_history(&self, cx: &Context<Self>) -> bool {
+    pub(crate) fn has_pending_max_history(&self, cx: &Context<'_, Self>) -> bool {
         let current_max_history = Settings::read(cx, |s| s.storage.max_history_records);
         let input = self
             .settings_editor
@@ -17,7 +17,7 @@ impl RopyBoard {
         Self::has_pending_numeric_input(&input, current_max_history, Self::parse_max_history_input)
     }
 
-    pub(crate) fn has_pending_max_storage(&self, cx: &Context<Self>) -> bool {
+    pub(crate) fn has_pending_max_storage(&self, cx: &Context<'_, Self>) -> bool {
         let current_max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
         let input = self
             .settings_editor
@@ -28,7 +28,7 @@ impl RopyBoard {
         Self::has_pending_numeric_input(&input, current_max_storage, Self::parse_max_storage_input)
     }
 
-    pub(crate) fn save_max_history(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn save_max_history(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
         let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
@@ -96,7 +96,7 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn save_max_storage(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+    pub(crate) fn save_max_storage(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
         let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });

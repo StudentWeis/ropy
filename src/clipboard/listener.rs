@@ -259,7 +259,7 @@ impl ClipboardMonitor {
 }
 
 /// Spawn a clipboard listener thread that watches for clipboard changes.
-pub fn start_clipboard_monitor(
+pub(crate) fn start_clipboard_monitor(
     tx: Sender<ClipboardEvent>,
     cx: &App,
     last_copy: Arc<Mutex<LastCopyState>>,

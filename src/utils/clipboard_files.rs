@@ -45,25 +45,25 @@ fn normalize_file_path(path: &str) -> Option<String> {
     Some(decode_percent_encoded(without_uri_prefix))
 }
 
-pub fn normalize_file_paths(paths: &[String]) -> Vec<String> {
+pub(crate) fn normalize_file_paths(paths: &[String]) -> Vec<String> {
     paths
         .iter()
         .filter_map(|path| normalize_file_path(path))
         .collect()
 }
 
-pub fn serialize_file_paths(paths: &[String]) -> Result<String, serde_json::Error> {
+pub(crate) fn serialize_file_paths(paths: &[String]) -> Result<String, serde_json::Error> {
     serde_json::to_string(&normalize_file_paths(paths))
 }
 
-pub fn deserialize_file_paths(content: &str) -> Vec<String> {
+pub(crate) fn deserialize_file_paths(content: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(content).map_or_else(
         |_| normalize_file_paths(&[content.to_string()]),
         |paths| normalize_file_paths(&paths),
     )
 }
 
-pub fn hash_file_paths(paths: &[String]) -> u64 {
+pub(crate) fn hash_file_paths(paths: &[String]) -> u64 {
     serialize_file_paths(paths).map_or(0, |serialized| seahash::hash(serialized.as_bytes()))
 }
 

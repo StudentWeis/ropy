@@ -10,7 +10,7 @@ use crate::{
 };
 
 impl RopyBoard {
-    pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let previous_theme = Settings::read(cx, |s| s.theme.clone());
         let next_theme = ThemeId::all()
             .get(self.settings_editor.selected_theme)
@@ -55,7 +55,11 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn save_selected_language(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn save_selected_language(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         let previous_language = Settings::read(cx, |s| s.language.clone());
         let next_language = Language::all()
             .get(self.settings_editor.selected_language)
@@ -91,7 +95,7 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn save_window_opacity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn save_window_opacity(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let previous_opacity = Settings::read(cx, |s| s.window.opacity_percent);
         let next_opacity = self.settings_editor.window_opacity_percent;
 

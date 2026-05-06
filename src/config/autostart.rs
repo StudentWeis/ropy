@@ -5,7 +5,7 @@ use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AutoStartError {
+pub(crate) enum AutoStartError {
     #[error("Failed to get executable path: {0}")]
     ExecutablePath(String),
     #[error("Failed to initialize auto-launch: {0}")]
@@ -21,12 +21,12 @@ pub enum AutoStartError {
 /// Owns the platform `AutoLaunch` handle and threads the `--silent` flag
 /// through it so a system-triggered launch boots into the tray instead of
 /// popping the main window.
-pub struct AutoStartManager {
+pub(crate) struct AutoStartManager {
     auto_launch: AutoLaunch,
 }
 
 impl AutoStartManager {
-    pub fn new(app_name: &str) -> Result<Self, AutoStartError> {
+    pub(crate) fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
         let auto_launch = AutoLaunchBuilder::new()
@@ -60,27 +60,24 @@ impl AutoStartManager {
             }
         }
 
-        exe_path
-            .to_str()
-            .map(std::string::ToString::to_string)
-            .ok_or_else(|| {
-                AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
-            })
+        exe_path.to_str().map(ToString::to_string).ok_or_else(|| {
+            AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
+        })
     }
 
-    pub fn enable(&self) -> Result<(), AutoStartError> {
+    pub(crate) fn enable(&self) -> Result<(), AutoStartError> {
         self.auto_launch
             .enable()
             .map_err(|e| AutoStartError::Enable(e.to_string()))
     }
 
-    pub fn disable(&self) -> Result<(), AutoStartError> {
+    pub(crate) fn disable(&self) -> Result<(), AutoStartError> {
         self.auto_launch
             .disable()
             .map_err(|e| AutoStartError::Disable(e.to_string()))
     }
 
-    pub fn is_enabled(&self) -> Result<bool, AutoStartError> {
+    pub(crate) fn is_enabled(&self) -> Result<bool, AutoStartError> {
         self.auto_launch
             .is_enabled()
             .map_err(|e| AutoStartError::StatusCheck(e.to_string()))
@@ -90,7 +87,7 @@ impl AutoStartManager {
     /// platform call when it already matches — repeatedly toggling
     /// `LaunchAgents` / registry entries is unnecessary churn and (on
     /// some Linux desktops) racy.
-    pub fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
+    pub(crate) fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
         let current_enabled = self.is_enabled().unwrap_or(false);
         if current_enabled == enabled {
             Ok(())

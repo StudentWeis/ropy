@@ -29,7 +29,7 @@ fn panel_header<T, L, R>(
     title: impl Into<SharedString>,
     leading: L,
     trailing: R,
-    cx: &Context<T>,
+    cx: &Context<'_, T>,
 ) -> impl IntoElement
 where
     L: IntoElement,
@@ -60,17 +60,17 @@ where
     header
 }
 
-pub fn panel_back_button(id: &'static str) -> Button {
+pub(super) fn panel_back_button(id: &'static str) -> Button {
     Button::new(id)
         .small()
         .ghost()
         .label(crate::constants::BACK_ARROW)
 }
 
-pub fn panel_header_with_back<T, B>(
+pub(super) fn panel_header_with_back<T, B>(
     title: impl Into<SharedString>,
     back_button: B,
-    cx: &Context<T>,
+    cx: &Context<'_, T>,
 ) -> impl IntoElement
 where
     B: IntoElement,

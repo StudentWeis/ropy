@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl RopyBoard {
-    pub fn check_for_update_async(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn check_for_update_async(&mut self, cx: &mut Context<'_, Self>) {
         self.update_manager.status = UpdateStatus::Checking;
         cx.notify();
 
@@ -38,7 +38,7 @@ impl RopyBoard {
         .detach();
     }
 
-    pub fn download_and_install_update(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn download_and_install_update(&mut self, cx: &mut Context<'_, Self>) {
         let release = match &self.update_manager.status {
             UpdateStatus::Available(info) => info.clone(),
             _ => return,
