@@ -9,7 +9,6 @@ use x11rb::{
 
 const ACTIVE_WINDOW_POLL_INTERVAL_MS: u64 = 10;
 
-#[allow(missing_debug_implementations)]
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
@@ -17,6 +16,15 @@ pub struct X11 {
     net_wm_state: u32,
     window_id: u32,
     net_active_window: u32,
+}
+
+impl std::fmt::Debug for X11 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("X11")
+            .field("root_id", &self.root_id)
+            .field("window_id", &self.window_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl X11 {
