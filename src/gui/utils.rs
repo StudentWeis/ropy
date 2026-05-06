@@ -232,7 +232,7 @@ fn reset_window_geometry_with_current_monitor_dpi(
     }
 
     let mut monitor_info = MONITORINFO {
-        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        cbSize: size_of::<MONITORINFO>() as u32,
         ..unsafe { std::mem::zeroed() }
     };
     // SAFETY: `monitor` is the handle just returned by `MonitorFromWindow`.
@@ -368,7 +368,7 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
         // geometry untouched, so this only flips Z-order.
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{
-                HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+                HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
             };
             let hwnd_insert_after: *mut std::ffi::c_void =
                 if pinned { HWND_TOPMOST } else { HWND_NOTOPMOST };
