@@ -154,7 +154,7 @@ impl X11 {
         Ok(())
     }
 
-    /// Activates the window (brings to foreground) by sending a _NET_ACTIVE_WINDOW client message.
+    /// Activates the window (brings to foreground) by sending a `_NET_ACTIVE_WINDOW` client message.
     ///
     /// # Errors
     ///
