@@ -9,7 +9,7 @@ use x11rb::{
 
 const ACTIVE_WINDOW_POLL_INTERVAL_MS: u64 = 10;
 
-#[derive(Debug)]
+#[allow(missing_debug_implementations)]
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
