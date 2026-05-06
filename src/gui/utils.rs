@@ -1,3 +1,17 @@
+//! Window / display helpers.
+//!
+//! Most `unsafe` blocks below share the same invariants:
+//!   * `hwnd` originates from a live GPUI `Window` handle and never
+//!     outlives the enclosing stack frame, so passing it to Win32 APIs
+//!     can't dangle.
+//!   * Out-pointers (`RECT`, `MONITORINFO`, …) point to locals declared
+//!     immediately above, owned for the duration of the call.
+//!   * No call transfers ownership of `hwnd` or otherwise mutates global
+//!     state that we don't already drive.
+//!
+//! Per-block `// SAFETY:` notes only call out additional, block-specific
+//! invariants on top of the above.
+
 use std::cfg_select;
 
 use gpui::{Context, Hsla, Pixels, Size, Window, hsla};
@@ -11,26 +25,11 @@ pub fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
     )
 }
 
-/// Spawn a named thread that runs a blocking receive loop and forwards mapped
-/// events to an `async_channel::Sender`.
-///
-/// `receive_loop` is called with a closure that the caller invokes for each
-/// received event. The closure accepts `Option<T>`: `None` values are skipped
-/// (filtered), and `Some(value)` values are forwarded. It returns `true` while
-/// the sender is still connected; the caller should stop when it returns `false`.
-///
-/// # Example
-///
-/// ```ignore
-/// let receiver = GlobalHotKeyEvent::receiver().clone();
-/// spawn_event_forwarder("hotkey-forwarder", sender, move |forward| {
-///     while let Ok(event) = receiver.recv() {
-///         if !forward(Some(ListenerMessage::HotkeyEvent(event))) {
-///             break;
-///         }
-///     }
-/// });
-/// ```
+/// Bridge a blocking OS receiver onto an `async_channel::Sender` from a
+/// dedicated thread. The forwarding closure returns `false` once the
+/// async receiver is gone, signalling the loop to break — without that
+/// signal the OS callback would keep buffering events for a consumer
+/// that no longer exists.
 pub fn spawn_event_forwarder<T, F>(
     thread_name: &str,
     sender: async_channel::Sender<T>,
@@ -147,7 +146,7 @@ fn calculate_activation_window_geometry(
 
 #[cfg(target_os = "windows")]
 fn window_frame_extents(hwnd: *mut std::ffi::c_void) -> WindowFrameExtents {
-    // SAFETY: `hwnd` comes from GPUI's live window handle; querying geometry APIs is read-only.
+    // SAFETY: see module-level note. Read-only geometry queries.
     unsafe {
         if IsIconic(hwnd) != 0 {
             return WindowFrameExtents::default();
@@ -188,8 +187,7 @@ fn window_frame_extents(hwnd: *mut std::ffi::c_void) -> WindowFrameExtents {
 
 #[cfg(target_os = "windows")]
 fn current_monitor_scale_factor(hwnd: *mut std::ffi::c_void) -> Option<f32> {
-    // SAFETY: `hwnd` is a valid live window handle; `MonitorFromWindow` returns the nearest
-    // monitor handle when one is available.
+    // SAFETY: see module-level note.
     let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
     if monitor.is_null() {
         return None;
@@ -197,13 +195,14 @@ fn current_monitor_scale_factor(hwnd: *mut std::ffi::c_void) -> Option<f32> {
 
     let mut dpi_x = 0;
     let mut dpi_y = 0;
-    // SAFETY: `monitor` was returned by `MonitorFromWindow`; the out-pointers are valid.
+    // SAFETY: `monitor` came from `MonitorFromWindow` above and out-pointers
+    // address the locals just declared.
     let status = unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) };
     if status == 0 && dpi_x > 0 && dpi_x == dpi_y {
         return Some(dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32);
     }
 
-    // SAFETY: `hwnd` is valid; this is a read-only fallback if the monitor DPI query fails.
+    // SAFETY: per-monitor DPI failed, fall back to the window-scoped query.
     let dpi = unsafe { GetDpiForWindow(hwnd) };
     let effective_dpi = if dpi > 0 {
         dpi
@@ -218,7 +217,7 @@ fn reset_window_geometry_with_current_monitor_dpi(
     hwnd: *mut std::ffi::c_void,
     logical_size: Size<Pixels>,
 ) -> bool {
-    // SAFETY: `hwnd` is a valid window handle; `MonitorFromWindow` returns the nearest monitor.
+    // SAFETY: see module-level note.
     let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
     if monitor.is_null() {
         return false;
@@ -228,7 +227,7 @@ fn reset_window_geometry_with_current_monitor_dpi(
         cbSize: std::mem::size_of::<MONITORINFO>() as u32,
         ..unsafe { std::mem::zeroed() }
     };
-    // SAFETY: `monitor` is valid and `monitor_info` points to writable storage.
+    // SAFETY: `monitor` is the handle just returned by `MonitorFromWindow`.
     if unsafe { GetMonitorInfoW(monitor, &mut monitor_info) } == 0 {
         return false;
     }
@@ -248,7 +247,9 @@ fn reset_window_geometry_with_current_monitor_dpi(
         window_frame_extents(hwnd),
     );
 
-    // SAFETY: `hwnd` is valid; we only adjust size and position before the later restore/activate.
+    // SAFETY: pure size + position update, no Z-order or focus change
+    // (`SWP_NOACTIVATE | SWP_NOZORDER`) so it can't race with the later
+    // restore / activate path.
     unsafe {
         SetWindowPos(
             hwnd,
@@ -278,7 +279,8 @@ pub fn reset_window_geometry_for_activation(window: &mut Window, logical_size: S
     window.resize(logical_size);
 }
 
-/// Hide the window based on the platform
+/// Hide (without destroying) the active window using the platform-native
+/// path so subsequent `active_window` calls can restore it.
 #[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     if pinned {
@@ -289,9 +291,7 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
-        // ShowWindow is safe to call with any valid window handle. SW_HIDE simply hides the
-        // window without destroying it, which is the intended behavior for hiding the window.
+        // SAFETY: see module-level note. `SW_HIDE` only toggles visibility.
         unsafe {
             ShowWindow(hwnd, SW_HIDE);
         }
@@ -312,7 +312,8 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     }
 }
 
-/// Activate the window based on the platform
+/// Restore the window and pull it to the foreground, mirroring the user's
+/// expectation that activating from the tray / hotkey gives focus.
 #[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
@@ -320,9 +321,8 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: The hwnd comes from gpui's live window handle. Calling ShowWindow and
-        // SetForegroundWindow with this handle only changes visibility/focus state and does
-        // not transfer ownership or outlive the window's lifetime in this scope.
+        // SAFETY: see module-level note. Both calls only affect
+        // visibility / focus.
         unsafe {
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
@@ -344,7 +344,8 @@ pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     }
 }
 
-/// Set the window to be always on top
+/// Toggle the always-on-top Z-order on platforms that expose it
+/// (macOS uses the `AppKit` equivalent at the GPUI level instead).
 #[allow(unused_variables)]
 #[cfg(not(target_os = "macos"))]
 pub fn set_always_on_top(window: &Window, pinned: bool) {
@@ -353,10 +354,8 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
-        // SetWindowPos is called with SWP_NOMOVE | SWP_NOSIZE to only change the Z-order
-        // (topmost state) without affecting position or size. The hwnd_insert_after value
-        // is either HWND_TOPMOST or HWND_NOTOPMOST, both of which are valid system constants.
+        // SAFETY: see module-level note. `SWP_NOMOVE | SWP_NOSIZE` keeps
+        // geometry untouched, so this only flips Z-order.
         unsafe {
             use windows_sys::Win32::UI::WindowsAndMessaging::{
                 HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
@@ -375,7 +374,8 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
     }
 }
 
-/// Start dragging the window
+/// Start an OS-managed drag — the only way to move borderless windows on
+/// Windows without re-implementing the entire DWM hit-test loop.
 #[cfg(target_os = "windows")]
 pub fn start_window_drag(window: &Window) {
     use windows_sys::Win32::UI::{
@@ -386,11 +386,8 @@ pub fn start_window_drag(window: &Window) {
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
     {
         let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: The hwnd is obtained from the valid window handle via HasWindowHandle trait.
-        // ReleaseCapture releases any mouse capture and is safe to call even if no capture exists.
-        // PostMessageA posts a WM_NCLBUTTONDOWN message with HTCAPTION to simulate dragging the
-        // window's title bar. This is a standard technique for implementing custom window drag
-        // and is safe as the message is handled by the window manager.
+        // SAFETY: see module-level note. `WM_NCLBUTTONDOWN` + `HTCAPTION`
+        // is the documented "synthesize a title-bar drag" pattern.
         unsafe {
             ReleaseCapture();
             PostMessageA(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
@@ -398,16 +395,15 @@ pub fn start_window_drag(window: &Window) {
     }
 }
 
-/// Config GPUI to run without a dock icon on macOS
+/// Promote the macOS process to "accessory" so we live in the menu bar
+/// only — no Dock tile and no Cmd-Tab entry, matching the tray-app UX.
 #[cfg(target_os = "macos")]
 pub fn set_activation_policy_accessory() {
     use objc2::{class, msg_send, runtime::AnyObject};
-    // SAFETY: NSApplication.sharedApplication returns a valid singleton instance that exists
-    // for the lifetime of the application. setActivationPolicy: with argument 1 (NSApplicationActivationPolicyAccessory)
-    // is a standard API call to configure the app as an accessory (no dock icon, no cmd+tab entry).
-    // The msg_send! macro ensures proper ABI compatibility with Objective-C runtime.
+    // SAFETY: `+[NSApplication sharedApplication]` is the canonical
+    // singleton accessor and lives for the whole process; the only
+    // mutation here is the activation-policy flag (1 = Accessory).
     unsafe {
-        // Config the app to be accessory (no dock icon & cmd tab)
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
     }

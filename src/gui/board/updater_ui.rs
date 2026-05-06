@@ -7,7 +7,6 @@ use crate::{
 };
 
 impl RopyBoard {
-    /// Trigger a manual update check in the background
     pub fn check_for_update_async(&mut self, cx: &mut Context<Self>) {
         self.update_manager.status = UpdateStatus::Checking;
         cx.notify();
@@ -39,7 +38,6 @@ impl RopyBoard {
         .detach();
     }
 
-    /// Trigger download and install in the background with progress updates
     pub fn download_and_install_update(&mut self, cx: &mut Context<Self>) {
         let release = match &self.update_manager.status {
             UpdateStatus::Available(info) => info.clone(),
@@ -48,8 +46,8 @@ impl RopyBoard {
         self.update_manager.status = UpdateStatus::Downloading(0.0);
         cx.notify();
 
-        // Progress channel is still needed because download_and_install reports
-        // incremental progress via an async_channel::Sender<f32>.
+        // download_and_install reports incremental progress via the
+        // sender, so we pair it with a foreground listener below.
         let (progress_tx, progress_rx) = async_channel::unbounded::<f32>();
 
         let download_task = cx.background_spawn(async move {
@@ -57,9 +55,9 @@ impl RopyBoard {
         });
 
         cx.spawn(async move |this, cx| {
-            // Listen for progress updates on the foreground thread and
-            // refresh the UI in real time. The loop exits when the sender
-            // is dropped (download finishes or fails).
+            // Loop exits naturally once the background task drops the
+            // sender (download succeeds or fails), which is what lets us
+            // collect the final result on the next line.
             while let Ok(progress) = progress_rx.recv().await {
                 let _ = this.update(cx, |board, cx| {
                     board.update_manager.status = UpdateStatus::Downloading(progress);
@@ -67,7 +65,6 @@ impl RopyBoard {
                 });
             }
 
-            // Download is done – collect the result and update final status
             let result: Result<(), UpdateError> = download_task.await;
 
             let _ = this.update(cx, |board, cx| {

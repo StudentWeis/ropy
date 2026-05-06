@@ -106,7 +106,9 @@ impl RopyBoard {
         self.sync_filtered_records(cx);
     }
 
-    /// Clear clipboard history
+    /// Wipe everything — including pinned and favorited records — used by
+    /// the "clear all" path. Most callers want
+    /// [`Self::clear_ordinary_history`] instead.
     pub(crate) fn clear_history(&mut self, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
@@ -124,7 +126,7 @@ impl RopyBoard {
         });
     }
 
-    /// Clear only ordinary clipboard history, preserving pinned and favorited records.
+    /// Default "clear history" path: pinned and favorited records survive.
     pub(crate) fn clear_ordinary_history(&mut self, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
@@ -156,13 +158,13 @@ impl RopyBoard {
         self.clear_last_copy_state();
     }
 
-    /// Clear last copy state
+    /// Reset the dedup gate so the next copy — even if identical to the
+    /// just-cleared content — is recaptured by the listener.
     pub(crate) fn clear_last_copy_state(&self) {
         let mut guard = lock_or_recover(&self.last_copy);
         *guard = LastCopyState::Text(String::new());
     }
 
-    /// Delete a single record by ID
     pub fn delete_record(&mut self, id: u64, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
@@ -176,7 +178,6 @@ impl RopyBoard {
         });
     }
 
-    /// Toggle favorite state of a record.
     pub fn toggle_record_favorite(&mut self, id: u64, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
@@ -193,7 +194,6 @@ impl RopyBoard {
         });
     }
 
-    /// Toggle pin state of a record
     pub fn toggle_record_pin(&mut self, id: u64, cx: &Context<Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
@@ -207,7 +207,8 @@ impl RopyBoard {
         });
     }
 
-    /// Toggle the content type filter. Clicking the same filter again resets to All.
+    /// Click-to-toggle behavior: re-clicking the active filter clears it
+    /// (back to `All`) so the same button serves as both apply and reset.
     pub(crate) fn toggle_content_filter(&mut self, target: ContentFilter) {
         if self.content_filter == target {
             self.content_filter = ContentFilter::All;
@@ -216,7 +217,8 @@ impl RopyBoard {
         }
     }
 
-    /// Toggle the favorites-only filter (independent of content type filter).
+    /// Favorites toggle is intentionally orthogonal to the content filter
+    /// so users can scope to e.g. "favorited images only".
     pub(crate) const fn toggle_favorites_only(&mut self) {
         self.favorites_only = !self.favorites_only;
     }
@@ -229,7 +231,6 @@ impl RopyBoard {
         self.search_options.whole_word = !self.search_options.whole_word;
     }
 
-    /// Get filtered records based on search query and content type filter
     pub(super) fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
         let records = read_or_recover(&self.records);
         filter_and_sort_record_indices(

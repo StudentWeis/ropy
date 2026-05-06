@@ -13,13 +13,10 @@ pub fn ensure_single_instance() -> bool {
         .chain(std::iter::once(0))
         .collect();
 
-    // SAFETY: CreateMutexW is called with a valid null pointer for security attributes,
-    // zero for initial owner (not owned), and a null-terminated wide string for the mutex name.
-    // The mutex name is valid UTF-16 with null terminator. GetLastError is safe to call anytime.
-    // FindWindowW is called with a valid null-terminated class name and null window name,
-    // which searches for any window of the specified class. ShowWindow and SetForegroundWindow
-    // are safe to call with any window handle; they may fail silently if the handle is invalid
-    // or the operation is not permitted, but will not cause undefined behavior.
+    // SAFETY: every wide string passed in is null-terminated; window
+    // handles returned by `FindWindowW` are only used while this stack
+    // frame is live, so neither `ShowWindow` nor `SetForegroundWindow`
+    // can outlive them.
     unsafe {
         let mutex = CreateMutexW(std::ptr::null(), 0, wide_name.as_ptr());
         if mutex.is_null() {
@@ -27,7 +24,9 @@ pub fn ensure_single_instance() -> bool {
         }
 
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            // Try to activate existing window
+            // GPUI registers its Win32 windows under the `Zed::Window`
+            // class name; matching that lets us bring the existing
+            // instance to the foreground instead of silently exiting.
             let class_name = OsStr::new("Zed::Window")
                 .encode_wide()
                 .chain(std::iter::once(0))

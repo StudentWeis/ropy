@@ -12,7 +12,6 @@ use gpui_component::{
 use super::{RopyBoard, filtering::ClearConfirmAction};
 use crate::i18n::I18n;
 
-/// Render the clear-all confirmation overlay (backdrop + centered dialog card)
 pub(super) fn render_clear_confirm_overlay(
     action: ClearConfirmAction,
     cx: &Context<'_, RopyBoard>,

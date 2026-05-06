@@ -12,13 +12,14 @@ use super::{
     sidecar::remove_record_sidecars,
 };
 
-/// Allow the repository to grow slightly past the configured limit so cleanup
-/// can batch deletions instead of scanning on every successful save.
+/// Let the repository grow slightly past the configured limit so cleanup can
+/// batch deletions instead of scanning on every successful save.
 const CLEANUP_BUFFER_DIVISOR: usize = 10;
 const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    /// Clear all ordinary records while preserving pinned and favorited ones.
+    /// "Clear history" without losing user-curated records: pinned and
+    /// favorited entries survive.
     pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
@@ -27,9 +28,8 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         self.cleanup_old_records_with_ordinary_total(0, ordinary_total, total, &favorite_ids)
     }
 
-    /// Clean up old records, keeping the most recent `keep_count` records.
-    ///
-    /// Pinned records are never removed.
+    /// Trim ordinary records down to the most recent `keep_count`. Pinned
+    /// entries are skipped so users can't lose deliberately-kept records.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
@@ -42,8 +42,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         )
     }
 
-    /// Clean up old records only after the repository has exceeded the
-    /// configured limit by a small buffer.
+    /// Hot-path variant of [`Self::cleanup_old_records`]: skip the scan
+    /// until ordinary record count exceeds `keep_count` by the buffer, so
+    /// the common save → cleanup pair doesn't pay for an iteration on
+    /// every insert.
     pub fn cleanup_old_records_if_needed(
         &self,
         keep_count: usize,

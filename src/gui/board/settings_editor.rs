@@ -93,7 +93,6 @@ impl UpdateManager {
     }
 }
 
-/// Build the window opacity slider and subscribe to its change events.
 pub(super) fn build_window_opacity_slider(
     opacity_percent: u8,
     window: &Window,
@@ -152,7 +151,6 @@ pub(super) fn sync_layout_select_items(
     });
 }
 
-/// Build the layout select dropdown and subscribe to its change events.
 pub(super) fn build_layout_select(
     selected_layout: usize,
     window: &mut Window,
@@ -187,7 +185,6 @@ pub(super) fn build_layout_select(
     layout_select
 }
 
-/// Build the theme select dropdown and subscribe to its change events.
 pub(super) fn build_theme_select(
     selected_theme: usize,
     window: &mut Window,
@@ -226,7 +223,6 @@ pub(super) fn build_theme_select(
     theme_select
 }
 
-/// Build the language select dropdown and subscribe to its change events.
 pub(super) fn build_language_select(
     selected_language: usize,
     window: &mut Window,

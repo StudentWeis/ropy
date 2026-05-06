@@ -12,7 +12,6 @@ use super::{
 };
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    /// Return all favorite record IDs.
     pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut ids = Vec::new();
 
@@ -27,9 +26,9 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(ids)
     }
 
-    /// Toggle the favorite state of a record.
-    ///
-    /// Returns the new favorite state after the operation.
+    /// Flip favorite state and return the new value. Errors if the target
+    /// record no longer exists, so the favorites tree can't accumulate
+    /// dangling pointers.
     pub fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
         if self.get_by_id(id)?.is_none() {
             return Err(RepositoryError::Query("record not found".to_string()));
@@ -46,13 +45,13 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(true)
     }
 
-    /// Remove a record from favorites.
     pub(super) fn remove_favorite(&self, id: u64) -> Result<(), RepositoryError> {
         self.favorites.remove(&id.to_be_bytes())?;
         Ok(())
     }
 
-    /// Collect all favorite IDs into a `HashSet`, filtering out stale entries.
+    /// Live favorites only: drop ids whose backing record was deleted, so
+    /// callers (cleanup, board rendering) never act on stale favorites.
     pub(super) fn favorite_id_set(&self) -> Result<HashSet<u64>, RepositoryError> {
         let mut favorite_ids = HashSet::new();
 

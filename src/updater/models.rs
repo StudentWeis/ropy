@@ -1,8 +1,9 @@
-//! Data models for auto-update
+//! Data models for auto-update.
 
 use serde::Deserialize;
 
-/// A GitHub Release as returned by the API
+/// Subset of GitHub's Release JSON we actually consume — extra fields are
+/// ignored so upstream additions can't break deserialization.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GitHubRelease {
     pub tag_name: String,
@@ -10,7 +11,6 @@ pub struct GitHubRelease {
     pub assets: Vec<GitHubAsset>,
 }
 
-/// A single asset attached to a GitHub Release
 #[derive(Debug, Clone, Deserialize)]
 pub struct GitHubAsset {
     pub name: String,
@@ -18,7 +18,8 @@ pub struct GitHubAsset {
     pub size: u64,
 }
 
-/// Parsed release information ready for display / download
+/// Release information already resolved to the current target triple, ready
+/// for the UI and the downloader without re-parsing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReleaseInfo {
     pub version: String,
@@ -28,22 +29,18 @@ pub struct ReleaseInfo {
     pub asset_size: u64,
 }
 
-/// Current state of the update lifecycle, shared with the UI
+/// Update lifecycle state shared with the UI as a `Global`. Variants are
+/// observable, hence `PartialEq` for cheap change detection.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UpdateStatus {
-    /// No check has been performed yet
     Idle,
-    /// A version check is in progress
     Checking,
-    /// A newer version is available
     Available(ReleaseInfo),
-    /// The running version is the latest
     UpToDate,
-    /// Downloading the new binary (progress 0.0 – 1.0)
+    /// Download progress in `0.0..=1.0`.
     Downloading(f32),
-    /// The new binary has been written; a restart is needed
+    /// New binary is on disk; user-initiated restart is required to apply it.
     ReadyToRestart,
-    /// An error occurred
     Error(String),
 }
 

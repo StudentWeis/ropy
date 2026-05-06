@@ -12,16 +12,13 @@ use crate::{
 
 mod validate;
 
-/// Default maximum number of records to display in the UI
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
-/// Default maximum number of records to store in the repository
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
-/// Minimum supported window opacity percentage.
+/// 40% is the lowest opacity that still keeps text legible during testing;
+/// going lower made the UI effectively unusable.
 const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
-/// Maximum supported window opacity percentage.
 const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
-/// Application settings structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
     pub hotkey: HotkeySettings,
@@ -37,19 +34,20 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// Get the configuration directory path
     pub fn config_dir() -> Result<PathBuf, ConfigError> {
         dirs::config_dir()
             .map(|dir| dir.join("ropy"))
             .ok_or_else(|| ConfigError::NotFound("Config directory not found".to_string()))
     }
 
-    /// Get the configuration file path
     pub fn config_file() -> Result<PathBuf, ConfigError> {
         Ok(Self::config_dir()?.join("config.toml"))
     }
 
-    /// Load settings from configuration file and environment variables
+    /// Load settings, layering the on-disk `config.toml` over the
+    /// `Default` instance so partial files keep working across upgrades,
+    /// and clamping each value group via [`validate`] so out-of-range
+    /// values on disk can't propagate into the running app.
     pub fn load() -> Result<Self, ConfigError> {
         let config_dir = Self::config_dir()?;
         let config_file = config_dir.join("config");
@@ -81,7 +79,6 @@ impl Settings {
         Ok(settings)
     }
 
-    /// Save settings to configuration file
     pub fn save(&self) -> Result<(), ConfigError> {
         let config_file = Self::config_file()?;
         let toml_string =
@@ -135,13 +132,13 @@ pub struct LayoutSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConfirmSettings {
-    /// Behavior when confirming a record from the board
     pub mode: ConfirmMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowSettings {
-    /// Window opacity percentage in the settings UI (40 - 100).
+    /// Allowed range is [`MIN_OPACITY_PERCENT`..=`MAX_OPACITY_PERCENT`];
+    /// values outside that band are clamped at load time.
     pub opacity_percent: u8,
 }
 
@@ -166,7 +163,8 @@ impl WindowSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeySettings {
-    /// Global hotkey to activate clipboard manager (e.g., "`cmd+shift+v`")
+    /// `+`-separated chord parsed by `global_hotkey` (e.g. `cmd+shift+v`).
+    /// Invalid values are reset to the default by [`validate_hotkey`].
     pub activation_key: String,
 }
 
@@ -183,10 +181,13 @@ impl Default for HotkeySettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageSettings {
-    /// Maximum number of records to display in the UI (1 - 10,000)
+    /// Soft cap on records visible in the board (1 – 10,000). Records past
+    /// this point are kept on disk but hidden until older entries are
+    /// pinned / cleared.
     pub max_history_records: usize,
-    /// Maximum number of records to store in the repository (1 - 100,000)
-    /// Must be >= `max_history_records`
+    /// Hard cap before cleanup deletes records (1 – 100,000). Validation
+    /// ensures `max_storage_records >= max_history_records` so the
+    /// visible window can always be filled.
     pub max_storage_records: usize,
 }
 
@@ -201,15 +202,12 @@ impl Default for StorageSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AutoStartSettings {
-    /// Whether to enable auto-launch at system startup
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateSettings {
-    /// Whether to automatically check for updates on startup
     pub auto_check: bool,
-    /// Whether to include pre-release versions
     pub include_prerelease: bool,
 }
 
@@ -224,7 +222,6 @@ impl Default for UpdateSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PreviewSettings {
-    /// Whether to enable hover preview for clipboard items
     pub hover_preview_enabled: bool,
 }
 
@@ -239,7 +236,8 @@ impl Default for PreviewSettings {
 impl Global for Settings {}
 
 impl Settings {
-    /// Read a value from the global settings via a closure.
+    /// Closure-style accessor to the global instance — keeps call sites
+    /// from holding a borrow of `cx` longer than the field they need.
     pub fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
         reader(Self::global(cx))
     }

@@ -4,14 +4,17 @@ use rust_embed::RustEmbed;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-/// Embedded theme TOML files from `assets/themes/`.
+/// Bundled theme TOML files. Adding a `<id>.toml` under `assets/themes/`
+/// is enough to make the theme selectable — no Rust code change required.
 #[derive(RustEmbed)]
 #[folder = "assets/themes"]
 struct ThemeAssets;
 
 static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 
-/// A theme identified by its file name (without `.toml`).
+/// Theme identifier — the bundle file name without the `.toml` suffix.
+/// Serialized transparently as the raw string so existing `config.toml`
+/// values keep working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct ThemeId(String);
@@ -57,7 +60,8 @@ impl<'de> Deserialize<'de> for ThemeId {
     }
 }
 
-/// Base appearance mode required by `gpui-component`.
+/// Appearance hint required by `gpui-component`'s theme runtime so it can
+/// pick the right base styles before our palette is layered on top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
@@ -65,7 +69,6 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// A theme definition loaded from a bundled TOML file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemeDefinition {
     id: ThemeId,
@@ -194,7 +197,7 @@ impl ThemeDefinition {
     }
 }
 
-/// Palette values applied to `gpui-component::theme::Theme`.
+/// Palette values copied into `gpui-component::theme::Theme` at apply time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemePalette {
     pub background: u32,

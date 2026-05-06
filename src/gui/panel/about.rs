@@ -18,13 +18,8 @@ use crate::{
     updater::models::UpdateStatus,
 };
 
-/// GitHub repository URL for the application.
-const GITHUB_URL: &str = "https://github.com/StudentWeis/ropy";
-
-/// MIT License URL for the application.
 const LICENSE_URL: &str = "https://github.com/StudentWeis/ropy/blob/main/LICENSE";
-
-/// Xiaohongshu profile URL for the application.
+const GITHUB_URL: &str = "https://github.com/StudentWeis/ropy";
 const XIAOHONGSHU_URL: &str = "https://xhslink.com/m/Ar6O3JkYc0X";
 
 fn render_social_link_button(
@@ -44,7 +39,6 @@ fn render_social_link_button(
     )
 }
 
-/// Render the about panel content
 pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let version = env!("CARGO_PKG_VERSION");
 
@@ -127,7 +121,6 @@ pub fn render_about_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl 
     )
 }
 
-/// Render the update section with status and action button.
 fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let status_text: gpui::SharedString = match &board.update_manager.status {
         UpdateStatus::Idle => I18n::translate(cx, "update_check_now").into(),
@@ -147,7 +140,9 @@ fn render_update_section(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl Int
         .into(),
         UpdateStatus::ReadyToRestart => I18n::translate(cx, "update_restart").into(),
         UpdateStatus::Error(msg) => {
-            // Map technical error messages to user-friendly descriptions
+            // Surface a localized "network problem" hint for the most common
+            // class of update failures so users aren't shown raw curl /
+            // TLS errors.
             let friendly_msg = if msg.contains("curl")
                 || msg.contains("SSL")
                 || msg.contains("HTTP request failed")
