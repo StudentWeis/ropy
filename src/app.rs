@@ -7,14 +7,14 @@
 //! can focus solely on rendering.
 
 use std::{
-    cfg_select,
+    cfg_select, env,
     sync::{Arc, Mutex},
 };
 
 use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 #[cfg(target_os = "linux")]
-use {crate::gui::x11::X11, std::env, std::sync::OnceLock};
+use {crate::gui::x11::X11, std::sync::OnceLock};
 
 use crate::{
     clipboard::{self, ClipboardEvent, LastCopyState},
@@ -258,7 +258,7 @@ fn is_silent_launch(args: &[String]) -> bool {
 
 /// Entry point: initialize all subsystems and launch the application.
 pub(crate) fn launch() {
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = env::args().collect();
     let is_silent = is_silent_launch(&args);
 
     gpui::Application::new()

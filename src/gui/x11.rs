@@ -9,6 +9,7 @@ use x11rb::{
 
 const ACTIVE_WINDOW_POLL_INTERVAL_MS: u64 = 10;
 
+#[derive(Debug)]
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
@@ -150,7 +151,7 @@ impl X11 {
         Ok(())
     }
 
-    fn wait_actvate_window(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn wait_actvate_window(&self) -> Result<(), Box<dyn Error>> {
         loop {
             let prop = self
                 .connection
