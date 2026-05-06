@@ -127,8 +127,16 @@ fn calculate_activation_window_geometry(
     } else {
         1.0
     };
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "physical pixel sizes fit in i32 on every supported platform"
+    )]
     let client_width =
         ((Into::<f32>::into(logical_size.width) * scale_factor).round() as i32).max(1);
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "physical pixel sizes fit in i32 on every supported platform"
+    )]
     let client_height =
         ((Into::<f32>::into(logical_size.height) * scale_factor).round() as i32).max(1);
     let width = client_width + frame_extents.left + frame_extents.right;

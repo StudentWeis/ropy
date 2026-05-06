@@ -8,6 +8,12 @@ use crate::{
 };
 
 pub(super) const GRID_COLUMN_COUNT: usize = 2;
+// Mirror constant in `f32` form so masonry layout math avoids per-call casts.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "GRID_COLUMN_COUNT is a tiny compile-time literal"
+)]
+pub(super) const GRID_COLUMN_COUNT_F32: f32 = GRID_COLUMN_COUNT as f32;
 pub(super) const GRID_CONTENT_PREVIEW_LIMIT: usize = 96;
 pub(super) const GRID_CONTENT_PREVIEW_MAX_LINES: usize = 4;
 pub(super) const GRID_CARD_MIN_HEIGHT: f32 = 96.0;
@@ -126,9 +132,15 @@ fn estimated_wrapped_line_count(content: &str, max_lines: usize) -> usize {
             if line.is_empty() {
                 1
             } else {
-                (estimated_text_units(line) / GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS)
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = ".max(1.0) keeps the value in [1.0, max_lines), well within usize"
+                )]
+                let lines = (estimated_text_units(line) / GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS)
                     .ceil()
-                    .max(1.0) as usize
+                    .max(1.0) as usize;
+                lines
             }
         })
         .sum::<usize>();
@@ -148,10 +160,13 @@ pub(super) fn estimated_grid_text_lines(content: &str) -> usize {
 }
 
 pub(super) fn estimated_grid_color_body_height(content: &str) -> f32 {
-    GRID_ESTIMATED_TEXT_LINE_HEIGHT.mul_add(
-        estimated_grid_text_lines(content) as f32,
-        GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP,
-    )
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
+    )]
+    let line_count = estimated_grid_text_lines(content) as f32;
+    GRID_ESTIMATED_TEXT_LINE_HEIGHT
+        .mul_add(line_count, GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP)
 }
 
 pub(super) fn file_display_name(path: &str) -> String {
@@ -195,14 +210,24 @@ pub(super) fn estimated_grid_card_height(record: &ClipboardRecord) -> f32 {
             if parse_clipboard_color(&record.content).is_some() {
                 estimated_grid_color_body_height(&record.content)
             } else {
-                estimated_grid_text_lines(&record.content) as f32 * GRID_ESTIMATED_TEXT_LINE_HEIGHT
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
+                )]
+                let lines = estimated_grid_text_lines(&record.content) as f32;
+                lines * GRID_ESTIMATED_TEXT_LINE_HEIGHT
             }
         }
         ContentType::Image => GRID_IMAGE_MAX_HEIGHT,
-        ContentType::FilePath => GRID_ESTIMATED_FILE_DETAIL_LINE_HEIGHT.mul_add(
-            estimated_grid_file_detail_lines(&record.content) as f32,
-            GRID_ESTIMATED_FILE_TITLE_HEIGHT,
-        ),
+        ContentType::FilePath => {
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "detail line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES - 1"
+            )]
+            let detail_lines = estimated_grid_file_detail_lines(&record.content) as f32;
+            GRID_ESTIMATED_FILE_DETAIL_LINE_HEIGHT
+                .mul_add(detail_lines, GRID_ESTIMATED_FILE_TITLE_HEIGHT)
+        }
     };
 
     (GRID_ESTIMATED_CARD_CHROME_HEIGHT + body_height)
@@ -287,10 +312,13 @@ mod tests {
     #[test]
     fn test_estimated_grid_color_body_height_adds_large_swatch_space() {
         let content = "#A1B2C3";
-        let expected = GRID_ESTIMATED_TEXT_LINE_HEIGHT.mul_add(
-            estimated_grid_text_lines(content) as f32,
-            GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP,
-        );
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
+        )]
+        let lines = estimated_grid_text_lines(content) as f32;
+        let expected = GRID_ESTIMATED_TEXT_LINE_HEIGHT
+            .mul_add(lines, GRID_COLOR_SWATCH_HEIGHT + GRID_COLOR_SWATCH_GAP);
 
         assert!((estimated_grid_color_body_height(content) - expected).abs() < f32::EPSILON);
     }

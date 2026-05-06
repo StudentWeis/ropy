@@ -206,7 +206,13 @@ fn parse_alpha(value: &str) -> Option<u8> {
         return None;
     }
 
-    Some((alpha * 255.0).round() as u8)
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "guard above pins alpha to [0.0, 1.0] so the scaled value fits in u8"
+    )]
+    let byte = (alpha * 255.0).round() as u8;
+    Some(byte)
 }
 
 fn hsl_to_rgb(hue: f32, saturation: f32, lightness: f32) -> (u8, u8, u8) {
@@ -237,6 +243,11 @@ fn hsl_to_rgb(hue: f32, saturation: f32, lightness: f32) -> (u8, u8, u8) {
     )
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "clamp(0.0, 1.0) keeps the scaled value in [0.0, 255.0]"
+)]
 fn float_channel_to_u8(value: f32) -> u8 {
     (value.clamp(0.0, 1.0) * 255.0).round() as u8
 }

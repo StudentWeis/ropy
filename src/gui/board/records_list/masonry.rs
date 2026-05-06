@@ -7,7 +7,7 @@ use gpui_component::scroll::{Scrollbar, ScrollbarShow};
 
 use super::{
     SCROLLBAR_OVERLAY_RIGHT_OFFSET,
-    metrics::{GRID_COLUMN_COUNT, estimated_grid_card_height},
+    metrics::{GRID_COLUMN_COUNT, GRID_COLUMN_COUNT_F32, estimated_grid_card_height},
     row::{RecordsListState, render_list_item_with_grid_height},
 };
 use crate::utils::read_or_recover;
@@ -54,6 +54,10 @@ fn build_masonry_layout(
             .map_or(0, |(column, _)| column);
 
         let top = column_heights[column];
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "column index is bounded by column_count (typically 2-4)"
+        )]
         let left = column as f32 * (column_width + column_gap);
         column_heights[column] += height + row_gap;
 
@@ -83,7 +87,7 @@ pub(super) fn grid_available_width(window: &Window) -> gpui::Pixels {
 }
 
 fn grid_card_width(available_width: gpui::Pixels) -> gpui::Pixels {
-    ((available_width - px(GRID_COLUMN_GAP)) / GRID_COLUMN_COUNT as f32).max(px(1.0))
+    ((available_width - px(GRID_COLUMN_GAP)) / GRID_COLUMN_COUNT_F32).max(px(1.0))
 }
 
 fn masonry_visible_window(scroll_handle: &ScrollHandle, window: &Window) -> (f32, f32) {

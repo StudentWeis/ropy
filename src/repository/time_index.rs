@@ -232,6 +232,12 @@ impl<T: KvTree> TimeIndex<T> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    reason = "test fixtures use small loop indices that fit in any integer width"
+)]
 mod tests {
     use std::collections::HashSet;
 

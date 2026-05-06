@@ -20,7 +20,7 @@ pub struct GitHubAsset {
 
 /// Release information already resolved to the current target triple, ready
 /// for the UI and the downloader without re-parsing.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseInfo {
     pub version: String,
     pub release_notes: String,

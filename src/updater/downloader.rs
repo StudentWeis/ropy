@@ -109,6 +109,10 @@ fn download_file(
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(UpdateError::Io)?;
         downloaded += n as u64;
         if total_size > 0 {
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "download progress only needs sub-percent accuracy"
+            )]
             let progress = downloaded as f32 / total_size as f32;
             let _ = progress_tx.send_blocking(progress);
         }
