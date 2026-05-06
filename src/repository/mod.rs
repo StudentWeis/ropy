@@ -12,8 +12,11 @@ pub mod memory_backend;
 pub mod models;
 pub mod redb_backend;
 pub mod repo;
+mod sidecar;
 #[cfg(test)]
 mod test_helpers;
+#[cfg(test)]
+mod tests;
 mod time_index;
 
 pub use models::{ClipboardRecord, ContentType, RichTextMeta, SharedRecords};

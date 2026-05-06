@@ -9,6 +9,7 @@ use super::{
     models::ClipboardRecord,
     redb_backend::RedbBackend,
     repo::ClipboardRepository,
+    sidecar::remove_record_sidecars,
 };
 
 /// Allow the repository to grow slightly past the configured limit so cleanup
@@ -90,7 +91,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             if let Some(value) = self.get_raw(&rec_key)?
                 && let Ok(record) = postcard::from_bytes::<ClipboardRecord>(&value)
             {
-                Self::remove_record_sidecars(&record);
+                remove_record_sidecars(&record);
             }
             self.records.remove(&rec_key)?;
             self.time_index.remove_raw(&ti_key)?;
