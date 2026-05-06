@@ -11,7 +11,7 @@
 - Build new UI components using `gpui-component`.
 - Run `scripts/precheck.sh` before committing to verify code quality and formatting.
 - Localize all user-facing strings — no hardcoded display text in source files.
-- Follow the guidelines in [Testing](./doc/TESTING.md) for test structure, naming, and coverage expectations.
+- Follow the guidelines in [Testing](./docs/TESTING.md) for test structure, naming, and coverage expectations.
 
 ## AI Collaboration Workflow
 

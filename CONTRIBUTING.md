@@ -1,6 +1,6 @@
 # Contributing to Ropy
 
-English | [简体中文](./doc/CONTRIBUTING/CONTRIBUTING_ZH.md)
+English | [简体中文](./docs/CONTRIBUTING/CONTRIBUTING_ZH.md)
 
 Thank you for considering contributing to Ropy! This document will guide you through adding new themes and language support to the project.
 
@@ -168,7 +168,7 @@ Refer to existing language files:
 
 ## Testing
 
-See the [Testing Documentation](./doc/TESTING.md) for guidelines on writing and running tests.
+See the [Testing Documentation](./docs/TESTING.md) for guidelines on writing and running tests.
 
 ## Submitting Changes
 
@@ -182,4 +182,4 @@ Thank you for your contribution!
 
 ---
 
-**Other Languages**: [简体中文](./doc/CONTRIBUTING/CONTRIBUTING_ZH.md)
+**Other Languages**: [简体中文](./docs/CONTRIBUTING/CONTRIBUTING_ZH.md)

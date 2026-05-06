@@ -13,7 +13,7 @@
 
 <p align="center">Cross-platform, lightweight clipboard manager written in Rust and GPUI.</p>
 
-<p align="center">English | <a href="doc/README/README_ZH.md">简体中文</a></p>
+<p align="center">English | <a href="docs/README/README_ZH.md">简体中文</a></p>
 
 <p align="center">
 <img src="https://www.imgur.la/images/2026/04/08/pic_1775632236468.png" alt="Ropy" width="80%">

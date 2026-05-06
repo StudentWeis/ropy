@@ -88,7 +88,8 @@ serial_test = "3.4.0"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-# cargo = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
 allow_attributes = "warn"
 dbg_macro = "warn"
 todo = "warn"

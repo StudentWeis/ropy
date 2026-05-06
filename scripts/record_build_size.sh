@@ -15,7 +15,7 @@ fi
 
 $CARGO_CMD build --release
 
-CSV_FILE="doc/data/build_sizes.csv"
+CSV_FILE="docs/data/build_sizes.csv"
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
