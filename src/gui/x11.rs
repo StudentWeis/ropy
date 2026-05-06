@@ -27,6 +27,7 @@ impl std::fmt::Debug for X11 {
     }
 }
 
+#[allow(clippy::missing_errors_doc)]
 impl X11 {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
