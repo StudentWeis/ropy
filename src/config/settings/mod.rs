@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_confirm_mode_serialization() {
         let toml = toml::to_string(&ConfirmSettings {
             mode: ConfirmMode::PasteImmediately,
@@ -394,7 +394,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_validate_hotkey_invalid() {
         let mut settings = Settings::default();
         settings.hotkey.activation_key = "not+a+valid+hotkey".to_string();
@@ -410,7 +409,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_validate_hotkey_gibberish() {
         let mut settings = Settings::default();
         settings.hotkey.activation_key = "@@@###".to_string();
@@ -511,7 +509,7 @@ max_history_records = 100
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_layout_mode_serialization_round_trip() {
         let mut settings = Settings::default();
         settings.layout.mode = LayoutMode::Grid;
@@ -641,7 +639,7 @@ max_history_records = 100
     // ── Language Tests ────────────────────────────────────────────
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_settings_language_round_trip() {
         let mut settings = Settings::default();
 
@@ -657,7 +655,7 @@ max_history_records = 100
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_settings_theme_round_trip() {
         let mut settings = Settings::default();
         let themes = vec!["ropy-light", "ropy-dark", "custom-theme"];
@@ -673,7 +671,7 @@ max_history_records = 100
     // ── Integration-style Tests ───────────────────────────────────
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_settings_serialization_format() {
         let settings = Settings::default();
         let toml = toml::to_string_pretty(&settings).unwrap();
@@ -693,7 +691,6 @@ max_history_records = 100
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_settings_clone() {
         let settings = Settings::default();
         let cloned = settings.clone();

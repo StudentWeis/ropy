@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_translations_from_toml() {
         let content = r#"
             show = "Show"
@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_missing_translation() {
         let content = r#"
             foo = "bar"
@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_i18n_initialization() {
         let i18n = I18n::new(Language::new("en"));
         assert!(i18n.is_ok());
@@ -150,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_i18n_language_switch() {
         let mut i18n = I18n::new(Language::new("en")).unwrap();
         assert_eq!(i18n.t("tray_show"), "Show");
@@ -177,7 +177,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_unknown_language_fallback() {
         // An unknown locale should fall back to the first available locale
         let i18n = I18n::new(Language::new("xx-UNKNOWN"));

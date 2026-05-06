@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::panic))]
+
 use std::collections::HashSet;
 
 use chrono::{Local, TimeZone};

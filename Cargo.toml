@@ -88,6 +88,11 @@ serial_test = "3.4.0"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+# cargo = { level = "warn", priority = -1 }
+allow_attributes = "warn"
+dbg_macro = "warn"
+todo = "warn"
+panic = "warn"
 unwrap_used = "warn"
 expect_used = "warn"
 print_stdout = "warn"

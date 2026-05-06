@@ -73,7 +73,7 @@ pub(super) const fn search_query_should_reveal_selection(
 }
 
 /// `RopyBoard` Main Window Component
-#[allow(clippy::struct_excessive_bools)]
+#[expect(clippy::struct_excessive_bools)]
 pub struct RopyBoard {
     pub(crate) records: SharedRecords,
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
@@ -168,7 +168,7 @@ impl RopyBoard {
         }
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)]
+    #[expect(clippy::needless_pass_by_ref_mut)]
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.active_panel = ActivePanel::Settings;
         self.settings_editor.settings_window_opacity_slider_visible = false;
@@ -201,7 +201,7 @@ impl RopyBoard {
             });
     }
 
-    #[allow(unused_variables, clippy::missing_const_for_fn)]
+    #[expect(unused_variables, clippy::missing_const_for_fn)]
     pub(crate) fn set_window_pinned(&mut self, window: &Window, pinned: bool) {
         self.pinned = Self::resolve_window_pin_state(self.confirm_mode, pinned);
         #[cfg(not(target_os = "macos"))]
@@ -232,7 +232,7 @@ impl RopyBoard {
         crate::gui::tray::TrayState::refresh_menu(cx);
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     pub fn new(
         records: SharedRecords,
         last_copy: Arc<Mutex<LastCopyState>>,

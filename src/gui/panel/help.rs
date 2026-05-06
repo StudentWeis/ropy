@@ -90,7 +90,6 @@ const SHORTCUTS: &[ShortcutRow] = &[
     },
 ];
 
-#[allow(clippy::too_many_lines)]
 pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = panel_header_with_back(
         I18n::translate(cx, "help_title"),

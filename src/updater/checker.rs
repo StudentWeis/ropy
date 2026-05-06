@@ -111,21 +111,21 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_plain() {
         let v = parse_version("1.2.3").unwrap();
         assert_eq!(v, Version::new(1, 2, 3));
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_with_v_prefix() {
         let v = parse_version("v0.2.1").unwrap();
         assert_eq!(v, Version::new(0, 2, 1));
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_prerelease() {
         let v = parse_version("v0.3.0-beta").unwrap();
         assert!(!v.pre.is_empty());
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_case_insensitive_v_prefix() {
         // Both 'v' and 'V' should work
         let v1 = parse_version("v1.2.3").unwrap();
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_with_build_metadata() {
         let v = parse_version("1.2.3+build.123").unwrap();
         assert_eq!(v.major, 1);
@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_parse_version_complex_prerelease() {
         let v = parse_version("1.0.0-alpha.1+build.123").unwrap();
         assert_eq!(v.major, 1);

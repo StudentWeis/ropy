@@ -42,6 +42,7 @@ impl ClipboardRepository<RedbBackend> {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic)]
 mod tests {
     use std::cmp::Ordering;
 

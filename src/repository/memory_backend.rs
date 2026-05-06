@@ -46,7 +46,7 @@ impl StorageBackend for MemoryBackend {
     }
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)]
 pub fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
     Ok(MemoryBackend::new())
 }

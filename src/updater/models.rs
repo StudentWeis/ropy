@@ -49,7 +49,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_github_release_deserialize_when_valid_json_parses_assets() {
         let release: GitHubRelease = serde_json::from_str(
             r#"{

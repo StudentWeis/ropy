@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used, clippy::panic))]
 //! Tests for deduplication, cleanup, favorites, delete, and clear.
 
 use std::{thread, time::Duration};

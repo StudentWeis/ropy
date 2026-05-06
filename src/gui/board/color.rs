@@ -206,7 +206,7 @@ fn parse_alpha(value: &str) -> Option<u8> {
         return None;
     }
 
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "guard above pins alpha to [0.0, 1.0] so the scaled value fits in u8"
@@ -243,7 +243,7 @@ fn hsl_to_rgb(hue: f32, saturation: f32, lightness: f32) -> (u8, u8, u8) {
     )
 }
 
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "clamp(0.0, 1.0) keeps the scaled value in [0.0, 255.0]"

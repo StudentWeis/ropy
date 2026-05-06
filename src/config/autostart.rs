@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     #[serial(autostart)]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_get_app_path() {
         let path = AutoStartManager::get_app_path();
         assert!(path.is_ok());

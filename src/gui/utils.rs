@@ -127,13 +127,13 @@ fn calculate_activation_window_geometry(
     } else {
         1.0
     };
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "physical pixel sizes fit in i32 on every supported platform"
     )]
     let client_width =
         ((Into::<f32>::into(logical_size.width) * scale_factor).round() as i32).max(1);
-    #[allow(
+    #[expect(
         clippy::cast_possible_truncation,
         reason = "physical pixel sizes fit in i32 on every supported platform"
     )]
@@ -271,7 +271,6 @@ fn reset_window_geometry_with_current_monitor_dpi(
     }
 }
 
-#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn reset_window_geometry_for_activation(window: &mut Window, logical_size: Size<Pixels>) {
     #[cfg(target_os = "windows")]
     if let Ok(window_handle) = HasWindowHandle::window_handle(window)
@@ -289,7 +288,7 @@ pub fn reset_window_geometry_for_activation(window: &mut Window, logical_size: S
 
 /// Hide (without destroying) the active window using the platform-native
 /// path so subsequent `active_window` calls can restore it.
-#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
+#[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
     if pinned {
         return;
@@ -322,7 +321,7 @@ pub fn hide_window<T>(window: &mut Window, cx: &Context<T>, pinned: bool) {
 
 /// Restore the window and pull it to the foreground, mirroring the user's
 /// expectation that activating from the tray / hotkey gives focus.
-#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
+#[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
 pub fn active_window<T>(window: &mut Window, cx: &Context<T>) {
     #[cfg(target_os = "windows")]
     if let Ok(window_handle) = HasWindowHandle::window_handle(window)
@@ -418,6 +417,7 @@ pub fn set_activation_policy_accessory() {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic)]
 mod tests {
     use std::{sync::mpsc, time::Duration};
 

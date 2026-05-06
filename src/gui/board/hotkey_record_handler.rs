@@ -260,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_keystroke_to_hotkey_control_shift_letter_round_trips() {
         let mut modifiers = Modifiers::none();
         modifiers.control = true;
@@ -272,7 +272,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_keystroke_to_hotkey_command_shift_letter_round_trips() {
         let mut modifiers = Modifiers::none();
         modifiers.platform = true;

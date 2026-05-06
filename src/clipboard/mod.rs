@@ -121,13 +121,13 @@ pub enum LastCopyState {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic, clippy::unwrap_used)]
 mod tests {
     use std::{sync::mpsc, time::Duration};
 
     use super::*;
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_copy_request_text_constructor_sets_text_without_completion() {
         let request = CopyRequest::text("hello".to_string());
 
@@ -145,7 +145,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_copy_request_text_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let request = CopyRequest::text_with_completion("hello".to_string(), completion_tx);
@@ -166,7 +165,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_copy_request_image_constructor_sets_path_without_completion() {
         let request = CopyRequest::image("/tmp/example.png".to_string());
 
@@ -182,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_copy_request_image_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let request =
@@ -217,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_copy_request_files_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let request =
@@ -263,7 +261,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_copy_request_rich_text_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let request = CopyRequest::rich_text_with_completion(

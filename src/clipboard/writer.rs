@@ -154,7 +154,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_load_image_from_path_when_png_exists_returns_decoded_image() {
         let temp_dir = tempfile::tempdir().unwrap();
         let image_path = temp_dir.path().join("test.png");
@@ -176,7 +176,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
     fn test_notify_completion_when_sender_exists_sends_signal() {
         let (completion_tx, completion_rx) = mpsc::channel();
 

@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used, clippy::panic))]
 //! Lightweight secondary index keyed by timestamp for efficient
 //! chronological queries without full record deserialization.
 //!
@@ -232,10 +232,8 @@ impl<T: KvTree> TimeIndex<T> {
 }
 
 #[cfg(test)]
-#[allow(
+#[expect(
     clippy::cast_sign_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
     reason = "test fixtures use small loop indices that fit in any integer width"
 )]
 mod tests {

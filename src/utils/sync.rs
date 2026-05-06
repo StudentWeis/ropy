@@ -22,7 +22,7 @@ pub fn write_or_recover<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
 }
 
 #[cfg(test)]
-#[allow(clippy::significant_drop_tightening)]
+#[expect(clippy::significant_drop_tightening, clippy::panic)]
 mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 

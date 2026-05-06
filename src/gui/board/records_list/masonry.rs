@@ -54,7 +54,7 @@ fn build_masonry_layout(
             .map_or(0, |(column, _)| column);
 
         let top = column_heights[column];
-        #[allow(
+        #[expect(
             clippy::cast_precision_loss,
             reason = "column index is bounded by column_count (typically 2-4)"
         )]

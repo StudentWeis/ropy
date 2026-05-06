@@ -266,7 +266,7 @@ impl ItemStyle {
     }
 }
 
-#[allow(clippy::struct_excessive_bools)]
+#[expect(clippy::struct_excessive_bools)]
 pub(super) struct RenderContext<'a> {
     index: usize,
     record: &'a ClipboardRecord,

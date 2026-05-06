@@ -270,6 +270,7 @@ fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic)]
 mod tests {
     use rstest::rstest;
 

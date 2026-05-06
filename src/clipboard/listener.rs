@@ -304,7 +304,7 @@ pub fn start_clipboard_monitor(
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::unwrap_used)]
+#[expect(clippy::expect_used)]
 mod tests {
     use rstest::rstest;
 

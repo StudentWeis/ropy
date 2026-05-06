@@ -109,7 +109,7 @@ fn download_file(
         std::io::Write::write_all(&mut file, &buf[..n]).map_err(UpdateError::Io)?;
         downloaded += n as u64;
         if total_size > 0 {
-            #[allow(
+            #[expect(
                 clippy::cast_precision_loss,
                 reason = "download progress only needs sub-percent accuracy"
             )]
@@ -268,7 +268,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_verify_checksum_format_parsing() {
         // Simulate a cargo-dist style checksum line
         let line = "abcdef1234567890  ropy-aarch64-apple-darwin.tar.xz\n";
@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_find_binary_in_dir() {
         let tmp = tempfile::tempdir().unwrap();
         let bin_path = tmp.path().join("ropy");
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_find_binary_in_nested_dir() {
         let tmp = tempfile::tempdir().unwrap();
         let nested = tmp.path().join("ropy-aarch64-apple-darwin");
@@ -301,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_find_binary_missing() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("readme.txt"), b"hi").unwrap();
@@ -311,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
+    #[expect(clippy::unwrap_used)]
     fn test_compute_sha256_hex_reads_file_content_expected() {
         let tmp = tempfile::tempdir().unwrap();
         let asset_path = tmp.path().join("asset.bin");
@@ -326,8 +326,8 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::unwrap_used)]
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::unwrap_used)]
+    #[expect(clippy::float_cmp)]
     fn test_progress_channel_send_blocking_delivers_values() {
         let (sender, receiver) = async_channel::unbounded::<f32>();
 

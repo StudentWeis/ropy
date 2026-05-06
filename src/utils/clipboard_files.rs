@@ -68,6 +68,7 @@ pub fn hash_file_paths(paths: &[String]) -> u64 {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic)]
 mod tests {
     use super::*;
 

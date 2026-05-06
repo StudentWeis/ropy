@@ -23,7 +23,7 @@ impl RopyBoard {
     }
 }
 
-#[allow(
+#[expect(
     clippy::derive_partial_eq_without_eq,
     reason = "gpui::actions! macro generates PartialEq; we cannot inject Eq from outside"
 )]
@@ -276,7 +276,7 @@ impl RopyBoard {
         }
     }
 
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     pub fn on_quit_action(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
         cx.quit();
     }

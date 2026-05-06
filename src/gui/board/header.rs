@@ -51,12 +51,10 @@ pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
                     .when(can_toggle_window_pin, |button| button.opacity(1.0_f32))
                     .icon(Icon::empty().path("icons/pin-to-top.svg"))
                     .tooltip(pin_tooltip)
-                    .on_click(
-                        cx.listener(|this, _event, #[allow(unused_variables)] window, cx| {
-                            this.toggle_window_pin(window);
-                            cx.notify();
-                        }),
-                    )
+                    .on_click(cx.listener(|this, _event, window, cx| {
+                        this.toggle_window_pin(window);
+                        cx.notify();
+                    }))
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(|_, _, _, cx| cx.stop_propagation()),

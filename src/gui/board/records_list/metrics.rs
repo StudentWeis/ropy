@@ -9,7 +9,7 @@ use crate::{
 
 pub(super) const GRID_COLUMN_COUNT: usize = 2;
 // Mirror constant in `f32` form so masonry layout math avoids per-call casts.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "GRID_COLUMN_COUNT is a tiny compile-time literal"
 )]
@@ -132,7 +132,7 @@ fn estimated_wrapped_line_count(content: &str, max_lines: usize) -> usize {
             if line.is_empty() {
                 1
             } else {
-                #[allow(
+                #[expect(
                     clippy::cast_possible_truncation,
                     clippy::cast_sign_loss,
                     reason = ".max(1.0) keeps the value in [1.0, max_lines), well within usize"
@@ -160,7 +160,7 @@ pub(super) fn estimated_grid_text_lines(content: &str) -> usize {
 }
 
 pub(super) fn estimated_grid_color_body_height(content: &str) -> f32 {
-    #[allow(
+    #[expect(
         clippy::cast_precision_loss,
         reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
     )]
@@ -210,7 +210,7 @@ pub(super) fn estimated_grid_card_height(record: &ClipboardRecord) -> f32 {
             if parse_clipboard_color(&record.content).is_some() {
                 estimated_grid_color_body_height(&record.content)
             } else {
-                #[allow(
+                #[expect(
                     clippy::cast_precision_loss,
                     reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
                 )]
@@ -220,7 +220,7 @@ pub(super) fn estimated_grid_card_height(record: &ClipboardRecord) -> f32 {
         }
         ContentType::Image => GRID_IMAGE_MAX_HEIGHT,
         ContentType::FilePath => {
-            #[allow(
+            #[expect(
                 clippy::cast_precision_loss,
                 reason = "detail line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES - 1"
             )]
@@ -235,6 +235,7 @@ pub(super) fn estimated_grid_card_height(record: &ClipboardRecord) -> f32 {
 }
 
 #[cfg(test)]
+#[expect(clippy::panic)]
 mod tests {
     use chrono::{Local, TimeZone};
 
@@ -312,7 +313,7 @@ mod tests {
     #[test]
     fn test_estimated_grid_color_body_height_adds_large_swatch_space() {
         let content = "#A1B2C3";
-        #[allow(
+        #[expect(
             clippy::cast_precision_loss,
             reason = "line count is bounded by GRID_CONTENT_PREVIEW_MAX_LINES (4)"
         )]

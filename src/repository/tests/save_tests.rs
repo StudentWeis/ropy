@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used, clippy::panic))]
 //! Tests for `save*` paths: text, files, images, rich-text, and serialization
 //! round-trips.
 

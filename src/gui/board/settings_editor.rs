@@ -9,8 +9,8 @@ use gpui_component::{
 use super::RopyBoard;
 use crate::{config::LayoutMode, gui::theme::ThemeId, i18n::Language};
 
-#[allow(clippy::redundant_pub_crate)]
-#[allow(clippy::struct_excessive_bools)]
+#[expect(clippy::redundant_pub_crate)]
+#[expect(clippy::struct_excessive_bools)]
 pub(crate) struct SettingsEditor {
     pub(crate) hotkey_recording: bool,
     pub(crate) pending_hotkey: String,
@@ -34,9 +34,9 @@ pub(crate) struct SettingsEditor {
 }
 
 impl SettingsEditor {
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::fn_params_excessive_bools)]
-    #[allow(clippy::missing_const_for_fn)]
+    #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::fn_params_excessive_bools)]
+    #[expect(clippy::missing_const_for_fn)]
     pub(super) fn new(
         pending_hotkey: String,
         hotkey_before_recording: String,
@@ -80,7 +80,7 @@ impl SettingsEditor {
     }
 }
 
-#[allow(clippy::redundant_pub_crate)]
+#[expect(clippy::redundant_pub_crate)]
 pub(crate) struct UpdateManager {
     pub(crate) status: crate::updater::models::UpdateStatus,
 }
@@ -115,7 +115,7 @@ pub(super) fn build_window_opacity_slider(
         window,
         |this, _, event: &SliderEvent, window, cx| {
             let SliderEvent::Change(value) = event;
-            #[allow(
+            #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
                 reason = "slider value is bounded by MIN/MAX_OPACITY_PERCENT (0..=100)"
