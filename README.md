@@ -91,14 +91,7 @@ cargo build --release
 ## Acknowledgements
 
 - Inspired by clipboard managers such as Ditto, Maccy and CopyQ.
-- Thanks to the Rust community and all upstream projects used by Ropy.
-- System Clipboard API: [clipboard-rs](https://github.com/ChurchTao/clipboard-rs)
-- GUI library: [Zed's gpui](https://github.com/zed-industries/zed/tree/main/crates/gpui)
-- GUI components: [gpui-component](https://github.com/longbridge/gpui-component)
-- Global hotkey: [global-hotkey](https://github.com/tauri-apps/global-hotkey)
-- Tray icon helper: [tray-icon](https://github.com/tauri-apps/tray-icon)
-- Embedded DB: [redb](https://github.com/cberner/redb)
-- Configuration: [config-rs](https://github.com/rust-cli/config-rs)
+- Thanks to the Rust community and all upstream projects used by Ropy: [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui), [clipboard-rs](https://github.com/ChurchTao/clipboard-rs), [redb](https://github.com/cberner/redb) and others.
 
 ## Star History
 
