@@ -115,6 +115,11 @@ pub(super) fn build_window_opacity_slider(
         window,
         |this, _, event: &SliderEvent, window, cx| {
             let SliderEvent::Change(value) = event;
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "slider value is bounded by MIN/MAX_OPACITY_PERCENT (0..=100)"
+            )]
             let opacity_percent = value.start().round() as u8;
             this.settings_editor.window_opacity_percent = opacity_percent;
             let theme = ThemeId::all()

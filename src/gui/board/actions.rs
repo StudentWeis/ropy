@@ -23,21 +23,29 @@ impl RopyBoard {
     }
 }
 
-gpui::actions!(
-    board,
-    [
-        Hide,
-        Quit,
-        Active,
-        SelectLeft,
-        SelectRight,
-        SelectPrev,
-        SelectNext,
-        ConfirmSelection,
-        ConfirmSelectionPlainText,
-        DeleteRecord
-    ]
-);
+#[allow(
+    clippy::derive_partial_eq_without_eq,
+    reason = "gpui::actions! macro generates PartialEq; we cannot inject Eq from outside"
+)]
+mod generated_actions {
+    gpui::actions!(
+        board,
+        [
+            Hide,
+            Quit,
+            Active,
+            SelectLeft,
+            SelectRight,
+            SelectPrev,
+            SelectNext,
+            ConfirmSelection,
+            ConfirmSelectionPlainText,
+            DeleteRecord
+        ]
+    );
+}
+
+pub use generated_actions::*;
 
 pub(super) fn horizontal_grid_target_index(
     selected_index: usize,

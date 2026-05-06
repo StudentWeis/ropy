@@ -82,8 +82,11 @@ fn calculate_image_size(
     if let Ok(reader) = ImageReader::open(path).and_then(image::ImageReader::with_guessed_format)
         && let Ok(dims) = reader.into_dimensions()
     {
-        let w = dims.0 as f32;
-        let h = dims.1 as f32;
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "image dimensions in pixels are well below the f32 mantissa range"
+        )]
+        let (w, h) = (dims.0 as f32, dims.1 as f32);
 
         let width_ratio = Into::<f32>::into(max_w) / w;
         let height_ratio = Into::<f32>::into(max_h) / h;

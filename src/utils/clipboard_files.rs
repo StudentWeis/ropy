@@ -1,3 +1,12 @@
+const fn hex_digit_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 fn decode_percent_encoded(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut index = 0;
@@ -5,11 +14,11 @@ fn decode_percent_encoded(input: &str) -> String {
 
     while index < bytes.len() {
         if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let high = (bytes[index + 1] as char).to_digit(16);
-            let low = (bytes[index + 2] as char).to_digit(16);
+            let high = hex_digit_value(bytes[index + 1]);
+            let low = hex_digit_value(bytes[index + 2]);
 
             if let (Some(high), Some(low)) = (high, low) {
-                decoded.push(((high << 4) | low) as u8);
+                decoded.push((high << 4) | low);
                 index += 3;
                 continue;
             }
