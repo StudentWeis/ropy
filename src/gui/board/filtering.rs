@@ -51,7 +51,6 @@ pub(super) fn plan_filtered_records_sync(
     }
 }
 
-/// Sort and filter record indices by search query, content type, and display order.
 pub(super) fn filter_and_sort_record_indices(
     records: &[ClipboardRecord],
     query: &str,

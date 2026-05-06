@@ -4,8 +4,10 @@ use image::ImageReader;
 
 use super::CopyRequest;
 
-/// Start a background task to handle clipboard write requests.
-/// This avoids creating a new `ClipboardContext` and spawning a new task for each write.
+/// Spawn the single long-lived task that owns the OS [`ClipboardContext`].
+/// All copy operations funnel through the returned channel so we don't pay
+/// the cost of recreating the context (and re-acquiring platform handles)
+/// on every write.
 pub fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
     let (tx, rx) = async_channel::unbounded();
 
@@ -53,28 +55,21 @@ fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {
         .and_then(image::ImageReader::decode)
 }
 
-/// Set text to clipboard
 fn set_text(ctx: &ClipboardContext, text: String) {
     if let Err(e) = ctx.set_text(text) {
         tracing::warn!(error = %e, "failed to set text to clipboard");
     }
 }
 
-/// Set image to clipboard. The image is read from the given file path.
-/// After setting the image, the original file and its thumbnail are deleted.
 fn set_image(ctx: &ClipboardContext, path: &str) {
     let img_res = load_image_from_path(path);
     if let Ok(img) = img_res {
         #[cfg(target_os = "macos")]
         {
-            // On macOS, `clipboard-rs`'s default `set_image` implementation clears the clipboard,
-            // then encodes the image to PNG, and finally writes it.
-            // For large images, the encoding step takes time, creating a race condition where
-            // the listener detects the "clear" event but fails to read the data because it's not written yet.
-            //
-            // To fix this, we pre-encode the image to PNG in memory and use `set_buffer` to write it.
-            // This minimizes the time window between clearing and writing, ensuring the listener
-            // finds the data when it reacts to the change event.
+            // `clipboard-rs::set_image` on macOS clears the pasteboard
+            // before encoding, so for large images the listener can fire
+            // on the empty intermediate state. Pre-encode here and use
+            // `set_buffer` to keep clear→write atomic from its POV.
             let mut bytes = Vec::new();
             if img
                 .write_to(
@@ -88,7 +83,6 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
             }
         }
 
-        // Platforms other than macOS can use RustImageData directly
         #[cfg(not(target_os = "macos"))]
         {
             use clipboard_rs::common::RustImage;

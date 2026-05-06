@@ -1,6 +1,8 @@
+//! Custom tooltip views that wrap automatically and stay within the
+//! window's bounds — GPUI's built-in tooltip helpers don't expose either.
+
 use std::path::PathBuf;
 
-/// Custom tooltip preview implementation that supports automatic line wrapping
 use gpui::{
     AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, Window, div, img, px,
 };
@@ -11,17 +13,8 @@ const TOOLTIP_HORIZONTAL_MARGIN_PX: f32 = 40.0;
 const IMAGE_TOOLTIP_MAX_WIDTH_PX: f32 = 600.0;
 const IMAGE_TOOLTIP_MAX_HEIGHT_PX: f32 = 400.0;
 
-/// Create a tooltip preview that supports automatic line wrapping
-///
-/// This implementation returns a `View` that will be correctly rendered by `GPUI`'s tooltip system
-///
-/// # Usage Example
-/// ```rust
-/// div()
-///     .tooltip(|window, cx| {
-///         simple_tooltip("This is tooltip content", window, cx)
-///     })
-/// ```
+/// Build a text tooltip whose width is capped against the current window so
+/// long lines wrap instead of being clipped.
 pub fn simple_tooltip(content: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let content = content.into();
     let window_width = window.bounds().size.width;
@@ -62,15 +55,8 @@ impl Render for TooltipView {
     }
 }
 
-/// Create an image tooltip preview
-///
-/// # Usage Example
-/// ```rust
-/// div()
-///     .tooltip(|window, cx| {
-///         image_tooltip("/path/to/image.png", window, cx)
-///     })
-/// ```
+/// Build an image tooltip scaled to fit within the current window while
+/// respecting an absolute maximum so previews stay readable on large screens.
 pub fn image_tooltip(image_path: impl Into<String>, window: &Window, cx: &mut App) -> AnyView {
     let image_path = image_path.into();
     let window_width = window.bounds().size.width;

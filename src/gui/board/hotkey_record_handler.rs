@@ -5,8 +5,6 @@ use gpui::{Context, Focusable, Keystroke, Modifiers, Window};
 
 use super::RopyBoard;
 
-// --- Hotkey recording utilities (merged from gui/hotkey_record.rs) ---
-
 fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
     if !has_supported_modifier(keystroke.modifiers) {
         return None;
@@ -139,8 +137,6 @@ fn is_modifier_key(key: &str) -> bool {
         "shift" | "control" | "ctrl" | "alt" | "cmd" | "command" | "super" | "fn"
     )
 }
-
-// --- RopyBoard hotkey recording methods ---
 
 impl RopyBoard {
     pub(crate) fn start_hotkey_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {

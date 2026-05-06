@@ -1,5 +1,6 @@
-//! Shared curl command builder – eliminates duplicated HTTP request logic
-//! across the updater module.
+//! Shared `curl` command builder. Centralises the base flags (silent,
+//! follow redirects, fail on HTTP errors, `User-Agent`) so individual call
+//! sites can't drift apart on retry / timeout policy.
 
 use std::process::Command;
 
@@ -9,15 +10,11 @@ pub const CONNECT_TIMEOUT_SECS: u32 = 15;
 pub const API_REQUEST_MAX_TIME_SECS: u32 = 30;
 pub const DOWNLOAD_REQUEST_MAX_TIME_SECS: u32 = 600;
 
-/// Builder for constructing `curl` subprocess commands with consistent
-/// base arguments (silent, follow redirects, fail on HTTP errors, User-Agent).
 pub struct CurlCommandBuilder {
     command: Command,
 }
 
 impl CurlCommandBuilder {
-    /// Create a new builder with the common base flags: `-sSL --fail` and the
-    /// `User-Agent` header.
     pub fn new(url: &str) -> Self {
         let mut command = Command::new("curl");
         command.args([
@@ -30,40 +27,38 @@ impl CurlCommandBuilder {
         Self { command }
     }
 
-    /// Add an extra HTTP header (e.g. `Accept: application/vnd.github.v3+json`).
     pub fn header(mut self, value: &str) -> Self {
         self.command.args(["-H", value]);
         self
     }
 
-    /// Set the `--connect-timeout` value in seconds.
     pub fn connect_timeout(mut self, seconds: u32) -> Self {
         self.command
             .args(["--connect-timeout", &seconds.to_string()]);
         self
     }
 
-    /// Set the `--max-time` value in seconds.
     pub fn max_time(mut self, seconds: u32) -> Self {
         self.command.args(["--max-time", &seconds.to_string()]);
         self
     }
 
-    /// Apply the standard timeout policy for short-lived API requests.
+    /// Standard policy for short-lived JSON API calls (release listings).
     pub fn with_api_timeouts(self) -> Self {
         self.connect_timeout(CONNECT_TIMEOUT_SECS)
             .max_time(API_REQUEST_MAX_TIME_SECS)
     }
 
-    /// Apply the standard timeout policy for large asset downloads.
+    /// Standard policy for large asset downloads — much longer max-time
+    /// because release archives can run into hundreds of MB.
     pub fn with_download_timeouts(self) -> Self {
         self.connect_timeout(CONNECT_TIMEOUT_SECS)
             .max_time(DOWNLOAD_REQUEST_MAX_TIME_SECS)
     }
 
-    /// Execute the command, collect stdout, and return the body as a `String`.
-    ///
-    /// Logs and returns an `UpdateError::Network` on failure.
+    /// Run to completion and decode stdout as UTF-8. Failures (non-zero
+    /// exit, non-UTF-8 body) are mapped to [`UpdateError::Network`] and
+    /// logged, since every callsite would otherwise repeat the same code.
     pub fn execute_to_string(mut self) -> Result<String, UpdateError> {
         let output = self.command.output().map_err(|e| {
             tracing::error!(error = %e, "failed to launch curl");
@@ -85,8 +80,9 @@ impl CurlCommandBuilder {
         })
     }
 
-    /// Return the inner `Command` for callers that need piped I/O (e.g.
-    /// streaming downloads with progress tracking).
+    /// Escape hatch for callers that need piped stdio (streaming downloads
+    /// with progress tracking) and therefore can't go through
+    /// [`Self::execute_to_string`].
     pub fn into_command(self) -> Command {
         self.command
     }

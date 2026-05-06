@@ -24,7 +24,6 @@ use crate::{
     i18n::{I18n, Language},
 };
 
-/// Render a settings row with label centered against the control.
 fn settings_row<C: IntoElement>(
     label: impl Into<gpui::SharedString>,
     control: C,
@@ -45,7 +44,6 @@ fn settings_row<C: IntoElement>(
         .child(control)
 }
 
-/// Render a section label displayed above a settings card.
 fn settings_section_label(
     label: impl Into<gpui::SharedString>,
     cx: &Context<RopyBoard>,
@@ -58,7 +56,6 @@ fn settings_section_label(
         .child(label.into())
 }
 
-/// Render a card container that groups related settings rows.
 fn settings_card(cx: &Context<RopyBoard>) -> gpui::Div {
     v_flex()
         .w_full()
@@ -67,7 +64,6 @@ fn settings_card(cx: &Context<RopyBoard>) -> gpui::Div {
         .bg(cx.theme().secondary)
 }
 
-/// Interleave settings rows with dividers inside a card.
 fn card_with_rows(rows: Vec<gpui::AnyElement>, cx: &Context<RopyBoard>) -> impl IntoElement {
     let mut card = settings_card(cx);
     let last_index = rows.len().saturating_sub(1);
@@ -80,7 +76,6 @@ fn card_with_rows(rows: Vec<gpui::AnyElement>, cx: &Context<RopyBoard>) -> impl 
     card
 }
 
-/// Render the settings panel content with grouped card sections.
 pub fn render_settings_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = render_settings_header(cx);
 

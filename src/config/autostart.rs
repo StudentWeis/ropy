@@ -18,19 +18,14 @@ pub enum AutoStartError {
     StatusCheck(String),
 }
 
-/// Manager for application auto-start functionality
+/// Owns the platform `AutoLaunch` handle and threads the `--silent` flag
+/// through it so a system-triggered launch boots into the tray instead of
+/// popping the main window.
 pub struct AutoStartManager {
     auto_launch: AutoLaunch,
 }
 
 impl AutoStartManager {
-    /// Create a new `AutoStartManager` instance
-    ///
-    /// # Arguments
-    /// * `app_name` - The name of the application
-    ///
-    /// # Returns
-    /// Result containing `AutoStartManager` or `AutoStartError`
     pub fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
@@ -46,27 +41,25 @@ impl AutoStartManager {
         Ok(Self { auto_launch })
     }
 
-    /// Get the application executable path
-    ///
-    /// For development builds, returns the debug executable path
-    /// For bundled `macOS` apps, returns the `.app` bundle path
+    /// Resolve the path that `LaunchAgents` / `.desktop` entries / the
+    /// Windows registry should point at. On macOS a release build runs
+    /// inside a `.app` bundle and the auto-launch entry must reference
+    /// the bundle, not the inner Mach-O — otherwise launchd starts a
+    /// detached binary without a working environment.
     fn get_app_path() -> Result<String, AutoStartError> {
-        // Get the current executable path
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
 
-        // On macOS, if we're inside a .app bundle, we need to return the bundle path
         #[cfg(target_os = "macos")]
         {
             let exe_str = exe_path.to_string_lossy();
-            // Check if we're inside a .app bundle
             if let Some(app_bundle_idx) = exe_str.rfind(".app/") {
-                let bundle_path = &exe_str[..app_bundle_idx + 4]; // Include .app
+                // +4 keeps the `.app` suffix in the slice.
+                let bundle_path = &exe_str[..app_bundle_idx + 4];
                 return Ok(bundle_path.to_string());
             }
         }
 
-        // For non-bundled or Windows builds, return the executable path
         exe_path
             .to_str()
             .map(std::string::ToString::to_string)
@@ -75,31 +68,28 @@ impl AutoStartManager {
             })
     }
 
-    /// Enable auto-start at system startup
     pub fn enable(&self) -> Result<(), AutoStartError> {
         self.auto_launch
             .enable()
             .map_err(|e| AutoStartError::Enable(e.to_string()))
     }
 
-    /// Disable auto-start at system startup
     pub fn disable(&self) -> Result<(), AutoStartError> {
         self.auto_launch
             .disable()
             .map_err(|e| AutoStartError::Disable(e.to_string()))
     }
 
-    /// Check if auto-start is currently enabled
     pub fn is_enabled(&self) -> Result<bool, AutoStartError> {
         self.auto_launch
             .is_enabled()
             .map_err(|e| AutoStartError::StatusCheck(e.to_string()))
     }
 
-    /// Synchronize auto-start state with the given enabled flag
-    ///
-    /// # Arguments
-    /// * `enabled` - Whether auto-start should be enabled
+    /// Make the system state match the user's preference, but skip the
+    /// platform call when it already matches — repeatedly toggling
+    /// `LaunchAgents` / registry entries is unnecessary churn and (on
+    /// some Linux desktops) racy.
     pub fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
         let current_enabled = self.is_enabled().unwrap_or(false);
         if current_enabled == enabled {

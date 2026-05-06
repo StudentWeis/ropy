@@ -14,10 +14,11 @@ use crate::{
     i18n::I18n,
 };
 
-/// A single row in the shortcuts table
 struct ShortcutRow {
     key: &'static str,
     label_key: &'static str,
+    /// When true, this shortcut is hidden in list mode because the action
+    /// (horizontal navigation) only makes sense in the grid layout.
     grid_only: bool,
 }
 
@@ -89,7 +90,6 @@ const SHORTCUTS: &[ShortcutRow] = &[
     },
 ];
 
-/// Render the help panel (keyboard shortcuts overview)
 #[allow(clippy::too_many_lines)]
 pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl IntoElement {
     let header = panel_header_with_back(
@@ -137,9 +137,10 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
         .filter(|row| board.can_toggle_window_pin() || row.label_key != "help_pin")
         .enumerate()
         .map(|(i, row)| {
-            // Resolve label: "help_nav_up_down" needs to combine two keys
+            // The "up / down" entry has no single translation key — compose
+            // it from the per-direction strings so each language can phrase
+            // them independently.
             let label = if row.label_key == "help_nav_up_down" {
-                // Concat the two individual translated strings
                 format!(
                     "{} / {}",
                     I18n::translate(cx, "help_nav_up"),

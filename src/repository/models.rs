@@ -1,42 +1,39 @@
-//! Data model for clipboard records
+//! Data model for clipboard records.
 
 use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
-/// Data model for clipboard records
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClipboardRecord {
-    /// Unique identifier (content hash)
+    /// Content hash; doubles as the deduplication key in the records tree.
     pub id: u64,
-    /// Plain-text clipboard content used for display, search, and deduplication.
+    /// Plain-text payload used for display, search, and dedup. Non-text
+    /// payloads (image, files, rich text) keep their binary data on disk
+    /// via [`RichTextMeta`] / sidecar files and store only a textual
+    /// summary here.
     pub content: String,
-    /// Creation time
     pub created_at: DateTime<Local>,
-    /// Content type
     pub content_type: ContentType,
-    /// Whether this record is pinned to the top
+    /// Pinned records stay at the top of the board and survive cleanup.
     #[serde(default)]
     pub pinned: bool,
-    /// Sidecar metadata for rich text payloads, when present.
     #[serde(default)]
     pub rich_text_meta: Option<RichTextMeta>,
 }
 
-/// Shared clipboard record list type alias for thread-safe access
 pub type SharedRecords = Arc<RwLock<Vec<ClipboardRecord>>>;
 
-/// Content type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ContentType {
-    /// Plain text
     Text,
-    /// Image (stored as `base64`)
+    /// Image payload; the actual bytes live on disk under the per-record
+    /// sidecar directory, and `content` carries the file path.
     Image,
-    /// File path
     FilePath,
-    /// Rich text with plain-text summary plus optional HTML / RTF sidecars.
+    /// Rich text with plain-text summary in `content` plus optional HTML / RTF
+    /// sidecars referenced from [`RichTextMeta`].
     RichText,
 }
 
@@ -47,7 +44,8 @@ pub struct RichTextMeta {
 }
 
 impl ContentType {
-    /// Encode content type as a single byte for the time index.
+    /// One-byte tag used by the time index value format. Stable on disk —
+    /// changing existing variants is a schema migration.
     pub(crate) const fn as_tag(&self) -> u8 {
         match self {
             Self::Text => 0,

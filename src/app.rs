@@ -267,30 +267,21 @@ pub fn launch() {
             #[cfg(target_os = "macos")]
             crate::gui::set_activation_policy_accessory();
 
-            // Initialize gpui-component
             gpui_component::init(cx);
-
-            // Bind global application keys
             bind_application_keys(cx);
 
-            // Register settings as GPUI Global for app-wide access
+            // Settings must be installed before the I18n / repository
+            // globals because both read from it during their own init.
             let settings = load_settings();
             cx.set_global(settings.clone());
-
-            // Register I18n as GPUI Global for app-wide access
             cx.set_global(I18n::load_i18n(settings.language.clone()));
-
-            // Register tray state as GPUI Global for app-wide access
             crate::gui::tray::TrayState::register(cx);
 
-            // Sync auto-start state on application launch
             sync_autostart_on_launch(settings.autostart.enabled);
 
             let repository = initialize_repository();
             let initial_records =
                 load_initial_records(repository.as_ref(), settings.storage.max_history_records);
-
-            // Register repository as GPUI Global for app-wide access
             cx.set_global(GlobalRepository::new(repository));
 
             let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
@@ -303,7 +294,9 @@ pub fn launch() {
             start_clipboard_event_handler(clipboard_rx, window_handle, cx);
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
-            // Initialize tray from the global I18n, then store the handle in global tray state.
+            // Tray initialization needs the loaded I18n; the resulting
+            // handle is stashed in the global so menu refreshes after a
+            // language change can reach it.
             let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
             crate::gui::tray::TrayState::install(cx, tray);
 
@@ -328,7 +321,6 @@ pub fn launch() {
                 tracing::error!("failed to downcast root view to RopyBoard");
             }
 
-            // Initialize X11 control
             #[cfg(target_os = "linux")]
             if env::var("DISPLAY").is_ok() {
                 match X11::new() {

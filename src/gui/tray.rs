@@ -61,7 +61,6 @@ impl TrayState {
     }
 }
 
-/// Build a tray menu with translated labels.
 pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
     let show_item = MenuItem::with_id(TRAY_SHOW_ID, i18n.t("tray_show"), true, None);
     let quit_item = MenuItem::with_id(TRAY_QUIT_ID, i18n.t("tray_quit"), true, None);
@@ -72,7 +71,6 @@ pub fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> 
     Ok(tray_menu)
 }
 
-/// Initialize and return the tray icon
 pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
     let tray_menu = build_tray_menu(i18n)?;
     let show_id = MenuId::new(TRAY_SHOW_ID);
@@ -80,7 +78,6 @@ pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std:
 
     let icon = create_icon()?;
 
-    // Create tray icon
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(tray_menu))
         .with_tooltip(APP_NAME)
@@ -91,7 +88,6 @@ pub fn init_tray(i18n: &I18n) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std:
     Ok((tray, show_id, quit_id))
 }
 
-/// Create a simple icon for the tray
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
     let asset = super::app::Assets::get("logo.png").ok_or("Failed to find embedded logo.png")?;
     let (rgba, width, height) = load_tray_icon_rgba(&asset.data)?;
@@ -192,7 +188,6 @@ fn spawn_tray_event_loop(
     .detach();
 }
 
-/// Start the system tray handler
 pub fn start_tray_handler_inner(
     i18n: &I18n,
     tx: async_channel::Sender<TrayEvent>,
@@ -214,7 +209,6 @@ pub fn start_tray_handler_inner(
     }
 }
 
-/// Send the active action to the main window
 pub fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut gpui::App) {
     window_handle
         .update(cx, |_, window: &mut gpui::Window, cx| {

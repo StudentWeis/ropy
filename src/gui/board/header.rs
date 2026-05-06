@@ -11,7 +11,6 @@ use gpui_component::{
 use super::RopyBoard;
 use crate::{constants::APP_NAME, i18n::I18n};
 
-/// Render the header section with title and window action buttons
 pub fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let is_pinned = board.pinned;
     let can_toggle_window_pin = board.can_toggle_window_pin();
