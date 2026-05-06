@@ -1,5 +1,5 @@
 use gpui::{
-    Context, div,
+    Context, StatefulInteractiveElement, div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
@@ -191,9 +191,12 @@ pub fn render_help_content(board: &RopyBoard, cx: &Context<RopyBoard>) -> impl I
 
     v_flex().size_full().child(header).child(
         v_flex()
+            .id("help-content")
+            .overflow_y_scroll()
+            .size_full()
             .flex_1()
-            .w_full()
             .gap_0p5()
+            .pb_4()
             .child(col_header)
             .children(rows),
     )
