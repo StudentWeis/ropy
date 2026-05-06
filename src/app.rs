@@ -31,17 +31,35 @@ use crate::{
 #[cfg(target_os = "linux")]
 pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
+/// Capacity for the clipboard event channel between the OS clipboard listener
+/// and the persistence task. Large enough to absorb bursts from apps that copy
+/// several times per second, while preventing unbounded memory growth if the
+/// consumer falls behind. When full, new events are dropped and logged.
+const CLIPBOARD_EVENT_CHANNEL_CAPACITY: usize = 256;
+
+/// Capacity for the UI refresh notification channel. Notifications carry no
+/// payload — the foreground task coalesces all pending notifications into a
+/// single repository read + UI refresh, so a small bounded capacity is
+/// sufficient. When full, additional notifications are no-ops because a
+/// refresh is already pending.
+const UI_NOTIFY_CHANNEL_CAPACITY: usize = 256;
+
 /// Consume clipboard events from the monitor, persist them to the repository,
 /// update the in-memory record list, and notify the GUI to refresh.
 ///
 /// This coordinates across three subsystems (clipboard, repository, GUI)
 /// and does not belong to the clipboard I/O layer alone.
+///
+/// The notification channel is bounded and notifications are coalesced: the
+/// foreground task drains all pending `()` notifications before doing a single
+/// repository read + UI refresh. This avoids redundant full-list refreshes
+/// when many records arrive in rapid succession.
 fn start_clipboard_event_handler(
     clipboard_rx: async_channel::Receiver<ClipboardEvent>,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
-    let (notify_tx, notify_rx) = async_channel::unbounded::<()>();
+    let (notify_tx, notify_rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
 
     // Clone the Arc before moving into the background task, since GPUI
     // globals are not accessible from background threads.
@@ -64,8 +82,19 @@ fn start_clipboard_event_handler(
 
             match result {
                 Ok(_record) => {
-                    if let Err(e) = notify_tx.send(()).await {
-                        tracing::warn!(error = %e, "failed to notify foreground of new record");
+                    // Use try_send: if the channel is already full a refresh
+                    // is already pending, so dropping this notification is
+                    // equivalent to coalescing it with the queued one.
+                    match notify_tx.try_send(()) {
+                        Ok(()) => {}
+                        Err(async_channel::TrySendError::Full(())) => {
+                            tracing::debug!("ui refresh notification coalesced (channel full)");
+                        }
+                        Err(async_channel::TrySendError::Closed(())) => {
+                            tracing::warn!(
+                                "ui refresh notification channel closed; foreground task gone"
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -79,6 +108,10 @@ fn start_clipboard_event_handler(
     // Process saved records on the foreground thread where GPUI globals are accessible.
     cx.spawn(async move |async_app| {
         while notify_rx.recv().await.is_ok() {
+            // Coalesce: drain all additional pending notifications so a burst
+            // of saves results in a single repository read + UI refresh.
+            drain_pending_notifications(&notify_rx);
+
             let _ = async_app.update(|cx| {
                 let max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
 
@@ -148,9 +181,22 @@ fn start_clipboard_monitor(
     cx: &App,
     last_copy: Arc<Mutex<LastCopyState>>,
 ) -> async_channel::Receiver<ClipboardEvent> {
-    let (clipboard_tx, clipboard_rx) = async_channel::unbounded::<ClipboardEvent>();
+    let (clipboard_tx, clipboard_rx) =
+        async_channel::bounded::<ClipboardEvent>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
     clipboard::start_clipboard_monitor(clipboard_tx, cx, last_copy);
     clipboard_rx
+}
+
+/// Drain all currently-pending `()` notifications from the channel without
+/// blocking. Used for notification coalescing: after one notification has been
+/// received, any further notifications already in the queue can be discarded
+/// because a single subsequent refresh will reflect all of them.
+fn drain_pending_notifications(notify_rx: &async_channel::Receiver<()>) -> usize {
+    let mut drained = 0usize;
+    while notify_rx.try_recv().is_ok() {
+        drained += 1;
+    }
+    drained
 }
 
 fn setup_hotkey_listener(
@@ -359,5 +405,62 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].content, "third");
         assert_eq!(records[1].content, "second");
+    }
+
+    #[test]
+    fn test_drain_pending_notifications_when_channel_has_queued_items_drains_all() {
+        let (tx, rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
+
+        for _ in 0..5 {
+            tx.try_send(()).expect("Failed to enqueue notification");
+        }
+
+        let drained = drain_pending_notifications(&rx);
+
+        assert_eq!(drained, 5);
+        assert!(rx.is_empty());
+    }
+
+    #[test]
+    fn test_drain_pending_notifications_when_channel_is_empty_returns_zero() {
+        let (_tx, rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
+
+        let drained = drain_pending_notifications(&rx);
+
+        assert_eq!(drained, 0);
+    }
+
+    #[test]
+    fn test_notify_channel_when_full_try_send_returns_full_error() {
+        // Simulates the producer path: when the foreground refresh task is
+        // briefly stalled, notifications coalesce by being dropped after the
+        // bounded channel saturates.
+        let (tx, rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
+
+        for _ in 0..UI_NOTIFY_CHANNEL_CAPACITY {
+            tx.try_send(()).expect("Failed to enqueue notification");
+        }
+
+        let result = tx.try_send(());
+
+        assert!(matches!(result, Err(async_channel::TrySendError::Full(()))));
+        assert_eq!(rx.len(), UI_NOTIFY_CHANNEL_CAPACITY);
+    }
+
+    #[test]
+    fn test_clipboard_event_channel_has_bounded_capacity() {
+        let (tx, _rx) = async_channel::bounded::<ClipboardEvent>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
+
+        for index in 0..CLIPBOARD_EVENT_CHANNEL_CAPACITY {
+            tx.try_send(ClipboardEvent::Text(format!("event-{index}")))
+                .expect("Failed to enqueue clipboard event");
+        }
+
+        let overflow_result = tx.try_send(ClipboardEvent::Text("overflow".to_string()));
+
+        assert!(matches!(
+            overflow_result,
+            Err(async_channel::TrySendError::Full(_))
+        ));
     }
 }

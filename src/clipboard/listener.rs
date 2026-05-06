@@ -131,8 +131,12 @@ impl ClipboardHandler for ClipboardMonitor {
             Some(ClipboardPayload::Files(files)) => {
                 let hash = hash_file_paths(&files);
                 if should_forward_files(&last_copy_guard, hash) {
-                    if let Err(e) = self.tx.send_blocking(ClipboardEvent::Files(files)) {
-                        tracing::warn!(error = %e, "failed to send files to clipboard event channel");
+                    // try_send: never block the OS clipboard callback thread.
+                    // If the channel is full, drop the event and warn — losing
+                    // a single event is preferable to stalling clipboard
+                    // notifications system-wide.
+                    if let Err(e) = self.tx.try_send(ClipboardEvent::Files(files)) {
+                        tracing::warn!(error = %e, "dropping files clipboard event (channel full or closed)");
                     }
                     *last_copy_guard = LastCopyState::Files(hash);
                 }
@@ -141,8 +145,8 @@ impl ClipboardHandler for ClipboardMonitor {
                 let hash: u64 = seahash::hash(dyn_img.as_bytes());
 
                 if should_forward_image(&last_copy_guard, hash) {
-                    if let Err(e) = self.image_tx.send_blocking((dyn_img, hash)) {
-                        tracing::warn!(error = %e, "failed to send image to processing channel");
+                    if let Err(e) = self.image_tx.try_send((dyn_img, hash)) {
+                        tracing::warn!(error = %e, "dropping image clipboard event (processing channel full or closed)");
                     }
                     *last_copy_guard = LastCopyState::Image(hash);
                 }
@@ -152,18 +156,18 @@ impl ClipboardHandler for ClipboardMonitor {
                 html,
                 rtf,
             }) if should_forward_text(&last_copy_guard, &plain_text) => {
-                if let Err(e) = self.tx.send_blocking(ClipboardEvent::RichText {
+                if let Err(e) = self.tx.try_send(ClipboardEvent::RichText {
                     plain_text: plain_text.clone(),
                     html,
                     rtf,
                 }) {
-                    tracing::warn!(error = %e, "failed to send rich text to clipboard event channel");
+                    tracing::warn!(error = %e, "dropping rich text clipboard event (channel full or closed)");
                 }
                 *last_copy_guard = LastCopyState::Text(plain_text);
             }
             Some(ClipboardPayload::Text(text)) if should_forward_text(&last_copy_guard, &text) => {
-                if let Err(e) = self.tx.send_blocking(ClipboardEvent::Text(text.clone())) {
-                    tracing::warn!(error = %e, "failed to send text to clipboard event channel");
+                if let Err(e) = self.tx.try_send(ClipboardEvent::Text(text.clone())) {
+                    tracing::warn!(error = %e, "dropping text clipboard event (channel full or closed)");
                 }
                 *last_copy_guard = LastCopyState::Text(text);
             }
@@ -185,10 +189,13 @@ pub fn start_clipboard_monitor(
 
     cx.background_spawn(async move {
         while let Ok((image, hash)) = image_rx.recv().await {
-            if let Some(path) = super::save_image(&image, hash)
-                && let Err(e) = tx.send_blocking(ClipboardEvent::Image(path, hash))
-            {
-                tracing::warn!(error = %e, "failed to send image event to clipboard channel");
+            if let Some(path) = super::save_image(&image, hash) {
+                // This task is async, so awaiting send() here is safe and
+                // applies natural backpressure to image processing without
+                // blocking the OS clipboard callback thread.
+                if let Err(e) = tx.send(ClipboardEvent::Image(path, hash)).await {
+                    tracing::warn!(error = %e, "failed to send image event to clipboard channel");
+                }
             }
         }
     })
