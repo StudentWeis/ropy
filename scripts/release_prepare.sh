@@ -37,3 +37,12 @@ perl -i -pe 's/<!-- \d+ -->//g' CHANGELOG.md
 
 # Verify dist plan
 dist plan
+
+# Ask for confirmation before proceeding with the release
+read -p "Continue with release? [Y/n] " -n 1 -r confirm
+confirm="${confirm:-y}"
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+	echo -e "\nRelease cancelled."
+	exit 0
+fi
+echo -e "\nRelease confirmed, continuing..."
