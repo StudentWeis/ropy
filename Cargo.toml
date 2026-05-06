@@ -99,6 +99,7 @@ expect_used = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
 undocumented_unsafe_blocks = "deny"
+mod_module_files = "deny"
 
 [profile.release]
 opt-level = 3
