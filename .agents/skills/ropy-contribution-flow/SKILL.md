@@ -82,7 +82,8 @@ Push additional commits to the same branch. **Do not force-push once a reviewer 
 
 ```bash
 gh pr merge <N> --squash --delete-branch
-git checkout main && git pull --ff-only && git fetch --prune
+git checkout main && git pull --ff-only
+git fetch --prune # cleanup remote-tracking branches
 ```
 
 ## CI failures
