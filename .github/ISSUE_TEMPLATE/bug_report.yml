@@ -48,8 +48,6 @@ body:
         - macOS
         - Windows
         - Linux (X11)
-        - Linux (Wayland)
-        - Other
     validations:
       required: true
   - type: textarea
