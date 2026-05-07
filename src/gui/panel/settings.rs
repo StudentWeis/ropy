@@ -61,6 +61,7 @@ fn settings_section_header(
 fn settings_card(cx: &Context<'_, RopyBoard>) -> gpui::Div {
     v_flex()
         .w_full()
+        .mt_3()
         .px_5()
         .rounded_xl()
         .bg(cx.theme().secondary)
