@@ -78,7 +78,7 @@ pub(crate) fn create_window(
 
 const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgroundAppearance {
     if opacity_percent < 100 {
-        WindowBackgroundAppearance::Transparent
+        WindowBackgroundAppearance::Blurred
     } else {
         WindowBackgroundAppearance::Opaque
     }
