@@ -91,7 +91,7 @@ pub(crate) fn render_about_content(
                     .px_8()
                     .text_center()
                     .text_sm()
-                    .text_color(cx.theme().muted_foreground)
+                    .text_color(cx.theme().foreground)
                     .child(I18n::translate(cx, "about_description")),
             )
             // License
@@ -157,10 +157,12 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
             friendly_msg.into()
         }
     };
+    // Use `foreground` for every non-error status so the text stays legible
+    // under dark themes when the window is in transparent mode, where
+    // `muted_foreground` blends into the translucent background.
     let status_color = match &board.update_manager.status {
-        UpdateStatus::Available(_) | UpdateStatus::ReadyToRestart => cx.theme().foreground,
         UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
-        _ => cx.theme().muted_foreground,
+        _ => cx.theme().foreground,
     };
 
     let action_button: Option<Button> = match &board.update_manager.status {
