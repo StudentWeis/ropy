@@ -4,7 +4,7 @@ use gpui::{
     px,
 };
 use gpui_component::{
-    ActiveTheme, Icon, IndexPath, Sizable,
+    ActiveTheme, Icon, IndexPath, Sizable, StyledExt,
     button::{Button, ButtonVariants},
     divider::Divider,
     h_flex,
@@ -44,28 +44,35 @@ fn settings_row<C: IntoElement>(
         .child(control)
 }
 
-fn settings_section_label(
+fn settings_section_header(
     label: impl Into<gpui::SharedString>,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     div()
+        .w_full()
+        .pt_3()
+        .pb_1()
         .text_xs()
+        .font_medium()
         .text_color(cx.theme().muted_foreground)
-        .mt_4()
-        .mb_1()
         .child(label.into())
 }
 
 fn settings_card(cx: &Context<'_, RopyBoard>) -> gpui::Div {
     v_flex()
         .w_full()
+        .mt_3()
         .px_5()
         .rounded_xl()
         .bg(cx.theme().secondary)
 }
 
-fn card_with_rows(rows: Vec<gpui::AnyElement>, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let mut card = settings_card(cx);
+fn section_card(
+    title: impl Into<gpui::SharedString>,
+    rows: Vec<gpui::AnyElement>,
+    cx: &Context<'_, RopyBoard>,
+) -> impl IntoElement {
+    let mut card = settings_card(cx).child(settings_section_header(title, cx));
     let last_index = rows.len().saturating_sub(1);
     for (index, row) in rows.into_iter().enumerate() {
         card = card.child(row);
@@ -82,10 +89,8 @@ pub(crate) fn render_settings_content(
 ) -> impl IntoElement {
     let header = render_settings_header(cx);
 
-    // Appearance section
-    let appearance_label =
-        settings_section_label(I18n::translate(cx, "settings_section_appearance"), cx);
-    let appearance_card = card_with_rows(
+    let appearance_card = section_card(
+        I18n::translate(cx, "settings_section_appearance"),
         vec![
             render_language_row(board, cx).into_any_element(),
             render_theme_row(board, cx).into_any_element(),
@@ -95,10 +100,8 @@ pub(crate) fn render_settings_content(
         cx,
     );
 
-    // Behavior section
-    let behavior_label =
-        settings_section_label(I18n::translate(cx, "settings_section_behavior"), cx);
-    let behavior_card = card_with_rows(
+    let behavior_card = section_card(
+        I18n::translate(cx, "settings_section_behavior"),
         vec![
             render_activation_key_row(board, cx).into_any_element(),
             render_confirm_mode_row(board, cx).into_any_element(),
@@ -108,9 +111,8 @@ pub(crate) fn render_settings_content(
         cx,
     );
 
-    // Storage section
-    let storage_label = settings_section_label(I18n::translate(cx, "settings_section_storage"), cx);
-    let storage_card = card_with_rows(
+    let storage_card = section_card(
+        I18n::translate(cx, "settings_section_storage"),
         vec![
             render_max_history_row(board, cx).into_any_element(),
             render_max_storage_row(board, cx).into_any_element(),
@@ -119,9 +121,8 @@ pub(crate) fn render_settings_content(
         cx,
     );
 
-    // About section
-    let about_label = settings_section_label(I18n::translate(cx, "settings_section_about"), cx);
-    let about_card = card_with_rows(
+    let about_card = section_card(
+        I18n::translate(cx, "settings_section_about"),
         vec![
             render_auto_check_row(board, cx).into_any_element(),
             render_include_prerelease_row(board, cx).into_any_element(),
@@ -138,13 +139,9 @@ pub(crate) fn render_settings_content(
             .flex_1()
             .px_2()
             .pb_4()
-            .child(appearance_label)
             .child(appearance_card)
-            .child(behavior_label)
             .child(behavior_card)
-            .child(storage_label)
             .child(storage_card)
-            .child(about_label)
             .child(about_card),
     )
 }
