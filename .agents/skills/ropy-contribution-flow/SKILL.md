@@ -35,8 +35,7 @@ Capture the returned number as `<N>`.
 
 ```bash
 git checkout main && git pull --ff-only
-git checkout -b <type>/<kebab-slug>
-# e.g. feat/grid-layout, fix/clipboard-empty-x11
+git checkout -b <type>/<kebab-slug> # e.g. feat/grid-layout, fix/clipboard-empty-x11
 ```
 
 ### 3. Implement
