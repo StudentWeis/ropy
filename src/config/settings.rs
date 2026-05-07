@@ -14,9 +14,11 @@ mod validate;
 
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
-/// 40% is the lowest opacity that still keeps text legible during testing;
-/// going lower made the UI effectively unusable.
-const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
+/// The opacity slider only fades the main window background — every UI
+/// surface (cards, inputs, popovers, …) stays fully opaque and the OS-native
+/// blur preserves contrast — so the entire `[0, 100]` range is safe to expose
+/// without sacrificing legibility.
+const MIN_WINDOW_OPACITY_PERCENT: u8 = 0;
 const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -608,13 +610,16 @@ max_history_records = 100
 
     #[test]
     fn test_window_settings_normalize_opacity_clamps_to_supported_range() {
+        // Lower bound is 0 (the full slider range is exposed), so a small
+        // legitimate value must round-trip unchanged.
         let mut window = WindowSettings { opacity_percent: 5 };
         window.normalize_opacity();
-        assert_eq!(window.opacity_percent, MIN_WINDOW_OPACITY_PERCENT);
+        assert_eq!(window.opacity_percent, 5);
 
+        // Upper bound still clamps overflowing on-disk values.
         window.opacity_percent = 150;
         window.normalize_opacity();
-        assert_eq!(window.opacity_percent, 100);
+        assert_eq!(window.opacity_percent, MAX_WINDOW_OPACITY_PERCENT);
     }
 
     // ── AutoStartSettings Tests ───────────────────────────────────
