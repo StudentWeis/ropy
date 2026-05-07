@@ -2,20 +2,15 @@ use std::sync::Arc;
 
 use gpui::{App, Global, ReadGlobal};
 
-/// Storage backend traits shared by repository implementations.
+/// Storage backend traits and implementations (memory, redb).
 pub mod backend;
 mod cleanup;
 mod display;
 /// Repository error types.
 pub mod errors;
 mod favorites;
-#[cfg(test)]
-/// In-memory backend used by tests.
-pub mod memory_backend;
 /// Persisted clipboard record models.
 pub mod models;
-/// Production `redb` backend implementation.
-pub mod redb_backend;
 /// Repository entry points and persistence APIs.
 pub mod repo;
 mod sidecar;

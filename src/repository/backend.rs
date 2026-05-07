@@ -9,6 +9,10 @@ use std::path::PathBuf;
 
 use super::errors::RepositoryError;
 
+#[cfg(test)]
+pub mod memory;
+pub mod redb;
+
 /// A named, ordered key-value store with forward and reverse iteration.
 /// Each "tree" is a logical namespace (e.g. `clipboard_records`,
 /// `time_index`, `favorites`).

@@ -6,9 +6,9 @@ use std::{thread, time::Duration};
 use rstest::rstest;
 
 use crate::repository::{
-    backend::{BackendFactory, StorageBackend},
-    memory_backend::memory_backend_factory,
-    redb_backend::redb_backend_factory,
+    backend::{
+        BackendFactory, StorageBackend, memory::memory_backend_factory, redb::redb_backend_factory,
+    },
     repo::ClipboardRepository,
     test_helpers::{
         create_test_repo, create_test_repo_with, load_display_records, save_numbered_records,

@@ -15,7 +15,7 @@ use std::{
 
 use redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 
-use super::{
+use crate::repository::{
     backend::{KvTree, StorageBackend},
     errors::RepositoryError,
 };

@@ -6,10 +6,12 @@ use std::path::{Path, PathBuf};
 use chrono::Local;
 
 use super::{
-    backend::{BackendFactory, KvTree, StorageBackend},
+    backend::{
+        BackendFactory, KvTree, StorageBackend,
+        redb::{RedbBackend, redb_backend_factory},
+    },
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
-    redb_backend::{RedbBackend, redb_backend_factory},
     sidecar::{
         purge_sidecar_dirs, remove_image_files, remove_record_sidecars,
         remove_superseded_rich_text_files,

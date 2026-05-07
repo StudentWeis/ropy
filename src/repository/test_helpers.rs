@@ -6,8 +6,10 @@ use std::{thread, time::Duration};
 use tempfile::tempdir;
 
 use super::{
-    backend::{BackendFactory, StorageBackend},
-    memory_backend::{MemoryBackend, memory_backend_factory},
+    backend::{
+        BackendFactory, StorageBackend,
+        memory::{MemoryBackend, memory_backend_factory},
+    },
     models::ClipboardRecord,
     repo::ClipboardRepository,
 };

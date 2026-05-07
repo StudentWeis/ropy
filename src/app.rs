@@ -341,7 +341,7 @@ mod tests {
     use std::{thread, time::Duration};
 
     use super::*;
-    use crate::repository::memory_backend::{MemoryBackend, memory_backend_factory};
+    use crate::repository::backend::memory::{MemoryBackend, memory_backend_factory};
 
     fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository<MemoryBackend>) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn test_load_initial_records_when_repository_is_missing_returns_empty() {
         let records =
-            load_initial_records::<crate::repository::redb_backend::RedbBackend>(None, 10);
+            load_initial_records::<crate::repository::backend::redb::RedbBackend>(None, 10);
 
         assert!(records.is_empty());
     }

@@ -7,6 +7,7 @@
 
 ## Development
 
+- Follow all the best practices outlined in the clippy lint.
 - Define all error types with `thiserror` — avoid manual `impl Display/Error`.
 - Build new UI components using `gpui-component`.
 - Run `scripts/precheck.sh` before committing to verify code quality and formatting.

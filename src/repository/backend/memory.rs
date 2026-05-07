@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, LockResult, Mutex, PoisonError, RwLock},
 };
 
-use super::{
+use crate::repository::{
     backend::{KvTree, StorageBackend},
     errors::RepositoryError,
 };
