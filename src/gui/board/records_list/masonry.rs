@@ -90,7 +90,11 @@ fn grid_card_width(available_width: gpui::Pixels) -> gpui::Pixels {
     ((available_width - px(GRID_COLUMN_GAP)) / GRID_COLUMN_COUNT_F32).max(px(1.0))
 }
 
-fn masonry_visible_window(scroll_handle: &ScrollHandle, window: &Window) -> (f32, f32) {
+fn masonry_visible_window(
+    scroll_handle: &ScrollHandle,
+    window: &Window,
+    total_height: f32,
+) -> (f32, f32) {
     let offset_y: f32 = scroll_handle.offset().y.into();
     let tracked_bounds = scroll_handle.bounds();
     let viewport_height: f32 = if tracked_bounds.size.height > px(0.0) {
@@ -98,7 +102,17 @@ fn masonry_visible_window(scroll_handle: &ScrollHandle, window: &Window) -> (f32
     } else {
         window.bounds().size.height.into()
     };
-    let scroll_top = (-offset_y).max(0.0);
+
+    compute_masonry_visible_window(offset_y, viewport_height, total_height)
+}
+
+fn compute_masonry_visible_window(
+    offset_y: f32,
+    viewport_height: f32,
+    total_height: f32,
+) -> (f32, f32) {
+    let max_scroll_top = (total_height - viewport_height).max(0.0);
+    let scroll_top = (-offset_y).clamp(0.0, max_scroll_top);
 
     (
         (scroll_top - GRID_OVERSCAN_PX).max(0.0),
@@ -157,7 +171,8 @@ impl RenderOnce for GridMasonry {
             GRID_ROW_GAP,
         );
 
-        let (visible_top, visible_bottom) = masonry_visible_window(&self.scroll_handle, window);
+        let (visible_top, visible_bottom) =
+            masonry_visible_window(&self.scroll_handle, window, layout.total_height);
 
         let mut children = Vec::with_capacity(layout.placements.len());
         let records = read_or_recover(&self.state.records);
@@ -232,7 +247,7 @@ impl RenderOnce for GridMasonry {
 mod tests {
     use super::{
         super::metrics::GRID_COLUMN_COUNT, MasonryPlacement, build_masonry_layout,
-        masonry_placement_is_visible,
+        compute_masonry_visible_window, masonry_placement_is_visible,
     };
 
     #[test]
@@ -292,5 +307,63 @@ mod tests {
 
         assert!(masonry_placement_is_visible(&visible, 0.0, 240.0));
         assert!(!masonry_placement_is_visible(&hidden, 0.0, 240.0));
+    }
+
+    #[test]
+    fn test_compute_visible_window_at_top() {
+        let (top, bottom) = compute_masonry_visible_window(0.0, 300.0, 800.0);
+
+        assert!((top - 0.0).abs() < f32::EPSILON);
+        assert!((bottom - (300.0 + 240.0)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_visible_window_at_bottom() {
+        let total_height = 800.0;
+        let viewport_height = 300.0;
+        let offset_y = -(total_height - viewport_height);
+        let (top, bottom) = compute_masonry_visible_window(offset_y, viewport_height, total_height);
+
+        assert!((top - (500.0 - 240.0)).abs() < f32::EPSILON);
+        assert!((bottom - (800.0 + 240.0)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_visible_window_clamps_positive_offset_y() {
+        // Positive offset_y simulates over-scroll (content pulled down).
+        // Without clamping, scroll_top would become negative and the visible
+        // window would flip to the top, hiding bottom records.
+        let total_height = 800.0;
+        let viewport_height = 300.0;
+        let offset_y = 50.0;
+        let (top, bottom) = compute_masonry_visible_window(offset_y, viewport_height, total_height);
+
+        // scroll_top should be clamped to 0, not negative.
+        assert!((top - 0.0).abs() < f32::EPSILON);
+        assert!((bottom - (300.0 + 240.0)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_visible_window_clamps_deep_negative_offset_y() {
+        // Deep negative offset_y simulates over-scroll past the bottom.
+        let total_height = 800.0;
+        let viewport_height = 300.0;
+        let offset_y = -700.0;
+        let (top, bottom) = compute_masonry_visible_window(offset_y, viewport_height, total_height);
+
+        // scroll_top should be clamped to max_scroll_top (500).
+        assert!((top - (500.0 - 240.0)).abs() < f32::EPSILON);
+        assert!((bottom - (800.0 + 240.0)).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_visible_window_when_content_fits_viewport() {
+        let total_height = 200.0;
+        let viewport_height = 300.0;
+        let (top, bottom) = compute_masonry_visible_window(-50.0, viewport_height, total_height);
+
+        // max_scroll_top is 0, so scroll_top is clamped to 0 regardless of offset_y.
+        assert!((top - 0.0).abs() < f32::EPSILON);
+        assert!((bottom - (300.0 + 240.0)).abs() < f32::EPSILON);
     }
 }
