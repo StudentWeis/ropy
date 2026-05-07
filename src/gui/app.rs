@@ -104,16 +104,16 @@ pub(crate) fn set_app_theme(
 
     Theme::change(component_mode, Some(window), cx);
 
-    // Only window-background surfaces follow the opacity slider so that the
-    // OS-level blur shows through behind the app, while interactive UI
-    // elements (buttons, inputs, popovers, selection, …) stay fully opaque
-    // and crisp regardless of the chosen translucency.
+    // Only the main window background follows the opacity slider so that the
+    // OS-level blur shows through behind the app, while every other UI
+    // surface (panels, buttons, inputs, popovers, selection, …) stays fully
+    // opaque and crisp regardless of the chosen translucency.
     let translucent_background = |color| surface_with_opacity(color, opacity_percent);
 
     let theme = Theme::global_mut(cx);
     theme.background = translucent_background(rgb(palette.background).into());
     theme.foreground = rgb(palette.foreground).into();
-    theme.secondary = translucent_background(rgb(palette.secondary).into());
+    theme.secondary = rgb(palette.secondary).into();
     theme.secondary_foreground = rgb(palette.secondary_foreground).into();
     theme.border = rgb(palette.border).into();
     theme.accent = rgb(palette.accent).into();
