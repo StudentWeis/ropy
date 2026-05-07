@@ -241,10 +241,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::repository::{
-        backend::{BackendFactory, StorageBackend},
-        memory_backend::{MemoryTreeHandle, memory_backend_factory},
-        redb_backend::redb_backend_factory,
+    use crate::repository::backend::{
+        BackendFactory, StorageBackend,
+        memory::{MemoryTreeHandle, memory_backend_factory},
+        redb::redb_backend_factory,
     };
 
     type MemoryTimeIndex = TimeIndex<MemoryTreeHandle>;

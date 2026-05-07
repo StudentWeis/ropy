@@ -3,8 +3,10 @@
 use std::cmp::Ordering;
 
 use super::{
-    backend::StorageBackend, errors::RepositoryError, models::ClipboardRecord,
-    redb_backend::RedbBackend, repo::ClipboardRepository,
+    backend::{StorageBackend, redb::RedbBackend},
+    errors::RepositoryError,
+    models::ClipboardRecord,
+    repo::ClipboardRepository,
 };
 
 impl<B: StorageBackend> ClipboardRepository<B> {

@@ -4,10 +4,9 @@
 use std::collections::HashSet;
 
 use super::{
-    backend::{KvTree, StorageBackend},
+    backend::{KvTree, StorageBackend, redb::RedbBackend},
     errors::RepositoryError,
     models::ClipboardRecord,
-    redb_backend::RedbBackend,
     repo::ClipboardRepository,
     sidecar::remove_record_sidecars,
 };
