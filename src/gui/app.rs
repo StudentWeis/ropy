@@ -104,30 +104,34 @@ pub(crate) fn set_app_theme(
 
     Theme::change(component_mode, Some(window), cx);
 
-    let surface = |color| surface_with_opacity(color, opacity_percent);
+    // Only window-background surfaces follow the opacity slider so that the
+    // OS-level blur shows through behind the app, while interactive UI
+    // elements (buttons, inputs, popovers, selection, …) stay fully opaque
+    // and crisp regardless of the chosen translucency.
+    let translucent_background = |color| surface_with_opacity(color, opacity_percent);
 
     let theme = Theme::global_mut(cx);
-    theme.background = surface(rgb(palette.background).into());
+    theme.background = translucent_background(rgb(palette.background).into());
     theme.foreground = rgb(palette.foreground).into();
-    theme.secondary = surface(rgb(palette.secondary).into());
+    theme.secondary = translucent_background(rgb(palette.secondary).into());
     theme.secondary_foreground = rgb(palette.secondary_foreground).into();
-    theme.border = surface(rgb(palette.border).into());
-    theme.accent = surface(rgb(palette.accent).into());
+    theme.border = rgb(palette.border).into();
+    theme.accent = rgb(palette.accent).into();
     theme.accent_foreground = rgb(palette.accent_foreground).into();
-    theme.muted = surface(rgb(palette.muted).into());
+    theme.muted = rgb(palette.muted).into();
     theme.muted_foreground = rgb(palette.muted_foreground).into();
-    theme.input = surface(rgb(palette.input).into());
-    theme.primary = surface(rgb(palette.primary).into());
+    theme.input = rgb(palette.input).into();
+    theme.primary = rgb(palette.primary).into();
     theme.primary_foreground = rgb(palette.primary_foreground).into();
-    theme.primary_hover = surface(rgb(palette.primary_hover).into());
-    theme.primary_active = surface(rgb(palette.primary_active).into());
-    theme.danger = surface(rgb(palette.danger).into());
+    theme.primary_hover = rgb(palette.primary_hover).into();
+    theme.primary_active = rgb(palette.primary_active).into();
+    theme.danger = rgb(palette.danger).into();
     theme.danger_foreground = rgb(palette.danger_foreground).into();
-    theme.popover = surface(rgb(palette.popover).into());
+    theme.popover = rgb(palette.popover).into();
     theme.popover_foreground = rgb(palette.popover_foreground).into();
-    theme.selection = surface(rgb(palette.selection).into());
-    theme.ring = surface(rgb(palette.ring).into());
-    theme.list_hover = surface(rgb(palette.list_hover).into());
-    theme.list_active = surface(rgb(palette.list_active).into());
-    theme.scrollbar_thumb = surface(rgb(palette.scrollbar_thumb).into());
+    theme.selection = rgb(palette.selection).into();
+    theme.ring = rgb(palette.ring).into();
+    theme.list_hover = rgb(palette.list_hover).into();
+    theme.list_active = rgb(palette.list_active).into();
+    theme.scrollbar_thumb = rgb(palette.scrollbar_thumb).into();
 }
