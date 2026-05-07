@@ -29,7 +29,6 @@ use super::{
 use crate::{
     clipboard::thumb_path_for,
     config::LayoutMode,
-    gui::surface_with_opacity,
     repository::{ClipboardRecord, SharedRecords, models::ContentType},
     utils::read_or_recover,
 };
@@ -254,14 +253,15 @@ struct ItemStyle {
 }
 
 impl ItemStyle {
-    fn from_app(cx: &App, opacity_percent: u8) -> Self {
+    fn from_app(cx: &App) -> Self {
+        let theme = cx.theme();
         Self {
-            selected_background: surface_with_opacity(cx.theme().accent, opacity_percent),
-            normal_background: surface_with_opacity(cx.theme().secondary, opacity_percent),
-            border: surface_with_opacity(cx.theme().border, opacity_percent),
-            hover_border: cx.theme().foreground,
-            meta_background: surface_with_opacity(cx.theme().background, opacity_percent),
-            badge_background: surface_with_opacity(cx.theme().accent, opacity_percent),
+            selected_background: theme.accent,
+            normal_background: theme.secondary,
+            border: theme.border,
+            hover_border: theme.foreground,
+            meta_background: theme.background,
+            badge_background: theme.accent,
         }
     }
 }
@@ -275,7 +275,6 @@ pub(super) struct RenderContext<'a> {
     layout_mode: LayoutMode,
     show_preview: bool,
     hover_preview_enabled: bool,
-    opacity_percent: u8,
     view: &'a gpui::WeakEntity<RopyBoard>,
 }
 
@@ -287,7 +286,6 @@ pub(super) struct RecordsListState {
     layout_mode: LayoutMode,
     show_preview: bool,
     hover_preview_enabled: bool,
-    opacity_percent: u8,
     pub(super) view: gpui::WeakEntity<RopyBoard>,
 }
 
@@ -302,7 +300,6 @@ impl RecordsListState {
             show_preview: board.show_preview,
             hover_preview_enabled: board.settings_editor.hover_preview_enabled
                 && !board.show_clear_confirm,
-            opacity_percent: board.settings_editor.window_opacity_percent,
             view: context.weak_entity(),
         }
     }
@@ -338,7 +335,6 @@ impl RecordsListState {
             layout_mode: self.layout_mode,
             show_preview: self.show_preview,
             hover_preview_enabled: self.hover_preview_enabled,
-            opacity_percent: self.opacity_percent,
             view: &self.view,
         }
     }
@@ -606,7 +602,7 @@ pub(super) fn render_list_item_with_grid_height(
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let preview_data = PreviewData::new(ctx.record);
-    let styles = ItemStyle::from_app(cx, ctx.opacity_percent);
+    let styles = ItemStyle::from_app(cx);
 
     let card = if compact {
         let card_shell = grid_height_override.map_or_else(
