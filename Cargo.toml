@@ -166,13 +166,6 @@ name = "Ropy"
 identifier = "com.ropy.app"
 icon = ["assets/logo.png"]
 osx_minimum_system_version = "10.15"
-# Inject LSUIElement=true so the bundled .app launches as a menu-bar
-# accessory with no Dock tile and no Cmd-Tab entry, matching the tray-app
-# UX. cargo-bundle splices the file's contents verbatim into the top-level
-# <dict>, which is why the fragment must not include <plist>/<dict>
-# wrappers. Runtime `setActivationPolicy:` is kept as a defensive backup
-# only — it runs too late to prevent the cold-launch Dock-icon flash.
-osx_info_plist_exts = ["assets/macos/Info.plist.ext"]
 
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
