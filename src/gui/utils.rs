@@ -342,6 +342,12 @@ pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
     cfg_select! {
         target_os = "macos" => {
             cx.activate(true);
+            // Re-assert the accessory policy after activation. Some macOS
+            // flows (native open/save panels, permission prompts) silently
+            // promote the process to a regular Dock app and don't always
+            // restore it, which would surface a stray Dock tile after the
+            // user re-opens Ropy via tray / hotkey.
+            set_activation_policy_accessory();
         }
         target_os = "linux" => {
             if let Some(x11) = crate::app::X11_INSTANCE.get()
@@ -407,6 +413,13 @@ pub fn start_window_drag(window: &Window) {
 
 /// Promote the macOS process to "accessory" so we live in the menu bar
 /// only — no Dock tile and no Cmd-Tab entry, matching the tray-app UX.
+///
+/// The bundled `Info.plist` sets `LSUIElement = true`, which is the real
+/// guarantee against a Dock-icon flash on cold launch (runtime calls
+/// always run too late for that). This function is a defensive backup
+/// for flows that `AppKit` may temporarily elevate — e.g. native panels,
+/// permission prompts, or `NSApp.activate(ignoringOtherApps:)` on some
+/// macOS versions.
 #[cfg(target_os = "macos")]
 pub(crate) fn set_activation_policy_accessory() {
     use objc2::{class, msg_send, runtime::AnyObject};
