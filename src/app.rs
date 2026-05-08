@@ -7,7 +7,7 @@
 //! can focus solely on rendering.
 
 use std::{
-    cfg_select, env,
+    cfg_select,
     sync::{Arc, Mutex},
 };
 
@@ -252,15 +252,8 @@ fn load_settings() -> Settings {
     }
 }
 
-fn is_silent_launch(args: &[String]) -> bool {
-    args.iter().any(|arg| arg == crate::constants::SILENT_ARG)
-}
-
 /// Entry point: initialize all subsystems and launch the application.
 pub(crate) fn launch() {
-    let args: Vec<String> = env::args().collect();
-    let is_silent = is_silent_launch(&args);
-
     gpui::Application::new()
         .with_assets(crate::gui::Assets)
         .run(move |cx| {
@@ -289,8 +282,7 @@ pub(crate) fn launch() {
             let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(cx);
 
-            let window_handle =
-                crate::gui::create_window(cx, shared_records, last_copy, copy_tx, is_silent);
+            let window_handle = crate::gui::create_window(cx, shared_records, last_copy, copy_tx);
             start_clipboard_event_handler(clipboard_rx, window_handle, cx);
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
@@ -354,20 +346,6 @@ mod tests {
         .expect("Failed to create test repository");
 
         (temp_dir, repo)
-    }
-
-    #[test]
-    fn test_is_silent_launch_when_flag_is_present_returns_true() {
-        let args = vec!["ropy".to_string(), crate::constants::SILENT_ARG.to_string()];
-
-        assert!(is_silent_launch(&args));
-    }
-
-    #[test]
-    fn test_is_silent_launch_when_flag_is_missing_returns_false() {
-        let args = vec!["ropy".to_string(), "--verbose".to_string()];
-
-        assert!(!is_silent_launch(&args));
     }
 
     #[test]

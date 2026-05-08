@@ -5,8 +5,4 @@
 /// "Ropy" in every locale.
 pub(crate) const APP_NAME: &str = "Ropy";
 
-/// Hidden CLI flag used by the auto-start launcher to suppress the
-/// initial window so the app boots silently into the tray.
-pub(crate) const SILENT_ARG: &str = "--silent";
-
 pub(crate) const BACK_ARROW: &str = "←";
