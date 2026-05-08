@@ -296,20 +296,20 @@ pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: b
     if pinned {
         return;
     }
-    #[cfg(target_os = "windows")]
-    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
-        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
-    {
-        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: see module-level note. `SW_HIDE` only toggles visibility.
-        unsafe {
-            ShowWindow(hwnd, SW_HIDE);
-        }
-    }
-
     cfg_select! {
         target_os = "macos" => {
             cx.hide();
+        }
+        target_os = "windows" => {
+            if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+                && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
+            {
+                let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+                // SAFETY: see module-level note. `SW_HIDE` only toggles visibility.
+                unsafe {
+                    ShowWindow(hwnd, SW_HIDE);
+                }
+            }
         }
         target_os = "linux" => {
             if let Some(x11) = crate::app::X11_INSTANCE.get()
@@ -334,22 +334,22 @@ pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: b
 pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
     window.activate_window();
 
-    #[cfg(target_os = "windows")]
-    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
-        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
-    {
-        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: see module-level note. Both calls only affect
-        // visibility / focus.
-        unsafe {
-            ShowWindow(hwnd, SW_RESTORE);
-            SetForegroundWindow(hwnd);
-        }
-    }
-
     cfg_select! {
         target_os = "macos" => {
             cx.activate(true);
+        }
+        target_os = "windows" => {
+            if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+                && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
+            {
+                let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+                // SAFETY: see module-level note. Both calls only affect
+                // visibility / focus.
+                unsafe {
+                    ShowWindow(hwnd, SW_RESTORE);
+                    SetForegroundWindow(hwnd);
+                }
+            }
         }
         target_os = "linux" => {
             if let Some(x11) = crate::app::X11_INSTANCE.get()
