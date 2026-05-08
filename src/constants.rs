@@ -5,15 +5,8 @@
 /// "Ropy" in every locale.
 pub(crate) const APP_NAME: &str = "Ropy";
 
-/// Hidden CLI flag historically used by the auto-start launcher to
-/// suppress the initial window. Ropy now never opens the window on
-/// launch — every entry point boots straight into the tray and the
-/// window only appears when the user invokes the global hotkey or a
-/// tray-menu action — so this flag is effectively a no-op.
-///
-/// It is still passed by `auto-launch` registrations because existing
-/// `LaunchAgents` on users' machines already reference it; rejecting or
-/// removing the arg would force a re-registration on every install.
+/// Hidden CLI flag used by the auto-start launcher to suppress the
+/// initial window so the app boots silently into the tray.
 pub(crate) const SILENT_ARG: &str = "--silent";
 
 pub(crate) const BACK_ARROW: &str = "←";
