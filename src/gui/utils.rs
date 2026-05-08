@@ -324,8 +324,16 @@ pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: b
 
 /// Restore the window and pull it to the foreground, mirroring the user's
 /// expectation that activating from the tray / hotkey gives focus.
-#[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
+///
+/// `window.activate_window()` is called unconditionally so that a window
+/// created hidden (`WindowOptions::show = false`) is also brought on-screen
+/// the first time the user triggers the hotkey or the tray "Show" entry —
+/// on macOS this maps to `[NSWindow makeKeyAndOrderFront]`, which both
+/// orders the window front and gives it key status.
+#[expect(clippy::needless_pass_by_ref_mut)]
 pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
+    window.activate_window();
+
     #[cfg(target_os = "windows")]
     if let Ok(window_handle) = HasWindowHandle::window_handle(window)
         && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
