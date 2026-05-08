@@ -7,7 +7,9 @@ description: Ropy repository contribution workflow. Use for any code change that
 
 Issue → Branch → PR → Merge workflow for any code change in this repo. Coding standards live in [`AGENTS.md`](../../../AGENTS.md); this skill only covers the process.
 
-## Conventional Commits
+## Conventions
+
+Shared vocabulary used throughout the flow below: `<type>` and `<scope>` placeholders in every step refer back here.
 
 - **Types**: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`
 - **Scopes** (top-level modules): `gui | repository | clipboard | updater | i18n | config | gpui`
@@ -21,10 +23,7 @@ Issue → Branch → PR → Merge workflow for any code change in this repo. Cod
 Pick a template from `.github/ISSUE_TEMPLATE/`. Fill it into `/tmp/ropy-issue.md`, then:
 
 ```bash
-gh issue create \
-  --title "<type>: ..."  \
-  --label "<from yml>" \
-  --body-file /tmp/ropy-issue.md
+gh issue create --title "<type>: ..." --label "<from yml>" --body-file /tmp/ropy-issue.md
 ```
 
 Capture the returned number as `<N>`.
@@ -40,7 +39,7 @@ git checkout -b <type>/<kebab-slug> # e.g. feat/grid-layout, fix/clipboard-empty
 
 ### 3. Implement
 
-Follow `AGENTS.md`. Re-read it if unsure about TDD, error types, UI components, or i18n.
+Follow `AGENTS.md`.
 
 ### 4. Precheck
 
@@ -53,22 +52,20 @@ Must pass before any commit:
 ### 5. Commit
 
 ```bash
-git commit -am "feat(gui): add grid layout mode
+git commit -am "<type>(<scope>): <short description>
 
 Refs #<N>"
 ```
 
 Multiple commits are fine — they are squashed on merge.
 
-### 6. Push & open the PR
+### 6. Push & Open the PR
 
 Fill `.github/PULL_REQUEST_TEMPLATE.md` into `/tmp/ropy-pr.md`, then:
 
 ```bash
 git push -u origin HEAD
-gh pr create --base main \
-  --title "<type>(<scope>): ..." \
-  --body-file /tmp/ropy-pr.md
+gh pr create --base main --title "<type>(<scope>): ..." --body-file /tmp/ropy-pr.md
 ```
 
 Report the PR URL back to the user.
@@ -77,14 +74,16 @@ Report the PR URL back to the user.
 
 Push additional commits to the same branch. **Do not force-push once a reviewer has left feedback**, unless the user explicitly requests it.
 
-### 8. Merge — only on explicit user instruction
+### 8. Merge
+
+Only on explicit user instruction.
 
 ```bash
 gh pr merge <N> --squash --delete-branch
 git checkout main && git pull --ff-only
-git fetch --prune # cleanup remote-tracking branches
+git fetch --prune # Cleanup remote-tracking branches
 ```
 
 ## CI failures
 
-Required checks: `Precheck` and `Cross-platform build (macos-latest / windows-latest)`. Most failures are reproducible locally via `./scripts/precheck.sh`. Inspect logs with `gh run view --log-failed`.
+Inspect logs with `gh run view --log-failed`.
