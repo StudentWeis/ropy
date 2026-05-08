@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-05-08
+
+### 🐛 Bug Fixes
+- Clamp scroll_top in grid masonry to prevent over-scroll hiding records (#93) by @StudentWeis in [#93](https://github.com/StudentWeis/ropy/pull/93)
+- Improve about panel text contrast under transparent dark themes (#91) by @StudentWeis in [#91](https://github.com/StudentWeis/ropy/pull/91)
+- Resolve precheck lint errors in x11 module (#83) by @StudentWeis in [#83](https://github.com/StudentWeis/ropy/pull/83)
+- Bound channels and coalesce ui notifications (#73) by @StudentWeis in [#73](https://github.com/StudentWeis/ropy/pull/73)
+
+### 💼 Other
+- Tighten clippy lints and adjust cfg attributes for macOS compatibility by @StudentWeis
+
+### 🚜 Refactor
+- Move backend implementations into backend/ submodule (#95) by @StudentWeis in [#95](https://github.com/StudentWeis/ropy/pull/95)
+- Embed section headings inside settings cards (#89) by @StudentWeis in [#89](https://github.com/StudentWeis/ropy/pull/89)
+- Update visibility modifiers and function signatures across modules by @StudentWeis
+- Migrate all mod.rs files to parent-named module files (#81) by @StudentWeis in [#81](https://github.com/StudentWeis/ropy/pull/81)
+- Replace clippy::allow with clippy::expect annotations in tests by @StudentWeis
+- Replace global clippy::pedantic allows with local annotations (#79) by @StudentWeis in [#79](https://github.com/StudentWeis/ropy/pull/79)
+- Split repo.rs God file into sidecar + per-theme test modules (#71) by @StudentWeis in [#71](https://github.com/StudentWeis/ropy/pull/71)
+
+### 📚 Documentation
+- Update SKILL.md conventions section by @StudentWeis
+- Update SKILL.md with improved git commands for PR merging process by @StudentWeis
+- Simplify contribution flow skill and clean up issue template (#96) by @StudentWeis in [#96](https://github.com/StudentWeis/ropy/pull/96)
+- Move markdown files to docs directory and update links accordingly. by @StudentWeis
+- Audit and prune low-value comments across src/ (#77) by @StudentWeis in [#77](https://github.com/StudentWeis/ropy/pull/77)
+- Remove outdated architecture review section from CODE_REVIEW.md by @StudentWeis
+- Update acknowledgements section in README files by @StudentWeis
+
+### 🎨 Styling
+- Remove redundant comment in SKILL.md by @StudentWeis
+
 ## [0.5.0] - 2026-05-06
 
 ### 🎯 Key Updates Since 0.5.0-alpha
