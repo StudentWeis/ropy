@@ -14,7 +14,10 @@ use std::{
 use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 #[cfg(target_os = "linux")]
-use {crate::gui::x11::X11, std::sync::OnceLock};
+use {
+    crate::gui::x11::X11,
+    std::{env, sync::OnceLock},
+};
 
 use crate::{
     clipboard::{self, ClipboardEvent, LastCopyState},
