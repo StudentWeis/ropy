@@ -42,12 +42,15 @@ impl AssetSource for Assets {
 }
 
 /// Create the main application window.
+///
+/// The window is always created hidden — Ropy is a tray-resident clipboard
+/// manager and is only revealed by the global hotkey or the tray menu,
+/// regardless of how the process was launched.
 pub(crate) fn create_window(
     cx: &mut App,
     shared_records: SharedRecords,
     last_copy: Arc<Mutex<LastCopyState>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
-    is_silent: bool,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, default_window_size(), cx);
     let window_opacity_percent = Settings::read(cx, |s| s.window.opacity_percent);
@@ -56,7 +59,7 @@ pub(crate) fn create_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
             titlebar: None,
-            show: !is_silent, // When silent mode, do not show the window initially
+            show: false,
             window_background: background_appearance_for_opacity(window_opacity_percent),
             ..Default::default()
         },

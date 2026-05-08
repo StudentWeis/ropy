@@ -18,9 +18,9 @@ pub(crate) enum AutoStartError {
     StatusCheck(String),
 }
 
-/// Owns the platform `AutoLaunch` handle and threads the `--silent` flag
-/// through it so a system-triggered launch boots into the tray instead of
-/// popping the main window.
+/// Owns the platform `AutoLaunch` handle. The app always boots hidden into
+/// the tray, so no extra CLI flag is needed to differentiate a
+/// system-triggered launch from a user-triggered one.
 pub(crate) struct AutoStartManager {
     auto_launch: AutoLaunch,
 }
@@ -32,7 +32,6 @@ impl AutoStartManager {
         let auto_launch = AutoLaunchBuilder::new()
             .set_app_name(app_name)
             .set_app_path(&app_path)
-            .set_args(&[crate::constants::SILENT_ARG])
             .build()
             .map_err(|e| {
                 AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
