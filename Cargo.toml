@@ -160,14 +160,13 @@ tag-name = "{{version}}"
 pre-release-commit-message = "chore(release): release {{crate_name}} {{version}}"
 pre-release-hook = ["bash", "scripts/release_prepare.sh"]
 
+# macOS specific settings
 [package.metadata.bundle]
 name = "Ropy"
 identifier = "com.ropy.app"
 icon = ["assets/logo.png"]
-resources = ["assets/locales"]
 osx_minimum_system_version = "10.15"
 
-# macOS specific settings
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
 version = "0.5.1"
