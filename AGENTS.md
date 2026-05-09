@@ -12,6 +12,7 @@
 - Build new UI components using `gpui-component`.
 - Localize all user-facing strings — no hardcoded display text in source files.
 - Follow the guidelines in [Testing](./docs/TESTING.md) for test structure, naming, and coverage expectations.
+- Log files can be viewed when troubleshooting problems.
 
 ## AI Collaboration Workflow
 
