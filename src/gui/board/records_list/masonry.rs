@@ -10,7 +10,7 @@ use super::{
     metrics::{GRID_COLUMN_COUNT, GRID_COLUMN_COUNT_F32, estimated_grid_card_height},
     row::{RecordsListState, render_list_item_with_grid_height},
 };
-use crate::utils::read_or_recover;
+use crate::{repository::SharedRecords, utils::read_or_recover};
 
 const GRID_COLUMN_GAP: f32 = 6.0;
 const GRID_ROW_GAP: f32 = 6.0;
@@ -128,6 +128,91 @@ fn masonry_placement_is_visible(
     placement.top + placement.height >= visible_top && placement.top <= visible_bottom
 }
 
+/// Geometric description of a masonry column grid (column count + widths +
+/// gaps). Lets `masonry_selected_card_fully_visible` keep a small argument
+/// list while still exposing all knobs to tests.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct MasonryColumnSpec {
+    pub(super) count: usize,
+    pub(super) width: f32,
+    pub(super) column_gap: f32,
+    pub(super) row_gap: f32,
+}
+
+/// Returns whether the selected card in `item_heights` is fully inside the
+/// current viewport.
+///
+/// Mirrors the "skip if already visible" semantics that `ListState::scroll_to_reveal_item`
+/// provides for list mode, so callers can avoid yanking the viewport back when
+/// the user is already looking at the selection.
+pub(super) fn masonry_selected_card_fully_visible(
+    item_heights: &[f32],
+    selected_index: usize,
+    columns: MasonryColumnSpec,
+    offset_y: f32,
+    viewport_height: f32,
+) -> bool {
+    let layout = build_masonry_layout(
+        item_heights,
+        columns.count,
+        columns.width,
+        columns.column_gap,
+        columns.row_gap,
+    );
+    let Some(placement) = layout.placements.get(selected_index) else {
+        return true;
+    };
+
+    let max_scroll_top = (layout.total_height - viewport_height).max(0.0);
+    let scroll_top = (-offset_y).clamp(0.0, max_scroll_top);
+    let viewport_top = scroll_top;
+    let viewport_bottom = scroll_top + viewport_height;
+
+    placement.top >= viewport_top && placement.top + placement.height <= viewport_bottom
+}
+
+pub(in crate::gui::board) fn board_selected_card_is_visible(
+    records: &SharedRecords,
+    filtered_record_indices: &[usize],
+    scroll_handle: &ScrollHandle,
+    selected_index: usize,
+) -> bool {
+    if filtered_record_indices.is_empty() {
+        return true;
+    }
+
+    let tracked_bounds = scroll_handle.bounds();
+    let viewport_height: f32 = tracked_bounds.size.height.into();
+    let viewport_width: f32 = tracked_bounds.size.width.into();
+    if viewport_height <= 0.0 || viewport_width <= 0.0 {
+        return true;
+    }
+
+    let card_width: f32 = Into::<f32>::into(grid_card_width(tracked_bounds.size.width));
+    let item_heights = {
+        let records = read_or_recover(records);
+        filtered_record_indices
+            .iter()
+            .filter_map(|record_index| records.get(*record_index))
+            .map(estimated_grid_card_height)
+            .collect::<Vec<_>>()
+    };
+
+    let offset_y: f32 = scroll_handle.offset().y.into();
+
+    masonry_selected_card_fully_visible(
+        &item_heights,
+        selected_index,
+        MasonryColumnSpec {
+            count: GRID_COLUMN_COUNT,
+            width: card_width,
+            column_gap: GRID_COLUMN_GAP,
+            row_gap: GRID_ROW_GAP,
+        },
+        offset_y,
+        viewport_height,
+    )
+}
 #[derive(IntoElement)]
 pub(super) struct GridMasonry {
     state: RecordsListState,
@@ -151,7 +236,6 @@ impl GridMasonry {
 
 impl RenderOnce for GridMasonry {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let view = self.state.view.clone();
         let card_width = grid_card_width(self.available_width);
         let estimated_heights = {
             let records = read_or_recover(&self.state.records);
@@ -220,11 +304,6 @@ impl RenderOnce for GridMasonry {
                     .relative()
                     .size_full()
                     .track_scroll(&self.scroll_handle)
-                    .on_scroll_wheel(move |_event, _window, cx| {
-                        let _ = view.update(cx, |this, _| {
-                            this.suppress_grid_auto_reveal();
-                        });
-                    })
                     .overflow_y_scroll()
                     .children(children),
             )
@@ -246,9 +325,28 @@ impl RenderOnce for GridMasonry {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::metrics::GRID_COLUMN_COUNT, MasonryPlacement, build_masonry_layout,
-        compute_masonry_visible_window, masonry_placement_is_visible,
+        super::metrics::GRID_COLUMN_COUNT, MasonryColumnSpec, MasonryPlacement,
+        build_masonry_layout, compute_masonry_visible_window, masonry_placement_is_visible,
+        masonry_selected_card_fully_visible,
     };
+
+    const fn two_col_spec(width: f32, gap: f32) -> MasonryColumnSpec {
+        MasonryColumnSpec {
+            count: 2,
+            width,
+            column_gap: gap,
+            row_gap: gap,
+        }
+    }
+
+    const fn one_col_spec(width: f32, gap: f32) -> MasonryColumnSpec {
+        MasonryColumnSpec {
+            count: 1,
+            width,
+            column_gap: 0.0,
+            row_gap: gap,
+        }
+    }
 
     #[test]
     fn test_grid_layout_remains_two_columns() {
@@ -356,6 +454,61 @@ mod tests {
         assert!((bottom - (800.0 + 240.0)).abs() < f32::EPSILON);
     }
 
+    #[test]
+    fn test_selected_card_visible_when_inside_viewport() {
+        // Three cards stacked across two columns; viewport covers the top.
+        // Card 0 sits at top:0 height:100, card 1 at top:0 height:60 (col 1),
+        // card 2 at top:108 height:80 (col 1, after row gap).
+        let heights = [100.0, 60.0, 80.0];
+        let visible = masonry_selected_card_fully_visible(
+            &heights,
+            0,
+            two_col_spec(120.0, 8.0),
+            /* offset_y */ 0.0,
+            /* viewport_height */ 300.0,
+        );
+        assert!(visible);
+    }
+
+    #[test]
+    fn test_selected_card_not_visible_when_user_scrolled_away() {
+        // Build a long column where card 5 sits well below the visible window
+        // after the user scrolled to the top. Reveal must NOT be skipped here.
+        let heights = vec![200.0; 8];
+        let visible = masonry_selected_card_fully_visible(
+            &heights,
+            5,
+            one_col_spec(120.0, 8.0),
+            /* offset_y */ 0.0,
+            /* viewport_height */ 300.0,
+        );
+        assert!(!visible);
+    }
+
+    #[test]
+    fn test_selected_card_visible_after_user_scrolled_to_match_selection() {
+        // Same long column; user has scrolled so that card 5 is in view.
+        // Card 5 in a single-column layout with height 200 + row_gap 8 starts at
+        // top = 5 * (200 + 8) = 1040.
+        let heights = vec![200.0; 8];
+        let visible = masonry_selected_card_fully_visible(
+            &heights,
+            5,
+            one_col_spec(120.0, 8.0),
+            /* offset_y */ -1040.0,
+            /* viewport_height */ 300.0,
+        );
+        assert!(visible);
+    }
+
+    #[test]
+    fn test_selected_card_visibility_handles_empty_or_out_of_range() {
+        // Out-of-range selected_index should be treated as "no reveal needed".
+        let heights = [100.0_f32, 60.0];
+        let visible =
+            masonry_selected_card_fully_visible(&heights, 99, two_col_spec(120.0, 8.0), 0.0, 300.0);
+        assert!(visible);
+    }
     #[test]
     fn test_compute_visible_window_when_content_fits_viewport() {
         let total_height = 200.0;

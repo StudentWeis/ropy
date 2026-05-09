@@ -8,6 +8,7 @@ use gpui::{
     px,
 };
 use gpui_component::scroll::{Scrollbar, ScrollbarShow};
+pub(super) use masonry::board_selected_card_is_visible;
 use masonry::{GridMasonry, grid_available_width};
 pub(super) use metrics::{list_row_for_selected_index, visible_list_len};
 use row::RecordsListState;

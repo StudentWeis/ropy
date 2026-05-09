@@ -154,7 +154,7 @@ impl RopyBoard {
         };
 
         self.selected_index = next_index;
-        self.force_reveal_selected_record();
+        self.reveal_selected_record();
         cx.notify();
     }
 
@@ -184,7 +184,7 @@ impl RopyBoard {
     ) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.force_reveal_selected_record();
+            self.reveal_selected_record();
             cx.notify();
         }
     }
@@ -198,7 +198,7 @@ impl RopyBoard {
         let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
-            self.force_reveal_selected_record();
+            self.reveal_selected_record();
             cx.notify();
         }
     }
@@ -235,7 +235,7 @@ impl RopyBoard {
             {
                 self.selected_index -= 1;
             }
-            self.force_reveal_selected_record();
+            self.reveal_selected_record();
             cx.notify();
         }
     }
@@ -254,7 +254,7 @@ impl RopyBoard {
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
         }
-        self.force_reveal_selected_record();
+        self.reveal_selected_record();
         self.active_panel = ActivePanel::ClipboardList;
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
         reset_window_geometry_for_activation(window, default_window_size());

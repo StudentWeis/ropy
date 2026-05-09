@@ -63,7 +63,7 @@ impl RopyBoard {
         }
 
         if reveal_selection {
-            self.force_reveal_selected_record();
+            self.reveal_selected_record();
         }
     }
 
