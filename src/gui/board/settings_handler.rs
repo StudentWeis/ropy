@@ -216,6 +216,32 @@ impl RopyBoard {
         cx.notify();
     }
 
+    pub(crate) fn save_space_preview_enabled(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let previous_value = Settings::read(cx, |s| s.preview.space_preview_enabled);
+        if enabled == previous_value {
+            return;
+        }
+
+        if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
+            settings.preview.space_preview_enabled = enabled;
+        }) {
+            Self::notify_settings_save_failed(window, cx, &error_message);
+            return;
+        }
+
+        self.settings_editor.panel_state.space_preview_enabled = enabled;
+        if !enabled {
+            self.ui_state.hide_preview();
+        }
+        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        cx.notify();
+    }
+
     pub(super) fn sync_autostart_state_for(
         enabled: bool,
     ) -> Result<(), crate::config::AutoStartError> {

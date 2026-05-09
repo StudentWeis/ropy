@@ -450,6 +450,10 @@ fn render_record_body(
     content.into_any_element()
 }
 
+const fn should_render_selected_preview(flags: RenderFlags) -> bool {
+    flags.is_selected() && flags.preview_visible()
+}
+
 fn render_record_meta(
     index: usize,
     record: &ClipboardRecord,
@@ -715,9 +719,53 @@ pub(super) fn render_list_item_with_grid_height(
         div().pb_2().relative().child(card)
     };
 
-    if ctx.flags.hover_preview_enabled() && ctx.flags.is_selected() && ctx.flags.preview_visible() {
+    if should_render_selected_preview(ctx.flags) {
         item = item.child(render_selected_preview(&preview_data, window, cx));
     }
 
     item.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        FavoriteState, HoverPreviewState, PreviewVisibility, RenderFlags, SelectionState,
+        should_render_selected_preview,
+    };
+
+    const fn flags(
+        selection: SelectionState,
+        preview: PreviewVisibility,
+        hover_preview: HoverPreviewState,
+    ) -> RenderFlags {
+        RenderFlags {
+            favorite: FavoriteState::NotFavorite,
+            selection,
+            preview,
+            hover_preview,
+        }
+    }
+
+    #[test]
+    fn selected_preview_remains_available_when_hover_preview_is_disabled() {
+        assert!(should_render_selected_preview(flags(
+            SelectionState::Selected,
+            PreviewVisibility::Visible,
+            HoverPreviewState::Disabled,
+        )));
+    }
+
+    #[test]
+    fn selected_preview_requires_selected_visible_state() {
+        assert!(!should_render_selected_preview(flags(
+            SelectionState::Unselected,
+            PreviewVisibility::Visible,
+            HoverPreviewState::Enabled,
+        )));
+        assert!(!should_render_selected_preview(flags(
+            SelectionState::Selected,
+            PreviewVisibility::Hidden,
+            HoverPreviewState::Enabled,
+        )));
+    }
 }

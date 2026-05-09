@@ -125,11 +125,30 @@ impl UiState {
         matches!(self.preview, PreviewState::Visible)
     }
 
-    pub(crate) const fn toggle_preview(&mut self) {
-        self.preview = match self.preview {
-            PreviewState::Hidden => PreviewState::Visible,
-            PreviewState::Visible => PreviewState::Hidden,
-        };
+    pub(crate) const fn show_preview(&mut self) -> bool {
+        if self.preview_visible() {
+            return false;
+        }
+
+        self.preview = PreviewState::Visible;
+        true
+    }
+
+    pub(crate) const fn show_space_preview(&mut self, enabled: bool) -> bool {
+        if !enabled {
+            return false;
+        }
+
+        self.show_preview()
+    }
+
+    pub(crate) const fn hide_preview(&mut self) -> bool {
+        if !self.preview_visible() {
+            return false;
+        }
+
+        self.preview = PreviewState::Hidden;
+        true
     }
 }
 
@@ -316,6 +335,7 @@ impl RopyBoard {
             auto_check_enabled,
             include_prerelease_enabled,
             hover_preview_enabled,
+            space_preview_enabled,
         ) = Settings::read(cx, |s| {
             (
                 s.storage.max_history_records,
@@ -330,6 +350,7 @@ impl RopyBoard {
                 s.update.auto_check,
                 s.update.include_prerelease,
                 s.preview.hover_preview_enabled,
+                s.preview.space_preview_enabled,
             )
         });
         let activation_key_placeholder = Self::hotkey_placeholder_text(&activation_key, cx);
@@ -417,6 +438,7 @@ impl RopyBoard {
             auto_check_enabled,
             include_prerelease_enabled,
             hover_preview_enabled,
+            space_preview_enabled,
         );
 
         Self {

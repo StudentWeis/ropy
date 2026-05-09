@@ -1,4 +1,4 @@
-use gpui::{Bounds, Context, Focusable, Pixels, Window};
+use gpui::{Bounds, Context, Focusable, KeyDownEvent, KeyUpEvent, Pixels, Window};
 
 use crate::{
     config::LayoutMode,
@@ -326,18 +326,11 @@ impl RopyBoard {
     /// when the main board — not the search input — has focus.
     pub(crate) fn on_key_down(
         &mut self,
-        event: &gpui::KeyDownEvent,
+        event: &KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.ui_state.clear_confirm_visible() {
-            return;
-        }
-
-        // If the search input is focused, ignore key presses
-        if let Some(focused_handle) = window.focused(cx)
-            && focused_handle == self.search_input.focus_handle(cx)
-        {
+        if self.should_ignore_board_key_event(window, cx) {
             return;
         }
 
@@ -345,8 +338,11 @@ impl RopyBoard {
             "/" => {
                 window.focus(&self.search_input.focus_handle(cx));
             }
-            "space" => {
-                self.ui_state.toggle_preview();
+            "space"
+                if self
+                    .ui_state
+                    .show_space_preview(self.settings_editor.panel_state.space_preview_enabled) =>
+            {
                 cx.notify();
             }
             "p" if self.can_toggle_window_pin() => {
@@ -392,5 +388,32 @@ impl RopyBoard {
             }
             _ => {}
         }
+    }
+
+    pub(crate) fn on_key_up(
+        &mut self,
+        event: &KeyUpEvent,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if self.should_ignore_board_key_event(window, cx) {
+            return;
+        }
+
+        if event.keystroke.key == "space" && self.ui_state.hide_preview() {
+            cx.notify();
+        }
+    }
+
+    fn should_ignore_board_key_event(&self, window: &Window, cx: &Context<'_, Self>) -> bool {
+        if self.ui_state.clear_confirm_visible() {
+            return true;
+        }
+
+        if let Some(focused_handle) = window.focused(cx) {
+            return focused_handle == self.search_input.focus_handle(cx);
+        }
+
+        false
     }
 }

@@ -47,6 +47,7 @@ impl Render for RopyBoard {
                 .on_action(cx.listener(Self::on_confirm_selection_plain_text))
                 .on_action(cx.listener(Self::on_delete_record))
                 .on_key_down(cx.listener(Self::on_key_down))
+                .on_key_up(cx.listener(Self::on_key_up))
                 .child(render_header(self, cx))
                 .child(render_search_input(self, cx))
                 .child(self.render_records_list(window, cx))
