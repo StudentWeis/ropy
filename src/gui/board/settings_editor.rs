@@ -20,6 +20,7 @@ pub(crate) struct HotkeyEditorState {
 pub(crate) struct SettingsPanelState {
     pub(crate) window_opacity_slider_visible: bool,
     pub(crate) hover_preview_enabled: bool,
+    pub(crate) space_preview_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,6 +78,7 @@ impl SettingsEditor {
         auto_check_enabled: bool,
         include_prerelease_enabled: bool,
         hover_preview_enabled: bool,
+        space_preview_enabled: bool,
     ) -> Self {
         Self {
             hotkey: HotkeyEditorState::default(),
@@ -89,6 +91,7 @@ impl SettingsEditor {
             panel_state: SettingsPanelState {
                 window_opacity_slider_visible: false,
                 hover_preview_enabled,
+                space_preview_enabled,
             },
             selected_theme,
             theme_select,

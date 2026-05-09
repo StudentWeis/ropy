@@ -106,6 +106,7 @@ pub(crate) fn render_settings_content(
             render_activation_key_row(board, cx).into_any_element(),
             render_confirm_mode_row(board, cx).into_any_element(),
             render_hover_preview_row(board, cx).into_any_element(),
+            render_space_preview_row(board, cx).into_any_element(),
             render_autostart_row(board, cx).into_any_element(),
         ],
         cx,
@@ -456,6 +457,19 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
     settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
 }
 
+fn render_space_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let toggle = Switch::new("space-preview-toggle")
+        .checked(board.settings_editor.panel_state.space_preview_enabled)
+        .on_click(cx.listener(|board, _, window, cx| {
+            board.save_space_preview_enabled(
+                !board.settings_editor.panel_state.space_preview_enabled,
+                window,
+                cx,
+            );
+        }));
+    settings_row(I18n::translate(cx, "settings_space_preview"), toggle, cx)
+}
+
 fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
         I18n::translate(cx, "settings_clear_history"),
@@ -572,6 +586,7 @@ pub(crate) fn reset_settings_dialog(
         auto_check_enabled,
         include_prerelease_enabled,
         hover_preview_enabled,
+        space_preview_enabled,
         confirm_mode,
         activation_key,
         window_opacity,
@@ -597,6 +612,7 @@ pub(crate) fn reset_settings_dialog(
             s.update.auto_check,
             s.update.include_prerelease,
             s.preview.hover_preview_enabled,
+            s.preview.space_preview_enabled,
             s.confirm.mode,
             s.hotkey.activation_key.clone(),
             s.window.opacity_percent,
@@ -612,6 +628,7 @@ pub(crate) fn reset_settings_dialog(
         .update_settings
         .include_prerelease_enabled = include_prerelease_enabled;
     board.settings_editor.panel_state.hover_preview_enabled = hover_preview_enabled;
+    board.settings_editor.panel_state.space_preview_enabled = space_preview_enabled;
     board.confirm_mode = confirm_mode;
     board.layout_mode = layout_mode;
     board.settings_editor.window_opacity_percent = window_opacity;

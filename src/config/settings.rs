@@ -223,12 +223,14 @@ impl Default for UpdateSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct PreviewSettings {
     pub hover_preview_enabled: bool,
+    pub space_preview_enabled: bool,
 }
 
 impl Default for PreviewSettings {
     fn default() -> Self {
         Self {
             hover_preview_enabled: true,
+            space_preview_enabled: true,
         }
     }
 }
@@ -322,6 +324,7 @@ mod tests {
         settings.update.auto_check = false;
         settings.update.include_prerelease = true;
         settings.preview.hover_preview_enabled = false;
+        settings.preview.space_preview_enabled = false;
         settings.confirm.mode = ConfirmMode::PasteImmediately;
         settings.layout.mode = LayoutMode::Grid;
         settings.window.opacity_percent = 72;
@@ -343,6 +346,7 @@ mod tests {
         assert!(!loaded.update.auto_check);
         assert!(loaded.update.include_prerelease);
         assert!(!loaded.preview.hover_preview_enabled);
+        assert!(!loaded.preview.space_preview_enabled);
         assert_eq!(loaded.confirm.mode, ConfirmMode::PasteImmediately);
         assert_eq!(loaded.layout.mode, LayoutMode::Grid);
         assert_eq!(loaded.window.opacity_percent, 72);
@@ -596,6 +600,7 @@ max_history_records = 100
     fn test_preview_settings_default() {
         let preview = PreviewSettings::default();
         assert!(preview.hover_preview_enabled);
+        assert!(preview.space_preview_enabled);
     }
 
     #[test]
