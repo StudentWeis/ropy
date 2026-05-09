@@ -187,7 +187,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
         board.settings_editor.window_opacity_percent,
         "search-case-sensitive-btn",
         "Aa",
-        board.search_options.case_sensitive,
+        board.filter_state.search_options.case_sensitive,
         I18n::translate(cx, "search_case_sensitive"),
         cx,
     )
@@ -204,7 +204,7 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
         board.settings_editor.window_opacity_percent,
         "search-whole-word-btn",
         "W",
-        board.search_options.whole_word,
+        board.filter_state.search_options.whole_word,
         I18n::translate(cx, "search_match_whole_word"),
         cx,
     )
@@ -273,19 +273,19 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
     let files_filter_tooltip = I18n::translate(cx, "filter_files");
     let opacity_percent = board.settings_editor.window_opacity_percent;
 
-    let text_button = if board.content_filter == ContentFilter::Text {
+    let text_button = if board.filter_state.content_filter == ContentFilter::Text {
         Button::new("filter-text-btn").primary()
     } else {
         Button::new("filter-text-btn").ghost()
     };
 
-    let image_button = if board.content_filter == ContentFilter::Image {
+    let image_button = if board.filter_state.content_filter == ContentFilter::Image {
         Button::new("filter-image-btn").primary()
     } else {
         Button::new("filter-image-btn").ghost()
     };
 
-    let files_button = if board.content_filter == ContentFilter::Files {
+    let files_button = if board.filter_state.content_filter == ContentFilter::Files {
         Button::new("filter-files-btn").primary()
     } else {
         Button::new("filter-files-btn").ghost()
@@ -342,7 +342,7 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
     let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
     let opacity_percent = board.settings_editor.window_opacity_percent;
 
-    let favorites_button = if board.favorites_only {
+    let favorites_button = if board.filter_state.favorites_only {
         Button::new("filter-favorites-btn").primary()
     } else {
         Button::new("filter-favorites-btn").ghost()

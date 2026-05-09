@@ -9,34 +9,56 @@ use gpui_component::{
 use super::RopyBoard;
 use crate::{config::LayoutMode, gui::theme::ThemeId, i18n::Language};
 
+#[derive(Debug, Clone, Copy, Default)]
 #[expect(clippy::redundant_pub_crate)]
-#[expect(clippy::struct_excessive_bools)]
+pub(crate) struct HotkeyEditorState {
+    pub(crate) recording: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct SettingsPanelState {
+    pub(crate) window_opacity_slider_visible: bool,
+    pub(crate) hover_preview_enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct AutostartSettingsState {
+    pub(crate) enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct UpdateSettingsState {
+    pub(crate) auto_check_enabled: bool,
+    pub(crate) include_prerelease_enabled: bool,
+}
+
+#[expect(clippy::redundant_pub_crate)]
 pub(crate) struct SettingsEditor {
-    pub(crate) hotkey_recording: bool,
+    pub(crate) hotkey: HotkeyEditorState,
     pub(crate) pending_hotkey: String,
     pub(crate) hotkey_before_recording: String,
     pub(crate) settings_activation_key_input: Entity<InputState>,
     pub(crate) settings_max_history_input: Entity<InputState>,
     pub(crate) settings_max_storage_input: Entity<InputState>,
     pub(crate) settings_window_opacity_slider: Entity<SliderState>,
-    pub(crate) settings_window_opacity_slider_visible: bool,
+    pub(crate) panel_state: SettingsPanelState,
     pub(crate) selected_theme: usize,
     pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) selected_layout: usize,
     pub(crate) layout_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) window_opacity_percent: u8,
-    pub(crate) autostart_enabled: bool,
+    pub(crate) autostart: AutostartSettingsState,
     pub(crate) selected_language: usize,
     pub(crate) language_select: Entity<SelectState<Vec<SharedString>>>,
-    pub(crate) auto_check_enabled: bool,
-    pub(crate) include_prerelease_enabled: bool,
-    pub(crate) hover_preview_enabled: bool,
+    pub(crate) update_settings: UpdateSettingsState,
 }
 
 impl SettingsEditor {
     #[expect(clippy::too_many_arguments)]
     #[expect(clippy::fn_params_excessive_bools)]
-    #[expect(clippy::missing_const_for_fn)]
     pub(super) fn new(
         pending_hotkey: String,
         hotkey_before_recording: String,
@@ -57,25 +79,31 @@ impl SettingsEditor {
         hover_preview_enabled: bool,
     ) -> Self {
         Self {
-            hotkey_recording: false,
+            hotkey: HotkeyEditorState::default(),
             pending_hotkey,
             hotkey_before_recording,
             settings_activation_key_input,
             settings_max_history_input,
             settings_max_storage_input,
             settings_window_opacity_slider,
-            settings_window_opacity_slider_visible: false,
+            panel_state: SettingsPanelState {
+                window_opacity_slider_visible: false,
+                hover_preview_enabled,
+            },
             selected_theme,
             theme_select,
             selected_layout,
             layout_select,
             window_opacity_percent,
-            autostart_enabled,
+            autostart: AutostartSettingsState {
+                enabled: autostart_enabled,
+            },
             selected_language,
             language_select,
-            auto_check_enabled,
-            include_prerelease_enabled,
-            hover_preview_enabled,
+            update_settings: UpdateSettingsState {
+                auto_check_enabled,
+                include_prerelease_enabled,
+            },
         }
     }
 }

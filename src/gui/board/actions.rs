@@ -246,7 +246,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey_recording {
+        if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             return;
         }
 
@@ -256,7 +256,7 @@ impl RopyBoard {
         }
         self.force_reveal_selected_record();
         self.active_panel = ActivePanel::ClipboardList;
-        self.show_clear_confirm = false;
+        self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
         reset_window_geometry_for_activation(window, default_window_size());
         active_window(window, cx);
     }
@@ -267,13 +267,13 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey_recording {
+        if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             self.cancel_hotkey_recording(window, cx);
             return;
         }
 
-        if self.show_clear_confirm {
-            self.show_clear_confirm = false;
+        if self.ui_state.clear_confirm_visible() {
+            self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
             cx.notify();
             return;
         }
@@ -330,8 +330,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        // Block keyboard shortcuts while the clear-confirm dialog is open
-        if self.show_clear_confirm {
+        if self.ui_state.clear_confirm_visible() {
             return;
         }
 
@@ -347,7 +346,7 @@ impl RopyBoard {
                 window.focus(&self.search_input.focus_handle(cx));
             }
             "space" => {
-                self.show_preview = !self.show_preview;
+                self.ui_state.toggle_preview();
                 cx.notify();
             }
             "p" if self.can_toggle_window_pin() => {

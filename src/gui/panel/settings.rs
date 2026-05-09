@@ -215,7 +215,11 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
                     .bg(cx.theme().accent)
                     .text_color(cx.theme().accent_foreground)
                     .opacity(
-                        if board.settings_editor.settings_window_opacity_slider_visible {
+                        if board
+                            .settings_editor
+                            .panel_state
+                            .window_opacity_slider_visible
+                        {
                             1.0_f32
                         } else {
                             0.0_f32
@@ -249,19 +253,19 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
 fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let is_dirty = board.has_pending_hotkey(cx);
 
-    let border_color = if board.settings_editor.hotkey_recording {
+    let border_color = if board.settings_editor.hotkey.recording {
         cx.theme().accent
     } else {
         cx.theme().border
     };
 
-    let record_tooltip = if board.settings_editor.hotkey_recording {
+    let record_tooltip = if board.settings_editor.hotkey.recording {
         I18n::translate(cx, "settings_hotkey_record_hint")
     } else {
         I18n::translate(cx, "settings_hotkey_record")
     };
 
-    let record_button = if board.settings_editor.hotkey_recording {
+    let record_button = if board.settings_editor.hotkey.recording {
         Button::new("hotkey-record-button").primary()
     } else {
         Button::new("hotkey-record-button")
@@ -299,7 +303,7 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
                 .icon(Icon::empty().path("icons/hotkey-record.svg").size(px(14.0)))
                 .tooltip(record_tooltip)
                 .on_click(cx.listener(|board, _, window, cx| {
-                    if board.settings_editor.hotkey_recording {
+                    if board.settings_editor.hotkey.recording {
                         board.cancel_hotkey_recording(window, cx);
                     } else {
                         board.start_hotkey_recording(window, cx);
@@ -408,7 +412,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
 
 fn render_autostart_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("autostart-toggle")
-        .checked(board.settings_editor.autostart_enabled)
+        .checked(board.settings_editor.autostart.enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.toggle_autostart(window, cx);
         }));
@@ -441,10 +445,10 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("hover-preview-toggle")
-        .checked(board.settings_editor.hover_preview_enabled)
+        .checked(board.settings_editor.panel_state.hover_preview_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.save_hover_preview_enabled(
-                !board.settings_editor.hover_preview_enabled,
+                !board.settings_editor.panel_state.hover_preview_enabled,
                 window,
                 cx,
             );
@@ -518,9 +522,13 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("auto-check-toggle")
-        .checked(board.settings_editor.auto_check_enabled)
+        .checked(board.settings_editor.update_settings.auto_check_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
-            board.save_auto_check_enabled(!board.settings_editor.auto_check_enabled, window, cx);
+            board.save_auto_check_enabled(
+                !board.settings_editor.update_settings.auto_check_enabled,
+                window,
+                cx,
+            );
         }));
     settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
 }
@@ -530,10 +538,18 @@ fn render_include_prerelease_row(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let toggle = Switch::new("include-prerelease-toggle")
-        .checked(board.settings_editor.include_prerelease_enabled)
+        .checked(
+            board
+                .settings_editor
+                .update_settings
+                .include_prerelease_enabled,
+        )
         .on_click(cx.listener(|board, _, window, cx| {
             board.save_include_prerelease_enabled(
-                !board.settings_editor.include_prerelease_enabled,
+                !board
+                    .settings_editor
+                    .update_settings
+                    .include_prerelease_enabled,
                 window,
                 cx,
             );
@@ -589,10 +605,13 @@ pub(crate) fn reset_settings_dialog(
     board.settings_editor.selected_language = lang_idx;
     board.settings_editor.selected_theme = theme_idx;
     board.settings_editor.selected_layout = layout_idx;
-    board.settings_editor.autostart_enabled = autostart_enabled;
-    board.settings_editor.auto_check_enabled = auto_check_enabled;
-    board.settings_editor.include_prerelease_enabled = include_prerelease_enabled;
-    board.settings_editor.hover_preview_enabled = hover_preview_enabled;
+    board.settings_editor.autostart.enabled = autostart_enabled;
+    board.settings_editor.update_settings.auto_check_enabled = auto_check_enabled;
+    board
+        .settings_editor
+        .update_settings
+        .include_prerelease_enabled = include_prerelease_enabled;
+    board.settings_editor.panel_state.hover_preview_enabled = hover_preview_enabled;
     board.confirm_mode = confirm_mode;
     board.layout_mode = layout_mode;
     board.settings_editor.window_opacity_percent = window_opacity;
@@ -601,7 +620,7 @@ pub(crate) fn reset_settings_dialog(
         .pending_hotkey
         .clone_from(&activation_key);
     board.settings_editor.hotkey_before_recording = activation_key;
-    board.settings_editor.hotkey_recording = false;
+    board.settings_editor.hotkey.recording = false;
 
     // Reset the language select dropdown
     board
@@ -628,7 +647,10 @@ pub(crate) fn reset_settings_dialog(
         .update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
-    board.settings_editor.settings_window_opacity_slider_visible = false;
+    board
+        .settings_editor
+        .panel_state
+        .window_opacity_slider_visible = false;
     board.sync_window_opacity_slider(window_opacity, window, cx);
     let theme = ThemeId::all().get(theme_idx).cloned().unwrap_or_default();
     crate::gui::app::set_app_theme(window, cx, &theme, window_opacity);

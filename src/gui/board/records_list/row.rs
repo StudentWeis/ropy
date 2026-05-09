@@ -266,15 +266,61 @@ impl ItemStyle {
     }
 }
 
-#[expect(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FavoriteState {
+    Favorite,
+    NotFavorite,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SelectionState {
+    Selected,
+    Unselected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PreviewVisibility {
+    Visible,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum HoverPreviewState {
+    Enabled,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct RenderFlags {
+    favorite: FavoriteState,
+    selection: SelectionState,
+    preview: PreviewVisibility,
+    hover_preview: HoverPreviewState,
+}
+
+impl RenderFlags {
+    const fn is_favorite(self) -> bool {
+        matches!(self.favorite, FavoriteState::Favorite)
+    }
+
+    const fn is_selected(self) -> bool {
+        matches!(self.selection, SelectionState::Selected)
+    }
+
+    const fn preview_visible(self) -> bool {
+        matches!(self.preview, PreviewVisibility::Visible)
+    }
+
+    const fn hover_preview_enabled(self) -> bool {
+        matches!(self.hover_preview, HoverPreviewState::Enabled)
+    }
+}
+
 pub(super) struct RenderContext<'a> {
     index: usize,
     record: &'a ClipboardRecord,
-    is_favorite: bool,
-    is_selected: bool,
+    flags: RenderFlags,
     layout_mode: LayoutMode,
-    show_preview: bool,
-    hover_preview_enabled: bool,
     opacity_percent: u8,
     view: &'a gpui::WeakEntity<RopyBoard>,
 }
@@ -299,9 +345,9 @@ impl RecordsListState {
             favorite_ids: board.favorite_ids.clone(),
             selected_index: board.selected_index,
             layout_mode: board.layout_mode,
-            show_preview: board.show_preview,
-            hover_preview_enabled: board.settings_editor.hover_preview_enabled
-                && !board.show_clear_confirm,
+            show_preview: board.ui_state.preview_visible(),
+            hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
+                && !board.ui_state.clear_confirm_visible(),
             opacity_percent: board.settings_editor.window_opacity_percent,
             view: context.weak_entity(),
         }
@@ -333,11 +379,29 @@ impl RecordsListState {
         RenderContext {
             index,
             record,
-            is_favorite: self.favorite_ids.contains(&record.id),
-            is_selected: index == self.selected_index,
+            flags: RenderFlags {
+                favorite: if self.favorite_ids.contains(&record.id) {
+                    FavoriteState::Favorite
+                } else {
+                    FavoriteState::NotFavorite
+                },
+                selection: if index == self.selected_index {
+                    SelectionState::Selected
+                } else {
+                    SelectionState::Unselected
+                },
+                preview: if self.show_preview {
+                    PreviewVisibility::Visible
+                } else {
+                    PreviewVisibility::Hidden
+                },
+                hover_preview: if self.hover_preview_enabled {
+                    HoverPreviewState::Enabled
+                } else {
+                    HoverPreviewState::Disabled
+                },
+            },
             layout_mode: self.layout_mode,
-            show_preview: self.show_preview,
-            hover_preview_enabled: self.hover_preview_enabled,
             opacity_percent: self.opacity_percent,
             view: &self.view,
         }
@@ -353,7 +417,7 @@ fn render_record_body(
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let mut content = div().flex_1().min_w_0().id(("record-content", ctx.index));
 
-    if !ctx.show_preview && ctx.hover_preview_enabled {
+    if !ctx.flags.preview_visible() && ctx.flags.hover_preview_enabled() {
         let preview_content_type = preview_data.content_type.clone();
         let preview_record_content = preview_data.record_content.clone();
         content = content.tooltip(move |window, cx| {
@@ -457,7 +521,7 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
     let view_delete = ctx.view.clone();
 
     let favorite_button = {
-        let button = if ctx.is_favorite {
+        let button = if ctx.flags.is_favorite() {
             Button::new(("favorite-btn", index))
                 .xsmall()
                 .primary()
@@ -562,14 +626,14 @@ fn decorate_record_card(
 
     card.bg(styles.normal_background)
         .rounded_md()
-        .border_color(if ctx.is_selected {
+        .border_color(if ctx.flags.is_selected() {
             styles.hover_border
         } else {
             styles.border
         })
         .border_1()
         .hover(move |style| {
-            if ctx.is_selected {
+            if ctx.flags.is_selected() {
                 style
             } else {
                 style
@@ -651,7 +715,7 @@ pub(super) fn render_list_item_with_grid_height(
         div().pb_2().relative().child(card)
     };
 
-    if ctx.hover_preview_enabled && ctx.is_selected && ctx.show_preview {
+    if ctx.flags.hover_preview_enabled() && ctx.flags.is_selected() && ctx.flags.preview_visible() {
         item = item.child(render_selected_preview(&preview_data, window, cx));
     }
 

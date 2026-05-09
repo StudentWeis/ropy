@@ -40,7 +40,7 @@ pub(super) fn render_clear_confirm_overlay(
         .justify_center()
         .id("clear-confirm-backdrop")
         .on_click(cx.listener(|this, _, _, cx| {
-            this.show_clear_confirm = false;
+            this.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
             cx.notify();
         }))
         .child(
@@ -77,7 +77,8 @@ pub(super) fn render_clear_confirm_overlay(
                                 .ghost()
                                 .label(cancel_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.show_clear_confirm = false;
+                                    this.ui_state.clear_confirm =
+                                        crate::gui::board::ClearConfirmState::Hidden;
                                     cx.notify();
                                 })),
                         )
@@ -88,7 +89,8 @@ pub(super) fn render_clear_confirm_overlay(
                                 .label(confirm_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.confirm_clear_action(cx);
-                                    this.show_clear_confirm = false;
+                                    this.ui_state.clear_confirm =
+                                        crate::gui::board::ClearConfirmState::Hidden;
                                     cx.notify();
                                 })),
                         ),

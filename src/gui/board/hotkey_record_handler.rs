@@ -145,7 +145,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         self.settings_editor.hotkey_before_recording = self.resolve_activation_key_input(cx);
-        self.settings_editor.hotkey_recording = true;
+        self.settings_editor.hotkey.recording = true;
         self.refresh_activation_key_placeholder(window, cx);
         self.settings_editor
             .settings_activation_key_input
@@ -161,7 +161,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        self.settings_editor.hotkey_recording = false;
+        self.settings_editor.hotkey.recording = false;
         self.settings_editor.pending_hotkey.clear();
         self.sync_activation_key_input_from_candidate("", window, cx);
         window.focus(
@@ -178,7 +178,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        self.settings_editor.hotkey_recording = false;
+        self.settings_editor.hotkey.recording = false;
         self.settings_editor
             .pending_hotkey
             .clone_from(&self.settings_editor.hotkey_before_recording);
@@ -199,7 +199,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if !self.settings_editor.hotkey_recording {
+        if !self.settings_editor.hotkey.recording {
             return;
         }
 
@@ -217,7 +217,7 @@ impl RopyBoard {
             return;
         };
 
-        self.settings_editor.hotkey_recording = false;
+        self.settings_editor.hotkey.recording = false;
         self.settings_editor.pending_hotkey.clone_from(&hotkey);
         self.sync_activation_key_input(
             &hotkey,
