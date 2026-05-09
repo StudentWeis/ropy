@@ -491,7 +491,7 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
         .label(I18n::translate(cx, "settings_open_log"))
         .on_click(cx.listener(|_, _, _, _| {
             let log_dir = crate::utils::logging::log_dir();
-            crate::utils::open_path::open_in_file_manager(&log_dir);
+            crate::utils::open_in_file_manager(&log_dir);
         }));
 
     let config_button = Button::new("open-config-button")
@@ -502,7 +502,7 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
         .label(I18n::translate(cx, "settings_open_config"))
         .on_click(cx.listener(|_, _, _, _| {
             if let Ok(config_dir) = crate::config::Settings::config_dir() {
-                crate::utils::open_path::open_in_file_manager(&config_dir);
+                crate::utils::open_in_file_manager(&config_dir);
             }
         }));
 
