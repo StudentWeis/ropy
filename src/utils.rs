@@ -4,6 +4,8 @@ pub mod clipboard_files;
 pub mod hash;
 /// Logging initialization and file locations.
 pub mod logging;
+/// Cross-platform helpers for revealing paths in the host file manager.
+pub mod open_path;
 #[cfg(target_os = "windows")]
 /// Windows single-instance enforcement.
 pub mod single_instance;
