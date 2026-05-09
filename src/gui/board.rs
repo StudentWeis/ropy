@@ -74,8 +74,78 @@ pub(super) const fn search_query_should_reveal_selection(
     previous_query.is_empty() && !next_query.is_empty()
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct FilterState {
+    /// Active content type filter
+    pub(crate) content_filter: ContentFilter,
+    /// Whether to show only favorited records (independent of content type filter)
+    pub(crate) favorites_only: bool,
+    /// Active text search options
+    pub(crate) search_options: SearchOptions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum GridRevealState {
+    #[default]
+    Auto,
+    Suppressed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PreviewState {
+    #[default]
+    Hidden,
+    Visible,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum DeletionState {
+    #[default]
+    Idle,
+    Deleting,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ClearConfirmState {
+    #[default]
+    Hidden,
+    Visible,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct UiState {
+    pub(crate) grid_reveal: GridRevealState,
+    pub(crate) preview: PreviewState,
+    pub(crate) deletion: DeletionState,
+    pub(crate) clear_confirm: ClearConfirmState,
+}
+
+impl UiState {
+    pub(crate) const fn grid_auto_reveal_enabled(self) -> bool {
+        matches!(self.grid_reveal, GridRevealState::Auto)
+    }
+
+    pub(crate) const fn is_deleting_record(self) -> bool {
+        matches!(self.deletion, DeletionState::Deleting)
+    }
+
+    pub(crate) const fn clear_confirm_visible(self) -> bool {
+        matches!(self.clear_confirm, ClearConfirmState::Visible)
+    }
+
+    pub(crate) const fn preview_visible(self) -> bool {
+        matches!(self.preview, PreviewState::Visible)
+    }
+
+    pub(crate) const fn toggle_preview(&mut self) {
+        self.preview = match self.preview {
+            PreviewState::Hidden => PreviewState::Visible,
+            PreviewState::Visible => PreviewState::Hidden,
+        };
+    }
+}
+
 /// `RopyBoard` Main Window Component
-#[expect(clippy::struct_excessive_bools)]
 pub(crate) struct RopyBoard {
     pub(crate) records: SharedRecords,
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
@@ -87,30 +157,20 @@ pub(crate) struct RopyBoard {
     pub(crate) last_search_query: String,
     pub(crate) list_state: ListState,
     pub(crate) grid_scroll_handle: ScrollHandle,
-    pub(crate) grid_auto_reveal_suppressed: bool,
+    pub(crate) ui_state: UiState,
     pub(crate) selected_index: usize,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
     pub(crate) active_panel: ActivePanel,
-    pub(crate) show_preview: bool,
     pub(crate) settings_editor: SettingsEditor,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) layout_mode: LayoutMode,
     pub(crate) pinned: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
-    /// Track if we're in a delete operation to preserve scroll position
-    pub(crate) deleting_record: bool,
     pub(crate) update_manager: UpdateManager,
-    /// Whether the clear-all confirmation dialog is visible
-    pub(crate) show_clear_confirm: bool,
     /// Which clear action is currently awaiting confirmation
     clear_confirm_action: ClearConfirmAction,
-    /// Active content type filter
-    pub(crate) content_filter: ContentFilter,
-    /// Whether to show only favorited records (independent of content type filter)
-    pub(crate) favorites_only: bool,
-    /// Active text search options
-    pub(crate) search_options: SearchOptions,
+    pub(crate) filter_state: FilterState,
 }
 
 impl RopyBoard {
@@ -152,7 +212,7 @@ impl RopyBoard {
                 .list_state
                 .scroll_to_reveal_item(self.selected_list_index()),
             LayoutMode::Grid => {
-                if !self.grid_auto_reveal_suppressed {
+                if self.ui_state.grid_auto_reveal_enabled() {
                     self.grid_scroll_handle.scroll_to_item(self.selected_index);
                 }
             }
@@ -160,20 +220,22 @@ impl RopyBoard {
     }
 
     pub(crate) fn force_reveal_selected_record(&mut self) {
-        self.grid_auto_reveal_suppressed = false;
+        self.ui_state.grid_reveal = GridRevealState::Auto;
         self.reveal_selected_record();
     }
 
     pub(crate) fn suppress_grid_auto_reveal(&mut self) {
         if self.layout_mode == LayoutMode::Grid {
-            self.grid_auto_reveal_suppressed = true;
+            self.ui_state.grid_reveal = GridRevealState::Suppressed;
         }
     }
 
     #[expect(clippy::needless_pass_by_ref_mut)]
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.active_panel = ActivePanel::Settings;
-        self.settings_editor.settings_window_opacity_slider_visible = false;
+        self.settings_editor
+            .panel_state
+            .window_opacity_slider_visible = false;
         window.focus(&self.focus_handle);
 
         let weak_entity = cx.entity().downgrade();
@@ -183,7 +245,10 @@ impl RopyBoard {
                     return;
                 }
 
-                board.settings_editor.settings_window_opacity_slider_visible = true;
+                board
+                    .settings_editor
+                    .panel_state
+                    .window_opacity_slider_visible = true;
                 window.focus(&board.focus_handle);
                 cx.notify();
             });
@@ -384,7 +449,7 @@ impl RopyBoard {
             search_input,
             last_search_query: String::new(),
             grid_scroll_handle: ScrollHandle::new(),
-            grid_auto_reveal_suppressed: false,
+            ui_state: UiState::default(),
             selected_index: 0,
             last_copy,
             list_state,
@@ -392,19 +457,14 @@ impl RopyBoard {
             favorite_ids,
             copy_tx,
             active_panel: ActivePanel::default(),
-            show_preview: false,
             settings_editor,
             confirm_mode,
             layout_mode,
             pinned: false,
             hotkey_tx: None,
-            deleting_record: false,
             update_manager: UpdateManager::new(),
-            show_clear_confirm: false,
             clear_confirm_action: ClearConfirmAction::AllHistory,
-            content_filter: ContentFilter::default(),
-            favorites_only: false,
-            search_options: SearchOptions::default(),
+            filter_state: FilterState::default(),
         }
     }
 }

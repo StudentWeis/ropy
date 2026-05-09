@@ -24,7 +24,7 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_editor.auto_check_enabled = enabled;
+        self.settings_editor.update_settings.auto_check_enabled = enabled;
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
@@ -47,7 +47,9 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_editor.include_prerelease_enabled = enabled;
+        self.settings_editor
+            .update_settings
+            .include_prerelease_enabled = enabled;
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }

@@ -144,7 +144,7 @@ impl RopyBoard {
         }
 
         if activation_key == current_hotkey {
-            self.settings_editor.hotkey_recording = false;
+            self.settings_editor.hotkey.recording = false;
             self.settings_editor
                 .pending_hotkey
                 .clone_from(&activation_key);
@@ -164,7 +164,7 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_editor.hotkey_recording = false;
+        self.settings_editor.hotkey.recording = false;
         self.settings_editor
             .pending_hotkey
             .clone_from(&activation_key);

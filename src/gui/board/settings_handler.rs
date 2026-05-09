@@ -139,7 +139,7 @@ impl RopyBoard {
 
     pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         let previous_value = Settings::read(cx, |s| s.autostart.enabled);
-        let next_value = !self.settings_editor.autostart_enabled;
+        let next_value = !self.settings_editor.autostart.enabled;
 
         if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
             settings.autostart.enabled = next_value;
@@ -155,7 +155,7 @@ impl RopyBoard {
             }) {
                 Self::notify_settings_save_failed(window, cx, &rollback_error);
             }
-            self.settings_editor.autostart_enabled = Settings::read(cx, |s| s.autostart.enabled);
+            self.settings_editor.autostart.enabled = Settings::read(cx, |s| s.autostart.enabled);
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -165,7 +165,7 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_editor.autostart_enabled = next_value;
+        self.settings_editor.autostart.enabled = next_value;
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
@@ -211,7 +211,7 @@ impl RopyBoard {
             return;
         }
 
-        self.settings_editor.hover_preview_enabled = enabled;
+        self.settings_editor.panel_state.hover_preview_enabled = enabled;
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }

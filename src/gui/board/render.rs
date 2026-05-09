@@ -56,7 +56,7 @@ impl Render for RopyBoard {
         // Render each notification directly in a bottom-right column.
         let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
         let has_notifs = !notifs.is_empty();
-        let show_clear_confirm = self.show_clear_confirm;
+        let show_clear_confirm = self.ui_state.clear_confirm_visible();
         let clear_confirm_action = self.clear_confirm_action;
         gpui::div()
             .relative()

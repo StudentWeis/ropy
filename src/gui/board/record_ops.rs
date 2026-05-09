@@ -34,7 +34,7 @@ impl RopyBoard {
             self.filtered_record_indices.as_ref(),
             next_indices,
             self.selected_index,
-            self.deleting_record,
+            self.ui_state.is_deleting_record(),
         );
         let next_visible_len = self.visible_list_len(plan.indices.len());
 
@@ -59,7 +59,7 @@ impl RopyBoard {
         }
 
         if plan.clear_deleting_record {
-            self.deleting_record = false;
+            self.ui_state.deletion = crate::gui::board::DeletionState::Idle;
         }
 
         if reveal_selection {
@@ -145,7 +145,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         self.clear_confirm_action = action;
-        self.show_clear_confirm = true;
+        self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Visible;
         cx.notify();
     }
 
@@ -171,7 +171,7 @@ impl RopyBoard {
                 if let Err(e) = repo.delete(id) {
                     tracing::warn!(error = %e, "failed to delete clipboard record");
                 } else {
-                    self.deleting_record = true;
+                    self.ui_state.deletion = crate::gui::board::DeletionState::Deleting;
                     self.refresh_records_from_repository(cx);
                 }
             }
@@ -210,25 +210,26 @@ impl RopyBoard {
     /// Click-to-toggle behavior: re-clicking the active filter clears it
     /// (back to `All`) so the same button serves as both apply and reset.
     pub(crate) fn toggle_content_filter(&mut self, target: ContentFilter) {
-        if self.content_filter == target {
-            self.content_filter = ContentFilter::All;
+        if self.filter_state.content_filter == target {
+            self.filter_state.content_filter = ContentFilter::All;
         } else {
-            self.content_filter = target;
+            self.filter_state.content_filter = target;
         }
     }
 
     /// Favorites toggle is intentionally orthogonal to the content filter
     /// so users can scope to e.g. "favorited images only".
     pub(crate) const fn toggle_favorites_only(&mut self) {
-        self.favorites_only = !self.favorites_only;
+        self.filter_state.favorites_only = !self.filter_state.favorites_only;
     }
 
     pub(crate) const fn toggle_case_sensitive_search(&mut self) {
-        self.search_options.case_sensitive = !self.search_options.case_sensitive;
+        self.filter_state.search_options.case_sensitive =
+            !self.filter_state.search_options.case_sensitive;
     }
 
     pub(crate) const fn toggle_whole_word_search(&mut self) {
-        self.search_options.whole_word = !self.search_options.whole_word;
+        self.filter_state.search_options.whole_word = !self.filter_state.search_options.whole_word;
     }
 
     pub(super) fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
@@ -236,10 +237,10 @@ impl RopyBoard {
         filter_and_sort_record_indices(
             &records,
             query,
-            self.content_filter,
-            self.search_options,
+            self.filter_state.content_filter,
+            self.filter_state.search_options,
             &self.favorite_ids,
-            self.favorites_only,
+            self.filter_state.favorites_only,
         )
     }
 
