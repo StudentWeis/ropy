@@ -85,13 +85,6 @@ pub(crate) struct FilterState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum GridRevealState {
-    #[default]
-    Auto,
-    Suppressed,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum PreviewState {
     #[default]
     Hidden,
@@ -114,17 +107,12 @@ pub(crate) enum ClearConfirmState {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct UiState {
-    pub(crate) grid_reveal: GridRevealState,
     pub(crate) preview: PreviewState,
     pub(crate) deletion: DeletionState,
     pub(crate) clear_confirm: ClearConfirmState,
 }
 
 impl UiState {
-    pub(crate) const fn grid_auto_reveal_enabled(self) -> bool {
-        matches!(self.grid_reveal, GridRevealState::Auto)
-    }
-
     pub(crate) const fn is_deleting_record(self) -> bool {
         matches!(self.deletion, DeletionState::Deleting)
     }
@@ -202,6 +190,11 @@ impl RopyBoard {
         records_list::list_row_for_selected_index(self.selected_index, self.layout_mode)
     }
 
+    /// Scrolls the active layout's viewport so the currently selected record is
+    /// visible. Idempotent when the selection is already on screen: both
+    /// `ListState::scroll_to_reveal_item` and `ScrollHandle::scroll_to_item`
+    /// (with the default `FirstVisible` strategy) leave the viewport untouched
+    /// when the target is already inside it.
     pub(crate) fn reveal_selected_record(&self) {
         if self.filtered_record_indices.is_empty() {
             return;
@@ -211,22 +204,7 @@ impl RopyBoard {
             LayoutMode::List => self
                 .list_state
                 .scroll_to_reveal_item(self.selected_list_index()),
-            LayoutMode::Grid => {
-                if self.ui_state.grid_auto_reveal_enabled() {
-                    self.grid_scroll_handle.scroll_to_item(self.selected_index);
-                }
-            }
-        }
-    }
-
-    pub(crate) fn force_reveal_selected_record(&mut self) {
-        self.ui_state.grid_reveal = GridRevealState::Auto;
-        self.reveal_selected_record();
-    }
-
-    pub(crate) fn suppress_grid_auto_reveal(&mut self) {
-        if self.layout_mode == LayoutMode::Grid {
-            self.ui_state.grid_reveal = GridRevealState::Suppressed;
+            LayoutMode::Grid => self.grid_scroll_handle.scroll_to_item(self.selected_index),
         }
     }
 

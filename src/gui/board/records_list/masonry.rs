@@ -151,7 +151,6 @@ impl GridMasonry {
 
 impl RenderOnce for GridMasonry {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let view = self.state.view.clone();
         let card_width = grid_card_width(self.available_width);
         let estimated_heights = {
             let records = read_or_recover(&self.state.records);
@@ -220,11 +219,6 @@ impl RenderOnce for GridMasonry {
                     .relative()
                     .size_full()
                     .track_scroll(&self.scroll_handle)
-                    .on_scroll_wheel(move |_event, _window, cx| {
-                        let _ = view.update(cx, |this, _| {
-                            this.suppress_grid_auto_reveal();
-                        });
-                    })
                     .overflow_y_scroll()
                     .children(children),
             )
