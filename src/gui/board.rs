@@ -191,10 +191,10 @@ impl RopyBoard {
     }
 
     /// Scrolls the active layout's viewport so the currently selected record is
-    /// visible. Idempotent when the selection is already on screen — list mode
-    /// inherits this from `ListState::scroll_to_reveal_item`, grid mode delegates
-    /// to `records_list::board_selected_card_is_visible` so user scrolling is
-    /// not undone by background re-renders.
+    /// visible. Idempotent when the selection is already on screen: both
+    /// `ListState::scroll_to_reveal_item` and `ScrollHandle::scroll_to_item`
+    /// (with the default `FirstVisible` strategy) leave the viewport untouched
+    /// when the target is already inside it.
     pub(crate) fn reveal_selected_record(&self) {
         if self.filtered_record_indices.is_empty() {
             return;
@@ -204,16 +204,7 @@ impl RopyBoard {
             LayoutMode::List => self
                 .list_state
                 .scroll_to_reveal_item(self.selected_list_index()),
-            LayoutMode::Grid => {
-                if !records_list::board_selected_card_is_visible(
-                    &self.records,
-                    &self.filtered_record_indices,
-                    &self.grid_scroll_handle,
-                    self.selected_index,
-                ) {
-                    self.grid_scroll_handle.scroll_to_item(self.selected_index);
-                }
-            }
+            LayoutMode::Grid => self.grid_scroll_handle.scroll_to_item(self.selected_index),
         }
     }
 

@@ -93,3 +93,38 @@ Under this model, `GridRevealState` and `suppress_grid_auto_reveal()` can likely
 `GridRevealState` is probably not necessary as durable `RopyBoard` state.
 
 The cleaner design is to treat reveal as an intentional side effect of selection/navigation events. If a reveal is undesirable after user scrolling, the better fix is to avoid calling reveal from that later path, not to remember that the user scrolled and suppress reveal afterward.
+
+### Postscript: the helper was also unnecessary
+
+The first refactor pass (commit `bd9696e`) replaced `GridRevealState` with a
+`board_selected_card_is_visible()` helper that re-ran the masonry layout and
+compared the selected card against the viewport before deciding whether to
+scroll. The intent was to mirror the "skip if already visible" semantics that
+`ListState::scroll_to_reveal_item` provides for list mode.
+
+A first-principles second look revealed that `gpui::ScrollHandle::scroll_to_item`
+already implements those semantics natively. Its default
+`ScrollStrategy::FirstVisible` (see `gpui-0.2.2/src/elements/div.rs`,
+`scroll_to_active_item`) only mutates the scroll offset when the target item's
+top is above the viewport top or its bottom is below the viewport bottom — the
+"already visible" branch leaves the offset untouched.
+
+That makes the helper a worse copy of behavior `gpui` already guarantees:
+
+- It works off `estimated_grid_card_height`, not the real measured bounds, so
+  it can disagree with `gpui` at the pixel level.
+- It re-runs the masonry layout that `GridMasonry::render` already computes.
+- It adds public surface (`board_selected_card_is_visible`,
+  `masonry_selected_card_fully_visible`, `MasonryColumnSpec`) and four unit
+  tests to validate logic that lives in the framework.
+
+The followup pass therefore deletes all of that and reduces the grid arm of
+`reveal_selected_record()` to a single line:
+
+```rust
+LayoutMode::Grid => self.grid_scroll_handle.scroll_to_item(self.selected_index),
+```
+
+Lesson: when a refactor is motivated by an asymmetry between two layouts,
+verify that the asymmetry actually exists in the framework before reproducing
+the missing behavior in application code.
