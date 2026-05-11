@@ -141,10 +141,8 @@ mod_module_files = "deny"
 empty_drop = "deny"
 
 [profile.release]
-opt-level = 3
 lto = "fat"
 codegen-units = 1
-incremental = false
 panic = "abort"
 strip = true
 
