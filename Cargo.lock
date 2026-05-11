@@ -5659,7 +5659,6 @@ dependencies = [
  "gpui",
  "gpui-component",
  "gtk",
- "hex",
  "image",
  "objc2",
  "postcard",
