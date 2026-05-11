@@ -343,6 +343,7 @@ impl RopyBoard {
                     .ui_state
                     .show_space_preview(self.settings_editor.panel_state.space_preview_enabled) =>
             {
+                self.reveal_selected_record();
                 cx.notify();
             }
             "p" if self.can_toggle_window_pin() => {
