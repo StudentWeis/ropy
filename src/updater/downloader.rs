@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 
 use super::{errors::UpdateError, models::ReleaseInfo};
 
+const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+
 /// Download the release asset, verify its checksum, extract the binary, and
 /// replace the running executable.
 ///
@@ -170,7 +172,15 @@ fn compute_sha256_hex(asset_path: &Path) -> Result<String, UpdateError> {
         hasher.update(&buffer[..read]);
     }
 
-    Ok(hex::encode(hasher.finalize()))
+    let digest = hasher.finalize();
+    let mut hex_output = String::with_capacity(digest.len() * 2);
+
+    for byte in digest {
+        hex_output.push(char::from(HEX_CHARS[usize::from(byte >> 4)]));
+        hex_output.push(char::from(HEX_CHARS[usize::from(byte & 0x0f)]));
+    }
+
+    Ok(hex_output)
 }
 
 /// Extract the `ropy` (or `ropy.exe`) binary from the archive and return its
