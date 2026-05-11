@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.2] - 2026-05-11
+
+### 🚀 Features
+- Hold preview while space is pressed (#112) by @StudentWeis in [#112](https://github.com/StudentWeis/ropy/pull/112)
+- Always start hidden into tray (#100) by @StudentWeis in [#100](https://github.com/StudentWeis/ropy/pull/100)
+
+### 🐛 Bug Fixes
+- Preserve settings error details (#117) by @StudentWeis in [#117](https://github.com/StudentWeis/ropy/pull/117)
+- Avoid blank reveal frame in grid mode (#115) by @StudentWeis in [#115](https://github.com/StudentWeis/ropy/pull/115)
+
+### 💼 Other
+- Remove unused profile settings in Cargo.toml by @StudentWeis
+- Update dependencies to latest versions in Cargo.lock by @StudentWeis
+- Update Cargo.toml with macOS bundle settings by @StudentWeis
+- Upgrade tray-icon dependency to v0.24.0 by @StudentWeis
+
+### 🚜 Refactor
+- Add reveal selected record action in board actions by @StudentWeis
+- Remove hex dependency (#119) by @StudentWeis in [#119](https://github.com/StudentWeis/ropy/pull/119)
+- Replace GridRevealState with visibility-aware reveal (#110) by @StudentWeis in [#110](https://github.com/StudentWeis/ropy/pull/110)
+- Group board state flags into typed state objects (#108) by @StudentWeis in [#108](https://github.com/StudentWeis/ropy/pull/108)
+- Extract open_in_file_manager helper using cfg_select! (#106) by @StudentWeis in [#106](https://github.com/StudentWeis/ropy/pull/106)
+- Unify per-platform dispatch in window helpers (#103) by @StudentWeis in [#103](https://github.com/StudentWeis/ropy/pull/103)
+
+### 📚 Documentation
+- Remove redundant theme content examples from contributing guides by @StudentWeis
+
 ## [0.5.1] - 2026-05-08
 
 ### 🐛 Bug Fixes
