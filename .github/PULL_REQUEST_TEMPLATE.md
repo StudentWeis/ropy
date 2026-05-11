@@ -31,6 +31,5 @@ Closes #
 
 - [ ] PR title follows Conventional Commits
 - [ ] No hardcoded user-facing strings — i18n keys added to all locale files
-- [ ] New UI components use `gpui-component`
 - [ ] Errors defined with `thiserror` (no manual `impl Display/Error`)
 - [ ] No unrelated changes mixed in
