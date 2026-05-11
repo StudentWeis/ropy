@@ -483,6 +483,7 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                     .border_1()
                     .border_color(cx.theme().border)
                     .label(I18n::translate(cx, "clear_ordinary"))
+                    .tooltip(I18n::translate(cx, "clear_ordinary_tooltip"))
                     .on_click(cx.listener(|board, _, _, cx| {
                         board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, cx);
                     })),
@@ -492,6 +493,7 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                     .small()
                     .danger()
                     .label(I18n::translate(cx, "clear_all"))
+                    .tooltip(I18n::translate(cx, "clear_all_tooltip"))
                     .on_click(cx.listener(|board, _, _, cx| {
                         board.open_clear_confirm(ClearConfirmAction::AllHistory, cx);
                     })),
