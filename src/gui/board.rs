@@ -31,8 +31,8 @@ pub(crate) use actions::{
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{
-    AppContext, Context, Entity, FocusHandle, ListAlignment, ListState, ScrollHandle, Subscription,
-    Window,
+    AppContext, Bounds, Context, Entity, FocusHandle, ListAlignment, ListState, Pixels, Point,
+    ScrollHandle, Subscription, Window,
 };
 use gpui_component::input::InputState;
 pub(crate) use search::{ContentFilter, SearchOptions};
@@ -209,6 +209,24 @@ impl RopyBoard {
         records_list::list_row_for_selected_index(self.selected_index, self.layout_mode)
     }
 
+    fn reveal_selected_grid_item(&self) {
+        let viewport_bounds = self.grid_scroll_handle.bounds();
+        if viewport_bounds.size.width > gpui::px(0.0)
+            && viewport_bounds.size.height > gpui::px(0.0)
+            && let Some(item_bounds) = self.grid_scroll_handle.bounds_for_item(self.selected_index)
+            && let Some(offset) = grid_reveal_offset(
+                viewport_bounds,
+                item_bounds,
+                self.grid_scroll_handle.offset(),
+            )
+        {
+            self.grid_scroll_handle.set_offset(offset);
+            return;
+        }
+
+        self.grid_scroll_handle.scroll_to_item(self.selected_index);
+    }
+
     /// Scrolls the active layout's viewport so the currently selected record is
     /// visible. Idempotent when the selection is already on screen: both
     /// `ListState::scroll_to_reveal_item` and `ScrollHandle::scroll_to_item`
@@ -223,7 +241,7 @@ impl RopyBoard {
             LayoutMode::List => self
                 .list_state
                 .scroll_to_reveal_item(self.selected_list_index()),
-            LayoutMode::Grid => self.grid_scroll_handle.scroll_to_item(self.selected_index),
+            LayoutMode::Grid => self.reveal_selected_grid_item(),
         }
     }
 
@@ -467,4 +485,31 @@ impl RopyBoard {
             filter_state: FilterState::default(),
         }
     }
+}
+
+fn grid_reveal_offset(
+    viewport_bounds: Bounds<Pixels>,
+    item_bounds: Bounds<Pixels>,
+    current_offset: Point<Pixels>,
+) -> Option<Point<Pixels>> {
+    let mut next_offset = current_offset;
+    let mut changed = false;
+
+    if item_bounds.top() + next_offset.y < viewport_bounds.top() {
+        next_offset.y = viewport_bounds.top() - item_bounds.top();
+        changed = true;
+    } else if item_bounds.bottom() + next_offset.y > viewport_bounds.bottom() {
+        next_offset.y = viewport_bounds.bottom() - item_bounds.bottom();
+        changed = true;
+    }
+
+    if item_bounds.left() + next_offset.x < viewport_bounds.left() {
+        next_offset.x = viewport_bounds.left() - item_bounds.left();
+        changed = true;
+    } else if item_bounds.right() + next_offset.x > viewport_bounds.right() {
+        next_offset.x = viewport_bounds.right() - item_bounds.right();
+        changed = true;
+    }
+
+    changed.then_some(next_offset)
 }

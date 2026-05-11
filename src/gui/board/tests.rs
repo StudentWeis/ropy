@@ -10,6 +10,7 @@ use super::{
     actions::horizontal_grid_target_index,
     clipboard_ops::{ConfirmFormat, build_copy_request, build_copy_request_for_record},
     filtering::filter_and_sort_record_indices,
+    grid_reveal_offset,
     search::{ContentFilter, SearchOptions},
     search_query_changed, search_query_should_reveal_selection,
     settings_editor::UpdateManager,
@@ -185,6 +186,36 @@ fn test_horizontal_grid_target_index_respects_missing_column_and_list_mode() {
 
 fn test_bounds(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {
     Bounds::new(point(px(x), px(y)), size(px(width), px(height)))
+}
+
+#[test]
+fn test_grid_reveal_offset_scrolls_down_to_show_item_bottom() {
+    let viewport = test_bounds(0.0, 0.0, 220.0, 300.0);
+    let item = test_bounds(0.0, 420.0, 100.0, 120.0);
+
+    let next_offset = grid_reveal_offset(viewport, item, point(px(0.0), px(0.0)));
+
+    assert_eq!(next_offset, Some(point(px(0.0), px(-240.0))));
+}
+
+#[test]
+fn test_grid_reveal_offset_keeps_visible_item_unchanged() {
+    let viewport = test_bounds(0.0, 0.0, 220.0, 300.0);
+    let item = test_bounds(0.0, 80.0, 100.0, 120.0);
+
+    let next_offset = grid_reveal_offset(viewport, item, point(px(0.0), px(0.0)));
+
+    assert_eq!(next_offset, None);
+}
+
+#[test]
+fn test_grid_reveal_offset_scrolls_left_to_show_item_right_edge() {
+    let viewport = test_bounds(0.0, 0.0, 220.0, 300.0);
+    let item = test_bounds(260.0, 40.0, 100.0, 120.0);
+
+    let next_offset = grid_reveal_offset(viewport, item, point(px(0.0), px(0.0)));
+
+    assert_eq!(next_offset, Some(point(px(-140.0), px(0.0))));
 }
 
 #[test]
