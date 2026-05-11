@@ -66,7 +66,7 @@ Ropy 支持多语言国际化（i18n）。语言文件同样使用 TOML 格式�
 
 ## 提交规范
 
-Ropy 采用 **Issue → 分支 → PR → Squash Merge** 的工作流，全程通过本地 `gh` CLI 完成。完整、可直接复制执行的 SOP 收敛在 [`ropy-contribution-flow`](../../.claude/skills/ropy-contribution-flow/SKILL.md) skill 中 —— 那里是分支命名、commit 规范、`scripts/precheck.sh` 检查、PR 自检清单的唯一权威来源。无论人类还是 AI 贡献者，都请遵循该 skill。
+Ropy 采用 **Issue → 分支 → PR → Squash Merge** 的工作流，全程通过本地 `gh` CLI 完成。完整、可直接复制执行的 SOP 收敛在 [`contribution-flow`](../../.agents/skills/contribution-flow/SKILL.md) skill 中 —— 那里是分支命名、commit 规范、`scripts/precheck.sh` 检查、PR 自检清单的唯一权威来源。无论人类还是 AI 贡献者，都请遵循该 skill。
 
 ## 问题反馈
 

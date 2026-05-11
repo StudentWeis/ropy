@@ -82,7 +82,7 @@ See the [Testing Documentation](./docs/TESTING.md) for guidelines on writing and
 
 ## Submitting Changes
 
-Ropy follows an **Issue → Branch → PR → Squash Merge** workflow, executed via the local `gh` CLI. The complete, copy-paste-ready SOP lives in the [`ropy-contribution-flow`](./.claude/skills/ropy-contribution-flow/SKILL.md) skill — it is the single source of truth for branch naming, commit conventions, the `scripts/precheck.sh` gate, and the PR self-check. Both human and AI contributors should follow it.
+Ropy follows an **Issue → Branch → PR → Squash Merge** workflow, executed via the local `gh` CLI. The complete, copy-paste-ready SOP lives in the [`contribution-flow`](./.agents/skills/contribution-flow/SKILL.md) skill — it is the single source of truth for branch naming, commit conventions, the `scripts/precheck.sh` gate, and the PR self-check. Both human and AI contributors should follow it.
 
 ## Reporting Issues
 
