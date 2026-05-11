@@ -20,7 +20,7 @@ Shared vocabulary used throughout the flow below: `<type>` and `<scope>` placeho
 
 ### 1. Open the Issue
 
-If the project has issue templates (`.github/ISSUE_TEMPLATE/`), pick the appropriate one. Otherwise use a concise description with acceptance criteria. Fill it into `/tmp/issue-body.md`, then:
+Pick the appropriate issue template from `.github/ISSUE_TEMPLATE/` — using a template is **mandatory**. Fill it into `/tmp/issue-body.md`, then:
 
 ```bash
 gh issue create --title "<type>: ..." --label "<appropriate label>" --body-file /tmp/issue-body.md
@@ -61,7 +61,7 @@ Multiple commits are fine — they are squashed on merge.
 
 ### 6. Push & Open the PR
 
-If the project has a PR template (`.github/PULL_REQUEST_TEMPLATE.md`), fill it into `/tmp/pr-body.md`. Otherwise write a concise summary with a test plan. Then:
+Fill in the PR template from `.github/PULL_REQUEST_TEMPLATE.md` into `/tmp/pr-body.md` — using the template is **mandatory**. Then:
 
 ```bash
 git push -u origin HEAD

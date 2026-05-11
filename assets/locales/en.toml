@@ -4,7 +4,8 @@ language_name = "English"
 # Application
 
 # Tray menu
-tray_show = "Show"
+tray_settings = "Settings"
+tray_about = "About"
 tray_quit = "Quit"
 
 # Main window

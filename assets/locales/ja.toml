@@ -5,7 +5,8 @@ language_name = "日本語"
 # Application
 
 # Tray menu
-tray_show = "表示"
+tray_settings = "設定"
+tray_about = "について"
 tray_quit = "終了"
 
 # Main window

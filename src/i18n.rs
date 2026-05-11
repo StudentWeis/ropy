@@ -149,19 +149,19 @@ mod tests {
         let i18n = I18n::new(Language::new("en"));
         assert!(i18n.is_ok());
         let i18n = i18n.unwrap();
-        assert_eq!(i18n.t("tray_show"), "Show");
+        assert_eq!(i18n.t("tray_settings"), "Settings");
     }
 
     #[test]
     #[expect(clippy::unwrap_used)]
     fn test_i18n_language_switch() {
         let mut i18n = I18n::new(Language::new("en")).unwrap();
-        assert_eq!(i18n.t("tray_show"), "Show");
+        assert_eq!(i18n.t("tray_settings"), "Settings");
 
         // Switch to Chinese
         let result = i18n.set_language(Language::new("zh-CN"));
         assert!(result.is_ok());
-        assert_eq!(i18n.t("tray_show"), "显示");
+        assert_eq!(i18n.t("tray_settings"), "设置");
     }
 
     #[test]
