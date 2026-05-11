@@ -27,7 +27,7 @@
 - Switchable list and grid layout modes for browsing history.
 - Search the loaded history with case-sensitive and whole-word options.
 - Favorite and pin records; automatic cleanup preserves pinned and favorited items.
-- Preview text and images with a configurable hover delay.
+- Preview text and images via configurable hover delay or by holding `Space`.
 - Configurable global hotkey, theme, language, autostart, and confirm mode.
 - System tray integration plus in-app update check, download, and install flow.
 
@@ -71,13 +71,13 @@ cargo build --release
 
 ## Usage
 
-- Launch Ropy to start recording clipboard history.
+- Launch Ropy — it starts hidden in the system tray and begins recording clipboard history.
 - Use the global hotkey or the tray icon to open the history window.
 - Press `/` to focus search, then refine results with case-sensitive, whole-word, and type filters.
 - Use `Up`/`Down` or `J`/`K` to move through items, and `Enter` or `1`-`5` to confirm a selection.
 - Press `Shift+Enter` to paste as plain text when a rich-text record is selected.
 - In grid mode, use `H`/`L` to move between columns.
-- Press `Space` to toggle preview, `F` to favorite the selected record, and `Delete` or `D` to remove it.
+- Hold `Space` to preview the selected record, press `F` to favorite it, and `Delete` or `D` to remove it.
 - Use row actions to pin records so they are excluded from storage cleanup.
 - Choose between `copy_to_clipboard` and `paste_immediately` confirm modes in Settings.
 
