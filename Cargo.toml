@@ -26,7 +26,6 @@ chrono = { version = "0.4.44", default-features = false, features = [
 ] }
 dirs = "6.0.0"
 thiserror = "2.0.18"
-config = { version = "0.15.22", default-features = false, features = ["toml"] }
 toml = "1.1.2"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 tray-icon = "0.24.0"

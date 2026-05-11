@@ -1,9 +1,9 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{cfg_select, path::PathBuf};
 
-use config::{Config, ConfigError, File};
 use gpui::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::{
     gui::theme::ThemeId,
@@ -19,7 +19,24 @@ const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
 const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
 const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
+#[derive(Debug, Error)]
+pub(crate) enum SettingsError {
+    #[error("config directory not found")]
+    ConfigDirectoryNotFound,
+    #[error("failed to access settings file at {path:?}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse settings file: {0}")]
+    Deserialize(#[from] toml::de::Error),
+    #[error("failed to serialize settings: {0}")]
+    Serialize(#[from] toml::ser::Error),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub(crate) struct Settings {
     pub hotkey: HotkeySettings,
     pub storage: StorageSettings,
@@ -34,13 +51,13 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    pub(crate) fn config_dir() -> Result<PathBuf, ConfigError> {
+    pub(crate) fn config_dir() -> Result<PathBuf, SettingsError> {
         dirs::config_dir()
             .map(|dir| dir.join("ropy"))
-            .ok_or_else(|| ConfigError::NotFound("Config directory not found".to_string()))
+            .ok_or(SettingsError::ConfigDirectoryNotFound)
     }
 
-    pub(crate) fn config_file() -> Result<PathBuf, ConfigError> {
+    pub(crate) fn config_file() -> Result<PathBuf, SettingsError> {
         Ok(Self::config_dir()?.join("config.toml"))
     }
 
@@ -48,44 +65,70 @@ impl Settings {
     /// `Default` instance so partial files keep working across upgrades,
     /// and clamping each value group via [`validate`] so out-of-range
     /// values on disk can't propagate into the running app.
-    pub(crate) fn load() -> Result<Self, ConfigError> {
+    pub(crate) fn load() -> Result<Self, SettingsError> {
         let config_dir = Self::config_dir()?;
-        let config_file = config_dir.join("config");
+        let config_file = config_dir.join("config.toml");
 
-        // Create config directory if it doesn't exist
-        if !config_dir.exists() {
-            std::fs::create_dir_all(&config_dir).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+        std::fs::create_dir_all(&config_dir).map_err(|source| SettingsError::Io {
+            path: config_dir.clone(),
+            source,
+        })?;
+
+        if !config_file.exists() {
+            return Ok(Self::default().validated());
         }
 
-        let mut builder = Config::builder()
-            // Start with default values
-            .add_source(Config::try_from(&Self::default())?);
+        let config_content =
+            std::fs::read_to_string(&config_file).map_err(|source| SettingsError::Io {
+                path: config_file.clone(),
+                source,
+            })?;
 
-        // Add configuration from file (optional)
-        if let Some(path_str) = config_file.to_str() {
-            builder = builder.add_source(File::with_name(path_str).required(false));
-        } else {
-            tracing::warn!("config file path contains invalid UTF-8 characters");
-        }
-
-        let config = builder.build()?;
-        let mut settings: Self = config.try_deserialize()?;
-
-        // Validate and reset hotkey if invalid
-        settings.validate_hotkey();
-        settings.validate_window_opacity();
-        settings.validate_storage();
-
-        Ok(settings)
+        Self::from_config_content(&config_content)
     }
 
-    pub(crate) fn save(&self) -> Result<(), ConfigError> {
-        let config_file = Self::config_file()?;
-        let toml_string =
-            toml::to_string_pretty(self).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+    fn from_config_content(config_content: &str) -> Result<Self, SettingsError> {
+        let mut default_config = toml::Value::try_from(Self::default())?;
+        let file_config = toml::Value::Table(toml::from_str(config_content)?);
+        Self::merge_config_values(&mut default_config, file_config);
 
-        std::fs::write(&config_file, toml_string).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+        let settings: Self = default_config.try_into()?;
+        Ok(settings.validated())
+    }
+
+    pub(crate) fn save(&self) -> Result<(), SettingsError> {
+        let config_file = Self::config_file()?;
+        let toml_string = toml::to_string_pretty(self)?;
+
+        std::fs::write(&config_file, toml_string).map_err(|source| SettingsError::Io {
+            path: config_file,
+            source,
+        })?;
         Ok(())
+    }
+
+    fn merge_config_values(default_config: &mut toml::Value, file_config: toml::Value) {
+        match (default_config, file_config) {
+            (toml::Value::Table(default_table), toml::Value::Table(file_table)) => {
+                for (key, file_value) in file_table {
+                    if let Some(default_value) = default_table.get_mut(&key) {
+                        Self::merge_config_values(default_value, file_value);
+                    } else {
+                        default_table.insert(key, file_value);
+                    }
+                }
+            }
+            (default_value, file_value) => {
+                *default_value = file_value;
+            }
+        }
+    }
+
+    fn validated(mut self) -> Self {
+        self.validate_hotkey();
+        self.validate_window_opacity();
+        self.validate_storage();
+        self
     }
 }
 
@@ -126,16 +169,19 @@ impl LayoutMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub(crate) struct LayoutSettings {
     pub mode: LayoutMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub(crate) struct ConfirmSettings {
     pub mode: ConfirmMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct WindowSettings {
     /// Allowed range is [`MIN_OPACITY_PERCENT`..=`MAX_OPACITY_PERCENT`];
     /// values outside that band are clamped at load time.
@@ -162,6 +208,7 @@ impl WindowSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct HotkeySettings {
     /// `+`-separated chord parsed by `global_hotkey` (e.g. `cmd+shift+v`).
     /// Invalid values are reset to the default by [`validate_hotkey`].
@@ -180,6 +227,7 @@ impl Default for HotkeySettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct StorageSettings {
     /// Soft cap on records visible in the board (1 – 10,000). Records past
     /// this point are kept on disk but hidden until older entries are
@@ -201,11 +249,13 @@ impl Default for StorageSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub(crate) struct AutoStartSettings {
     pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct UpdateSettings {
     pub auto_check: bool,
     pub include_prerelease: bool,
@@ -221,6 +271,7 @@ impl Default for UpdateSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct PreviewSettings {
     pub hover_preview_enabled: bool,
     pub space_preview_enabled: bool,
@@ -430,11 +481,88 @@ mod tests {
 
     #[test]
     fn test_load_partial_config() {
-        // Settings::default() provides all required fields.
-        // Settings::load() uses config-rs which merges defaults with the file,
-        // so partial config files work fine at runtime.
-        // Here we verify that the default values themselves are correct.
-        let settings = Settings::default();
+        let settings = Settings::from_config_content(
+            r"
+[storage]
+max_history_records = 50
+
+[window]
+opacity_percent = 72
+",
+        )
+        .expect("Failed to load partial config");
+
+        assert_eq!(settings.storage.max_history_records, 50);
+        assert_eq!(
+            settings.storage.max_storage_records,
+            DEFAULT_MAX_STORAGE_RECORDS
+        );
+        assert_eq!(settings.window.opacity_percent, 72);
+        assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
+        assert!(settings.update.auto_check);
+        assert!(!settings.hotkey.activation_key.is_empty());
+        assert_eq!(settings.theme.code(), "ropy-light");
+        assert_eq!(settings.language.code(), "en");
+    }
+
+    #[test]
+    fn test_load_config_with_extra_fields() {
+        let settings = Settings::from_config_content(
+            r#"
+unknown_root = "ignored"
+
+[storage]
+max_history_records = 100
+max_storage_records = 1000
+unknown_storage = "ignored"
+
+[hotkey]
+activation_key = "ctrl+shift+v"
+"#,
+        )
+        .expect("Failed to load config with extra fields");
+
+        assert_eq!(settings.storage.max_history_records, 100);
+        assert_eq!(settings.storage.max_storage_records, 1000);
+        assert_eq!(settings.hotkey.activation_key, "ctrl+shift+v");
+    }
+
+    #[test]
+    fn test_load_malformed_config() {
+        let malformed = r"
+[storage
+max_history_records = 100
+";
+
+        let result = Settings::from_config_content(malformed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_errors_include_source_details() {
+        let error = Settings::from_config_content("[storage").expect_err("expected parse error");
+        let rendered = format!("{error}");
+        let prefix = "failed to parse settings file: ";
+
+        assert!(rendered.starts_with(prefix));
+        assert!(rendered.len() > prefix.len());
+    }
+
+    #[test]
+    fn test_io_errors_include_source_details() {
+        let error = SettingsError::Io {
+            path: PathBuf::from("/tmp/config.toml"),
+            source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied"),
+        };
+        let rendered = format!("{error}");
+
+        assert!(rendered.contains("failed to access settings file at"));
+        assert!(rendered.contains("permission denied"));
+    }
+
+    #[test]
+    fn test_load_empty_config() {
+        let settings = Settings::from_config_content("").expect("Failed to load empty config");
 
         assert_eq!(
             settings.storage.max_history_records,
@@ -445,52 +573,69 @@ mod tests {
             DEFAULT_MAX_STORAGE_RECORDS
         );
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
-        assert!(settings.update.auto_check);
-        assert!(!settings.hotkey.activation_key.is_empty());
         assert_eq!(settings.theme.code(), "ropy-light");
-        assert_eq!(settings.language.code(), "en");
     }
 
     #[test]
-    fn test_load_config_with_extra_fields() {
-        // Verify that a fully-serialized Settings round-trips correctly.
-        // Settings::load() uses config-rs which ignores unknown fields at runtime.
-        let mut settings = Settings::default();
-        settings.storage.max_history_records = 100;
-        settings.storage.max_storage_records = 1000;
-        settings.hotkey.activation_key = "ctrl+shift+v".to_string();
-
-        let toml_str = toml::to_string_pretty(&settings).expect("Failed to serialize");
-
-        assert!(toml_str.contains("max_history_records = 100"));
-        assert!(toml_str.contains("max_storage_records = 1000"));
-        assert!(toml_str.contains("ctrl+shift+v"));
-
-        let loaded: Settings = toml::from_str(&toml_str).expect("Failed to deserialize");
-
-        assert_eq!(loaded.storage.max_history_records, 100);
-        assert_eq!(loaded.storage.max_storage_records, 1000);
-        assert_eq!(loaded.hotkey.activation_key, "ctrl+shift+v");
-    }
-
-    #[test]
-    fn test_load_malformed_config() {
-        let malformed = r"
-[storage
+    fn test_merge_config_values_recursively_overlays_tables() {
+        let mut default_config = toml::Value::Table(
+            toml::from_str(
+                r"
+[storage]
 max_history_records = 100
-";
+max_storage_records = 200
 
-        let result: Result<Settings, _> = toml::from_str(malformed);
-        assert!(result.is_err());
-    }
+[window]
+opacity_percent = 100
 
-    #[test]
-    fn test_load_empty_config() {
-        let empty = "";
+[preview]
+hover_preview_enabled = true
+space_preview_enabled = true
+",
+            )
+            .expect("Failed to parse default config"),
+        );
+        let file_config = toml::Value::Table(
+            toml::from_str(
+                r"
+[storage]
+max_history_records = 50
+unknown_storage = 7
 
-        let result: Result<Settings, _> = toml::from_str(empty);
-        // Empty config should use all defaults
-        assert!(result.is_err()); // toml::from_str requires at least an empty table for struct
+[window]
+opacity_percent = 72
+
+[new_section]
+enabled = true
+",
+            )
+            .expect("Failed to parse file config"),
+        );
+        let expected_config = toml::Value::Table(
+            toml::from_str(
+                r"
+[storage]
+max_history_records = 50
+max_storage_records = 200
+unknown_storage = 7
+
+[window]
+opacity_percent = 72
+
+[preview]
+hover_preview_enabled = true
+space_preview_enabled = true
+
+[new_section]
+enabled = true
+",
+            )
+            .expect("Failed to parse expected config"),
+        );
+
+        Settings::merge_config_values(&mut default_config, file_config);
+
+        assert_eq!(default_config, expected_config);
     }
 
     // ── ConfirmMode Tests ─────────────────────────────────────────
