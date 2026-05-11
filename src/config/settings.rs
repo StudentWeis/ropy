@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
-use std::{cfg_select, path::PathBuf};
+use std::{cfg_select, path::PathBuf, str::FromStr};
 
 use gpui::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
@@ -9,8 +9,6 @@ use crate::{
     gui::theme::ThemeId,
     i18n::{I18n, Language},
 };
-
-mod validate;
 
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
@@ -129,6 +127,27 @@ impl Settings {
         self.validate_window_opacity();
         self.validate_storage();
         self
+    }
+
+    /// Validate hotkey and reset to default if invalid.
+    fn validate_hotkey(&mut self) {
+        if self.hotkey.activation_key.is_empty()
+            || global_hotkey::hotkey::HotKey::from_str(&self.hotkey.activation_key).is_err()
+        {
+            self.hotkey.activation_key = Self::default().hotkey.activation_key;
+        }
+    }
+
+    fn validate_window_opacity(&mut self) {
+        self.window.normalize_opacity();
+    }
+
+    fn validate_storage(&mut self) {
+        self.storage.max_history_records = self.storage.max_history_records.clamp(1, 10_000);
+        self.storage.max_storage_records = self.storage.max_storage_records.clamp(1, 100_000);
+        if self.storage.max_storage_records < self.storage.max_history_records {
+            self.storage.max_storage_records = self.storage.max_history_records;
+        }
     }
 }
 
@@ -298,8 +317,6 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use tempfile::TempDir;
 
     use super::*;
