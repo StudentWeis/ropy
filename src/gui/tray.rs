@@ -12,7 +12,8 @@ use tray_icon::{
 use crate::{constants::APP_NAME, i18n::I18n};
 
 /// Fixed menu IDs so event handlers remain valid after menu rebuilds.
-const TRAY_SHOW_ID: &str = "tray_show";
+const TRAY_SETTINGS_ID: &str = "tray_settings";
+const TRAY_ABOUT_ID: &str = "tray_about";
 const TRAY_QUIT_ID: &str = "tray_quit";
 const TRAY_ICON_SIZE: u32 = 32;
 
@@ -62,20 +63,23 @@ impl TrayState {
 }
 
 pub(crate) fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
-    let show_item = MenuItem::with_id(TRAY_SHOW_ID, i18n.t("tray_show"), true, None);
+    let settings_item = MenuItem::with_id(TRAY_SETTINGS_ID, i18n.t("tray_settings"), true, None);
+    let about_item = MenuItem::with_id(TRAY_ABOUT_ID, i18n.t("tray_about"), true, None);
     let quit_item = MenuItem::with_id(TRAY_QUIT_ID, i18n.t("tray_quit"), true, None);
 
     let tray_menu = Menu::new();
-    tray_menu.append(&show_item)?;
+    tray_menu.append(&settings_item)?;
+    tray_menu.append(&about_item)?;
     tray_menu.append(&quit_item)?;
     Ok(tray_menu)
 }
 
 pub(crate) fn init_tray(
     i18n: &I18n,
-) -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error>> {
+) -> Result<(TrayIcon, MenuId, MenuId, MenuId), Box<dyn std::error::Error>> {
     let tray_menu = build_tray_menu(i18n)?;
-    let show_id = MenuId::new(TRAY_SHOW_ID);
+    let settings_id = MenuId::new(TRAY_SETTINGS_ID);
+    let about_id = MenuId::new(TRAY_ABOUT_ID);
     let quit_id = MenuId::new(TRAY_QUIT_ID);
 
     let icon = create_icon()?;
@@ -87,7 +91,7 @@ pub(crate) fn init_tray(
         .with_menu_on_left_click(false)
         .build()?;
 
-    Ok((tray, show_id, quit_id))
+    Ok((tray, settings_id, about_id, quit_id))
 }
 
 fn create_icon() -> Result<Icon, Box<dyn std::error::Error>> {
@@ -122,7 +126,8 @@ fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::Image
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrayEvent {
-    Show,
+    Settings,
+    About,
     Quit,
 }
 
@@ -178,8 +183,11 @@ fn spawn_tray_event_loop(
     cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
-                TrayEvent::Show => {
-                    let _ = async_app.update(|cx| send_active_action(window_handle, cx));
+                TrayEvent::Settings => {
+                    let _ = async_app.update(|cx| send_open_settings(window_handle, cx));
+                }
+                TrayEvent::About => {
+                    let _ = async_app.update(|cx| send_open_about(window_handle, cx));
                 }
                 TrayEvent::Quit => {
                     let _ = async_app.update(|cx| cx.quit());
@@ -195,12 +203,12 @@ pub(crate) fn start_tray_handler_inner(
     tx: async_channel::Sender<TrayEvent>,
 ) -> Option<TrayIcon> {
     match init_tray(i18n) {
-        Ok((tray, show_id, quit_id)) => {
+        Ok((tray, settings_id, about_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
 
             #[cfg(not(target_os = "linux"))]
             spawn_tray_icon_event_forwarder(tx.clone());
-            spawn_tray_menu_event_forwarder(tx, show_id, quit_id);
+            spawn_tray_menu_event_forwarder(tx, settings_id, about_id, quit_id);
 
             Some(tray)
         }
@@ -211,23 +219,64 @@ pub(crate) fn start_tray_handler_inner(
     }
 }
 
-pub(crate) fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut App) {
+pub(crate) fn send_open_settings(window_handle: WindowHandle<Root>, cx: &mut App) {
     window_handle
-        .update(cx, |_, window: &mut gpui::Window, cx| {
-            window.dispatch_action(Box::new(crate::gui::board::Active), cx);
+        .update(cx, |root, window: &mut gpui::Window, cx| {
+            if let Ok(board) = root
+                .view()
+                .clone()
+                .downcast::<crate::gui::board::RopyBoard>()
+            {
+                board.update(cx, |board, cx| {
+                    board.active_panel = crate::gui::board::ActivePanel::Settings;
+                    board
+                        .settings_editor
+                        .panel_state
+                        .window_opacity_slider_visible = true;
+                    board.activated = true;
+                    window.focus(&board.focus_handle);
+                    cx.notify();
+                });
+            }
+            super::active_window(window, cx);
+        })
+        .ok();
+}
+
+pub(crate) fn send_open_about(window_handle: WindowHandle<Root>, cx: &mut App) {
+    window_handle
+        .update(cx, |root, window: &mut gpui::Window, cx| {
+            if let Ok(board) = root
+                .view()
+                .clone()
+                .downcast::<crate::gui::board::RopyBoard>()
+            {
+                board.update(cx, |board, cx| {
+                    board.active_panel = crate::gui::board::ActivePanel::About;
+                    board.activated = true;
+                    cx.notify();
+                });
+            }
+            super::active_window(window, cx);
         })
         .ok();
 }
 
 fn spawn_tray_menu_event_forwarder(
     tx: async_channel::Sender<TrayEvent>,
-    show_id: MenuId,
+    settings_id: MenuId,
+    about_id: MenuId,
     quit_id: MenuId,
 ) {
     let receiver = tray_icon::menu::MenuEvent::receiver().clone();
     super::utils::spawn_event_forwarder("tray-menu-event-forwarder", tx, move |forward| {
         while let Ok(event) = receiver.recv() {
-            if !forward(tray_event_from_menu_event(&event, &show_id, &quit_id)) {
+            if !forward(tray_event_from_menu_event(
+                &event,
+                &settings_id,
+                &about_id,
+                &quit_id,
+            )) {
                 break;
             }
         }
@@ -248,11 +297,14 @@ fn spawn_tray_icon_event_forwarder(tx: async_channel::Sender<TrayEvent>) {
 
 fn tray_event_from_menu_event(
     event: &tray_icon::menu::MenuEvent,
-    show_id: &MenuId,
+    settings_id: &MenuId,
+    about_id: &MenuId,
     quit_id: &MenuId,
 ) -> Option<TrayEvent> {
-    if event.id == *show_id {
-        Some(TrayEvent::Show)
+    if event.id == *settings_id {
+        Some(TrayEvent::Settings)
+    } else if event.id == *about_id {
+        Some(TrayEvent::About)
     } else if event.id == *quit_id {
         Some(TrayEvent::Quit)
     } else {
@@ -265,7 +317,7 @@ fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
     if let TrayIconEvent::Click { button, .. } = event
         && *button == tray_icon::MouseButton::Left
     {
-        Some(TrayEvent::Show)
+        Some(TrayEvent::Settings)
     } else {
         None
     }
@@ -321,27 +373,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case(TRAY_SHOW_ID, Some(TrayEvent::Show))]
+    #[case(TRAY_SETTINGS_ID, Some(TrayEvent::Settings))]
+    #[case(TRAY_ABOUT_ID, Some(TrayEvent::About))]
     #[case(TRAY_QUIT_ID, Some(TrayEvent::Quit))]
     #[case("other", None)]
     fn test_tray_event_from_menu_event_matches_menu_id(
         #[case] event_id: &str,
         #[case] expected: Option<TrayEvent>,
     ) {
-        let show_id = MenuId::new(TRAY_SHOW_ID);
+        let settings_id = MenuId::new(TRAY_SETTINGS_ID);
+        let about_id = MenuId::new(TRAY_ABOUT_ID);
         let quit_id = MenuId::new(TRAY_QUIT_ID);
         let event = tray_icon::menu::MenuEvent {
             id: MenuId::new(event_id),
         };
 
-        let result = tray_event_from_menu_event(&event, &show_id, &quit_id);
+        let result = tray_event_from_menu_event(&event, &settings_id, &about_id, &quit_id);
 
-        assert!(matches!(
-            (result, expected),
-            (Some(TrayEvent::Show), Some(TrayEvent::Show))
-                | (Some(TrayEvent::Quit), Some(TrayEvent::Quit))
-                | (None, None)
-        ));
+        assert_eq!(result, expected);
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -354,7 +403,7 @@ mod tests {
             button: tray_icon::MouseButton::Left,
             button_state: tray_icon::MouseButtonState::Up,
         },
-        Some(TrayEvent::Show)
+        Some(TrayEvent::Settings)
     )]
     #[case(
         TrayIconEvent::Click {
@@ -380,9 +429,6 @@ mod tests {
     ) {
         let result = tray_event_from_icon_event(&event);
 
-        assert!(matches!(
-            (result, expected),
-            (Some(TrayEvent::Show), Some(TrayEvent::Show)) | (None, None)
-        ));
+        assert_eq!(result, expected);
     }
 }

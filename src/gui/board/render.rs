@@ -23,6 +23,13 @@ impl Render for RopyBoard {
             .px_4()
             .pb_4();
 
+        if !self.activated {
+            return gpui::div()
+                .size_full()
+                .child(base.bg(self.main_panel_surface(cx.theme().background)))
+                .into_any_element();
+        }
+
         let body: AnyElement = match self.active_panel {
             ActivePanel::Settings => base
                 .bg(self.main_panel_surface(cx.theme().background))
@@ -80,5 +87,6 @@ impl Render for RopyBoard {
                         .children(notifs),
                 )
             })
+            .into_any_element()
     }
 }

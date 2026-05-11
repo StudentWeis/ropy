@@ -4,7 +4,8 @@ language_name = "简体中文"
 # 应用程序
 
 # 托盘菜单
-tray_show = "显示"
+tray_settings = "设置"
+tray_about = "关于"
 tray_quit = "退出"
 
 # 主窗口

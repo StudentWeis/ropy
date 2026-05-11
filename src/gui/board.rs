@@ -173,6 +173,7 @@ pub(crate) struct RopyBoard {
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) layout_mode: LayoutMode,
     pub(crate) pinned: bool,
+    pub(crate) activated: bool,
     pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
     pub(crate) update_manager: UpdateManager,
     /// Which clear action is currently awaiting confirmation
@@ -479,6 +480,7 @@ impl RopyBoard {
             confirm_mode,
             layout_mode,
             pinned: false,
+            activated: false,
             hotkey_tx: None,
             update_manager: UpdateManager::new(),
             clear_confirm_action: ClearConfirmAction::AllHistory,
