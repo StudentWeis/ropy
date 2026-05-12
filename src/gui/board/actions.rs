@@ -209,6 +209,10 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if self.ui_state.delete_confirm_visible() {
+            self.confirm_pending_delete(cx);
+            return;
+        }
         self.confirm_record(window, cx, self.selected_index);
     }
 
@@ -227,16 +231,15 @@ impl RopyBoard {
         _window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if self.ui_state.delete_confirm_visible() {
+            return;
+        }
         if let Some(id) = self.filtered_record_id_at(self.selected_index) {
-            self.delete_record(id, cx);
-            // Clamp selected_index after deletion
-            if self.selected_index > 0
-                && self.selected_index >= self.filtered_record_len().saturating_sub(1)
-            {
-                self.selected_index -= 1;
+            let showed_confirm = self.request_delete_record(id, cx);
+            if !showed_confirm {
+                self.clamp_selection_after_delete();
+                cx.notify();
             }
-            self.reveal_selected_record();
-            cx.notify();
         }
     }
 
@@ -270,6 +273,11 @@ impl RopyBoard {
     ) {
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             self.cancel_hotkey_recording(window, cx);
+            return;
+        }
+
+        if self.ui_state.delete_confirm_visible() {
+            self.cancel_pending_delete(cx);
             return;
         }
 
@@ -331,6 +339,16 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        // Handle delete-confirm dialog keys before the general ignore guard
+        if self.ui_state.delete_confirm_visible() {
+            match event.keystroke.key.as_str() {
+                "d" | "enter" => self.confirm_pending_delete(cx),
+                "escape" => self.cancel_pending_delete(cx),
+                _ => {}
+            }
+            return;
+        }
+
         if self.should_ignore_board_key_event(window, cx) {
             return;
         }
@@ -408,7 +426,7 @@ impl RopyBoard {
     }
 
     fn should_ignore_board_key_event(&self, window: &Window, cx: &Context<'_, Self>) -> bool {
-        if self.ui_state.clear_confirm_visible() {
+        if self.ui_state.any_overlay_visible() {
             return true;
         }
 

@@ -3,6 +3,7 @@ pub mod actions;
 mod clear_confirm;
 mod clipboard_ops;
 mod color;
+mod delete_confirm;
 pub(super) mod filtering;
 mod header;
 mod hotkey_record_handler;
@@ -105,11 +106,19 @@ pub(crate) enum ClearConfirmState {
     Visible,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum DeleteConfirmState {
+    #[default]
+    Hidden,
+    Visible,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct UiState {
     pub(crate) preview: PreviewState,
     pub(crate) deletion: DeletionState,
     pub(crate) clear_confirm: ClearConfirmState,
+    pub(crate) delete_confirm: DeleteConfirmState,
 }
 
 impl UiState {
@@ -119,6 +128,14 @@ impl UiState {
 
     pub(crate) const fn clear_confirm_visible(self) -> bool {
         matches!(self.clear_confirm, ClearConfirmState::Visible)
+    }
+
+    pub(crate) const fn delete_confirm_visible(self) -> bool {
+        matches!(self.delete_confirm, DeleteConfirmState::Visible)
+    }
+
+    pub(crate) const fn any_overlay_visible(self) -> bool {
+        self.clear_confirm_visible() || self.delete_confirm_visible()
     }
 
     pub(crate) const fn preview_visible(self) -> bool {
@@ -178,6 +195,8 @@ pub(crate) struct RopyBoard {
     pub(crate) update_manager: UpdateManager,
     /// Which clear action is currently awaiting confirmation
     clear_confirm_action: ClearConfirmAction,
+    /// Record ID awaiting single-record delete confirmation
+    pending_delete_id: Option<u64>,
     pub(crate) filter_state: FilterState,
 }
 
@@ -484,6 +503,7 @@ impl RopyBoard {
             hotkey_tx: None,
             update_manager: UpdateManager::new(),
             clear_confirm_action: ClearConfirmAction::AllHistory,
+            pending_delete_id: None,
             filter_state: FilterState::default(),
         }
     }
