@@ -14,6 +14,8 @@ use crate::gui::panel::{
 
 impl Render for RopyBoard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let surface_bg = self.main_panel_surface(cx.theme().background);
+
         let base = v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
@@ -22,31 +24,23 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_active_action))
             .size_full()
             .px_4()
-            .pb_4();
+            .pb_4()
+            .bg(surface_bg);
 
         if !self.activated {
-            return gpui::div()
-                .size_full()
-                .child(base.bg(self.main_panel_surface(cx.theme().background)))
-                .into_any_element();
+            return gpui::div().size_full().child(base).into_any_element();
         }
 
         let body: AnyElement = match self.active_panel {
             ActivePanel::Settings => base
-                .bg(self.main_panel_surface(cx.theme().background))
                 .on_key_down(cx.listener(Self::on_settings_key_down))
                 .child(render_settings_content(self, cx))
                 .into_any_element(),
             ActivePanel::About => base
-                .bg(self.main_panel_surface(cx.theme().background))
                 .child(render_about_content(self, cx))
                 .into_any_element(),
-            ActivePanel::Help => base
-                .bg(self.main_panel_surface(cx.theme().background))
-                .child(render_help_content(self, cx))
-                .into_any_element(),
+            ActivePanel::Help => base.child(render_help_content(self, cx)).into_any_element(),
             ActivePanel::ClipboardList => base
-                .bg(self.main_panel_surface(cx.theme().background))
                 .on_action(cx.listener(Self::on_select_left))
                 .on_action(cx.listener(Self::on_select_right))
                 .on_action(cx.listener(Self::on_select_prev))
