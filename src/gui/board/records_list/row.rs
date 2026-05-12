@@ -2,7 +2,10 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use gpui::{
     AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img,
-    prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
+    prelude::{
+        FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
+        Styled,
+    },
     px,
 };
 use gpui_component::{
@@ -322,6 +325,7 @@ pub(super) struct RenderContext<'a> {
     flags: RenderFlags,
     layout_mode: LayoutMode,
     opacity_percent: u8,
+    overlay_visible: bool,
     view: &'a gpui::WeakEntity<RopyBoard>,
 }
 
@@ -333,12 +337,14 @@ pub(super) struct RecordsListState {
     layout_mode: LayoutMode,
     show_preview: bool,
     hover_preview_enabled: bool,
+    overlay_visible: bool,
     opacity_percent: u8,
     pub(super) view: gpui::WeakEntity<RopyBoard>,
 }
 
 impl RecordsListState {
     pub(super) fn from_board(board: &RopyBoard, context: &Context<'_, RopyBoard>) -> Self {
+        let overlay_visible = board.ui_state.any_overlay_visible();
         Self {
             filtered_record_indices: board.filtered_record_indices.clone(),
             records: board.records.clone(),
@@ -347,7 +353,8 @@ impl RecordsListState {
             layout_mode: board.layout_mode,
             show_preview: board.ui_state.preview_visible(),
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
-                && !board.ui_state.clear_confirm_visible(),
+                && !overlay_visible,
+            overlay_visible,
             opacity_percent: board.settings_editor.window_opacity_percent,
             view: context.weak_entity(),
         }
@@ -403,6 +410,7 @@ impl RecordsListState {
             },
             layout_mode: self.layout_mode,
             opacity_percent: self.opacity_percent,
+            overlay_visible: self.overlay_visible,
             view: &self.view,
         }
     }
@@ -575,8 +583,7 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         .on_click(move |_event, _window, cx| {
             view_delete
                 .update(cx, |this, cx| {
-                    this.delete_record(record_id, cx);
-                    cx.notify();
+                    this.request_delete_record(record_id, cx);
                 })
                 .ok();
         });
@@ -627,6 +634,7 @@ fn decorate_record_card(
 ) -> AnyElement {
     let view_click = ctx.view.clone();
     let index = ctx.index;
+    let overlay_visible = ctx.overlay_visible;
 
     card.bg(styles.normal_background)
         .rounded_md()
@@ -636,18 +644,23 @@ fn decorate_record_card(
             styles.border
         })
         .border_1()
-        .hover(move |style| {
-            if ctx.flags.is_selected() {
-                style
-            } else {
-                style
-                    .bg(styles.selected_background)
-                    .border_color(styles.selected_background)
-            }
+        .when(!overlay_visible, |el| {
+            el.hover(move |style| {
+                if ctx.flags.is_selected() {
+                    style
+                } else {
+                    style
+                        .bg(styles.selected_background)
+                        .border_color(styles.selected_background)
+                }
+            })
+            .cursor_pointer()
         })
-        .cursor_pointer()
         .id(("record", ctx.index))
         .on_click(move |event, window, cx| {
+            if overlay_visible {
+                return;
+            }
             let confirm_as_plain_text = event.modifiers().shift;
             view_click
                 .update(cx, |this, cx| {

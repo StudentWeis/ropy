@@ -178,6 +178,56 @@ impl RopyBoard {
         });
     }
 
+    /// Returns true if the record is pinned or favorited (i.e. non-ordinary).
+    fn is_record_special(&self, id: u64) -> bool {
+        self.favorite_ids.contains(&id)
+            || read_or_recover(&self.records)
+                .iter()
+                .any(|r| r.id == id && r.pinned)
+    }
+
+    /// Requests deletion of a record. If the record is non-ordinary (pinned or
+    /// favorited), a confirmation dialog is shown first.
+    /// Returns `true` when a confirmation dialog was shown (deletion deferred).
+    pub(crate) fn request_delete_record(&mut self, id: u64, cx: &mut Context<'_, Self>) -> bool {
+        if self.is_record_special(id) {
+            self.pending_delete_id = Some(id);
+            self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Visible;
+            cx.notify();
+            true
+        } else {
+            self.delete_record(id, cx);
+            false
+        }
+    }
+
+    /// Clamps `selected_index` to stay within bounds after a record deletion.
+    pub(crate) fn clamp_selection_after_delete(&mut self) {
+        if self.selected_index > 0
+            && self.selected_index >= self.filtered_record_len().saturating_sub(1)
+        {
+            self.selected_index -= 1;
+        }
+        self.reveal_selected_record();
+    }
+
+    /// Confirms and executes the pending single-record deletion.
+    pub(crate) fn confirm_pending_delete(&mut self, cx: &mut Context<'_, Self>) {
+        if let Some(id) = self.pending_delete_id.take() {
+            self.delete_record(id, cx);
+            self.clamp_selection_after_delete();
+        }
+        self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Hidden;
+        cx.notify();
+    }
+
+    /// Cancels the pending single-record delete confirmation.
+    pub(crate) fn cancel_pending_delete(&mut self, cx: &mut Context<'_, Self>) {
+        self.pending_delete_id = None;
+        self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Hidden;
+        cx.notify();
+    }
+
     pub(crate) fn toggle_record_favorite(&mut self, id: u64, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {
