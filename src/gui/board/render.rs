@@ -5,7 +5,8 @@ use gpui::{
 use gpui_component::{ActiveTheme, WindowExt, v_flex};
 
 use super::{
-    ActivePanel, RopyBoard, clear_confirm, header::render_header, search::render_search_input,
+    ActivePanel, RopyBoard, clear_confirm, delete_confirm, header::render_header,
+    search::render_search_input,
 };
 use crate::gui::panel::{
     about::render_about_content, help::render_help_content, settings::render_settings_content,
@@ -65,6 +66,7 @@ impl Render for RopyBoard {
         let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
         let has_notifs = !notifs.is_empty();
         let show_clear_confirm = self.ui_state.clear_confirm_visible();
+        let show_delete_confirm = self.ui_state.delete_confirm_visible();
         let clear_confirm_action = self.clear_confirm_action;
         gpui::div()
             .relative()
@@ -75,6 +77,9 @@ impl Render for RopyBoard {
                     clear_confirm_action,
                     cx,
                 ))
+            })
+            .when(show_delete_confirm, |this| {
+                this.child(delete_confirm::render_delete_confirm_overlay(cx))
             })
             .when(has_notifs, move |this| {
                 this.child(
