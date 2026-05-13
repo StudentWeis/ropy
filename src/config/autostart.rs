@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::env;
 
+#[cfg(target_os = "windows")]
+use auto_launch::WindowsEnableMode;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use thiserror::Error;
 
@@ -29,13 +31,15 @@ impl AutoStartManager {
     pub(crate) fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
-        let auto_launch = AutoLaunchBuilder::new()
-            .set_app_name(app_name)
-            .set_app_path(&app_path)
-            .build()
-            .map_err(|e| {
-                AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
-            })?;
+        let mut builder = AutoLaunchBuilder::new();
+        builder.set_app_name(app_name).set_app_path(&app_path);
+
+        #[cfg(target_os = "windows")]
+        builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
+
+        let auto_launch = builder.build().map_err(|e| {
+            AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
+        })?;
 
         Ok(Self { auto_launch })
     }
@@ -45,6 +49,11 @@ impl AutoStartManager {
     /// inside a `.app` bundle and the auto-launch entry must reference
     /// the bundle, not the inner Mach-O — otherwise launchd starts a
     /// detached binary without a working environment.
+    ///
+    /// On Windows, when installed via Scoop the resolved exe path may
+    /// point through a versioned directory (e.g. `apps\ropy\0.5.1\`)
+    /// instead of the stable `apps\ropy\current\` junction. We normalise
+    /// back to `current` so that the registry entry survives upgrades.
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
@@ -56,6 +65,32 @@ impl AutoStartManager {
                 // +4 keeps the `.app` suffix in the slice.
                 let bundle_path = &exe_str[..app_bundle_idx + 4];
                 return Ok(bundle_path.to_string());
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let exe_str = exe_path.to_string_lossy();
+            // Detect Scoop layout: ...\scoop\apps\<name>\<version>\<binary>
+            // and replace the version segment with "current".
+            if let Some(apps_idx) = exe_str.to_lowercase().find("\\scoop\\apps\\") {
+                let after_apps = apps_idx + "\\scoop\\apps\\".len();
+                // Find the app-name segment end (next backslash after apps\)
+                if let Some(name_end) = exe_str[after_apps..].find('\\') {
+                    let version_start = after_apps + name_end + 1;
+                    // Find the version segment end
+                    if let Some(version_end) = exe_str[version_start..].find('\\') {
+                        let version_segment = &exe_str[version_start..version_start + version_end];
+                        if version_segment != "current" {
+                            let normalised = format!(
+                                "{}current{}",
+                                &exe_str[..version_start],
+                                &exe_str[version_start + version_end..]
+                            );
+                            return Ok(normalised);
+                        }
+                    }
+                }
             }
         }
 
