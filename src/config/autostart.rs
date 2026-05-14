@@ -48,12 +48,9 @@ impl AutoStartManager {
     /// Windows registry should point at. On macOS a release build runs
     /// inside a `.app` bundle and the auto-launch entry must reference
     /// the bundle, not the inner Mach-O — otherwise launchd starts a
-    /// detached binary without a working environment.
-    ///
-    /// On Windows, when installed via Scoop the resolved exe path may
-    /// point through a versioned directory (e.g. `apps\ropy\0.5.1\`)
-    /// instead of the stable `apps\ropy\current\` junction. We normalise
-    /// back to `current` so that the registry entry survives upgrades.
+    /// detached binary without a working environment. On Windows we
+    /// also rewrite Scoop's versioned install path back to the stable
+    /// `current` junction — see [`normalise_scoop_path`].
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
@@ -71,26 +68,8 @@ impl AutoStartManager {
         #[cfg(target_os = "windows")]
         {
             let exe_str = exe_path.to_string_lossy();
-            // Detect Scoop layout: ...\scoop\apps\<name>\<version>\<binary>
-            // and replace the version segment with "current".
-            if let Some(apps_idx) = exe_str.to_lowercase().find("\\scoop\\apps\\") {
-                let after_apps = apps_idx + "\\scoop\\apps\\".len();
-                // Find the app-name segment end (next backslash after apps\)
-                if let Some(name_end) = exe_str[after_apps..].find('\\') {
-                    let version_start = after_apps + name_end + 1;
-                    // Find the version segment end
-                    if let Some(version_end) = exe_str[version_start..].find('\\') {
-                        let version_segment = &exe_str[version_start..version_start + version_end];
-                        if version_segment != "current" {
-                            let normalised = format!(
-                                "{}current{}",
-                                &exe_str[..version_start],
-                                &exe_str[version_start + version_end..]
-                            );
-                            return Ok(normalised);
-                        }
-                    }
-                }
+            if let Some(normalised) = normalise_scoop_path(&exe_str) {
+                return Ok(normalised);
             }
         }
 
@@ -131,6 +110,42 @@ impl AutoStartManager {
             self.disable()
         }
     }
+}
+
+/// Rewrite a Windows path that points through a Scoop versioned
+/// directory (`...\scoop\apps\<name>\<version>\...`) so the version
+/// segment becomes `current`. Returns `None` when `path` is not a
+/// Scoop install path or already targets `current`.
+///
+/// `current_exe()` resolves Scoop's `current` junction to the real
+/// versioned directory; persisting that resolved path to the autostart
+/// registry pins the entry to a specific version, which Scoop then
+/// deletes on upgrade. Pointing at `current` lets the entry survive
+/// upgrades.
+#[cfg(any(target_os = "windows", test))]
+fn normalise_scoop_path(path: &str) -> Option<String> {
+    const MARKER: &[u8] = br"\scoop\apps\";
+
+    let bytes = path.as_bytes();
+    let last_start = bytes.len().checked_sub(MARKER.len())?;
+    let apps_idx =
+        (0..=last_start).find(|&i| bytes[i..i + MARKER.len()].eq_ignore_ascii_case(MARKER))?;
+
+    // Marker is pure ASCII, so byte indices are valid UTF-8 char
+    // boundaries; the same holds for the `\` positions found below.
+    let after_apps = apps_idx + MARKER.len();
+    let name_end = path[after_apps..].find('\\')?;
+    let version_start = after_apps + name_end + 1;
+    let version_end = path[version_start..].find('\\')?;
+    let version_segment = &path[version_start..version_start + version_end];
+    if version_segment.eq_ignore_ascii_case("current") {
+        return None;
+    }
+    Some(format!(
+        "{}current{}",
+        &path[..version_start],
+        &path[version_start + version_end..],
+    ))
 }
 
 #[cfg(test)]
@@ -174,5 +189,59 @@ mod tests {
         if let Ok(enabled) = manager.is_enabled() {
             assert!(!enabled);
         }
+    }
+
+    // Pure-string Scoop normalisation tests — no OS state, safe to run
+    // in parallel with each other on any platform.
+
+    #[test]
+    fn normalise_scoop_replaces_versioned_segment() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\0.5.1\ropy.exe").as_deref(),
+            Some(r"C:\Users\foo\scoop\apps\ropy\current\ropy.exe"),
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_for_current_junction() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\current\ropy.exe"),
+            None,
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_is_case_insensitive() {
+        // Marker matches case-insensitively…
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\Scoop\Apps\ropy\0.5.1\ropy.exe").as_deref(),
+            Some(r"C:\Users\foo\Scoop\Apps\ropy\current\ropy.exe"),
+        );
+        // …and so does the `current` check, so we don't pointlessly
+        // rewrite an already-stable path.
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\Current\ropy.exe"),
+            None,
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_for_non_scoop_path() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Program Files\ropy\ropy.exe"),
+            None,
+        );
+        assert_eq!(normalise_scoop_path(""), None);
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_when_version_segment_missing() {
+        // No `\` after the version, i.e. path ends at the version dir.
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\0.5.1"),
+            None,
+        );
+        // No app-name segment at all.
+        assert_eq!(normalise_scoop_path(r"C:\scoop\apps\"), None);
     }
 }
