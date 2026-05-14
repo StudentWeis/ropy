@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::env;
 
+#[cfg(target_os = "windows")]
+use auto_launch::WindowsEnableMode;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use thiserror::Error;
 
@@ -29,13 +31,15 @@ impl AutoStartManager {
     pub(crate) fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
-        let auto_launch = AutoLaunchBuilder::new()
-            .set_app_name(app_name)
-            .set_app_path(&app_path)
-            .build()
-            .map_err(|e| {
-                AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
-            })?;
+        let mut builder = AutoLaunchBuilder::new();
+        builder.set_app_name(app_name).set_app_path(&app_path);
+
+        #[cfg(target_os = "windows")]
+        builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
+
+        let auto_launch = builder.build().map_err(|e| {
+            AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
+        })?;
 
         Ok(Self { auto_launch })
     }
@@ -44,7 +48,9 @@ impl AutoStartManager {
     /// Windows registry should point at. On macOS a release build runs
     /// inside a `.app` bundle and the auto-launch entry must reference
     /// the bundle, not the inner Mach-O — otherwise launchd starts a
-    /// detached binary without a working environment.
+    /// detached binary without a working environment. On Windows we
+    /// also rewrite Scoop's versioned install path back to the stable
+    /// `current` junction — see [`normalise_scoop_path`].
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
@@ -56,6 +62,14 @@ impl AutoStartManager {
                 // +4 keeps the `.app` suffix in the slice.
                 let bundle_path = &exe_str[..app_bundle_idx + 4];
                 return Ok(bundle_path.to_string());
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let exe_str = exe_path.to_string_lossy();
+            if let Some(normalised) = normalise_scoop_path(&exe_str) {
+                return Ok(normalised);
             }
         }
 
@@ -96,6 +110,42 @@ impl AutoStartManager {
             self.disable()
         }
     }
+}
+
+/// Rewrite a Windows path that points through a Scoop versioned
+/// directory (`...\scoop\apps\<name>\<version>\...`) so the version
+/// segment becomes `current`. Returns `None` when `path` is not a
+/// Scoop install path or already targets `current`.
+///
+/// `current_exe()` resolves Scoop's `current` junction to the real
+/// versioned directory; persisting that resolved path to the autostart
+/// registry pins the entry to a specific version, which Scoop then
+/// deletes on upgrade. Pointing at `current` lets the entry survive
+/// upgrades.
+#[cfg(any(target_os = "windows", test))]
+fn normalise_scoop_path(path: &str) -> Option<String> {
+    const MARKER: &[u8] = br"\scoop\apps\";
+
+    let bytes = path.as_bytes();
+    let last_start = bytes.len().checked_sub(MARKER.len())?;
+    let apps_idx =
+        (0..=last_start).find(|&i| bytes[i..i + MARKER.len()].eq_ignore_ascii_case(MARKER))?;
+
+    // Marker is pure ASCII, so byte indices are valid UTF-8 char
+    // boundaries; the same holds for the `\` positions found below.
+    let after_apps = apps_idx + MARKER.len();
+    let name_end = path[after_apps..].find('\\')?;
+    let version_start = after_apps + name_end + 1;
+    let version_end = path[version_start..].find('\\')?;
+    let version_segment = &path[version_start..version_start + version_end];
+    if version_segment.eq_ignore_ascii_case("current") {
+        return None;
+    }
+    Some(format!(
+        "{}current{}",
+        &path[..version_start],
+        &path[version_start + version_end..],
+    ))
 }
 
 #[cfg(test)]
@@ -139,5 +189,59 @@ mod tests {
         if let Ok(enabled) = manager.is_enabled() {
             assert!(!enabled);
         }
+    }
+
+    // Pure-string Scoop normalisation tests — no OS state, safe to run
+    // in parallel with each other on any platform.
+
+    #[test]
+    fn normalise_scoop_replaces_versioned_segment() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\0.5.1\ropy.exe").as_deref(),
+            Some(r"C:\Users\foo\scoop\apps\ropy\current\ropy.exe"),
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_for_current_junction() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\current\ropy.exe"),
+            None,
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_is_case_insensitive() {
+        // Marker matches case-insensitively…
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\Scoop\Apps\ropy\0.5.1\ropy.exe").as_deref(),
+            Some(r"C:\Users\foo\Scoop\Apps\ropy\current\ropy.exe"),
+        );
+        // …and so does the `current` check, so we don't pointlessly
+        // rewrite an already-stable path.
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\Current\ropy.exe"),
+            None,
+        );
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_for_non_scoop_path() {
+        assert_eq!(
+            normalise_scoop_path(r"C:\Program Files\ropy\ropy.exe"),
+            None,
+        );
+        assert_eq!(normalise_scoop_path(""), None);
+    }
+
+    #[test]
+    fn normalise_scoop_returns_none_when_version_segment_missing() {
+        // No `\` after the version, i.e. path ends at the version dir.
+        assert_eq!(
+            normalise_scoop_path(r"C:\Users\foo\scoop\apps\ropy\0.5.1"),
+            None,
+        );
+        // No app-name segment at all.
+        assert_eq!(normalise_scoop_path(r"C:\scoop\apps\"), None);
     }
 }
