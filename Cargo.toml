@@ -1,6 +1,6 @@
 [package]
 name = "ropy"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2024"
 description = "A clipboard manager built with Rust and GPUI."
 authors = ["Student Wei <studentweis@gmail.com>"]
@@ -166,7 +166,7 @@ osx_minimum_system_version = "10.15"
 
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
-version = "0.5.2"
+version = "0.5.3"
 copyright = "Copyright 2026 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"

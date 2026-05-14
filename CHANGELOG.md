@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.3] - 2026-05-14
+
+### 🚀 Features
+- Add delete-confirm overlay rendering and i18n keys by @StudentWeis
+- Replace tray Show button with Settings and About entries (#127) by @StudentWeis in [#127](https://github.com/StudentWeis/ropy/pull/127)
+- Add tooltips to clear buttons and shorten Japanese labels (#125) by @StudentWeis in [#125](https://github.com/StudentWeis/ropy/pull/125)
+
+### 🐛 Bug Fixes
+- Use CurrentUser registry and normalise Scoop path on Windows (#133) by @StudentWeis in [#133](https://github.com/StudentWeis/ropy/pull/133)
+
+### 🚜 Refactor
+- Hoist background color onto shared base builder (#131) by @StudentWeis in [#131](https://github.com/StudentWeis/ropy/pull/131)
+- Simplify delete-confirm overlay logic and deduplicate clamping (#129) by @StudentWeis in [#129](https://github.com/StudentWeis/ropy/pull/129)
+- Inline validate.rs into settings.rs and remove settings/ folder (#123) by @StudentWeis in [#123](https://github.com/StudentWeis/ropy/pull/123)
+
+### 📚 Documentation
+- Update README with new preview functionality and clarify launch instructions by @StudentWeis
+
+### ⚙️ Miscellaneous Tasks
+- Update dependencies in Cargo.lock to latest versions by @StudentWeis
+- Rename ropy-contribution-flow skill to contribution-flow (#121) by @StudentWeis in [#121](https://github.com/StudentWeis/ropy/pull/121)
+- Remove redundant symlinks for claude skills and docs by @StudentWeis
+
 ## [0.5.2] - 2026-05-11
 
 ### 🚀 Features
