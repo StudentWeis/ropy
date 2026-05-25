@@ -4,7 +4,7 @@ use crate::{
     config::LayoutMode,
     gui::{
         active_window,
-        board::{ActivePanel, RopyBoard},
+        board::{ActivePanel, RopyBoard, search::next_content_filter},
         constants::default_window_size,
         hide_window,
         panel::settings,
@@ -40,7 +40,10 @@ mod generated_actions {
             SelectNext,
             ConfirmSelection,
             ConfirmSelectionPlainText,
-            DeleteRecord
+            DeleteRecord,
+            CycleFilterNext,
+            CycleFilterPrev,
+            ToggleFavoritesFilter
         ]
     );
 }
@@ -223,6 +226,41 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         self.confirm_record_as_plain_text(window, cx, self.selected_index);
+    }
+
+    pub(crate) fn on_cycle_filter_next(
+        &mut self,
+        _: &CycleFilterNext,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let next = next_content_filter(self.filter_state.content_filter, true);
+        self.filter_state.content_filter = next;
+        self.sync_filtered_records_and_reveal(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn on_cycle_filter_prev(
+        &mut self,
+        _: &CycleFilterPrev,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let next = next_content_filter(self.filter_state.content_filter, false);
+        self.filter_state.content_filter = next;
+        self.sync_filtered_records_and_reveal(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn on_toggle_favorites_filter(
+        &mut self,
+        _: &ToggleFavoritesFilter,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        self.toggle_favorites_only();
+        self.sync_filtered_records_and_reveal(cx);
+        cx.notify();
     }
 
     pub(crate) fn on_delete_record(

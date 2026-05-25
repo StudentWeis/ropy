@@ -79,6 +79,16 @@ const SHORTCUTS: &[ShortcutRow] = &[
         grid_only: false,
     },
     ShortcutRow {
+        key: "Alt+← / Alt+→",
+        label_key: "help_cycle_filter",
+        grid_only: false,
+    },
+    ShortcutRow {
+        key: "Alt+F",
+        label_key: "help_toggle_favorites_filter",
+        grid_only: false,
+    },
+    ShortcutRow {
         key: "P",
         label_key: "help_pin",
         grid_only: false,

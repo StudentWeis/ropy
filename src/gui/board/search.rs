@@ -38,6 +38,32 @@ pub(crate) enum ContentFilter {
     Files,
 }
 
+/// Cycle to the adjacent `ContentFilter` in display order.
+///
+/// Order matches the filter buttons in the search bar header: `All → Text →
+/// Image → Files → All`. `forward = true` advances; `false` walks backward.
+pub(crate) const fn next_content_filter(current: ContentFilter, forward: bool) -> ContentFilter {
+    const CYCLE: [ContentFilter; 4] = [
+        ContentFilter::All,
+        ContentFilter::Text,
+        ContentFilter::Image,
+        ContentFilter::Files,
+    ];
+    let len = CYCLE.len();
+    let index = match current {
+        ContentFilter::All => 0,
+        ContentFilter::Text => 1,
+        ContentFilter::Image => 2,
+        ContentFilter::Files => 3,
+    };
+    let next = if forward {
+        (index + 1) % len
+    } else {
+        (index + len - 1) % len
+    };
+    CYCLE[next]
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct SearchOptions {
     pub(crate) case_sensitive: bool,
@@ -389,6 +415,46 @@ mod tests {
 
     fn empty_favorites() -> HashSet<u64> {
         HashSet::new()
+    }
+
+    #[test]
+    fn next_content_filter_cycles_forward() {
+        assert_eq!(
+            next_content_filter(ContentFilter::All, true),
+            ContentFilter::Text
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Text, true),
+            ContentFilter::Image
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Image, true),
+            ContentFilter::Files
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Files, true),
+            ContentFilter::All
+        );
+    }
+
+    #[test]
+    fn next_content_filter_cycles_backward() {
+        assert_eq!(
+            next_content_filter(ContentFilter::All, false),
+            ContentFilter::Files
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Files, false),
+            ContentFilter::Image
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Image, false),
+            ContentFilter::Text
+        );
+        assert_eq!(
+            next_content_filter(ContentFilter::Text, false),
+            ContentFilter::All
+        );
     }
 
     /// Helper: build a mixed set of test records (2 text + 1 image)
