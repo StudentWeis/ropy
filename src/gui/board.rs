@@ -27,8 +27,8 @@ use std::{
 
 // Re-export utilities for external use
 pub(crate) use actions::{
-    Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, SelectLeft, SelectNext,
-    SelectPrev, SelectRight,
+    Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev, Hide,
+    Quit, SelectLeft, SelectNext, SelectPrev, SelectRight, ToggleFavoritesFilter,
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui::{

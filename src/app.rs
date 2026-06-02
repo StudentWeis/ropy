@@ -24,8 +24,9 @@ use crate::{
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
     gui::board::{
-        Active, ConfirmSelection, ConfirmSelectionPlainText, Hide, Quit, RopyBoard, SelectLeft,
-        SelectNext, SelectPrev, SelectRight,
+        Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev,
+        Hide, Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
+        ToggleFavoritesFilter,
     },
     i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, backend::StorageBackend},
@@ -235,6 +236,9 @@ fn bind_application_keys(cx: &mut App) {
         KeyBinding::new("down", SelectNext, None),
         KeyBinding::new("enter", ConfirmSelection, None),
         KeyBinding::new("shift-enter", ConfirmSelectionPlainText, None),
+        KeyBinding::new("alt-right", CycleFilterNext, None),
+        KeyBinding::new("alt-left", CycleFilterPrev, None),
+        KeyBinding::new("alt-f", ToggleFavoritesFilter, None),
     ]);
 }
 
