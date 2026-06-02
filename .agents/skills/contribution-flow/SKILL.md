@@ -79,9 +79,9 @@ Push additional commits to the same branch. **Do not force-push once a reviewer 
 Only on explicit user instruction.
 
 ```bash
-gh pr merge <N> --squash --delete-branch
-git checkout main && git pull --ff-only
-git fetch --prune # Cleanup remote-tracking branches
+gh pr merge <N> --squash --delete-branch && \
+  git checkout main && git pull --ff-only && \
+  git fetch --prune # Cleanup stale remote-tracking branches
 ```
 
 ## CI failures
