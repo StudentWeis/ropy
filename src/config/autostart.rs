@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{env, path::Path};
 
+#[cfg(target_os = "macos")]
+use auto_launch::MacOSLaunchMode;
 #[cfg(target_os = "windows")]
 use auto_launch::WindowsEnableMode;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -26,9 +28,7 @@ pub(crate) enum AutoStartError {
 pub(crate) struct AutoStartManager {
     auto_launch: AutoLaunch,
     #[cfg(target_os = "macos")]
-    app_name: String,
-    #[cfg(target_os = "macos")]
-    app_path: String,
+    legacy_launch_agent: AutoLaunch,
 }
 
 impl AutoStartManager {
@@ -37,6 +37,9 @@ impl AutoStartManager {
 
         let mut builder = AutoLaunchBuilder::new();
         builder.set_app_name(app_name).set_app_path(&app_path);
+
+        #[cfg(target_os = "macos")]
+        builder.set_macos_launch_mode(MacOSLaunchMode::AppleScript);
 
         #[cfg(target_os = "windows")]
         builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
@@ -48,19 +51,15 @@ impl AutoStartManager {
         Ok(Self {
             auto_launch,
             #[cfg(target_os = "macos")]
-            app_name: app_name.to_owned(),
-            #[cfg(target_os = "macos")]
-            app_path,
+            legacy_launch_agent: Self::build_macos_legacy_launch_agent(app_name, &app_path)?,
         })
     }
 
     /// Resolve the path that `LaunchAgents` / `.desktop` entries / the
-    /// Windows registry should execute. macOS `LaunchAgent` entries place
-    /// this value directly in `ProgramArguments`, so a bundled app must
-    /// keep the inner `Contents/MacOS/...` executable path rather than
-    /// the `.app` directory. On Windows we rewrite Scoop's versioned
-    /// install path back to the stable `current` junction — see
-    /// [`normalise_scoop_path`].
+    /// Windows registry should execute. macOS uses a Login Item so bundled
+    /// builds point at the `.app` directory that System Settings displays.
+    /// On Windows we rewrite Scoop's versioned install path back to the
+    /// stable `current` junction — see [`normalise_scoop_path`].
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
@@ -68,6 +67,11 @@ impl AutoStartManager {
     }
 
     fn resolve_app_path(exe_path: &Path) -> Result<String, AutoStartError> {
+        #[cfg(target_os = "macos")]
+        if let Some(bundle_path) = macos_app_bundle_path(exe_path) {
+            return Ok(bundle_path);
+        }
+
         #[cfg(target_os = "windows")]
         {
             let exe_str = exe_path.to_string_lossy();
@@ -78,6 +82,21 @@ impl AutoStartManager {
 
         exe_path.to_str().map(ToString::to_string).ok_or_else(|| {
             AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    fn build_macos_legacy_launch_agent(
+        app_name: &str,
+        app_path: &str,
+    ) -> Result<AutoLaunch, AutoStartError> {
+        let mut builder = AutoLaunchBuilder::new();
+        builder
+            .set_app_name(app_name)
+            .set_app_path(app_path)
+            .set_macos_launch_mode(MacOSLaunchMode::LaunchAgent);
+        builder.build().map_err(|e| {
+            AutoStartError::Initialization(format!("Failed to build legacy AutoLaunch: {e}"))
         })
     }
 
@@ -101,43 +120,28 @@ impl AutoStartManager {
 
     /// Make the system state match the user's preference, but skip the
     /// platform call when it already matches — repeatedly toggling
-    /// `LaunchAgents` / registry entries is unnecessary churn and (on
+    /// Login Items / registry entries is unnecessary churn and (on
     /// some Linux desktops) racy.
     pub(crate) fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
         let current_enabled = self.is_enabled().unwrap_or(false);
-        let entry_matches_app_path = if enabled && current_enabled {
-            #[cfg(target_os = "macos")]
-            {
-                self.autostart_entry_matches_app_path()
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                true
-            }
-        } else {
-            true
-        };
-
-        match autostart_sync_action(enabled, current_enabled, entry_matches_app_path) {
+        match autostart_sync_action(enabled, current_enabled) {
             AutoStartSyncAction::None => Ok(()),
             AutoStartSyncAction::Enable => self.enable(),
             AutoStartSyncAction::Disable => self.disable(),
-        }
+        }?;
+        self.disable_macos_legacy_launch_agent()
     }
 
     #[cfg(target_os = "macos")]
-    fn autostart_entry_matches_app_path(&self) -> bool {
-        let Some(home_dir) = dirs::home_dir() else {
-            return false;
-        };
-        let app_name = &self.app_name;
-        let plist_path = home_dir
-            .join("Library")
-            .join("LaunchAgents")
-            .join(format!("{app_name}.plist"));
+    fn disable_macos_legacy_launch_agent(&self) -> Result<(), AutoStartError> {
+        self.legacy_launch_agent
+            .disable()
+            .map_err(|e| AutoStartError::Disable(e.to_string()))
+    }
 
-        std::fs::read_to_string(plist_path)
-            .is_ok_and(|contents| launch_agent_contains_app_path(&contents, &self.app_path))
+    #[cfg(not(target_os = "macos"))]
+    fn disable_macos_legacy_launch_agent(&self) -> Result<(), AutoStartError> {
+        Ok(())
     }
 }
 
@@ -148,13 +152,9 @@ enum AutoStartSyncAction {
     Disable,
 }
 
-const fn autostart_sync_action(
-    enabled: bool,
-    current_enabled: bool,
-    entry_matches_app_path: bool,
-) -> AutoStartSyncAction {
+const fn autostart_sync_action(enabled: bool, current_enabled: bool) -> AutoStartSyncAction {
     if enabled {
-        if current_enabled && entry_matches_app_path {
+        if current_enabled {
             AutoStartSyncAction::None
         } else {
             AutoStartSyncAction::Enable
@@ -167,8 +167,12 @@ const fn autostart_sync_action(
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn launch_agent_contains_app_path(contents: &str, app_path: &str) -> bool {
-    contents.contains(&format!("<string>{app_path}</string>"))
+fn macos_app_bundle_path(exe_path: &Path) -> Option<String> {
+    let exe_str = exe_path.to_string_lossy();
+    exe_str.rfind(".app/").map(|app_bundle_idx| {
+        // +4 keeps the `.app` suffix in the slice.
+        exe_str[..app_bundle_idx + 4].to_string()
+    })
 }
 
 /// Rewrite a Windows path that points through a Scoop versioned
@@ -213,8 +217,8 @@ mod tests {
 
     use super::*;
 
-    // These tests touch OS-level auto-launch state (macOS LaunchAgents,
-    // Linux `.desktop` entries, Windows registry). Running them in parallel
+    // These tests touch OS-level auto-launch state (macOS Login Items /
+    // legacy LaunchAgents, Linux `.desktop` entries, Windows registry). Running them in parallel
     // can race on that shared global state, so they are serialised explicitly
     // while the rest of the suite runs in parallel.
 
@@ -237,61 +241,51 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     #[expect(clippy::unwrap_used)]
-    fn test_resolve_app_path_macos_bundle_executable_keeps_executable_path() {
+    fn test_resolve_app_path_macos_bundle_executable_returns_bundle_path() {
         let executable_path = Path::new("/Applications/Ropy.app/Contents/MacOS/ropy");
 
         let resolved = AutoStartManager::resolve_app_path(executable_path).unwrap();
 
-        assert_eq!(resolved, "/Applications/Ropy.app/Contents/MacOS/ropy");
+        assert_eq!(resolved, "/Applications/Ropy.app");
     }
 
     #[test]
-    fn test_launch_agent_contains_app_path_matching_executable_returns_true() {
-        let contents = r"
-<key>ProgramArguments</key>
-<array><string>/Applications/Ropy.app/Contents/MacOS/ropy</string></array>
-";
+    fn test_macos_app_bundle_path_with_inner_executable_returns_bundle_path() {
+        let executable_path = Path::new("/Applications/Ropy.app/Contents/MacOS/ropy");
 
-        assert!(launch_agent_contains_app_path(
-            contents,
-            "/Applications/Ropy.app/Contents/MacOS/ropy",
-        ));
-    }
-
-    #[test]
-    fn test_launch_agent_contains_app_path_bundle_directory_returns_false() {
-        let contents = r"
-<key>ProgramArguments</key>
-<array><string>/Applications/Ropy.app</string></array>
-";
-
-        assert!(!launch_agent_contains_app_path(
-            contents,
-            "/Applications/Ropy.app/Contents/MacOS/ropy",
-        ));
-    }
-
-    #[test]
-    fn test_autostart_sync_action_stale_enabled_entry_enables() {
         assert_eq!(
-            autostart_sync_action(true, true, false),
+            macos_app_bundle_path(executable_path).as_deref(),
+            Some("/Applications/Ropy.app"),
+        );
+    }
+
+    #[test]
+    fn test_macos_app_bundle_path_without_bundle_returns_none() {
+        assert_eq!(
+            macos_app_bundle_path(Path::new("/usr/local/bin/ropy")),
+            None
+        );
+    }
+
+    #[test]
+    fn test_autostart_sync_action_enabled_preference_with_disabled_entry_enables() {
+        assert_eq!(
+            autostart_sync_action(true, false),
             AutoStartSyncAction::Enable,
         );
     }
 
     #[test]
     fn test_autostart_sync_action_current_enabled_entry_is_noop() {
-        assert_eq!(
-            autostart_sync_action(true, true, true),
-            AutoStartSyncAction::None,
-        );
+        assert_eq!(autostart_sync_action(true, true), AutoStartSyncAction::None);
     }
 
     #[test]
     fn test_autostart_sync_action_disabled_preference_disables_enabled_entry() {
         assert_eq!(
-            autostart_sync_action(false, true, true),
+            autostart_sync_action(false, true),
             AutoStartSyncAction::Disable,
         );
     }
