@@ -129,7 +129,11 @@ impl AutoStartManager {
             AutoStartSyncAction::Enable => self.enable(),
             AutoStartSyncAction::Disable => self.disable(),
         }?;
-        self.disable_macos_legacy_launch_agent()
+
+        #[cfg(target_os = "macos")]
+        self.disable_macos_legacy_launch_agent()?;
+
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]
@@ -137,11 +141,6 @@ impl AutoStartManager {
         self.legacy_launch_agent
             .disable()
             .map_err(|e| AutoStartError::Disable(e.to_string()))
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn disable_macos_legacy_launch_agent(&self) -> Result<(), AutoStartError> {
-        Ok(())
     }
 }
 
