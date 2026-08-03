@@ -30,7 +30,13 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\.bin\.ropy\]\n(?:.*\n)*?versio
 ./scripts/record_build_size.sh
 
 # Generate changelog for the new release
-git cliff --unreleased --tag "$release_version" --prepend CHANGELOG.md
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+	if ! GITHUB_TOKEN="$(gh auth token)"; then
+		echo "Error: failed to get a GitHub token from gh; run 'gh auth login' first." >&2
+		exit 1
+	fi
+fi
+GITHUB_TOKEN="$GITHUB_TOKEN" git cliff --unreleased --tag "$release_version" --prepend CHANGELOG.md
 # Remove HTML comment markers (e.g., <!-- 0 -->) from CHANGELOG.md
 # These markers are added by git-cliff as placeholders for version numbers
 perl -i -pe 's/<!-- \d+ -->//g' CHANGELOG.md
