@@ -7,6 +7,9 @@ pub(crate) enum UpdateError {
     #[error("network request failed: {0}")]
     Network(String),
 
+    #[error("GitHub API rate limit exceeded; please try again later")]
+    RateLimited,
+
     #[error("failed to parse release info: {0}")]
     Parse(String),
 

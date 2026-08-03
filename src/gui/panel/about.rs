@@ -146,7 +146,9 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
             // Surface a localized "network problem" hint for the most common
             // class of update failures so users aren't shown raw curl /
             // TLS errors.
-            let friendly_msg = if msg.contains("curl")
+            let friendly_msg = if msg.to_ascii_lowercase().contains("rate limit") {
+                I18n::translate(cx, "update_error_rate_limited")
+            } else if msg.contains("curl")
                 || msg.contains("SSL")
                 || msg.contains("HTTP request failed")
             {

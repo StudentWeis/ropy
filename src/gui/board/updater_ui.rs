@@ -8,7 +8,9 @@ use crate::{
 
 impl RopyBoard {
     pub(crate) fn check_for_update_async(&mut self, cx: &mut Context<'_, Self>) {
-        self.update_manager.status = UpdateStatus::Checking;
+        if !self.update_manager.begin_check() {
+            return;
+        }
         cx.notify();
 
         let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);

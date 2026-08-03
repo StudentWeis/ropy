@@ -122,6 +122,15 @@ impl UpdateManager {
             status: crate::updater::models::UpdateStatus::Idle,
         }
     }
+
+    pub(super) fn begin_check(&mut self) -> bool {
+        if matches!(self.status, crate::updater::models::UpdateStatus::Checking) {
+            return false;
+        }
+
+        self.status = crate::updater::models::UpdateStatus::Checking;
+        true
+    }
 }
 
 pub(super) fn build_window_opacity_slider(

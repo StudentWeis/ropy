@@ -91,6 +91,7 @@ update_restart = "更新已安装，重启后生效。"
 update_restart_button = "立即重启"
 update_error = "检查更新失败"
 update_error_network = "网络连接失败，请检查网络设置"
+update_error_rate_limited = "GitHub 更新检查请求受限，请稍后重试"
 
 # 帮助 / 快捷键
 help_title = "快捷键说明"

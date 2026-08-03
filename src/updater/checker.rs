@@ -1,4 +1,4 @@
-//! Version checker – queries GitHub Releases API and compares versions.
+//! Version checker – discovers GitHub releases and compares versions.
 
 use semver::Version;
 
@@ -16,6 +16,10 @@ const TARGET: &str = env!("TARGET");
 
 /// Current crate version from `Cargo.toml`
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn stable_release_manifest_url() -> String {
+    format!("https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/latest/download/latest.json")
+}
 
 /// Return the expected asset filename for the given target triple.
 fn expected_asset_name(target: &str) -> String {
@@ -35,22 +39,31 @@ pub(crate) fn check_for_update(
     include_prerelease: bool,
 ) -> Result<Option<ReleaseInfo>, UpdateError> {
     let release = fetch_latest_release(include_prerelease)?;
-    let latest_version = parse_version(&release.tag_name)?;
     let current_version =
         Version::parse(CURRENT_VERSION).map_err(|e| UpdateError::Parse(e.to_string()))?;
 
-    if latest_version <= current_version {
+    resolve_release(release, &current_version, TARGET)
+}
+
+fn resolve_release(
+    release: GitHubRelease,
+    current_version: &Version,
+    target: &str,
+) -> Result<Option<ReleaseInfo>, UpdateError> {
+    let latest_version = parse_version(&release.tag_name)?;
+
+    if latest_version <= *current_version {
         return Ok(None);
     }
 
-    let asset_name = expected_asset_name(TARGET);
+    let asset_name = expected_asset_name(target);
     let checksum_name = format!("{asset_name}.sha256");
 
     let asset = release
         .assets
         .iter()
         .find(|a| a.name == asset_name)
-        .ok_or_else(|| UpdateError::NoCompatibleAsset(TARGET.to_string()))?;
+        .ok_or_else(|| UpdateError::NoCompatibleAsset(target.to_string()))?;
 
     let checksum_asset = release.assets.iter().find(|a| a.name == checksum_name);
 
@@ -67,10 +80,11 @@ pub(crate) fn check_for_update(
     }))
 }
 
-/// Fetch the latest (non-prerelease by default) release from GitHub.
+/// Fetch the latest release manifest.
 fn fetch_latest_release(include_prerelease: bool) -> Result<GitHubRelease, UpdateError> {
     if include_prerelease {
-        // Need to list releases and pick the first one (which is the latest)
+        // GitHub's stable release redirect excludes prereleases, so the
+        // opt-in prerelease path still uses the rate-limited API.
         let url =
             format!("https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases?per_page=10");
         let body = http_get(&url)?;
@@ -81,8 +95,7 @@ fn fetch_latest_release(include_prerelease: bool) -> Result<GitHubRelease, Updat
             .next()
             .ok_or_else(|| UpdateError::Parse("no releases found".into()))
     } else {
-        let url = format!("https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest");
-        let body = http_get(&url)?;
+        let body = http_get(&stable_release_manifest_url())?;
         serde_json::from_str(&body).map_err(|e| UpdateError::Parse(e.to_string()))
     }
 }
@@ -149,6 +162,50 @@ mod tests {
     fn test_expected_asset_name_linux() {
         let name = expected_asset_name("x86_64-unknown-linux-gnu");
         assert_eq!(name, "ropy-x86_64-unknown-linux-gnu.tar.xz");
+    }
+
+    #[test]
+    fn test_stable_manifest_url_avoids_github_api() {
+        let url = stable_release_manifest_url();
+        assert_eq!(
+            url,
+            "https://github.com/StudentWeis/ropy/releases/latest/download/latest.json"
+        );
+        assert!(!url.contains("api.github.com"));
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_resolve_release_manifest_for_matching_target_returns_download_info() {
+        let release: GitHubRelease = serde_json::from_str(
+            r#"{
+                "tag_name": "0.6.0",
+                "body": "Rate-limit resistant updates",
+                "assets": [
+                    {
+                        "name": "ropy-aarch64-apple-darwin.tar.xz",
+                        "browser_download_url": "https://github.com/StudentWeis/ropy/releases/download/0.6.0/ropy-aarch64-apple-darwin.tar.xz",
+                        "size": 4096
+                    },
+                    {
+                        "name": "ropy-aarch64-apple-darwin.tar.xz.sha256",
+                        "browser_download_url": "https://github.com/StudentWeis/ropy/releases/download/0.6.0/ropy-aarch64-apple-darwin.tar.xz.sha256",
+                        "size": 99
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let info = resolve_release(release, &Version::new(0, 5, 4), "aarch64-apple-darwin")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(info.version, "0.6.0");
+        assert_eq!(info.release_notes, "Rate-limit resistant updates");
+        assert_eq!(info.asset_size, 4096);
+        assert!(info.download_url.ends_with(".tar.xz"));
+        assert!(info.checksum_url.ends_with(".tar.xz.sha256"));
     }
 
     // ── parse_version Error Cases ─────────────────────────────────
