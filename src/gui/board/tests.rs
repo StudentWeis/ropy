@@ -108,6 +108,15 @@ fn test_update_manager_new_starts_idle() {
 }
 
 #[test]
+fn test_update_manager_begin_check_ignores_duplicate_in_flight_request() {
+    let mut manager = UpdateManager::new();
+
+    assert!(manager.begin_check());
+    assert!(matches!(manager.status, UpdateStatus::Checking));
+    assert!(!manager.begin_check());
+}
+
+#[test]
 fn test_preview_state_is_visible_only_while_space_is_held() {
     let mut ui_state = UiState::default();
 

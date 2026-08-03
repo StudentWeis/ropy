@@ -90,6 +90,7 @@ update_restart = "Update installed. Restart to apply."
 update_restart_button = "Restart Now"
 update_error = "Update check failed"
 update_error_network = "Network connection failed, please check your network settings"
+update_error_rate_limited = "GitHub is limiting update checks. Please try again later"
 
 # Help / Keyboard shortcuts
 help_title = "Keyboard Shortcuts"
