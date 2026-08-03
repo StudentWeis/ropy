@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.4] - 2026-08-03
+
+### 🚀 Features
+- Add category-switch keyboard shortcuts (#136) by @StudentWeis in [#136](https://github.com/StudentWeis/ropy/pull/136)
+
+### 🐛 Bug Fixes
+- Authenticate git-cliff with gh token (#146) by @StudentWeis in [#146](https://github.com/StudentWeis/ropy/pull/146)
+- Use macOS login item autostart (#141) by @StudentWeis in [#141](https://github.com/StudentWeis/ropy/pull/141)
+
+### 💼 Other
+- Update Cargo.lock by @StudentWeis
+- Upgrade cargo-dist to 0.32.0 (#148) by @StudentWeis in [#148](https://github.com/StudentWeis/ropy/pull/148)
+
+### ⚙️ Miscellaneous Tasks
+- Change init.sh permissions to executable by @StudentWeis
+- Upgrade Rust to 1.97.1 (#144) by @StudentWeis in [#144](https://github.com/StudentWeis/ropy/pull/144)
+- Bump rust toolchain to 1.96.0 and update dependencies (#137) by @StudentWeis in [#137](https://github.com/StudentWeis/ropy/pull/137)
+- Update SKILL.md instructions and Cargo.toml dependency versions by @StudentWeis
+
 ## [0.5.3] - 2026-05-14
 
 ### 🚀 Features
