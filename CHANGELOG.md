@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.5] - 2026-08-03
+
+### 🐛 Bug Fixes
+- Avoid anonymous API rate limits (#150) by @StudentWeis in [#150](https://github.com/StudentWeis/ropy/pull/150)
+
 ## [0.5.4] - 2026-08-03
 
 ### 🚀 Features
