@@ -16,6 +16,14 @@ pub(crate) struct CurlCommandBuilder {
     command: Command,
 }
 
+#[derive(Debug)]
+struct CurlOutput {
+    success: bool,
+    status: String,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
 impl CurlCommandBuilder {
     pub(crate) fn new(url: &str) -> Self {
         let mut command = Command::new("curl");
@@ -60,9 +68,24 @@ impl CurlCommandBuilder {
     /// Run to completion, capture the final HTTP status, and decode stdout as
     /// UTF-8. HTTP failures retain their response body so callers can
     /// distinguish service rate limits from connection failures.
-    pub(crate) fn execute_to_string(mut self) -> Result<String, UpdateError> {
+    pub(crate) fn execute_to_string(self) -> Result<String, UpdateError> {
+        self.execute_with(|command| {
+            let output = command.output()?;
+            Ok(CurlOutput {
+                success: output.status.success(),
+                status: output.status.to_string(),
+                stdout: output.stdout,
+                stderr: output.stderr,
+            })
+        })
+    }
+
+    fn execute_with(
+        mut self,
+        runner: impl FnOnce(&mut Command) -> std::io::Result<CurlOutput>,
+    ) -> Result<String, UpdateError> {
         self.command.args(["--write-out", HTTP_STATUS_WRITE_OUT]);
-        let output = self.command.output().map_err(|e| {
+        let output = runner(&mut self.command).map_err(|e| {
             tracing::error!(error = %e, "failed to launch curl");
             UpdateError::Network(format!("failed to launch curl: {e}"))
         })?;
@@ -72,13 +95,13 @@ impl CurlCommandBuilder {
             UpdateError::Network(format!("invalid UTF-8 in response: {e}"))
         })?;
 
-        if !output.status.success() {
+        if !output.success {
             let body = stdout
                 .rsplit_once(HTTP_STATUS_MARKER)
                 .map_or(stdout.as_str(), |(body, _)| body);
             let stderr = String::from_utf8_lossy(&output.stderr);
             tracing::error!(status = %output.status, stderr = %stderr, body = %body, "curl request failed");
-            return Err(curl_failure(&output.status.to_string(), body, &stderr));
+            return Err(curl_failure(&output.status, body, &stderr));
         }
 
         let (body, http_status) = parse_http_response(&stdout)?;
@@ -127,6 +150,24 @@ fn curl_failure(status: &str, body: &str, stderr: &str) -> UpdateError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn request_mock(http_status: u16, body: &str) -> Result<String, UpdateError> {
+        let output = CurlOutput {
+            success: true,
+            status: "exit status: 0".to_string(),
+            stdout: format!("{body}{HTTP_STATUS_MARKER}{http_status}").into_bytes(),
+            stderr: Vec::new(),
+        };
+
+        CurlCommandBuilder::new("https://mock.invalid/release").execute_with(|command| {
+            let args = command_args(command);
+            assert!(
+                args.windows(2)
+                    .any(|pair| pair == ["--write-out", HTTP_STATUS_WRITE_OUT])
+            );
+            Ok(output)
+        })
+    }
 
     fn command_args(command: &Command) -> Vec<String> {
         command
@@ -182,5 +223,24 @@ mod tests {
 
         assert_eq!(body, r#"{"tag_name":"0.6.0"}"#);
         assert_eq!(status, 200);
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_execute_to_string_when_mock_returns_success_returns_response_body() {
+        let expected = r#"{"tag_name":"0.6.0","body":"Mock release","assets":[]}"#;
+
+        let actual = request_mock(200, expected).unwrap();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_execute_to_string_when_mock_returns_rate_limit_returns_rate_limited_error() {
+        let body = r#"{"message":"API rate limit exceeded for 192.0.2.1."}"#;
+
+        let result = request_mock(403, body);
+
+        assert!(matches!(result, Err(UpdateError::RateLimited)));
     }
 }
