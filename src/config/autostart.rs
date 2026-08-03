@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
-use std::env;
+use std::{env, path::Path};
 
+#[cfg(target_os = "macos")]
+use auto_launch::MacOSLaunchMode;
 #[cfg(target_os = "windows")]
 use auto_launch::WindowsEnableMode;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
@@ -25,6 +27,8 @@ pub(crate) enum AutoStartError {
 /// system-triggered launch from a user-triggered one.
 pub(crate) struct AutoStartManager {
     auto_launch: AutoLaunch,
+    #[cfg(target_os = "macos")]
+    legacy_launch_agent: AutoLaunch,
 }
 
 impl AutoStartManager {
@@ -34,6 +38,9 @@ impl AutoStartManager {
         let mut builder = AutoLaunchBuilder::new();
         builder.set_app_name(app_name).set_app_path(&app_path);
 
+        #[cfg(target_os = "macos")]
+        builder.set_macos_launch_mode(MacOSLaunchMode::AppleScript);
+
         #[cfg(target_os = "windows")]
         builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
 
@@ -41,28 +48,28 @@ impl AutoStartManager {
             AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
         })?;
 
-        Ok(Self { auto_launch })
+        Ok(Self {
+            auto_launch,
+            #[cfg(target_os = "macos")]
+            legacy_launch_agent: Self::build_macos_legacy_launch_agent(app_name, &app_path)?,
+        })
     }
 
     /// Resolve the path that `LaunchAgents` / `.desktop` entries / the
-    /// Windows registry should point at. On macOS a release build runs
-    /// inside a `.app` bundle and the auto-launch entry must reference
-    /// the bundle, not the inner Mach-O — otherwise launchd starts a
-    /// detached binary without a working environment. On Windows we
-    /// also rewrite Scoop's versioned install path back to the stable
-    /// `current` junction — see [`normalise_scoop_path`].
+    /// Windows registry should execute. macOS uses a Login Item so bundled
+    /// builds point at the `.app` directory that System Settings displays.
+    /// On Windows we rewrite Scoop's versioned install path back to the
+    /// stable `current` junction — see [`normalise_scoop_path`].
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
+        Self::resolve_app_path(&exe_path)
+    }
 
+    fn resolve_app_path(exe_path: &Path) -> Result<String, AutoStartError> {
         #[cfg(target_os = "macos")]
-        {
-            let exe_str = exe_path.to_string_lossy();
-            if let Some(app_bundle_idx) = exe_str.rfind(".app/") {
-                // +4 keeps the `.app` suffix in the slice.
-                let bundle_path = &exe_str[..app_bundle_idx + 4];
-                return Ok(bundle_path.to_string());
-            }
+        if let Some(bundle_path) = macos_app_bundle_path(exe_path) {
+            return Ok(bundle_path);
         }
 
         #[cfg(target_os = "windows")]
@@ -75,6 +82,21 @@ impl AutoStartManager {
 
         exe_path.to_str().map(ToString::to_string).ok_or_else(|| {
             AutoStartError::ExecutablePath("Path contains invalid UTF-8".to_string())
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    fn build_macos_legacy_launch_agent(
+        app_name: &str,
+        app_path: &str,
+    ) -> Result<AutoLaunch, AutoStartError> {
+        let mut builder = AutoLaunchBuilder::new();
+        builder
+            .set_app_name(app_name)
+            .set_app_path(app_path)
+            .set_macos_launch_mode(MacOSLaunchMode::LaunchAgent);
+        builder.build().map_err(|e| {
+            AutoStartError::Initialization(format!("Failed to build legacy AutoLaunch: {e}"))
         })
     }
 
@@ -98,18 +120,58 @@ impl AutoStartManager {
 
     /// Make the system state match the user's preference, but skip the
     /// platform call when it already matches — repeatedly toggling
-    /// `LaunchAgents` / registry entries is unnecessary churn and (on
+    /// Login Items / registry entries is unnecessary churn and (on
     /// some Linux desktops) racy.
     pub(crate) fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
         let current_enabled = self.is_enabled().unwrap_or(false);
-        if current_enabled == enabled {
-            Ok(())
-        } else if enabled {
-            self.enable()
-        } else {
-            self.disable()
-        }
+        match autostart_sync_action(enabled, current_enabled) {
+            AutoStartSyncAction::None => Ok(()),
+            AutoStartSyncAction::Enable => self.enable(),
+            AutoStartSyncAction::Disable => self.disable(),
+        }?;
+
+        #[cfg(target_os = "macos")]
+        self.disable_macos_legacy_launch_agent()?;
+
+        Ok(())
     }
+
+    #[cfg(target_os = "macos")]
+    fn disable_macos_legacy_launch_agent(&self) -> Result<(), AutoStartError> {
+        self.legacy_launch_agent
+            .disable()
+            .map_err(|e| AutoStartError::Disable(e.to_string()))
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum AutoStartSyncAction {
+    None,
+    Enable,
+    Disable,
+}
+
+const fn autostart_sync_action(enabled: bool, current_enabled: bool) -> AutoStartSyncAction {
+    if enabled {
+        if current_enabled {
+            AutoStartSyncAction::None
+        } else {
+            AutoStartSyncAction::Enable
+        }
+    } else if current_enabled {
+        AutoStartSyncAction::Disable
+    } else {
+        AutoStartSyncAction::None
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_app_bundle_path(exe_path: &Path) -> Option<String> {
+    let exe_str = exe_path.to_string_lossy();
+    exe_str.rfind(".app/").map(|app_bundle_idx| {
+        // +4 keeps the `.app` suffix in the slice.
+        exe_str[..app_bundle_idx + 4].to_string()
+    })
 }
 
 /// Rewrite a Windows path that points through a Scoop versioned
@@ -154,8 +216,8 @@ mod tests {
 
     use super::*;
 
-    // These tests touch OS-level auto-launch state (macOS LaunchAgents,
-    // Linux `.desktop` entries, Windows registry). Running them in parallel
+    // These tests touch OS-level auto-launch state (macOS Login Items /
+    // legacy LaunchAgents, Linux `.desktop` entries, Windows registry). Running them in parallel
     // can race on that shared global state, so they are serialised explicitly
     // while the rest of the suite runs in parallel.
 
@@ -175,6 +237,56 @@ mod tests {
         assert!(path.is_ok());
         let path_str = path.unwrap();
         assert!(!path_str.is_empty());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    #[expect(clippy::unwrap_used)]
+    fn test_resolve_app_path_macos_bundle_executable_returns_bundle_path() {
+        let executable_path = Path::new("/Applications/Ropy.app/Contents/MacOS/ropy");
+
+        let resolved = AutoStartManager::resolve_app_path(executable_path).unwrap();
+
+        assert_eq!(resolved, "/Applications/Ropy.app");
+    }
+
+    #[test]
+    fn test_macos_app_bundle_path_with_inner_executable_returns_bundle_path() {
+        let executable_path = Path::new("/Applications/Ropy.app/Contents/MacOS/ropy");
+
+        assert_eq!(
+            macos_app_bundle_path(executable_path).as_deref(),
+            Some("/Applications/Ropy.app"),
+        );
+    }
+
+    #[test]
+    fn test_macos_app_bundle_path_without_bundle_returns_none() {
+        assert_eq!(
+            macos_app_bundle_path(Path::new("/usr/local/bin/ropy")),
+            None
+        );
+    }
+
+    #[test]
+    fn test_autostart_sync_action_enabled_preference_with_disabled_entry_enables() {
+        assert_eq!(
+            autostart_sync_action(true, false),
+            AutoStartSyncAction::Enable,
+        );
+    }
+
+    #[test]
+    fn test_autostart_sync_action_current_enabled_entry_is_noop() {
+        assert_eq!(autostart_sync_action(true, true), AutoStartSyncAction::None);
+    }
+
+    #[test]
+    fn test_autostart_sync_action_disabled_preference_disables_enabled_entry() {
+        assert_eq!(
+            autostart_sync_action(false, true),
+            AutoStartSyncAction::Disable,
+        );
     }
 
     #[test]
