@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ropy Cross-Platform GUI E2E"
+  short_description: "Run Ropy GUI tests locally and in virtual desktops"
+  default_prompt: "Use $cross-platform-gui-e2e-test to validate the latest Ropy build on macOS, Windows, and Linux."
