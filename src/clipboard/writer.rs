@@ -2,7 +2,7 @@ use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
 use gpui::{App, AppContext as _};
 use image::ImageReader;
 
-use super::CopyRequest;
+use super::{ClipboardWriteError, ClipboardWriteResult, CopyRequest};
 
 /// Spawn the single long-lived task that owns the OS [`ClipboardContext`].
 /// All copy operations funnel through the returned channel so we don't pay
@@ -22,16 +22,13 @@ pub(crate) fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequ
         while let Ok(req) = rx.recv().await {
             match req {
                 CopyRequest::Text { text, completion } => {
-                    set_text(&ctx, text);
-                    notify_completion(completion);
+                    notify_completion(completion, set_text(&ctx, text));
                 }
                 CopyRequest::Image { path, completion } => {
-                    set_image(&ctx, &path);
-                    notify_completion(completion);
+                    notify_completion(completion, set_image(&ctx, &path));
                 }
                 CopyRequest::Files { paths, completion } => {
-                    set_files(&ctx, &paths);
-                    notify_completion(completion);
+                    notify_completion(completion, set_files(&ctx, &paths));
                 }
                 CopyRequest::RichText {
                     plain_text,
@@ -39,8 +36,7 @@ pub(crate) fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequ
                     rtf,
                     completion,
                 } => {
-                    set_rich_text(&ctx, plain_text, html, rtf);
-                    notify_completion(completion);
+                    notify_completion(completion, set_rich_text(&ctx, plain_text, html, rtf));
                 }
             }
         }
@@ -55,15 +51,24 @@ fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {
         .and_then(ImageReader::decode)
 }
 
-fn set_text(ctx: &ClipboardContext, text: String) {
-    if let Err(e) = ctx.set_text(text) {
-        tracing::warn!(error = %e, "failed to set text to clipboard");
-    }
+fn clipboard_error(error: impl std::fmt::Display) -> ClipboardWriteError {
+    ClipboardWriteError::Clipboard(error.to_string())
 }
 
-fn set_image(ctx: &ClipboardContext, path: &str) {
-    let img_res = load_image_from_path(path);
-    if let Ok(img) = img_res {
+fn set_text(ctx: &ClipboardContext, text: String) -> ClipboardWriteResult {
+    ctx.set_text(text).map_err(clipboard_error)
+}
+
+fn load_and_set_image(
+    path: &str,
+    set_image: impl FnOnce(image::DynamicImage) -> ClipboardWriteResult,
+) -> ClipboardWriteResult {
+    let image = load_image_from_path(path)?;
+    set_image(image)
+}
+
+fn set_image(ctx: &ClipboardContext, path: &str) -> ClipboardWriteResult {
+    load_and_set_image(path, |img| {
         #[cfg(target_os = "macos")]
         {
             // `clipboard-rs::set_image` on macOS clears the pasteboard
@@ -71,16 +76,11 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
             // on the empty intermediate state. Pre-encode here and use
             // `set_buffer` to keep clear→write atomic from its POV.
             let mut bytes = Vec::new();
-            if img
-                .write_to(
-                    &mut std::io::Cursor::new(&mut bytes),
-                    image::ImageFormat::Png,
-                )
-                .is_ok()
-                && let Err(e) = ctx.set_buffer("public.png", bytes)
-            {
-                tracing::warn!(error = %e, "failed to set image to clipboard");
-            }
+            img.write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )?;
+            ctx.set_buffer("public.png", bytes).map_err(clipboard_error)
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -88,16 +88,14 @@ fn set_image(ctx: &ClipboardContext, path: &str) {
             use clipboard_rs::common::RustImage;
 
             let rust_image = clipboard_rs::RustImageData::from_dynamic_image(img);
-            if let Err(e) = ctx.set_image(rust_image) {
-                tracing::warn!(error = %e, "failed to set image to clipboard");
-            }
+            ctx.set_image(rust_image).map_err(clipboard_error)
         }
-    }
+    })
 }
 
-fn set_files(ctx: &ClipboardContext, paths: &[String]) {
+fn set_files(ctx: &ClipboardContext, paths: &[String]) -> ClipboardWriteResult {
     if paths.is_empty() {
-        return;
+        return Err(ClipboardWriteError::EmptyFileList);
     }
 
     let contents = vec![
@@ -105,15 +103,10 @@ fn set_files(ctx: &ClipboardContext, paths: &[String]) {
         ClipboardContent::Files(paths.to_vec()),
     ];
 
-    if let Err(error) = ctx.set(contents)
-        && let Err(fallback_error) = ctx.set_files(paths.to_vec())
-    {
-        tracing::warn!(
-            error = %error,
-            fallback_error = %fallback_error,
-            "failed to set files to clipboard"
-        );
+    if ctx.set(contents).is_ok() {
+        return Ok(());
     }
+    ctx.set_files(paths.to_vec()).map_err(clipboard_error)
 }
 
 fn set_rich_text(
@@ -121,7 +114,7 @@ fn set_rich_text(
     plain_text: String,
     html: Option<String>,
     rtf: Option<String>,
-) {
+) -> ClipboardWriteResult {
     let mut contents = vec![ClipboardContent::Text(plain_text.clone())];
     if let Some(html_content) = html {
         contents.push(ClipboardContent::Html(html_content));
@@ -130,20 +123,21 @@ fn set_rich_text(
         contents.push(ClipboardContent::Rtf(rtf_content));
     }
 
-    if let Err(error) = ctx.set(contents)
-        && let Err(fallback_error) = ctx.set_text(plain_text)
-    {
-        tracing::warn!(
-            error = %error,
-            fallback_error = %fallback_error,
-            "failed to set rich text to clipboard"
-        );
+    if ctx.set(contents).is_ok() {
+        return Ok(());
     }
+    ctx.set_text(plain_text).map_err(clipboard_error)
 }
 
-fn notify_completion(completion: Option<std::sync::mpsc::Sender<()>>) {
+fn notify_completion(
+    completion: Option<std::sync::mpsc::Sender<ClipboardWriteResult>>,
+    result: ClipboardWriteResult,
+) {
+    if let Err(error) = &result {
+        tracing::warn!(error = %error, "failed to write clipboard content");
+    }
     if let Some(tx) = completion {
-        let _ = tx.send(());
+        let _ = tx.send(result);
     }
 }
 
@@ -176,16 +170,31 @@ mod tests {
     }
 
     #[test]
-    fn test_notify_completion_when_sender_exists_sends_signal() {
+    fn test_set_image_when_file_is_missing_returns_error() {
+        let setter_called = std::cell::Cell::new(false);
+        let result = load_and_set_image("/definitely/missing/image.png", |_| {
+            setter_called.set(true);
+            Ok(())
+        });
+
+        assert!(matches!(result, Err(ClipboardWriteError::Image(_))));
+        assert!(!setter_called.get());
+    }
+
+    #[test]
+    fn test_notify_completion_when_sender_exists_sends_result() {
         let (completion_tx, completion_rx) = mpsc::channel();
 
-        notify_completion(Some(completion_tx));
+        notify_completion(Some(completion_tx), Err(ClipboardWriteError::EmptyFileList));
 
-        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+        assert!(matches!(
+            completion_rx.recv_timeout(Duration::from_secs(1)),
+            Ok(Err(ClipboardWriteError::EmptyFileList))
+        ));
     }
 
     #[test]
     fn test_notify_completion_when_sender_missing_returns_without_panic() {
-        notify_completion(None);
+        notify_completion(None, Ok(()));
     }
 }

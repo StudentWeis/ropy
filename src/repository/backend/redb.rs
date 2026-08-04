@@ -7,16 +7,13 @@
 use std::{
     fs,
     path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, Mutex},
 };
 
 use redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 
 use crate::repository::{
-    backend::{KvTree, StorageBackend},
+    backend::{KvTree, StorageBackend, TreeKey},
     errors::RepositoryError,
 };
 
@@ -55,6 +52,48 @@ impl StorageBackend for RedbBackend {
         RedbTree::open(self.db.clone(), name.to_string())
     }
 
+    fn remove_batch(&self, removals: &[TreeKey<'_>]) -> Result<Vec<bool>, RepositoryError> {
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+        let mut results = Vec::with_capacity(removals.len());
+        for removal in removals {
+            let removed = {
+                let mut table = write_txn
+                    .open_table(RedbTree::table_definition(removal.tree))
+                    .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+                table
+                    .remove(removal.key)
+                    .map_err(|error| RepositoryError::Delete(error.to_string()))?
+                    .is_some()
+            };
+            results.push(removed);
+        }
+        write_txn
+            .commit()
+            .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+        Ok(results)
+    }
+
+    fn clear_batch(&self, trees: &[&'static str]) -> Result<(), RepositoryError> {
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+        for tree_name in trees {
+            let mut table = write_txn
+                .open_table(RedbTree::table_definition(tree_name))
+                .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+            table
+                .retain(|_, _| false)
+                .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|error| RepositoryError::Delete(error.to_string()))
+    }
+
     fn flush(&self) -> Result<(), RepositoryError> {
         // redb writes are durably committed per transaction by default.
         Ok(())
@@ -69,7 +108,6 @@ pub(crate) fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, Rep
 pub(crate) struct RedbTree {
     db: Arc<Database>,
     name: String,
-    len: Arc<AtomicUsize>,
     write_lock: Mutex<()>,
 }
 
@@ -78,15 +116,14 @@ impl RedbTree {
         let write_txn = db
             .begin_write()
             .map_err(|error| RepositoryError::TreeOpen(error.to_string()))?;
-        let len = {
+        {
             let table = write_txn
                 .open_table(Self::table_definition(&name))
                 .map_err(|error| RepositoryError::TreeOpen(error.to_string()))?;
-            let len = table
+            table
                 .len()
                 .map_err(|error| RepositoryError::TreeOpen(error.to_string()))?;
-            usize::try_from(len).unwrap_or(usize::MAX)
-        };
+        }
         write_txn
             .commit()
             .map_err(|error| RepositoryError::TreeOpen(error.to_string()))?;
@@ -94,7 +131,6 @@ impl RedbTree {
         Ok(Self {
             db,
             name,
-            len: Arc::new(AtomicUsize::new(len)),
             write_lock: Mutex::new(()),
         })
     }
@@ -149,16 +185,12 @@ impl RedbTree {
 
 impl KvTree for RedbTree {
     fn insert(&self, key: &[u8], value: &[u8]) -> Result<(), RepositoryError> {
-        let existed = self.with_write_table(RepositoryError::Insert, |table| {
+        self.with_write_table(RepositoryError::Insert, |table| {
             let replaced = table
                 .insert(key, value)
                 .map_err(|error| RepositoryError::Insert(error.to_string()))?;
             Ok(replaced.is_some())
         })?;
-
-        if !existed {
-            self.len.fetch_add(1, Ordering::Relaxed);
-        }
         Ok(())
     }
 
@@ -179,16 +211,23 @@ impl KvTree for RedbTree {
             Ok(removed.is_some())
         })?;
 
-        if removed {
-            self.len.fetch_sub(1, Ordering::Relaxed);
-        }
         Ok(removed)
     }
 
     fn len(&self) -> usize {
-        self.len.load(Ordering::Relaxed)
+        self.with_read_table(|table| {
+            table
+                .len()
+                .map(|len| usize::try_from(len).unwrap_or(usize::MAX))
+                .map_err(|error| RepositoryError::Query(error.to_string()))
+        })
+        .unwrap_or_else(|error| {
+            tracing::warn!(error = %error, tree = %self.name, "failed to read tree length");
+            0
+        })
     }
 
+    #[cfg(test)]
     fn clear(&self) -> Result<(), RepositoryError> {
         self.with_write_table(RepositoryError::Delete, |table| {
             table
@@ -196,7 +235,6 @@ impl KvTree for RedbTree {
                 .map_err(|error| RepositoryError::Delete(error.to_string()))?;
             Ok(())
         })?;
-        self.len.store(0, Ordering::Relaxed);
         Ok(())
     }
 

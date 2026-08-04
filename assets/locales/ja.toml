@@ -33,6 +33,8 @@ filter_files = "ファイルをフィルター"
 filter_favorites = "お気に入りをフィルター"
 search_case_sensitive = "大文字と小文字を区別"
 search_match_whole_word = "単語一致"
+record_file_empty = "ファイル"
+record_file_count = "{count} 個のファイル"
 # Settings
 settings_button = "設定"
 settings_title = "設定"

@@ -25,6 +25,8 @@ use crate::{
     repository::SharedRecords,
 };
 
+pub(crate) const MAIN_WINDOW_TITLE: &str = "Ropy";
+
 #[derive(RustEmbed)]
 #[folder = "assets"]
 pub(crate) struct Assets;
@@ -64,6 +66,7 @@ pub(crate) fn create_window(
             ..Default::default()
         },
         |window, cx| {
+            window.set_window_title(MAIN_WINDOW_TITLE);
             // Apply the application theme based on settings
             let theme_id = Settings::read(cx, |s| s.theme.clone());
             set_app_theme(window, cx, &theme_id, window_opacity_percent);

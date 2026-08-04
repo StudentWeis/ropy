@@ -7,13 +7,27 @@ use rstest::rstest;
 
 use crate::repository::{
     backend::{
-        BackendFactory, StorageBackend, memory::memory_backend_factory, redb::redb_backend_factory,
+        BackendFactory, StorageBackend,
+        memory::{MemoryBackend, memory_backend_factory},
+        redb::redb_backend_factory,
     },
     repo::ClipboardRepository,
     test_helpers::{
         create_test_repo, create_test_repo_with, load_display_records, save_numbered_records,
     },
 };
+
+fn create_failure_injecting_repo() -> (
+    tempfile::TempDir,
+    MemoryBackend,
+    ClipboardRepository<MemoryBackend>,
+) {
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), temp_dir.path().join("images"))
+        .expect("Failed to create repository");
+    (temp_dir, backend, repo)
+}
 
 #[test]
 fn test_dedup_same_content() {
@@ -295,6 +309,56 @@ fn test_delete_when_record_is_rich_text_removes_sidecar_files() {
 }
 
 #[test]
+fn test_delete_when_database_batch_fails_preserves_record_and_sidecars() {
+    let (_temp_dir, backend, repo) = create_failure_injecting_repo();
+    let record = repo
+        .save_rich_text("hello".to_string(), Some("<p>hello</p>"), None)
+        .expect("Failed to save rich text");
+    let html_path = record
+        .rich_text_meta
+        .as_ref()
+        .and_then(|meta| meta.html_path.as_ref())
+        .expect("HTML path should be present")
+        .clone();
+    backend.fail_next_batch();
+
+    let result = repo.delete(record.id);
+
+    assert!(result.is_err());
+    assert!(
+        repo.get_by_id(record.id)
+            .expect("Failed to query")
+            .is_some()
+    );
+    assert!(std::path::Path::new(&html_path).exists());
+}
+
+#[test]
+fn test_cleanup_when_database_batch_fails_preserves_record_and_sidecars() {
+    let (_temp_dir, backend, repo) = create_failure_injecting_repo();
+    let record = repo
+        .save_rich_text("hello".to_string(), Some("<p>hello</p>"), None)
+        .expect("Failed to save rich text");
+    let html_path = record
+        .rich_text_meta
+        .as_ref()
+        .and_then(|meta| meta.html_path.as_ref())
+        .expect("HTML path should be present")
+        .clone();
+    backend.fail_next_batch();
+
+    let result = repo.cleanup_old_records(0);
+
+    assert!(result.is_err());
+    assert!(
+        repo.get_by_id(record.id)
+            .expect("Failed to query")
+            .is_some()
+    );
+    assert!(std::path::Path::new(&html_path).exists());
+}
+
+#[test]
 fn test_delete_nonexistent() {
     let repo = create_test_repo();
 
@@ -313,6 +377,31 @@ fn test_clear() {
 
     repo.clear().expect("Failed to clear");
     assert_eq!(repo.count(), 0);
+}
+
+#[test]
+fn test_clear_when_database_batch_fails_preserves_records_and_sidecars() {
+    let (_temp_dir, backend, repo) = create_failure_injecting_repo();
+    let record = repo
+        .save_rich_text("hello".to_string(), Some("<p>hello</p>"), None)
+        .expect("Failed to save rich text");
+    let html_path = record
+        .rich_text_meta
+        .as_ref()
+        .and_then(|meta| meta.html_path.as_ref())
+        .expect("HTML path should be present")
+        .clone();
+    backend.fail_next_batch();
+
+    let result = repo.clear();
+
+    assert!(result.is_err());
+    assert!(
+        repo.get_by_id(record.id)
+            .expect("Failed to query")
+            .is_some()
+    );
+    assert!(std::path::Path::new(&html_path).exists());
 }
 
 #[test]

@@ -16,6 +16,12 @@ pub(crate) enum UpdateError {
     #[error("no compatible asset found for target: {0}")]
     NoCompatibleAsset(String),
 
+    #[error("release is missing checksum asset: {0}")]
+    MissingChecksumAsset(String),
+
+    #[error("invalid checksum file: {0}")]
+    InvalidChecksum(String),
+
     #[error("checksum verification failed (expected {expected}, got {actual})")]
     ChecksumMismatch { expected: String, actual: String },
 

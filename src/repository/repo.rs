@@ -7,7 +7,8 @@ use chrono::Local;
 
 use super::{
     backend::{
-        BackendFactory, KvTree, StorageBackend,
+        BackendFactory, FAVORITES_TREE, KvTree, META_TREE, RECORDS_TREE, StorageBackend,
+        TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey,
         redb::{RedbBackend, redb_backend_factory},
     },
     errors::RepositoryError,
@@ -28,7 +29,7 @@ use crate::{
 const SCHEMA_VERSION: u64 = 3;
 
 pub(crate) struct ClipboardRepository<B: StorageBackend = RedbBackend> {
-    backend: B,
+    pub(super) backend: B,
     pub(super) records: B::Tree,
     pub(super) time_index: TimeIndex<B::Tree>,
     pub(super) favorites: B::Tree,
@@ -67,13 +68,13 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 
     pub(crate) fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
-        let meta = backend.open_tree("meta")?;
-        let records = backend.open_tree("clipboard_records")?;
+        let meta = backend.open_tree(META_TREE)?;
+        let records = backend.open_tree(RECORDS_TREE)?;
         let time_index = TimeIndex::new(
-            backend.open_tree("time_index")?,
-            backend.open_tree("time_index_lookup")?,
+            backend.open_tree(TIME_INDEX_TREE)?,
+            backend.open_tree(TIME_INDEX_LOOKUP_TREE)?,
         );
-        let favorites = backend.open_tree("favorites")?;
+        let favorites = backend.open_tree(FAVORITES_TREE)?;
 
         let rich_text_dir = images_dir.parent().map_or_else(
             || PathBuf::from("rich_text"),
@@ -81,9 +82,12 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         );
 
         if Self::needs_schema_migration(&meta)? {
-            records.clear()?;
-            time_index.clear()?;
-            favorites.clear()?;
+            backend.clear_batch(&[
+                RECORDS_TREE,
+                TIME_INDEX_TREE,
+                TIME_INDEX_LOOKUP_TREE,
+                FAVORITES_TREE,
+            ])?;
             purge_sidecar_dirs(&images_dir, &rich_text_dir);
             meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
             backend.flush()?;
@@ -290,26 +294,39 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     pub(crate) fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let record = self.get_by_id(id)?;
-        if let Some(ref rec) = record {
-            remove_record_sidecars(rec);
-        }
-
         let key = id.to_be_bytes();
-        let removed = self.records.remove(&key)?;
-        self.remove_favorite(id)?;
+        let time_key = record.as_ref().map(|record| {
+            TimeIndex::<B::Tree>::encode_key(record.created_at.timestamp_millis(), id)
+        });
+        let mut removals = vec![
+            TreeKey::new(RECORDS_TREE, &key),
+            TreeKey::new(FAVORITES_TREE, &key),
+        ];
+        if let Some(time_key) = time_key.as_ref() {
+            removals.push(TreeKey::new(TIME_INDEX_TREE, time_key));
+            removals.push(TreeKey::new(TIME_INDEX_LOOKUP_TREE, &key));
+        }
+        let removed = self
+            .backend
+            .remove_batch(&removals)?
+            .first()
+            .copied()
+            .unwrap_or(false);
 
-        if let Some(rec) = record {
-            self.time_index
-                .remove(rec.created_at.timestamp_millis(), rec.id)?;
+        if removed && let Some(record) = record.as_ref() {
+            remove_record_sidecars(record);
         }
         Ok(removed)
     }
 
     /// Wipe every record and its on-disk sidecars (images + rich text).
     pub(crate) fn clear(&self) -> Result<(), RepositoryError> {
-        self.records.clear()?;
-        self.time_index.clear()?;
-        self.favorites.clear()?;
+        self.backend.clear_batch(&[
+            RECORDS_TREE,
+            TIME_INDEX_TREE,
+            TIME_INDEX_LOOKUP_TREE,
+            FAVORITES_TREE,
+        ])?;
         purge_sidecar_dirs(&self.images_dir, &self.rich_text_dir);
         Ok(())
     }

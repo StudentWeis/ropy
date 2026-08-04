@@ -45,6 +45,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub(super) fn remove_favorite(&self, id: u64) -> Result<(), RepositoryError> {
         self.favorites.remove(&id.to_be_bytes())?;
         Ok(())

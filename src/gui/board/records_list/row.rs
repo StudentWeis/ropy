@@ -33,6 +33,7 @@ use crate::{
     clipboard::thumb_path_for,
     config::LayoutMode,
     gui::surface_with_opacity,
+    i18n::I18n,
     repository::{ClipboardRecord, SharedRecords, models::ContentType},
     utils::read_or_recover,
 };
@@ -126,14 +127,14 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         return div()
             .text_sm()
             .text_color(cx.theme().secondary_foreground)
-            .child("File")
+            .child(I18n::translate(cx, "record_file_empty"))
             .into_any_element();
     }
 
     let title = if files.len() == 1 {
         file_display_name(&files[0])
     } else {
-        format!("{} files", files.len())
+        I18n::translate_count(cx, "record_file_count", files.len())
     };
     let detail = if files.len() == 1 {
         files[0].clone()

@@ -1,4 +1,4 @@
-use std::{error::Error, io, thread, time::Duration};
+use std::{error::Error, io};
 
 use x11rb::{
     connection::Connection,
@@ -6,8 +6,6 @@ use x11rb::{
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
-
-const ACTIVE_WINDOW_POLL_INTERVAL_MS: u64 = 10;
 
 pub struct X11 {
     connection: RustConnection,
@@ -134,7 +132,8 @@ impl X11 {
     ///
     /// # Errors
     ///
-    /// Returns an error if the X11 connection fails or the window cannot be displayed/activated.
+    /// Returns an error if the X11 request cannot be sent. Window managers
+    /// are allowed to decline activation requests without reporting an error.
     pub fn display_and_activate_window(&self) -> Result<(), Box<dyn Error>> {
         self.display_window()?;
         self.active_window()?;
@@ -158,7 +157,9 @@ impl X11 {
     ///
     /// # Errors
     ///
-    /// Returns an error if the X11 connection fails or the window cannot be activated.
+    /// Returns an error if the X11 request cannot be sent. The request is
+    /// asynchronous: the window manager may decline it without reporting an
+    /// error to the client.
     pub fn active_window(&self) -> Result<(), Box<dyn Error>> {
         let event = ClientMessageEvent::new(
             32,
@@ -175,7 +176,6 @@ impl X11 {
         )?;
 
         self.connection.sync()?;
-        self.wait_actvate_window()?;
 
         Ok(())
     }
@@ -190,27 +190,5 @@ impl X11 {
         self.connection.sync()?;
 
         Ok(())
-    }
-
-    fn wait_actvate_window(&self) -> Result<(), Box<dyn Error>> {
-        loop {
-            let prop = self
-                .connection
-                .get_property(
-                    false,
-                    self.root_id,
-                    self.net_active_window,
-                    AtomEnum::WINDOW,
-                    0,
-                    1,
-                )?
-                .reply()?;
-
-            if u32::from_ne_bytes(prop.value[0..4].try_into()?) == self.window_id {
-                return Ok(());
-            }
-
-            thread::sleep(Duration::from_millis(ACTIVE_WINDOW_POLL_INTERVAL_MS));
-        }
     }
 }

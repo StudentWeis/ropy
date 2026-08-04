@@ -65,11 +65,12 @@ fn resolve_release(
         .find(|a| a.name == asset_name)
         .ok_or_else(|| UpdateError::NoCompatibleAsset(target.to_string()))?;
 
-    let checksum_asset = release.assets.iter().find(|a| a.name == checksum_name);
-
-    let checksum_url = checksum_asset
+    let checksum_url = release
+        .assets
+        .iter()
+        .find(|a| a.name == checksum_name)
         .map(|a| a.browser_download_url.clone())
-        .unwrap_or_default();
+        .ok_or(UpdateError::MissingChecksumAsset(checksum_name))?;
 
     Ok(Some(ReleaseInfo {
         version: latest_version.to_string(),
@@ -206,6 +207,26 @@ mod tests {
         assert_eq!(info.asset_size, 4096);
         assert!(info.download_url.ends_with(".tar.xz"));
         assert!(info.checksum_url.ends_with(".tar.xz.sha256"));
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_resolve_release_when_checksum_asset_missing_returns_error() {
+        let release: GitHubRelease = serde_json::from_str(
+            r#"{
+                "tag_name": "0.6.0",
+                "assets": [{
+                    "name": "ropy-aarch64-apple-darwin.tar.xz",
+                    "browser_download_url": "https://example.com/ropy.tar.xz",
+                    "size": 4096
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        let result = resolve_release(release, &Version::new(0, 5, 4), "aarch64-apple-darwin");
+
+        assert!(matches!(result, Err(UpdateError::MissingChecksumAsset(_))));
     }
 
     // ── parse_version Error Cases ─────────────────────────────────

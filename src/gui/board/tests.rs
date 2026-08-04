@@ -8,7 +8,9 @@ use rstest::rstest;
 
 use super::{
     actions::horizontal_grid_target_index,
-    clipboard_ops::{ConfirmFormat, build_copy_request, build_copy_request_for_record},
+    clipboard_ops::{
+        ConfirmFormat, build_copy_request, build_copy_request_for_record, wait_for_clipboard_write,
+    },
     filtering::filter_and_sort_record_indices,
     grid_reveal_offset,
     search::{ContentFilter, SearchOptions},
@@ -16,11 +18,33 @@ use super::{
     settings_editor::UpdateManager,
 };
 use crate::{
+    clipboard::ClipboardWriteError,
     config::{ConfirmMode, LayoutMode},
     gui::board::{RopyBoard, UiState},
     repository::{ClipboardRecord, models::ContentType},
     updater::models::UpdateStatus,
 };
+
+#[test]
+fn test_wait_for_clipboard_write_when_writer_succeeds_returns_true() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    assert!(tx.send(Ok(())).is_ok());
+
+    assert!(wait_for_clipboard_write(&rx));
+}
+
+#[test]
+fn test_wait_for_clipboard_write_when_writer_fails_returns_false() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    assert!(
+        tx.send(Err(ClipboardWriteError::Clipboard(
+            "injected failure".to_string(),
+        )))
+        .is_ok()
+    );
+
+    assert!(!wait_for_clipboard_write(&rx));
+}
 
 #[rstest]
 #[case(false, true)]

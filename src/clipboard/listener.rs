@@ -1,6 +1,9 @@
 //! A simple clipboard change listener using event-driven watching.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    hash::Hasher,
+    sync::{Arc, Mutex},
+};
 
 use async_channel::{Receiver, Sender};
 use clipboard_rs::{
@@ -88,6 +91,48 @@ const fn should_forward_image(last_copy: &LastCopyState, hash: u64) -> bool {
 
 fn should_forward_text(last_copy: &LastCopyState, text: &str) -> bool {
     !matches!(last_copy, LastCopyState::Text(last_text) if last_text == text)
+}
+
+fn write_optional_content(hasher: &mut seahash::SeaHasher, content: Option<&str>) {
+    match content {
+        Some(value) => {
+            hasher.write_u8(1);
+            hasher.write_usize(value.len());
+            hasher.write(value.as_bytes());
+        }
+        None => hasher.write_u8(0),
+    }
+}
+
+fn rich_text_content_hash(plain_text: &str, html: Option<&str>, rtf: Option<&str>) -> u64 {
+    let mut hasher = seahash::SeaHasher::new();
+    hasher.write_usize(plain_text.len());
+    hasher.write(plain_text.as_bytes());
+    write_optional_content(&mut hasher, html);
+    write_optional_content(&mut hasher, rtf);
+    hasher.finish()
+}
+
+fn should_forward_rich_text(
+    last_copy: &LastCopyState,
+    plain_text: &str,
+    html: Option<&str>,
+    rtf: Option<&str>,
+) -> bool {
+    let hash = rich_text_content_hash(plain_text, html, rtf);
+    !matches!(last_copy, LastCopyState::RichText(last_hash) if *last_hash == hash)
+}
+
+fn image_content_hash(image: &DynamicImage) -> u64 {
+    let mut hasher = seahash::SeaHasher::new();
+    hasher.write_u32(image.width());
+    hasher.write_u32(image.height());
+    let color = image.color();
+    hasher.write_u8(color.bytes_per_pixel());
+    hasher.write_u8(u8::from(color.has_alpha()));
+    hasher.write_u8(u8::from(color.has_color()));
+    hasher.write(image.as_bytes());
+    hasher.finish()
 }
 
 const fn should_forward_files(last_copy: &LastCopyState, hash: u64) -> bool {
@@ -208,7 +253,7 @@ impl ClipboardMonitor {
                 }
             }
             ClipboardPayload::Image(dyn_img) => {
-                let hash: u64 = seahash::hash(dyn_img.as_bytes());
+                let hash = image_content_hash(&dyn_img);
                 if !should_forward_image(last_copy, hash) {
                     return None;
                 }
@@ -227,15 +272,21 @@ impl ClipboardMonitor {
                 html,
                 rtf,
             } => {
-                if !should_forward_text(last_copy, &plain_text) {
+                if !should_forward_rich_text(
+                    last_copy,
+                    &plain_text,
+                    html.as_deref(),
+                    rtf.as_deref(),
+                ) {
                     return None;
                 }
+                let hash = rich_text_content_hash(&plain_text, html.as_deref(), rtf.as_deref());
                 match self.tx.try_send(ClipboardEvent::RichText {
-                    plain_text: plain_text.clone(),
+                    plain_text,
                     html,
                     rtf,
                 }) {
-                    Ok(()) => Some(LastCopyState::Text(plain_text)),
+                    Ok(()) => Some(LastCopyState::RichText(hash)),
                     Err(e) => {
                         tracing::warn!(error = %e, "dropping rich text clipboard event (channel full or closed)");
                         None
@@ -358,6 +409,39 @@ mod tests {
     }
 
     #[test]
+    fn test_should_forward_text_when_last_copy_is_rich_text_returns_true() {
+        let last_copy = LastCopyState::RichText(42);
+
+        assert!(should_forward_text(&last_copy, "hello"));
+    }
+
+    #[test]
+    fn test_should_forward_rich_text_when_markup_changes_returns_true() {
+        let first_hash = rich_text_content_hash("hello", Some("<b>hello</b>"), None);
+        let last_copy = LastCopyState::RichText(first_hash);
+
+        assert!(should_forward_rich_text(
+            &last_copy,
+            "hello",
+            Some("<i>hello</i>"),
+            None,
+        ));
+    }
+
+    #[test]
+    fn test_should_forward_rich_text_when_payload_is_unchanged_returns_false() {
+        let hash = rich_text_content_hash("hello", Some("<b>hello</b>"), None);
+        let last_copy = LastCopyState::RichText(hash);
+
+        assert!(!should_forward_rich_text(
+            &last_copy,
+            "hello",
+            Some("<b>hello</b>"),
+            None,
+        ));
+    }
+
+    #[test]
     fn test_should_forward_files_when_same_hash_returns_false() {
         let last_copy = LastCopyState::Files(42);
 
@@ -390,6 +474,23 @@ mod tests {
         let last_copy = LastCopyState::Text("hello".to_string());
 
         assert!(should_forward_image(&last_copy, 42));
+    }
+
+    #[test]
+    fn test_image_content_hash_when_dimensions_differ_returns_different_hashes() {
+        let horizontal = DynamicImage::ImageRgba8(
+            image::ImageBuffer::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6, 7, 8])
+                .expect("valid horizontal image"),
+        );
+        let vertical = DynamicImage::ImageRgba8(
+            image::ImageBuffer::from_raw(1, 2, vec![1, 2, 3, 4, 5, 6, 7, 8])
+                .expect("valid vertical image"),
+        );
+
+        assert_ne!(
+            image_content_hash(&horizontal),
+            image_content_hash(&vertical)
+        );
     }
 
     #[test]

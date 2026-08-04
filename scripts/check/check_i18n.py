@@ -51,13 +51,14 @@ def collect_used_keys(src_root: Path) -> set[str]:
 
     Recognises these call patterns:
       * I18n::translate(cx, "key")
+      * I18n::translate_count(cx, "key", count)
       * i18n.t("key")
       * translations.get("key")
       * any_field_key: "key"  (struct field ending with ``_key``, used for
                                indirect i18n lookups like ``i18n.t(row.label_key)``)
     """
     # Direct I18n::translate / .t() / .get() call patterns
-    direct_pattern = re.compile(r'I18n::translate\(\s*\w+\s*,\s*"([^"]+)"\s*\)|\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
+    direct_pattern = re.compile(r'I18n::translate(?:_count)?\(\s*\w+\s*,\s*"([^"]+)"|\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
     # Struct field whose name ends with ``_key`` assigned a string literal,
     # e.g. ``label_key: "help_search"``
     field_key_pattern = re.compile(r'\b\w+_key\s*:\s*"([^"]+)"')
