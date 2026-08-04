@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Quality Review"
+  short_description: "Review code, comments, and tests with evidence"
+  default_prompt: "Use $code-quality-review to review this change for code, comment, and test quality."
