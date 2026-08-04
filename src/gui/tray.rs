@@ -126,6 +126,7 @@ fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::Image
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrayEvent {
+    Show,
     Settings,
     About,
     Quit,
@@ -183,6 +184,9 @@ fn spawn_tray_event_loop(
     cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
+                TrayEvent::Show => {
+                    let _ = async_app.update(|cx| send_active_action(window_handle, cx));
+                }
                 TrayEvent::Settings => {
                     let _ = async_app.update(|cx| send_open_settings(window_handle, cx));
                 }
@@ -217,6 +221,14 @@ pub(crate) fn start_tray_handler_inner(
             None
         }
     }
+}
+
+fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut App) {
+    window_handle
+        .update(cx, |_, window: &mut gpui::Window, cx| {
+            window.dispatch_action(Box::new(crate::gui::board::Active), cx);
+        })
+        .ok();
 }
 
 pub(crate) fn send_open_settings(window_handle: WindowHandle<Root>, cx: &mut App) {
@@ -317,7 +329,7 @@ fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
     if let TrayIconEvent::Click { button, .. } = event
         && *button == tray_icon::MouseButton::Left
     {
-        Some(TrayEvent::Settings)
+        Some(TrayEvent::Show)
     } else {
         None
     }
@@ -403,7 +415,7 @@ mod tests {
             button: tray_icon::MouseButton::Left,
             button_state: tray_icon::MouseButtonState::Up,
         },
-        Some(TrayEvent::Settings)
+        Some(TrayEvent::Show)
     )]
     #[case(
         TrayIconEvent::Click {
