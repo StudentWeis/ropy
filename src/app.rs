@@ -33,6 +33,7 @@ use crate::{
 };
 
 #[cfg(target_os = "linux")]
+/// Shared X11 connection used for native window mapping and activation.
 pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
 /// Capacity for the clipboard event channel between the OS clipboard listener

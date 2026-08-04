@@ -7,6 +7,7 @@ use x11rb::{
     wrapper::ConnectionExt as _,
 };
 
+/// Native X11 window operations for the Ropy application window.
 pub struct X11 {
     connection: RustConnection,
     root_id: u32,
