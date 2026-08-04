@@ -1,0 +1,4 @@
+interface:
+  display_name: "AgentBay Windows GUI Test"
+  short_description: "Run Ropy Windows GUI E2E tests in AgentBay"
+  default_prompt: "Use $agentbay-windows-gui-test to deploy and validate the latest Ropy Windows build in AgentBay."
