@@ -42,12 +42,14 @@ pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 #[cfg(any(target_os = "linux", test))]
 const LINUX_STARTUP_HIDE_DELAY: Duration = Duration::from_millis(100);
 
-/// Let GPUI present the initial scene before Linux startup unmaps the window.
+/// Let GPUI present the initial scene before Linux startup discovers and
+/// unmaps the window.
 ///
-/// Unmapping synchronously during application setup prevents GPUI's X11
-/// renderer from presenting any scene after the window is mapped again. The
-/// short foreground delay gives the initial frame time to reach the compositor,
-/// preserving tray-resident startup without leaving a transparent surface.
+/// The X11 window manager publishes the new client asynchronously, so looking
+/// it up during application setup can miss it. The short foreground delay also
+/// gives GPUI's initial frame time to reach the compositor before the window is
+/// hidden, preserving tray-resident startup without leaving a transparent
+/// surface when it is mapped again.
 #[cfg(any(target_os = "linux", test))]
 fn schedule_linux_window_hide_after_initial_paint(
     window: &gpui::Window,
@@ -345,30 +347,31 @@ pub(crate) fn launch() {
 
             #[cfg(target_os = "linux")]
             if env::var("DISPLAY").is_ok() {
-                match X11::new(MAIN_WINDOW_TITLE) {
-                    Ok(x11_new) => {
-                        X11_INSTANCE.get_or_init(|| x11_new);
-                        if let Err(error) = window_handle.update(cx, |_, window, cx| {
-                            schedule_linux_window_hide_after_initial_paint(window, cx, || {
-                                if let Some(x11) = X11_INSTANCE.get()
-                                    && let Err(error) = x11.hide_window()
-                                {
-                                    tracing::warn!(
-                                        error = %error,
-                                        "failed to hide Linux window after initial paint"
-                                    );
-                                }
-                            });
-                        }) {
+                if let Err(error) = window_handle.update(cx, |_, window, cx| {
+                    schedule_linux_window_hide_after_initial_paint(window, cx, || {
+                        let x11 = match X11::new(MAIN_WINDOW_TITLE) {
+                            Ok(x11) => X11_INSTANCE.get_or_init(|| x11),
+                            Err(error) => {
+                                tracing::error!(
+                                    error = %error,
+                                    "failed to initialize x11rb after initial paint"
+                                );
+                                return;
+                            }
+                        };
+
+                        if let Err(error) = x11.hide_window() {
                             tracing::warn!(
                                 error = %error,
-                                "failed to schedule Linux startup window hide"
+                                "failed to hide Linux window after initial paint"
                             );
                         }
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to connect x11rb; skipping X11 init");
-                    }
+                    });
+                }) {
+                    tracing::warn!(
+                        error = %error,
+                        "failed to schedule Linux startup window hide"
+                    );
                 }
             }
         });
