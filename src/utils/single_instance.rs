@@ -6,6 +6,8 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow},
 };
 
+use crate::gui::app::MAIN_WINDOW_TITLE;
+
 pub fn ensure_single_instance() -> bool {
     let mutex_name = "RopySingleInstanceMutex";
     let wide_name: Vec<u16> = OsStr::new(mutex_name)
@@ -24,14 +26,18 @@ pub fn ensure_single_instance() -> bool {
         }
 
         if GetLastError() == ERROR_ALREADY_EXISTS {
-            // GPUI registers its Win32 windows under the `Zed::Window`
-            // class name; matching that lets us bring the existing
-            // instance to the foreground instead of silently exiting.
+            // GPUI's class name is shared by every GPUI application. Match
+            // Ropy's native window title as well so another GPUI process is
+            // never activated by mistake.
             let class_name = OsStr::new("Zed::Window")
                 .encode_wide()
                 .chain(std::iter::once(0))
                 .collect::<Vec<_>>();
-            let hwnd = FindWindowW(class_name.as_ptr(), std::ptr::null());
+            let window_title = OsStr::new(MAIN_WINDOW_TITLE)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect::<Vec<_>>();
+            let hwnd = FindWindowW(class_name.as_ptr(), window_title.as_ptr());
             if !hwnd.is_null() {
                 ShowWindow(hwnd, SW_RESTORE);
                 SetForegroundWindow(hwnd);

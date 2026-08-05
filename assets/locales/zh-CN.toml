@@ -32,6 +32,8 @@ filter_files = "筛选文件"
 filter_favorites = "筛选收藏"
 search_case_sensitive = "区分大小写"
 search_match_whole_word = "全词"
+record_file_empty = "文件"
+record_file_count = "{count} 个文件"
 # 设置
 settings_button = "设置"
 settings_title = "设置"

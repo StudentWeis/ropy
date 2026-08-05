@@ -33,6 +33,7 @@ use crate::{
 };
 
 #[cfg(target_os = "linux")]
+/// Shared X11 connection used for native window mapping and activation.
 pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
 /// Capacity for the clipboard event channel between the OS clipboard listener
@@ -250,11 +251,7 @@ fn load_settings() -> Settings {
         }
         Err(e) => {
             tracing::warn!(error = %e, "failed to load settings; using defaults");
-            let default_settings = Settings::default();
-            default_settings.save().unwrap_or_else(|err| {
-                tracing::error!(error = %err, "failed to save default settings");
-            });
-            default_settings
+            Settings::default()
         }
     }
 }

@@ -5,22 +5,31 @@
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
-    sync::{Arc, LockResult, Mutex, PoisonError, RwLock},
+    sync::{
+        Arc, LockResult, Mutex, PoisonError, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use crate::repository::{
-    backend::{KvTree, StorageBackend},
+    backend::{KvTree, StorageBackend, TreeKey},
     errors::RepositoryError,
 };
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct MemoryBackend {
-    trees: Mutex<HashMap<String, Arc<MemoryTree>>>,
+    trees: Arc<Mutex<HashMap<String, Arc<MemoryTree>>>>,
+    transaction_lock: Arc<Mutex<()>>,
+    fail_next_batch: Arc<AtomicBool>,
 }
 
 impl MemoryBackend {
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+
+    pub(crate) fn fail_next_batch(&self) {
+        self.fail_next_batch.store(true, Ordering::SeqCst);
     }
 }
 
@@ -38,7 +47,48 @@ impl StorageBackend for MemoryBackend {
             .entry(name.to_string())
             .or_insert_with(|| Arc::new(MemoryTree::default()))
             .clone();
-        Ok(MemoryTreeHandle(tree))
+        Ok(MemoryTreeHandle {
+            tree,
+            transaction_lock: self.transaction_lock.clone(),
+        })
+    }
+
+    fn remove_batch(&self, removals: &[TreeKey<'_>]) -> Result<Vec<bool>, RepositoryError> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        if self.fail_next_batch.swap(false, Ordering::SeqCst) {
+            return Err(RepositoryError::Delete(
+                "injected batch deletion failure".to_string(),
+            ));
+        }
+
+        let trees = recover_lock(self.trees.lock());
+        let mut results = Vec::with_capacity(removals.len());
+        for removal in removals {
+            let removed = trees.get(removal.tree).is_some_and(|tree| {
+                recover_lock(tree.entries.write())
+                    .remove(removal.key)
+                    .is_some()
+            });
+            results.push(removed);
+        }
+        Ok(results)
+    }
+
+    fn clear_batch(&self, tree_names: &[&'static str]) -> Result<(), RepositoryError> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        if self.fail_next_batch.swap(false, Ordering::SeqCst) {
+            return Err(RepositoryError::Delete(
+                "injected batch deletion failure".to_string(),
+            ));
+        }
+
+        let trees = recover_lock(self.trees.lock());
+        for tree_name in tree_names {
+            if let Some(tree) = trees.get(*tree_name) {
+                recover_lock(tree.entries.write()).clear();
+            }
+        }
+        Ok(())
     }
 
     fn flush(&self) -> Result<(), RepositoryError> {
@@ -57,36 +107,43 @@ struct MemoryTree {
 }
 
 #[derive(Clone)]
-pub(crate) struct MemoryTreeHandle(Arc<MemoryTree>);
+pub(crate) struct MemoryTreeHandle {
+    tree: Arc<MemoryTree>,
+    transaction_lock: Arc<Mutex<()>>,
+}
 
 impl KvTree for MemoryTreeHandle {
     fn insert(&self, key: &[u8], value: &[u8]) -> Result<(), RepositoryError> {
-        let entries_lock = self.0.entries.write();
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        let entries_lock = self.tree.entries.write();
         let mut entries = recover_lock(entries_lock);
         entries.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
-        let entries_lock = self.0.entries.read();
+        let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         Ok(entries.get(key).cloned())
     }
 
     fn remove(&self, key: &[u8]) -> Result<bool, RepositoryError> {
-        let entries_lock = self.0.entries.write();
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        let entries_lock = self.tree.entries.write();
         let mut entries = recover_lock(entries_lock);
         Ok(entries.remove(key).is_some())
     }
 
     fn len(&self) -> usize {
-        let entries_lock = self.0.entries.read();
+        let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         entries.len()
     }
 
+    #[cfg(test)]
     fn clear(&self) -> Result<(), RepositoryError> {
-        let entries_lock = self.0.entries.write();
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        let entries_lock = self.tree.entries.write();
         let mut entries = recover_lock(entries_lock);
         entries.clear();
         Ok(())
@@ -96,7 +153,7 @@ impl KvTree for MemoryTreeHandle {
         &self,
         callback: &mut dyn FnMut(&[u8], &[u8]) -> bool,
     ) -> Result<(), RepositoryError> {
-        let entries_lock = self.0.entries.read();
+        let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         for (key, value) in entries.iter() {
             if !callback(key, value) {
@@ -110,7 +167,7 @@ impl KvTree for MemoryTreeHandle {
         &self,
         callback: &mut dyn FnMut(&[u8], &[u8]) -> bool,
     ) -> Result<(), RepositoryError> {
-        let entries_lock = self.0.entries.read();
+        let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         for (key, value) in entries.iter().rev() {
             if !callback(key, value) {

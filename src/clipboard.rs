@@ -1,5 +1,7 @@
 use std::sync::mpsc::Sender as CompletionSender;
 
+use thiserror::Error;
+
 /// Clipboard event monitoring and ingestion.
 pub mod listener;
 /// Clipboard asset persistence helpers.
@@ -26,24 +28,36 @@ pub(crate) enum ClipboardEvent {
     },
 }
 
+pub(crate) type ClipboardWriteResult = Result<(), ClipboardWriteError>;
+
+#[derive(Debug, Error)]
+pub(crate) enum ClipboardWriteError {
+    #[error("clipboard operation failed: {0}")]
+    Clipboard(String),
+    #[error("failed to load clipboard image: {0}")]
+    Image(#[from] image::ImageError),
+    #[error("cannot copy an empty file list")]
+    EmptyFileList,
+}
+
 pub(crate) enum CopyRequest {
     Text {
         text: String,
-        completion: Option<CompletionSender<()>>,
+        completion: Option<CompletionSender<ClipboardWriteResult>>,
     },
     Image {
         path: String,
-        completion: Option<CompletionSender<()>>,
+        completion: Option<CompletionSender<ClipboardWriteResult>>,
     },
     Files {
         paths: Vec<String>,
-        completion: Option<CompletionSender<()>>,
+        completion: Option<CompletionSender<ClipboardWriteResult>>,
     },
     RichText {
         plain_text: String,
         html: Option<String>,
         rtf: Option<String>,
-        completion: Option<CompletionSender<()>>,
+        completion: Option<CompletionSender<ClipboardWriteResult>>,
     },
 }
 
@@ -57,7 +71,7 @@ impl CopyRequest {
 
     pub(crate) const fn text_with_completion(
         text: String,
-        completion: CompletionSender<()>,
+        completion: CompletionSender<ClipboardWriteResult>,
     ) -> Self {
         Self::Text {
             text,
@@ -74,7 +88,7 @@ impl CopyRequest {
 
     pub(crate) const fn image_with_completion(
         path: String,
-        completion: CompletionSender<()>,
+        completion: CompletionSender<ClipboardWriteResult>,
     ) -> Self {
         Self::Image {
             path,
@@ -91,7 +105,7 @@ impl CopyRequest {
 
     pub(crate) const fn files_with_completion(
         paths: Vec<String>,
-        completion: CompletionSender<()>,
+        completion: CompletionSender<ClipboardWriteResult>,
     ) -> Self {
         Self::Files {
             paths,
@@ -116,7 +130,7 @@ impl CopyRequest {
         plain_text: String,
         html: Option<String>,
         rtf: Option<String>,
-        completion: CompletionSender<()>,
+        completion: CompletionSender<ClipboardWriteResult>,
     ) -> Self {
         Self::RichText {
             plain_text,
@@ -129,6 +143,7 @@ impl CopyRequest {
 
 pub(crate) enum LastCopyState {
     Text(String),
+    RichText(u64),
     Image(u64),
     Files(u64),
 }
@@ -165,7 +180,7 @@ mod tests {
         match request {
             CopyRequest::Text { text, completion } => {
                 assert_eq!(text, "hello");
-                completion.unwrap().send(()).unwrap();
+                completion.unwrap().send(Ok(())).unwrap();
             }
             CopyRequest::Image { .. }
             | CopyRequest::Files { .. }
@@ -174,7 +189,10 @@ mod tests {
             }
         }
 
-        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+        assert!(matches!(
+            completion_rx.recv_timeout(Duration::from_secs(1)),
+            Ok(Ok(()))
+        ));
     }
 
     #[test]
@@ -202,14 +220,17 @@ mod tests {
         match request {
             CopyRequest::Image { path, completion } => {
                 assert_eq!(path, "/tmp/example.png");
-                completion.unwrap().send(()).unwrap();
+                completion.unwrap().send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Files { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected image copy request")
             }
         }
 
-        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+        assert!(matches!(
+            completion_rx.recv_timeout(Duration::from_secs(1)),
+            Ok(Ok(()))
+        ));
     }
 
     #[test]
@@ -237,14 +258,17 @@ mod tests {
         match request {
             CopyRequest::Files { paths, completion } => {
                 assert_eq!(paths, vec!["/tmp/example.txt"]);
-                completion.unwrap().send(()).unwrap();
+                completion.unwrap().send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected files copy request")
             }
         }
 
-        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+        assert!(matches!(
+            completion_rx.recv_timeout(Duration::from_secs(1)),
+            Ok(Ok(()))
+        ));
     }
 
     #[test]
@@ -294,13 +318,16 @@ mod tests {
                 assert_eq!(plain_text, "hello");
                 assert_eq!(html.as_deref(), Some("<p>hello</p>"));
                 assert_eq!(rtf.as_deref(), Some("{\\rtf1 hello}"));
-                completion.unwrap().send(()).unwrap();
+                completion.unwrap().send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
                 panic!("expected rich text copy request")
             }
         }
 
-        assert_eq!(completion_rx.recv_timeout(Duration::from_secs(1)), Ok(()));
+        assert!(matches!(
+            completion_rx.recv_timeout(Duration::from_secs(1)),
+            Ok(Ok(()))
+        ));
     }
 }

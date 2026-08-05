@@ -20,6 +20,7 @@ pub(crate) fn download_and_install(
     release: &ReleaseInfo,
     progress_tx: &async_channel::Sender<f32>,
 ) -> Result<(), UpdateError> {
+    let checksum_url = required_checksum_url(release)?;
     let tmp_dir = tempfile::tempdir().map_err(UpdateError::Io)?;
     let asset_name = release
         .download_url
@@ -37,13 +38,9 @@ pub(crate) fn download_and_install(
         progress_tx,
     )?;
 
-    // 2. Verify checksum (if available)
-    if release.checksum_url.is_empty() {
-        tracing::warn!("no checksum URL provided – skipping verification");
-    } else {
-        tracing::info!("verifying checksum");
-        verify_checksum(&asset_path, &release.checksum_url)?;
-    }
+    // 2. Verify checksum before extracting executable content.
+    tracing::info!("verifying checksum");
+    verify_checksum(&asset_path, checksum_url)?;
 
     // 3. Extract the binary from the archive
     tracing::info!("extracting binary from archive");
@@ -64,6 +61,16 @@ pub(crate) fn download_and_install(
 
     tracing::info!("update installed successfully – restart required");
     Ok(())
+}
+
+fn required_checksum_url(release: &ReleaseInfo) -> Result<&str, UpdateError> {
+    if release.checksum_url.trim().is_empty() {
+        return Err(UpdateError::MissingChecksumAsset(format!(
+            "release {}",
+            release.version
+        )));
+    }
+    Ok(&release.checksum_url)
 }
 
 /// Download `url` into `dest`, reporting progress via `progress_tx`.
@@ -142,11 +149,7 @@ fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateEr
         .execute_to_string()?;
 
     // The checksum file format from cargo-dist is:  "<hex>  <filename>\n"
-    let expected_hex = checksum_body
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let expected_hex = parse_checksum(&checksum_body)?;
 
     let actual_hex = compute_sha256_hex(asset_path)?;
 
@@ -157,6 +160,16 @@ fn verify_checksum(asset_path: &Path, checksum_url: &str) -> Result<(), UpdateEr
         });
     }
     Ok(())
+}
+
+fn parse_checksum(checksum_body: &str) -> Result<String, UpdateError> {
+    let checksum = checksum_body.split_whitespace().next().unwrap_or("");
+    if checksum.len() != 64 || !checksum.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(UpdateError::InvalidChecksum(
+            "expected exactly 64 hexadecimal characters".to_string(),
+        ));
+    }
+    Ok(checksum.to_ascii_lowercase())
 }
 
 fn compute_sha256_hex(asset_path: &Path) -> Result<String, UpdateError> {
@@ -278,12 +291,44 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_verify_checksum_format_parsing() {
-        // Simulate a cargo-dist style checksum line
-        let line = "abcdef1234567890  ropy-aarch64-apple-darwin.tar.xz\n";
-        let expected = line.split_whitespace().next().unwrap().to_lowercase();
-        assert_eq!(expected, "abcdef1234567890");
+    #[expect(clippy::expect_used)]
+    fn test_parse_checksum_when_valid_returns_normalized_hash() {
+        let checksum =
+            "A948904F2F0F479B8F8197694B30184B0D2ED1C1CD2A1EC0FB85D299A192A447  ropy.tar.xz\n";
+
+        let parsed = parse_checksum(checksum).expect("checksum should parse");
+
+        assert_eq!(
+            parsed,
+            "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+        );
+    }
+
+    #[rstest::rstest]
+    #[case("")]
+    #[case("abcdef")]
+    #[case("z948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447")]
+    fn test_parse_checksum_when_malformed_returns_error(#[case] checksum: &str) {
+        assert!(matches!(
+            parse_checksum(checksum),
+            Err(UpdateError::InvalidChecksum(_))
+        ));
+    }
+
+    #[test]
+    fn test_required_checksum_url_when_missing_returns_error_before_download() {
+        let release = ReleaseInfo {
+            version: "0.6.0".to_string(),
+            release_notes: String::new(),
+            download_url: "https://example.com/ropy.tar.xz".to_string(),
+            checksum_url: String::new(),
+            asset_size: 1,
+        };
+
+        assert!(matches!(
+            required_checksum_url(&release),
+            Err(UpdateError::MissingChecksumAsset(_))
+        ));
     }
 
     #[test]

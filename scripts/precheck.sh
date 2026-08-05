@@ -29,6 +29,7 @@ fi
 $CARGO_CMD check --all-targets --all-features
 $CARGO_CMD clippy --all-targets --all-features
 $CARGO_CMD test
+RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --no-deps
 
 # Check unused dependencies
 if command -v cargo-machete &>/dev/null; then

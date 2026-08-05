@@ -32,6 +32,8 @@ filter_files = "Filter files"
 filter_favorites = "Filter favorites"
 search_case_sensitive = "Case-sensitive"
 search_match_whole_word = "Whole word"
+record_file_empty = "File"
+record_file_count = "{count} files"
 # Settings
 settings_button = "Settings"
 settings_title = "Settings"

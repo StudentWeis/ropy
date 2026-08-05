@@ -4,7 +4,7 @@ use gpui::{Context, Window};
 
 use super::RopyBoard;
 use crate::{
-    clipboard::{CopyRequest, load_rich_text_html, load_rich_text_rtf},
+    clipboard::{ClipboardWriteResult, CopyRequest, load_rich_text_html, load_rich_text_rtf},
     config::ConfirmMode,
     gui::{hide_window, paste},
     repository::{ClipboardRecord, models::ContentType},
@@ -23,7 +23,7 @@ pub(in crate::gui::board) enum ConfirmFormat {
 pub(in crate::gui::board) fn build_copy_request(
     content: &str,
     content_type: &ContentType,
-    completion: Option<mpsc::Sender<()>>,
+    completion: Option<mpsc::Sender<ClipboardWriteResult>>,
 ) -> Option<CopyRequest> {
     match content_type {
         ContentType::Text => Some(completion.map_or_else(
@@ -56,7 +56,7 @@ pub(in crate::gui::board) fn build_copy_request(
 pub(in crate::gui::board) fn build_copy_request_for_record(
     record: &ClipboardRecord,
     confirm_format: ConfirmFormat,
-    completion: Option<mpsc::Sender<()>>,
+    completion: Option<mpsc::Sender<ClipboardWriteResult>>,
 ) -> Option<CopyRequest> {
     if confirm_format == ConfirmFormat::PlainText && record.content_type == ContentType::RichText {
         return Some(completion.map_or_else(
@@ -77,6 +77,22 @@ pub(in crate::gui::board) fn build_copy_request_for_record(
         Some(tx) => CopyRequest::rich_text_with_completion(record.content.clone(), html, rtf, tx),
         None => CopyRequest::rich_text(record.content.clone(), html, rtf),
     })
+}
+
+pub(in crate::gui::board) fn wait_for_clipboard_write(
+    rx: &mpsc::Receiver<ClipboardWriteResult>,
+) -> bool {
+    match rx.recv_timeout(Duration::from_millis(CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS)) {
+        Ok(Ok(())) => true,
+        Ok(Err(error)) => {
+            tracing::warn!(error = %error, "clipboard write failed");
+            false
+        }
+        Err(error) => {
+            tracing::warn!(error = %error, "timed out waiting for clipboard write completion");
+            false
+        }
+    }
 }
 
 impl RopyBoard {
@@ -102,11 +118,8 @@ impl RopyBoard {
                 return false;
             }
             if let Some((_, rx)) = completion
-                && rx
-                    .recv_timeout(Duration::from_millis(CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS))
-                    .is_err()
+                && !wait_for_clipboard_write(&rx)
             {
-                tracing::warn!("timed out waiting for clipboard write completion");
                 return false;
             }
             return true;

@@ -54,6 +54,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Remove the entry that matches the given `(timestamp_millis, id)` pair.
+    #[cfg(test)]
     pub(super) fn remove(&self, timestamp_millis: i64, id: u64) -> Result<(), RepositoryError> {
         let key = Self::encode_key(timestamp_millis, id);
         self.entries.remove(&key)?;
@@ -75,6 +76,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Clear all entries.
+    #[cfg(test)]
     pub(super) fn clear(&self) -> Result<(), RepositoryError> {
         self.entries.clear()?;
         self.id_lookup.clear()
@@ -206,6 +208,7 @@ impl<T: KvTree> TimeIndex<T> {
     }
 
     /// Delete a raw encoded key from the underlying tree.
+    #[cfg(test)]
     pub(super) fn remove_raw(&self, key: &[u8; 16]) -> Result<(), RepositoryError> {
         self.entries.remove(key.as_ref())?;
         let id = u64::from_be_bytes(key[8..].try_into().unwrap_or_default());

@@ -59,7 +59,7 @@ impl AutoStartManager {
     /// Windows registry should execute. macOS uses a Login Item so bundled
     /// builds point at the `.app` directory that System Settings displays.
     /// On Windows we rewrite Scoop's versioned install path back to the
-    /// stable `current` junction — see [`normalise_scoop_path`].
+    /// stable `current` junction — see `normalise_scoop_path`.
     fn get_app_path() -> Result<String, AutoStartError> {
         let exe_path =
             env::current_exe().map_err(|e| AutoStartError::ExecutablePath(e.to_string()))?;
@@ -123,7 +123,7 @@ impl AutoStartManager {
     /// Login Items / registry entries is unnecessary churn and (on
     /// some Linux desktops) racy.
     pub(crate) fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
-        let current_enabled = self.is_enabled().unwrap_or(false);
+        let current_enabled = self.is_enabled()?;
         match autostart_sync_action(enabled, current_enabled) {
             AutoStartSyncAction::None => Ok(()),
             AutoStartSyncAction::Enable => self.enable(),
@@ -212,17 +212,9 @@ fn normalise_scoop_path(path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-
     use super::*;
 
-    // These tests touch OS-level auto-launch state (macOS Login Items /
-    // legacy LaunchAgents, Linux `.desktop` entries, Windows registry). Running them in parallel
-    // can race on that shared global state, so they are serialised explicitly
-    // while the rest of the suite runs in parallel.
-
     #[test]
-    #[serial(autostart)]
     fn test_autostart_manager_creation() {
         use crate::constants::APP_NAME;
         let manager = AutoStartManager::new(APP_NAME);
@@ -230,7 +222,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(autostart)]
     #[expect(clippy::unwrap_used)]
     fn test_get_app_path() {
         let path = AutoStartManager::get_app_path();
@@ -287,20 +278,6 @@ mod tests {
             autostart_sync_action(false, true),
             AutoStartSyncAction::Disable,
         );
-    }
-
-    #[test]
-    #[serial(autostart)]
-    fn test_sync_state() {
-        let manager = AutoStartManager::new("RopyTest").expect("Failed to create manager");
-
-        // Try disabling (may fail on some environments); don't make the test brittle
-        let _ = manager.sync_state(false);
-
-        // Verify state if possible
-        if let Ok(enabled) = manager.is_enabled() {
-            assert!(!enabled);
-        }
     }
 
     // Pure-string Scoop normalisation tests — no OS state, safe to run

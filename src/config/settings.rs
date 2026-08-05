@@ -1,5 +1,10 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
-use std::{cfg_select, path::PathBuf, str::FromStr};
+use std::{
+    cfg_select,
+    io::Write as _,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use gpui::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
@@ -61,14 +66,18 @@ impl Settings {
 
     /// Load settings, layering the on-disk `config.toml` over the
     /// `Default` instance so partial files keep working across upgrades,
-    /// and clamping each value group via [`validate`] so out-of-range
+    /// and clamping each value group via [`Self::validated`] so out-of-range
     /// values on disk can't propagate into the running app.
     pub(crate) fn load() -> Result<Self, SettingsError> {
         let config_dir = Self::config_dir()?;
+        Self::load_from_dir(&config_dir)
+    }
+
+    fn load_from_dir(config_dir: &Path) -> Result<Self, SettingsError> {
         let config_file = config_dir.join("config.toml");
 
-        std::fs::create_dir_all(&config_dir).map_err(|source| SettingsError::Io {
-            path: config_dir.clone(),
+        std::fs::create_dir_all(config_dir).map_err(|source| SettingsError::Io {
+            path: config_dir.to_path_buf(),
             source,
         })?;
 
@@ -96,12 +105,37 @@ impl Settings {
 
     pub(crate) fn save(&self) -> Result<(), SettingsError> {
         let config_file = Self::config_file()?;
-        let toml_string = toml::to_string_pretty(self)?;
+        self.save_to_file(&config_file)
+    }
 
-        std::fs::write(&config_file, toml_string).map_err(|source| SettingsError::Io {
-            path: config_file,
+    fn save_to_file(&self, config_file: &Path) -> Result<(), SettingsError> {
+        let toml_string = toml::to_string_pretty(self)?;
+        let parent = config_file
+            .parent()
+            .ok_or(SettingsError::ConfigDirectoryNotFound)?;
+        std::fs::create_dir_all(parent).map_err(|source| SettingsError::Io {
+            path: parent.to_path_buf(),
             source,
         })?;
+
+        let mut temp_file =
+            tempfile::NamedTempFile::new_in(parent).map_err(|source| SettingsError::Io {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        temp_file
+            .write_all(toml_string.as_bytes())
+            .and_then(|()| temp_file.as_file().sync_all())
+            .map_err(|source| SettingsError::Io {
+                path: config_file.to_path_buf(),
+                source,
+            })?;
+        temp_file
+            .persist(config_file)
+            .map_err(|error| SettingsError::Io {
+                path: config_file.to_path_buf(),
+                source: error.error,
+            })?;
         Ok(())
     }
 
@@ -202,7 +236,8 @@ pub(crate) struct ConfirmSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct WindowSettings {
-    /// Allowed range is [`MIN_OPACITY_PERCENT`..=`MAX_OPACITY_PERCENT`];
+    /// Allowed range is [`WindowSettings::MIN_OPACITY_PERCENT`] through
+    /// [`WindowSettings::MAX_OPACITY_PERCENT`];
     /// values outside that band are clamped at load time.
     pub opacity_percent: u8,
 }
@@ -230,7 +265,7 @@ impl WindowSettings {
 #[serde(default)]
 pub(crate) struct HotkeySettings {
     /// `+`-separated chord parsed by `global_hotkey` (e.g. `cmd+shift+v`).
-    /// Invalid values are reset to the default by [`validate_hotkey`].
+    /// Invalid values are reset to the default by [`Settings::validate_hotkey`].
     pub activation_key: String,
 }
 
@@ -349,10 +384,32 @@ mod tests {
     }
 
     #[test]
-    fn test_load_settings() {
-        // This should work with default values even if no config file exists
-        let result = Settings::load();
-        assert!(result.is_ok());
+    fn test_load_from_dir_when_config_missing_returns_defaults_without_host_state() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        let settings = Settings::load_from_dir(temp_dir.path()).expect("Failed to load settings");
+
+        assert_eq!(
+            settings.storage.max_history_records,
+            DEFAULT_MAX_HISTORY_RECORDS
+        );
+        assert!(!temp_dir.path().join("config.toml").exists());
+    }
+
+    #[test]
+    fn test_load_from_dir_when_config_is_invalid_preserves_original_file() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let config_path = temp_dir.path().join("config.toml");
+        let invalid_content = "[storage\nmax_history_records = nope";
+        std::fs::write(&config_path, invalid_content).expect("Failed to write fixture");
+
+        let result = Settings::load_from_dir(temp_dir.path());
+
+        assert!(matches!(result, Err(SettingsError::Deserialize(_))));
+        assert_eq!(
+            std::fs::read_to_string(config_path).expect("Failed to read fixture"),
+            invalid_content
+        );
     }
 
     #[test]
@@ -397,13 +454,10 @@ mod tests {
         settings.layout.mode = LayoutMode::Grid;
         settings.window.opacity_percent = 72;
 
-        // Save to file
-        let toml = toml::to_string_pretty(&settings).expect("Failed to serialize");
-        std::fs::write(&config_path, toml).expect("Failed to write config");
-
-        // Load back
-        let content = std::fs::read_to_string(&config_path).expect("Failed to read config");
-        let loaded: Settings = toml::from_str(&content).expect("Failed to deserialize");
+        settings
+            .save_to_file(&config_path)
+            .expect("Failed to save settings");
+        let loaded = Settings::load_from_dir(temp_dir.path()).expect("Failed to load settings");
 
         // Verify all fields match
         assert_eq!(loaded.storage.max_history_records, 50);

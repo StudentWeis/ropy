@@ -17,7 +17,7 @@ pub(crate) use translations::Translations;
 /// I18n manager for handling translations.
 ///
 /// Registered as a GPUI [`Global`] so translations are accessible from any
-/// context via [`I18n::global`] or [`I18n::translate`].
+/// context via [`ReadGlobal::global`] or [`I18n::translate`].
 #[derive(Debug, Clone)]
 pub(crate) struct I18n {
     current_language: Language,
@@ -81,6 +81,11 @@ impl I18n {
         Self::global(cx).t(key)
     }
 
+    /// Translate a message containing a `{count}` placeholder.
+    pub(crate) fn translate_count(cx: &App, key: &str, count: usize) -> String {
+        interpolate_count(&Self::translate(cx, key), count)
+    }
+
     /// Get a reference to the global I18n instance.
     pub(crate) fn load_i18n(language: Language) -> Self {
         Self::new(language).unwrap_or_else(|e| {
@@ -88,6 +93,11 @@ impl I18n {
             Self::default()
         })
     }
+}
+
+fn interpolate_count(template: &str, count: usize) -> String {
+    const COUNT_PLACEHOLDER: &str = concat!("{", "count", "}");
+    template.replace(COUNT_PLACEHOLDER, &count.to_string())
 }
 
 impl Default for I18n {
@@ -184,5 +194,10 @@ mod tests {
         // An unknown locale should fall back to the first available locale
         let i18n = I18n::new(Language::new("xx-UNKNOWN"));
         assert!(i18n.is_ok());
+    }
+
+    #[test]
+    fn test_interpolate_count_replaces_placeholder() {
+        assert_eq!(interpolate_count("{count} files", 3), "3 files");
     }
 }

@@ -33,9 +33,11 @@ append_asset() {
 
 while IFS= read -r -d '' archive; do
 	append_asset "$archive"
-	if [[ -f "${archive}.sha256" ]]; then
-		append_asset "${archive}.sha256"
+	if [[ ! -f "${archive}.sha256" ]]; then
+		echo "Missing checksum for update archive: ${archive}.sha256" >&2
+		exit 1
 	fi
+	append_asset "${archive}.sha256"
 done < <(
 	find "$artifact_dir" -maxdepth 1 -type f \
 		\( -name 'ropy-*.tar.xz' -o -name 'ropy-*.zip' \) \

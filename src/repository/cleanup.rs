@@ -4,7 +4,10 @@
 use std::collections::HashSet;
 
 use super::{
-    backend::{KvTree, StorageBackend, redb::RedbBackend},
+    backend::{
+        RECORDS_TREE, StorageBackend, TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey,
+        redb::RedbBackend,
+    },
     errors::RepositoryError,
     models::ClipboardRecord,
     repo::ClipboardRepository,
@@ -89,13 +92,17 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             }
 
             let rec_key = id.to_be_bytes();
-            if let Some(value) = self.get_raw(&rec_key)?
-                && let Ok(record) = postcard::from_bytes::<ClipboardRecord>(&value)
-            {
-                remove_record_sidecars(&record);
+            let record = self
+                .get_raw(&rec_key)?
+                .and_then(|value| postcard::from_bytes::<ClipboardRecord>(&value).ok());
+            self.backend.remove_batch(&[
+                TreeKey::new(RECORDS_TREE, &rec_key),
+                TreeKey::new(TIME_INDEX_TREE, &ti_key),
+                TreeKey::new(TIME_INDEX_LOOKUP_TREE, &rec_key),
+            ])?;
+            if let Some(record) = record.as_ref() {
+                remove_record_sidecars(record);
             }
-            self.records.remove(&rec_key)?;
-            self.time_index.remove_raw(&ti_key)?;
             removed += 1;
         }
         Ok(removed)
