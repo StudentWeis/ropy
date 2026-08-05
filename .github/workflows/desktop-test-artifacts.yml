@@ -1,0 +1,115 @@
+name: Desktop test artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-test-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} test artifact
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            archive: ropy-x86_64-unknown-linux-gnu.tar.xz
+            install_dist_command: >-
+              curl --proto '=https' --tlsv1.2 -LsSf
+              https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh
+              | sh
+          - platform: windows-x86_64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            archive: ropy-x86_64-pc-windows-msvc.zip
+            install_dist_command: >-
+              irm
+              https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.ps1
+              | iex
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache Cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-test-artifacts-${{ matrix.target }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libatk1.0-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf2.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libxdo-dev \
+            libxkbcommon-x11-dev
+
+      - name: Install cargo-dist
+        run: ${{ matrix.install_dist_command }}
+
+      - name: Build packaged artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist build \
+            --artifacts=local \
+            --target="${{ matrix.target }}" \
+            --print=linkage \
+            --output-format=json \
+            > dist-manifest.json
+
+      - name: Stage Linux artifact
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="target/distrib/${{ matrix.archive }}"
+          checksum="${archive}.sha256"
+          test -f "$archive"
+          test -f "$checksum"
+          expected="$(awk '{print tolower($1)}' "$checksum")"
+          actual="$(sha256sum "$archive" | awk '{print tolower($1)}')"
+          test "$actual" = "$expected"
+          mkdir -p "target/test-artifacts/${{ matrix.platform }}"
+          cp "$archive" "$checksum" dist-manifest.json \
+            "target/test-artifacts/${{ matrix.platform }}/"
+
+      - name: Stage Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = "target/distrib/${{ matrix.archive }}"
+          $checksum = "$archive.sha256"
+          if (-not (Test-Path $archive)) { throw "Missing $archive" }
+          if (-not (Test-Path $checksum)) { throw "Missing $checksum" }
+          $destination = "target/test-artifacts/${{ matrix.platform }}"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Copy-Item $archive, $checksum, dist-manifest.json -Destination $destination
+          $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "SHA-256 mismatch for $archive: expected $expected, got $actual"
+          }
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ropy-${{ matrix.platform }}-${{ github.sha }}
+          path: target/test-artifacts/${{ matrix.platform }}/
+          if-no-files-found: error
+          retention-days: 7
