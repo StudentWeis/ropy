@@ -299,6 +299,8 @@ impl RopyBoard {
         self.active_panel = ActivePanel::ClipboardList;
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
         self.activated = true;
+        window.focus(&self.focus_handle);
+        cx.notify();
         reset_window_geometry_for_activation(window, default_window_size());
         active_window(window, cx);
     }

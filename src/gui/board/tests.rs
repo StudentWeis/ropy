@@ -1,12 +1,21 @@
 #![cfg_attr(test, allow(clippy::panic))]
 
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use chrono::{Local, TimeZone};
-use gpui::{Bounds, Pixels, point, px, size};
+use futures::{FutureExt as _, StreamExt as _};
+use gpui::{
+    AppContext as _, Bounds, Pixels, TestAppContext, VisualTestContext, WindowOptions, point, px,
+    size,
+};
+use gpui_component::Root;
 use rstest::rstest;
 
 use super::{
+    Active,
     actions::horizontal_grid_target_index,
     clipboard_ops::{
         ConfirmFormat, build_copy_request, build_copy_request_for_record, wait_for_clipboard_write,
@@ -18,12 +27,58 @@ use super::{
     settings_editor::UpdateManager,
 };
 use crate::{
-    clipboard::ClipboardWriteError,
-    config::{ConfirmMode, LayoutMode},
+    clipboard::{ClipboardWriteError, LastCopyState},
+    config::{ConfirmMode, LayoutMode, Settings},
     gui::board::{RopyBoard, UiState},
-    repository::{ClipboardRecord, models::ContentType},
+    i18n::I18n,
+    repository::{ClipboardRecord, GlobalRepository, models::ContentType},
     updater::models::UpdateStatus,
 };
+
+#[gpui::test]
+fn test_active_action_when_window_is_hidden_notifies_board_for_render(cx: &mut TestAppContext) {
+    let settings = Settings::default();
+    let language = settings.language.clone();
+    cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.set_global(settings);
+        cx.set_global(I18n::load_i18n(language));
+        cx.set_global(GlobalRepository::new(None));
+    });
+
+    let records = Arc::new(RwLock::new(Vec::new()));
+    let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
+    let (copy_tx, _copy_rx) = async_channel::bounded(1);
+    let window = cx.update(|cx| {
+        cx.open_window(WindowOptions::default(), |window, cx| {
+            let board = cx.new(|cx| RopyBoard::new(records, last_copy, copy_tx, window, cx));
+            cx.new(|cx| Root::new(board, window, cx))
+        })
+        .unwrap_or_else(|error| panic!("test window should open: {error}"))
+    });
+    let board = window
+        .update(cx, |root, _, _| {
+            root.view()
+                .clone()
+                .downcast::<RopyBoard>()
+                .unwrap_or_else(|_| panic!("test board should exist"))
+        })
+        .unwrap_or_else(|error| panic!("test window should exist: {error}"));
+    let mut notifications = cx.notifications(&board);
+    let mut visual_cx = VisualTestContext::from_window(window.into(), cx);
+
+    visual_cx.update(|window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_active_action(&Active, window, cx);
+        });
+    });
+    visual_cx.run_until_parked();
+
+    assert!(
+        notifications.next().now_or_never().flatten().is_some(),
+        "activating the hidden board must notify GPUI to paint its first visible frame"
+    );
+}
 
 #[test]
 fn test_wait_for_clipboard_write_when_writer_succeeds_returns_true() {

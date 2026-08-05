@@ -322,7 +322,9 @@ pub(crate) fn launch() {
                 match X11::new() {
                     Ok(x11_new) => {
                         let x11 = X11_INSTANCE.get_or_init(|| x11_new);
-                        let _ = x11.active_window();
+                        if let Err(e) = x11.hide_window() {
+                            tracing::warn!(error = %e, "failed to hide Linux window at startup");
+                        }
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to connect x11rb; skipping X11 init");

@@ -80,6 +80,8 @@ image = { version = "0.25.10", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+futures = "0.3.33"
+gpui = { version = "0.2.2", default-features = false, features = ["test-support"] }
 rstest = "0.26.1"
 
 [lints.rust]
