@@ -337,19 +337,25 @@ pub(crate) fn launch() {
                     Ok(x11_new) => {
                         X11_INSTANCE.get_or_init(|| x11_new);
                         if let Err(error) = window_handle.update(cx, |_, window, _| {
-                            schedule_linux_window_hide_after_first_frame(
-                                |hide| window.on_next_frame(move |_, _| hide()),
-                                || {
-                                    if let Some(x11) = X11_INSTANCE.get()
-                                        && let Err(error) = x11.hide_window()
-                                    {
-                                        tracing::warn!(
-                                            error = %error,
-                                            "failed to hide Linux window after first frame"
-                                        );
-                                    }
-                                },
-                            );
+                            // GPUI runs queued callbacks at the beginning of a
+                            // frame. Queue once to let the initial request paint,
+                            // then queue the actual hide for the following frame.
+                            window.on_next_frame(|window, _| {
+                                schedule_linux_window_hide_after_first_frame(
+                                    |hide| window.on_next_frame(move |_, _| hide()),
+                                    || {
+                                        if let Some(x11) = X11_INSTANCE.get()
+                                            && let Err(error) = x11.hide_window()
+                                        {
+                                            tracing::warn!(
+                                                error = %error,
+                                                "failed to hide Linux window after first frame"
+                                            );
+                                        }
+                                    },
+                                );
+                                window.refresh();
+                            });
                             window.refresh();
                         }) {
                             tracing::warn!(
