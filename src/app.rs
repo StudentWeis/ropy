@@ -36,6 +36,20 @@ use crate::{
 /// Shared X11 connection used for native window mapping and activation.
 pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
+/// Let GPUI present the initial scene before Linux startup unmaps the window.
+///
+/// Unmapping synchronously during application setup prevents GPUI's X11
+/// renderer from presenting any scene after the window is mapped again. The
+/// callback therefore runs after the first rendered frame, preserving the
+/// tray-resident startup behavior without leaving a transparent surface.
+#[cfg(any(target_os = "linux", test))]
+fn schedule_linux_window_hide_after_first_frame(
+    schedule: impl FnOnce(Box<dyn FnOnce()>),
+    hide: impl FnOnce() + 'static,
+) {
+    schedule(Box::new(hide));
+}
+
 /// Capacity for the clipboard event channel between the OS clipboard listener
 /// and the persistence task. Large enough to absorb bursts from apps that copy
 /// several times per second, while preventing unbounded memory growth if the
@@ -321,9 +335,27 @@ pub(crate) fn launch() {
             if env::var("DISPLAY").is_ok() {
                 match X11::new() {
                     Ok(x11_new) => {
-                        let x11 = X11_INSTANCE.get_or_init(|| x11_new);
-                        if let Err(e) = x11.hide_window() {
-                            tracing::warn!(error = %e, "failed to hide Linux window at startup");
+                        X11_INSTANCE.get_or_init(|| x11_new);
+                        if let Err(error) = window_handle.update(cx, |_, window, _| {
+                            schedule_linux_window_hide_after_first_frame(
+                                |hide| window.on_next_frame(move |_, _| hide()),
+                                || {
+                                    if let Some(x11) = X11_INSTANCE.get()
+                                        && let Err(error) = x11.hide_window()
+                                    {
+                                        tracing::warn!(
+                                            error = %error,
+                                            "failed to hide Linux window after first frame"
+                                        );
+                                    }
+                                },
+                            );
+                            window.refresh();
+                        }) {
+                            tracing::warn!(
+                                error = %error,
+                                "failed to schedule Linux startup window hide"
+                            );
                         }
                     }
                     Err(e) => {
@@ -336,10 +368,47 @@ pub(crate) fn launch() {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+        thread,
+        time::Duration,
+    };
 
     use super::*;
     use crate::repository::backend::memory::{MemoryBackend, memory_backend_factory};
+
+    #[test]
+    fn test_linux_startup_hide_runs_only_after_scheduled_frame_callback() {
+        let hidden = Rc::new(Cell::new(false));
+        let hidden_after_frame = hidden.clone();
+        let scheduled = Rc::new(RefCell::new(None));
+        let scheduled_callback = scheduled.clone();
+
+        schedule_linux_window_hide_after_first_frame(
+            move |callback| {
+                *scheduled_callback.borrow_mut() = Some(callback);
+            },
+            move || {
+                hidden_after_frame.set(true);
+            },
+        );
+
+        assert!(
+            !hidden.get(),
+            "Linux startup must not unmap the window before GPUI paints its first frame"
+        );
+        let callback = scheduled
+            .borrow_mut()
+            .take()
+            .expect("startup hide callback should be scheduled");
+        callback();
+
+        assert!(
+            hidden.get(),
+            "Linux startup should hide the window immediately after the first frame"
+        );
+    }
 
     fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository<MemoryBackend>) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
