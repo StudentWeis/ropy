@@ -103,7 +103,7 @@ jobs:
           $expected = ((Get-Content $checksum -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
           $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actual -ne $expected) {
-            throw "SHA-256 mismatch for $archive: expected $expected, got $actual"
+            throw "SHA-256 mismatch for ${archive}: expected $expected, got $actual"
           }
 
       - name: Upload packaged artifact
