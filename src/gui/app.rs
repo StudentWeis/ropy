@@ -64,7 +64,10 @@ pub(crate) fn create_window(
             titlebar: None,
             show: show_main_window_during_creation(cfg!(target_os = "linux")),
             app_id: Some(MAIN_WINDOW_TITLE.to_owned()),
-            window_background: background_appearance_for_opacity(window_opacity_percent),
+            window_background: background_appearance_for_opacity(
+                window_opacity_percent,
+                cfg!(target_os = "linux"),
+            ),
             ..Default::default()
         },
         |window, cx| {
@@ -88,8 +91,15 @@ const fn show_main_window_during_creation(target_is_linux: bool) -> bool {
     target_is_linux
 }
 
-const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgroundAppearance {
-    if opacity_percent < 100 {
+const fn background_appearance_for_opacity(
+    opacity_percent: u8,
+    target_is_linux: bool,
+) -> WindowBackgroundAppearance {
+    // GPUI creates Linux windows with a 32-bit ARGB visual. Some compositors
+    // treat an opaque swapchain on that visual as having a zero alpha channel,
+    // so keep alpha compositing enabled even when Ropy's configured opacity is
+    // 100%. The rendered colors remain fully opaque at that setting.
+    if target_is_linux || opacity_percent < 100 {
         WindowBackgroundAppearance::Transparent
     } else {
         WindowBackgroundAppearance::Opaque
@@ -97,7 +107,10 @@ const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgro
 }
 
 pub(crate) fn apply_window_opacity(window: &gpui::Window, opacity_percent: u8) {
-    window.set_background_appearance(background_appearance_for_opacity(opacity_percent));
+    window.set_background_appearance(background_appearance_for_opacity(
+        opacity_percent,
+        cfg!(target_os = "linux"),
+    ));
 }
 
 /// Set the application theme from a bundled theme definition.
@@ -146,11 +159,29 @@ pub(crate) fn set_app_theme(
 
 #[cfg(test)]
 mod tests {
-    use super::show_main_window_during_creation;
+    use gpui::WindowBackgroundAppearance;
+
+    use super::{background_appearance_for_opacity, show_main_window_during_creation};
 
     #[test]
     fn linux_requests_initial_frame_before_startup_hide() {
         assert!(show_main_window_during_creation(true));
         assert!(!show_main_window_during_creation(false));
+    }
+
+    #[test]
+    fn linux_uses_alpha_aware_surface_for_argb_visual() {
+        assert!(matches!(
+            background_appearance_for_opacity(100, true),
+            WindowBackgroundAppearance::Transparent
+        ));
+        assert!(matches!(
+            background_appearance_for_opacity(100, false),
+            WindowBackgroundAppearance::Opaque
+        ));
+        assert!(matches!(
+            background_appearance_for_opacity(99, false),
+            WindowBackgroundAppearance::Transparent
+        ));
     }
 }
