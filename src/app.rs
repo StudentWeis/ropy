@@ -6,6 +6,8 @@
 //! subsystems.  It intentionally lives outside `gui` so that the GUI module
 //! can focus solely on rendering.
 
+#[cfg(any(target_os = "linux", test))]
+use std::time::Duration;
 use std::{
     cfg_select,
     sync::{Arc, Mutex},
@@ -36,18 +38,28 @@ use crate::{
 /// Shared X11 connection used for native window mapping and activation.
 pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
+/// Grace period for GPUI to present the initial Linux frame before X11 unmaps it.
+#[cfg(any(target_os = "linux", test))]
+const LINUX_STARTUP_HIDE_DELAY: Duration = Duration::from_millis(100);
+
 /// Let GPUI present the initial scene before Linux startup unmaps the window.
 ///
 /// Unmapping synchronously during application setup prevents GPUI's X11
 /// renderer from presenting any scene after the window is mapped again. The
-/// callback therefore runs after the first rendered frame, preserving the
-/// tray-resident startup behavior without leaving a transparent surface.
+/// short foreground delay gives the initial frame time to reach the compositor,
+/// preserving tray-resident startup without leaving a transparent surface.
 #[cfg(any(target_os = "linux", test))]
-fn schedule_linux_window_hide_after_first_frame(
-    schedule: impl FnOnce(Box<dyn FnOnce()>),
+fn schedule_linux_window_hide_after_initial_paint(
+    window: &gpui::Window,
+    cx: &App,
     hide: impl FnOnce() + 'static,
 ) {
-    schedule(Box::new(hide));
+    window
+        .spawn(cx, async move |_| {
+            gpui::Timer::after(LINUX_STARTUP_HIDE_DELAY).await;
+            hide();
+        })
+        .detach();
 }
 
 /// Capacity for the clipboard event channel between the OS clipboard listener
@@ -336,27 +348,17 @@ pub(crate) fn launch() {
                 match X11::new() {
                     Ok(x11_new) => {
                         X11_INSTANCE.get_or_init(|| x11_new);
-                        if let Err(error) = window_handle.update(cx, |_, window, _| {
-                            // GPUI runs queued callbacks at the beginning of a
-                            // frame. Queue once to let the initial request paint,
-                            // then queue the actual hide for the following frame.
-                            window.on_next_frame(|window, _| {
-                                schedule_linux_window_hide_after_first_frame(
-                                    |hide| window.on_next_frame(move |_, _| hide()),
-                                    || {
-                                        if let Some(x11) = X11_INSTANCE.get()
-                                            && let Err(error) = x11.hide_window()
-                                        {
-                                            tracing::warn!(
-                                                error = %error,
-                                                "failed to hide Linux window after first frame"
-                                            );
-                                        }
-                                    },
-                                );
-                                window.refresh();
+                        if let Err(error) = window_handle.update(cx, |_, window, cx| {
+                            schedule_linux_window_hide_after_initial_paint(window, cx, || {
+                                if let Some(x11) = X11_INSTANCE.get()
+                                    && let Err(error) = x11.hide_window()
+                                {
+                                    tracing::warn!(
+                                        error = %error,
+                                        "failed to hide Linux window after initial paint"
+                                    );
+                                }
                             });
-                            window.refresh();
                         }) {
                             tracing::warn!(
                                 error = %error,
@@ -374,45 +376,36 @@ pub(crate) fn launch() {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::{Cell, RefCell},
-        rc::Rc,
-        thread,
-        time::Duration,
-    };
+    use std::{cell::Cell, rc::Rc, thread};
+
+    use gpui::TestAppContext;
 
     use super::*;
     use crate::repository::backend::memory::{MemoryBackend, memory_backend_factory};
 
-    #[test]
-    fn test_linux_startup_hide_runs_only_after_scheduled_frame_callback() {
+    #[gpui::test]
+    fn test_linux_startup_hide_waits_for_initial_paint_delay(cx: &mut TestAppContext) {
         let hidden = Rc::new(Cell::new(false));
         let hidden_after_frame = hidden.clone();
-        let scheduled = Rc::new(RefCell::new(None));
-        let scheduled_callback = scheduled.clone();
+        let visual_cx = cx.add_empty_window();
 
-        schedule_linux_window_hide_after_first_frame(
-            move |callback| {
-                *scheduled_callback.borrow_mut() = Some(callback);
-            },
-            move || {
+        visual_cx.update(|window, cx| {
+            schedule_linux_window_hide_after_initial_paint(window, cx, move || {
                 hidden_after_frame.set(true);
-            },
-        );
+            });
+        });
+        visual_cx.run_until_parked();
 
         assert!(
             !hidden.get(),
-            "Linux startup must not unmap the window before GPUI paints its first frame"
+            "Linux startup must not unmap the window before the paint delay elapses"
         );
-        let callback = scheduled
-            .borrow_mut()
-            .take()
-            .expect("startup hide callback should be scheduled");
-        callback();
+        thread::sleep(LINUX_STARTUP_HIDE_DELAY + Duration::from_millis(50));
+        visual_cx.run_until_parked();
 
         assert!(
             hidden.get(),
-            "Linux startup should hide the window immediately after the first frame"
+            "Linux startup should hide the window after the initial paint delay"
         );
     }
 
