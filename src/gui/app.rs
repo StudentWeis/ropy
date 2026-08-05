@@ -45,9 +45,10 @@ impl AssetSource for Assets {
 
 /// Create the main application window.
 ///
-/// The window is always created hidden — Ropy is a tray-resident clipboard
-/// manager and is only revealed by the global hotkey or the tray menu,
-/// regardless of how the process was launched.
+/// Ropy starts tray-resident and is only revealed by the global hotkey or tray
+/// menu. Linux must initially create the GPUI window as shown so its renderer
+/// submits a real first frame; the application lifecycle hides it immediately
+/// after that frame has reached X11.
 pub(crate) fn create_window(
     cx: &mut App,
     shared_records: SharedRecords,
@@ -61,7 +62,7 @@ pub(crate) fn create_window(
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
             titlebar: None,
-            show: false,
+            show: show_main_window_during_creation(cfg!(target_os = "linux")),
             app_id: Some(MAIN_WINDOW_TITLE.to_owned()),
             window_background: background_appearance_for_opacity(window_opacity_percent),
             ..Default::default()
@@ -81,6 +82,10 @@ pub(crate) fn create_window(
         tracing::error!(error = %e, "fatal: failed to create window");
         std::process::exit(1);
     })
+}
+
+const fn show_main_window_during_creation(target_is_linux: bool) -> bool {
+    target_is_linux
 }
 
 const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgroundAppearance {
@@ -137,4 +142,15 @@ pub(crate) fn set_app_theme(
     theme.list_hover = surface(rgb(palette.list_hover).into());
     theme.list_active = surface(rgb(palette.list_active).into());
     theme.scrollbar_thumb = surface(rgb(palette.scrollbar_thumb).into());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::show_main_window_during_creation;
+
+    #[test]
+    fn linux_requests_initial_frame_before_startup_hide() {
+        assert!(show_main_window_during_creation(true));
+        assert!(!show_main_window_during_creation(false));
+    }
 }
