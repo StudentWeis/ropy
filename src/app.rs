@@ -346,8 +346,8 @@ pub(crate) fn launch() {
             }
 
             #[cfg(target_os = "linux")]
-            if env::var("DISPLAY").is_ok() {
-                if let Err(error) = window_handle.update(cx, |_, window, cx| {
+            if env::var("DISPLAY").is_ok()
+                && let Err(error) = window_handle.update(cx, |_, window, cx| {
                     schedule_linux_window_hide_after_initial_paint(window, cx, || {
                         let x11 = match X11::new(MAIN_WINDOW_TITLE) {
                             Ok(x11) => X11_INSTANCE.get_or_init(|| x11),
@@ -367,12 +367,12 @@ pub(crate) fn launch() {
                             );
                         }
                     });
-                }) {
-                    tracing::warn!(
-                        error = %error,
-                        "failed to schedule Linux startup window hide"
-                    );
-                }
+                })
+            {
+                tracing::warn!(
+                    error = %error,
+                    "failed to schedule Linux startup window hide"
+                );
             }
         });
 }
