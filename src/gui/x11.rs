@@ -28,14 +28,15 @@ impl std::fmt::Debug for X11 {
 
 impl X11 {
     /// Creates a new X11 instance by connecting to the X server and finding
-    /// the current process's window.
+    /// the current process's main application window.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Cannot connect to the X server.
-    /// - Cannot find the window belonging to the current process.
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    /// - Cannot find a window with the expected application ID belonging to
+    ///   the current process.
+    pub fn new(expected_app_id: &str) -> Result<Self, Box<dyn Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
 
         let screen = &conn.setup().roots[screen_num];
@@ -48,14 +49,18 @@ impl X11 {
 
         let windows = Self::get_value32(&conn, root_id, net_client_list)?;
 
+        let process_id = std::process::id();
         let mut window_id = None;
 
         for window in windows {
             let Ok(pids) = Self::get_value32(&conn, window, net_wm_pid) else {
                 continue;
             };
+            let Ok(wm_class) = Self::get_value8(&conn, window, AtomEnum::WM_CLASS.into()) else {
+                continue;
+            };
 
-            if pids.contains(&std::process::id()) {
+            if window_identity_matches(&pids, &wm_class, process_id, expected_app_id) {
                 window_id = Some(window);
                 break;
             }
@@ -93,6 +98,17 @@ impl X11 {
             .collect();
 
         Ok(res)
+    }
+
+    fn get_value8(
+        conn: &RustConnection,
+        window: u32,
+        atom: u32,
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
+        Ok(conn
+            .get_property(false, window, atom, AtomEnum::ANY, 0, u32::MAX)?
+            .reply()?
+            .value)
     }
 
     fn send_wm_state_and_sync(
@@ -191,5 +207,45 @@ impl X11 {
         self.connection.sync()?;
 
         Ok(())
+    }
+}
+
+fn window_identity_matches(
+    pids: &[u32],
+    wm_class: &[u8],
+    expected_pid: u32,
+    expected_app_id: &str,
+) -> bool {
+    pids.contains(&expected_pid)
+        && wm_class
+            .split(|byte| *byte == 0)
+            .any(|class| class == expected_app_id.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::window_identity_matches;
+
+    #[test]
+    fn selects_main_window_when_same_process_owns_helper_windows() {
+        let process_id = 42;
+
+        assert!(!window_identity_matches(
+            &[process_id],
+            b"tray-helper\0TrayHelper\0",
+            process_id,
+            "Ropy",
+        ));
+        assert!(window_identity_matches(
+            &[process_id],
+            b"Ropy\0Ropy\0",
+            process_id,
+            "Ropy",
+        ));
+    }
+
+    #[test]
+    fn rejects_matching_window_class_from_another_process() {
+        assert!(!window_identity_matches(&[7], b"Ropy\0Ropy\0", 42, "Ropy",));
     }
 }

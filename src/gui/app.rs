@@ -62,6 +62,7 @@ pub(crate) fn create_window(
             kind: WindowKind::PopUp,
             titlebar: None,
             show: false,
+            app_id: Some(MAIN_WINDOW_TITLE.to_owned()),
             window_background: background_appearance_for_opacity(window_opacity_percent),
             ..Default::default()
         },

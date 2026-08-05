@@ -17,7 +17,7 @@ use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
 use gpui_component::Root;
 #[cfg(target_os = "linux")]
 use {
-    crate::gui::x11::X11,
+    crate::gui::{app::MAIN_WINDOW_TITLE, x11::X11},
     std::{env, sync::OnceLock},
 };
 
@@ -345,7 +345,7 @@ pub(crate) fn launch() {
 
             #[cfg(target_os = "linux")]
             if env::var("DISPLAY").is_ok() {
-                match X11::new() {
+                match X11::new(MAIN_WINDOW_TITLE) {
                     Ok(x11_new) => {
                         X11_INSTANCE.get_or_init(|| x11_new);
                         if let Err(error) = window_handle.update(cx, |_, window, cx| {
