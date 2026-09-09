@@ -1,2 +1,5 @@
 /target
 .DS_Store
+
+# Local Codex configuration can contain MCP credentials.
+/.codex/config.toml
