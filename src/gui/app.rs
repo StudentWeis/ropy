@@ -14,7 +14,7 @@ use gpui_component::{Root, ThemeMode as ComponentThemeMode, theme::Theme};
 use rust_embed::RustEmbed;
 
 use crate::{
-    clipboard::LastCopyState,
+    clipboard::CopyTracker,
     config::Settings,
     gui::{
         board::RopyBoard,
@@ -51,7 +51,7 @@ impl AssetSource for Assets {
 pub(crate) fn create_window(
     cx: &mut App,
     shared_records: SharedRecords,
-    last_copy: Arc<Mutex<LastCopyState>>,
+    last_copy: Arc<Mutex<CopyTracker>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, default_window_size(), cx);

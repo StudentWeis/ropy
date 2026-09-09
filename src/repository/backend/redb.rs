@@ -13,7 +13,7 @@ use std::{
 use redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition};
 
 use crate::repository::{
-    backend::{KvTree, StorageBackend, TreeKey},
+    backend::{KvTree, StorageBackend, TreeKey, TreeWrite},
     errors::RepositoryError,
 };
 
@@ -25,6 +25,8 @@ type RedbTableDefinition<'a> = TableDefinition<'a, &'static [u8], &'static [u8]>
 /// A [`StorageBackend`] backed by the redb embedded database.
 pub(crate) struct RedbBackend {
     db: Arc<Database>,
+    #[cfg(test)]
+    fail_write_after: std::sync::atomic::AtomicUsize,
 }
 
 impl RedbBackend {
@@ -41,7 +43,17 @@ impl RedbBackend {
             .create(db_path)
             .map_err(|error| RepositoryError::DatabaseOpen(error.to_string()))?;
 
-        Ok(Self { db: Arc::new(db) })
+        Ok(Self {
+            db: Arc::new(db),
+            #[cfg(test)]
+            fail_write_after: std::sync::atomic::AtomicUsize::new(usize::MAX),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_write_after(&self, writes: usize) {
+        self.fail_write_after
+            .store(writes, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -50,6 +62,52 @@ impl StorageBackend for RedbBackend {
 
     fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError> {
         RedbTree::open(self.db.clone(), name.to_string())
+    }
+
+    fn write_batch(&self, writes: &[TreeWrite<'_>]) -> Result<(), RepositoryError> {
+        let transaction = self
+            .db
+            .begin_write()
+            .map_err(|error| RepositoryError::Insert(error.to_string()))?;
+        #[cfg(test)]
+        let fail_after = self
+            .fail_write_after
+            .swap(usize::MAX, std::sync::atomic::Ordering::SeqCst);
+        for (index, write) in writes.iter().enumerate() {
+            #[cfg(not(test))]
+            let _ = index;
+            #[cfg(test)]
+            if index == fail_after {
+                return Err(RepositoryError::Insert(
+                    "injected transaction failure".into(),
+                ));
+            }
+            match write {
+                TreeWrite::Insert(key, value) => {
+                    let mut table = transaction
+                        .open_table(RedbTree::table_definition(key.tree))
+                        .map_err(|error| RepositoryError::Insert(error.to_string()))?;
+                    table
+                        .insert(key.key, *value)
+                        .map_err(|error| RepositoryError::Insert(error.to_string()))?;
+                }
+                TreeWrite::Remove(key) => {
+                    let mut table = transaction
+                        .open_table(RedbTree::table_definition(key.tree))
+                        .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+                    table
+                        .remove(key.key)
+                        .map_err(|error| RepositoryError::Delete(error.to_string()))?;
+                }
+            }
+        }
+        #[cfg(test)]
+        if writes.len() == fail_after {
+            return Err(RepositoryError::Insert("injected commit failure".into()));
+        }
+        transaction
+            .commit()
+            .map_err(|error| RepositoryError::Insert(error.to_string()))
     }
 
     fn remove_batch(&self, removals: &[TreeKey<'_>]) -> Result<Vec<bool>, RepositoryError> {

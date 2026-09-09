@@ -1,14 +1,17 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Clipboard repository for storing and retrieving clipboard records.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Mutex, MutexGuard},
+};
 
 use chrono::Local;
 
 use super::{
     backend::{
         BackendFactory, FAVORITES_TREE, KvTree, META_TREE, RECORDS_TREE, StorageBackend,
-        TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey,
+        TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey, TreeWrite,
         redb::{RedbBackend, redb_backend_factory},
     },
     errors::RepositoryError,
@@ -29,6 +32,8 @@ use crate::{
 const SCHEMA_VERSION: u64 = 3;
 
 pub(crate) struct ClipboardRepository<B: StorageBackend = RedbBackend> {
+    // Protect complete repository read/modify/write operations, including sidecar cleanup.
+    operation_lock: Mutex<()>,
     pub(super) backend: B,
     pub(super) records: B::Tree,
     pub(super) time_index: TimeIndex<B::Tree>,
@@ -93,18 +98,25 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             backend.flush()?;
         }
 
-        Ok(Self {
+        let repository = Self {
+            operation_lock: Mutex::new(()),
             backend,
             records,
             time_index,
             favorites,
             images_dir,
             rich_text_dir,
-        })
+        };
+        repository.repair_time_index()?;
+        Ok(repository)
     }
 
     pub(crate) fn flush(&self) -> Result<(), RepositoryError> {
         self.backend.flush()
+    }
+
+    fn repair_time_index(&self) -> Result<(), RepositoryError> {
+        self.time_index.repair(&self.records, &self.backend)
     }
 
     fn needs_schema_migration(meta: &impl KvTree) -> Result<bool, RepositoryError> {
@@ -136,6 +148,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         content: String,
         content_type: ContentType,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        let _operation = self.lock_operation();
         let id = content_hash(&content, &content_type);
         let key = id.to_be_bytes();
         let now = Local::now();
@@ -144,8 +157,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             record.created_at = now;
-            self.put_raw(&key, &record)?;
-            self.time_index.upsert(&record)?;
+            self.put_indexed_record(&key, &record)?;
             return Ok(record);
         }
 
@@ -157,8 +169,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             pinned: false,
             rich_text_meta: None,
         };
-        self.put_raw(&key, &record)?;
-        self.time_index.upsert(&record)?;
+        self.put_indexed_record(&key, &record)?;
         Ok(record)
     }
 
@@ -170,6 +181,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         file_path: String,
         image_content_hash: u64,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        let _operation = self.lock_operation();
         let id = image_content_hash;
         let key = id.to_be_bytes();
         let now = Local::now();
@@ -177,12 +189,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+            record.created_at = now;
+            self.put_indexed_record(&key, &record)?;
             if record.content != file_path {
                 remove_image_files(&file_path);
             }
-            record.created_at = now;
-            self.put_raw(&key, &record)?;
-            self.time_index.upsert(&record)?;
             return Ok(record);
         }
 
@@ -194,8 +205,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             pinned: false,
             rich_text_meta: None,
         };
-        self.put_raw(&key, &record)?;
-        self.time_index.upsert(&record)?;
+        self.put_indexed_record(&key, &record)?;
         Ok(record)
     }
 
@@ -223,6 +233,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         html: Option<&str>,
         rtf: Option<&str>,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        let _operation = self.lock_operation();
         let id = content_hash(&plain_text, &ContentType::RichText);
         let key = id.to_be_bytes();
         let now = Local::now();
@@ -232,12 +243,14 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
             record.created_at = now;
+            let previous_meta = record.rich_text_meta.clone();
             if let Some(meta) = rich_text_meta {
-                remove_superseded_rich_text_files(record.rich_text_meta.as_ref(), &meta);
                 record.rich_text_meta = Some(meta);
             }
-            self.put_raw(&key, &record)?;
-            self.time_index.upsert(&record)?;
+            self.put_indexed_record(&key, &record)?;
+            if let Some(meta) = record.rich_text_meta.as_ref() {
+                remove_superseded_rich_text_files(previous_meta.as_ref(), meta);
+            }
             return Ok(record);
         }
 
@@ -249,8 +262,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             pinned: false,
             rich_text_meta,
         };
-        self.put_raw(&key, &record)?;
-        self.time_index.upsert(&record)?;
+        self.put_indexed_record(&key, &record)?;
         Ok(record)
     }
 }
@@ -275,6 +287,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
 impl<B: StorageBackend> ClipboardRepository<B> {
     pub(crate) fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
+        let _operation = self.lock_operation();
         let mut record = self
             .get_by_id(id)?
             .ok_or_else(|| RepositoryError::Query("record not found".to_string()))?;
@@ -282,17 +295,12 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         record.pinned = !record.pinned;
 
         let key = id.to_be_bytes();
-        self.put_raw(&key, &record)?;
-        self.time_index.update_pinned(
-            record.created_at.timestamp_millis(),
-            record.id,
-            record.pinned,
-            &record.content_type,
-        )?;
+        self.put_indexed_record(&key, &record)?;
         Ok(())
     }
 
     pub(crate) fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
+        let _operation = self.lock_operation();
         let record = self.get_by_id(id)?;
         let key = id.to_be_bytes();
         let time_key = record.as_ref().map(|record| {
@@ -321,6 +329,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     /// Wipe every record and its on-disk sidecars (images + rich text).
     pub(crate) fn clear(&self) -> Result<(), RepositoryError> {
+        let _operation = self.lock_operation();
         self.backend.clear_batch(&[
             RECORDS_TREE,
             TIME_INDEX_TREE,
@@ -333,18 +342,40 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
+    pub(super) fn lock_operation(&self) -> MutexGuard<'_, ()> {
+        self.operation_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     pub(super) fn get_raw(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
         self.records.get(key)
     }
 
-    pub(super) fn put_raw(
+    /// Called while the operation lock protects the preceding record read.
+    /// The backend commits the record and both indexes in one durable transaction.
+    fn put_indexed_record(
         &self,
         key: &[u8],
         record: &ClipboardRecord,
     ) -> Result<(), RepositoryError> {
         let value = postcard::to_allocvec(record)
             .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
-        self.records.insert(key, &value)
+        let timestamp = record.created_at.timestamp_millis();
+        let time_key = TimeIndex::<B::Tree>::encode_key(timestamp, record.id);
+        let index_value = [u8::from(record.pinned), record.content_type.as_tag()];
+        let old_time_key = self.time_index.key_for_id(record.id)?;
+        let timestamp_bytes = timestamp.to_be_bytes();
+        let mut writes = Vec::with_capacity(4);
+        if let Some(old_key) = old_time_key.as_ref() {
+            writes.push(TreeWrite::Remove(TreeKey::new(TIME_INDEX_TREE, old_key)));
+        }
+        writes.extend([
+            TreeWrite::Insert(TreeKey::new(RECORDS_TREE, key), &value),
+            TreeWrite::Insert(TreeKey::new(TIME_INDEX_TREE, &time_key), &index_value),
+            TreeWrite::Insert(TreeKey::new(TIME_INDEX_LOOKUP_TREE, key), &timestamp_bytes),
+        ]);
+        self.backend.write_batch(&writes)
     }
 
     /// Load records by id, dropping (with a warn log) any that fail to

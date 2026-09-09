@@ -19,6 +19,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         &self,
         limit: usize,
     ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
+        let _operation = self.lock_operation();
         let favorite_ids = self.favorite_id_set()?;
         let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
         let mut records = self.load_records(&selected_ids);

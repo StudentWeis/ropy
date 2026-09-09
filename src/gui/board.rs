@@ -43,7 +43,7 @@ use settings_editor::{
 };
 
 use crate::{
-    clipboard::LastCopyState,
+    clipboard::CopyTracker,
     config::{ConfirmMode, LayoutMode, Settings},
     gui::{hide_window, surface_with_opacity, theme::ThemeId},
     i18n::Language,
@@ -184,14 +184,14 @@ pub(crate) struct RopyBoard {
     pub(crate) ui_state: UiState,
     pub(crate) selected_index: usize,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
-    pub(crate) last_copy: Arc<Mutex<LastCopyState>>,
+    pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
     pub(crate) settings_editor: SettingsEditor,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) layout_mode: LayoutMode,
     pub(crate) pinned: bool,
     pub(crate) activated: bool,
-    pub(crate) hotkey_tx: Option<async_channel::Sender<String>>,
+    pub(crate) hotkey_tx: Option<async_channel::Sender<crate::gui::hotkey::HotkeyUpdate>>,
     pub(crate) update_manager: UpdateManager,
     /// Which clear action is currently awaiting confirmation
     clear_confirm_action: ClearConfirmAction,
@@ -328,7 +328,10 @@ impl RopyBoard {
         }
     }
 
-    pub(crate) fn set_hotkey_tx(&mut self, tx: async_channel::Sender<String>) {
+    pub(crate) fn set_hotkey_tx(
+        &mut self,
+        tx: async_channel::Sender<crate::gui::hotkey::HotkeyUpdate>,
+    ) {
         self.hotkey_tx = Some(tx);
     }
 
@@ -340,7 +343,7 @@ impl RopyBoard {
     #[expect(clippy::too_many_lines)]
     pub(crate) fn new(
         records: SharedRecords,
-        last_copy: Arc<Mutex<LastCopyState>>,
+        last_copy: Arc<Mutex<CopyTracker>>,
         copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
         window: &mut Window,
         cx: &mut Context<'_, Self>,

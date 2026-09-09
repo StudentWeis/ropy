@@ -2,6 +2,10 @@ use std::sync::mpsc::Sender as CompletionSender;
 
 use thiserror::Error;
 
+/// Capture acknowledgements and retryable deduplication.
+pub mod capture;
+pub(crate) use capture::{ClipboardCapture, CopyTracker, delete_tracked_record};
+
 /// Clipboard event monitoring and ingestion.
 pub mod listener;
 /// Clipboard asset persistence helpers.
@@ -16,6 +20,7 @@ pub(crate) use utils::{
 };
 pub(crate) use writer::start_clipboard_writer;
 
+#[derive(Debug)]
 pub(crate) enum ClipboardEvent {
     Text(String),
     /// Image(path, `content_hash`)
@@ -141,6 +146,7 @@ impl CopyRequest {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum LastCopyState {
     Text(String),
     RichText(u64),

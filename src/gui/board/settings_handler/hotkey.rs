@@ -7,7 +7,11 @@
 use gpui::{Context, Window};
 
 use super::RopyBoard;
-use crate::{config::Settings, i18n::I18n};
+use crate::{
+    config::Settings,
+    gui::hotkey::{HotkeyUpdateError, request_hotkey_update},
+    i18n::I18n,
+};
 
 impl RopyBoard {
     pub(crate) fn hotkey_placeholder_text(
@@ -143,41 +147,66 @@ impl RopyBoard {
             return;
         }
 
-        if activation_key == current_hotkey {
-            self.settings_editor.hotkey.recording = false;
-            self.settings_editor
-                .pending_hotkey
-                .clone_from(&activation_key);
-            self.settings_editor
-                .hotkey_before_recording
-                .clone_from(&activation_key);
-            self.sync_activation_key_input("", &activation_key, window, cx);
-            cx.notify();
+        if self.settings_editor.hotkey.saving {
             return;
         }
-
-        let activation_key_to_save = activation_key.clone();
-        if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
-            settings.hotkey.activation_key = activation_key_to_save;
-        }) {
-            Self::notify_settings_save_failed(window, cx, &error_message);
-            return;
-        }
-
-        self.settings_editor.hotkey.recording = false;
-        self.settings_editor
-            .pending_hotkey
-            .clone_from(&activation_key);
-        self.settings_editor
-            .hotkey_before_recording
-            .clone_from(&activation_key);
-        self.sync_activation_key_input("", &activation_key, window, cx);
-
-        if let Some(tx) = &self.hotkey_tx {
-            let _ = tx.try_send(activation_key);
-        }
-
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        let response = self
+            .hotkey_tx
+            .as_ref()
+            .ok_or(HotkeyUpdateError::Disconnected)
+            .and_then(|tx| request_hotkey_update(tx, activation_key.clone()));
+        let response = match response {
+            Ok(response) => response,
+            Err(error) => {
+                Self::notify_hotkey_update_failed(&error, window, cx);
+                return;
+            }
+        };
+        self.settings_editor.hotkey.saving = true;
         cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = response
+                .recv()
+                .await
+                .unwrap_or(Err(HotkeyUpdateError::Disconnected));
+            let _ = this.update_in(cx, |board, window, cx| {
+                board.settings_editor.hotkey.saving = false;
+                match result {
+                    Ok(()) => {
+                        board.settings_editor.hotkey.recording = false;
+                        board
+                            .settings_editor
+                            .pending_hotkey
+                            .clone_from(&activation_key);
+                        board
+                            .settings_editor
+                            .hotkey_before_recording
+                            .clone_from(&activation_key);
+                        board.sync_activation_key_input("", &activation_key, window, cx);
+                        Self::notify_settings_success(
+                            window,
+                            cx,
+                            I18n::translate(cx, "settings_save_success"),
+                        );
+                    }
+                    Err(error) => Self::notify_hotkey_update_failed(&error, window, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn notify_hotkey_update_failed(
+        error: &HotkeyUpdateError,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        tracing::warn!(%error, "hotkey update failed");
+        Self::notify_settings_warning(
+            window,
+            cx,
+            I18n::translate(cx, "settings_hotkey_update_failed"),
+        );
     }
 }

@@ -7,4 +7,5 @@
 mod dedup_tests;
 mod display_tests;
 mod pin_tests;
+mod recovery_tests;
 mod save_tests;

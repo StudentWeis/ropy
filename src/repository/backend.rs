@@ -27,6 +27,12 @@ impl<'a> TreeKey<'a> {
     }
 }
 
+/// Ordered mutations committed together, or all discarded on failure.
+pub(crate) enum TreeWrite<'a> {
+    Insert(TreeKey<'a>, &'a [u8]),
+    Remove(TreeKey<'a>),
+}
+
 #[cfg(test)]
 pub mod memory;
 pub mod redb;
@@ -66,6 +72,8 @@ pub(crate) trait StorageBackend: Send + Sync {
     type Tree: KvTree;
 
     fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError>;
+
+    fn write_batch(&self, writes: &[TreeWrite<'_>]) -> Result<(), RepositoryError>;
 
     /// Remove keys from multiple logical trees in one atomic transaction.
     fn remove_batch(&self, removals: &[TreeKey<'_>]) -> Result<Vec<bool>, RepositoryError>;

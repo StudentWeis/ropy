@@ -8,10 +8,12 @@
 //! ## Value format (2 bytes)
 //! `pinned(u8) ++ content_type_tag(u8)`
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use super::{
-    backend::KvTree,
+    backend::{
+        KvTree, StorageBackend, TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey, TreeWrite,
+    },
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType},
 };
@@ -34,23 +36,85 @@ impl<T: KvTree> TimeIndex<T> {
         Self { entries, id_lookup }
     }
 
-    /// Insert or update the time index entry for a record.
+    pub(super) fn key_for_id(&self, id: u64) -> Result<Option<[u8; 16]>, RepositoryError> {
+        self.id_lookup
+            .get(&id.to_be_bytes())?
+            .map(|bytes| {
+                Self::decode_lookup_timestamp(&bytes)
+                    .map(|timestamp| Self::encode_key(timestamp, id))
+            })
+            .transpose()
+    }
+
+    /// Repair indexes left behind by older, independently committed tree writes.
     ///
-    /// Removes any stale entry with the same `id` before inserting
-    /// the new one (timestamp may have changed on dedup upsert).
-    pub(super) fn upsert(&self, record: &ClipboardRecord) -> Result<(), RepositoryError> {
-        self.remove_by_id(record.id)?;
-        let key = Self::encode_key(record.created_at.timestamp_millis(), record.id);
-        let val = Self::encode_value(record.pinned, &record.content_type);
-        self.entries.insert(&key, &val)?;
-        if let Err(error) = self.id_lookup.insert(
-            &record.id.to_be_bytes(),
-            &record.created_at.timestamp_millis().to_be_bytes(),
-        ) {
-            let _ = self.entries.remove(&key);
-            return Err(error);
+    /// The record store is authoritative and is never cleared by this repair.
+    pub(super) fn repair(
+        &self,
+        records: &impl KvTree,
+        backend: &impl StorageBackend,
+    ) -> Result<(), RepositoryError> {
+        let mut expected_entries = BTreeMap::new();
+        let mut expected_lookup = BTreeMap::new();
+        let mut unreadable_keys = HashSet::new();
+        records.scan_ascending(&mut |key, value| {
+            match postcard::from_bytes::<ClipboardRecord>(value) {
+                Ok(record) => {
+                    let timestamp = record.created_at.timestamp_millis();
+                    expected_entries.insert(
+                        Self::encode_key(timestamp, record.id).to_vec(),
+                        Self::encode_value(record.pinned, &record.content_type).to_vec(),
+                    );
+                    expected_lookup.insert(key.to_vec(), timestamp.to_be_bytes().to_vec());
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "preserving unreadable record during index repair");
+                    unreadable_keys.insert(key.to_vec());
+                }
+            }
+            true
+        })?;
+        let entries = Self::snapshot(&self.entries)?;
+        let lookup = Self::snapshot(&self.id_lookup)?;
+        // Keep opaque records and their existing indexes intact. One unreadable
+        // payload must not make the rest of the history unavailable at startup.
+        for (key, value) in &entries {
+            if key.get(8..).is_some_and(|id| unreadable_keys.contains(id)) {
+                expected_entries.insert(key.clone(), value.clone());
+            }
+        }
+        for (key, value) in &lookup {
+            if unreadable_keys.contains(key) {
+                expected_lookup.insert(key.clone(), value.clone());
+            }
+        }
+        let mut writes = Vec::new();
+        for (tree, actual, expected) in [
+            (TIME_INDEX_TREE, &entries, &expected_entries),
+            (TIME_INDEX_LOOKUP_TREE, &lookup, &expected_lookup),
+        ] {
+            for key in actual.keys().filter(|key| !expected.contains_key(*key)) {
+                writes.push(TreeWrite::Remove(TreeKey::new(tree, key)));
+            }
+            for (key, value) in expected {
+                if actual.get(key) != Some(value) {
+                    writes.push(TreeWrite::Insert(TreeKey::new(tree, key), value));
+                }
+            }
+        }
+        if !writes.is_empty() {
+            backend.write_batch(&writes)?;
         }
         Ok(())
+    }
+
+    fn snapshot(tree: &T) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, RepositoryError> {
+        let mut values = BTreeMap::new();
+        tree.scan_ascending(&mut |key, value| {
+            values.insert(key.to_vec(), value.to_vec());
+            true
+        })?;
+        Ok(values)
     }
 
     /// Remove the entry that matches the given `(timestamp_millis, id)` pair.
@@ -60,19 +124,6 @@ impl<T: KvTree> TimeIndex<T> {
         self.entries.remove(&key)?;
         self.id_lookup.remove(&id.to_be_bytes())?;
         Ok(())
-    }
-
-    /// Update the pinned flag for an existing entry (key stays the same).
-    pub(super) fn update_pinned(
-        &self,
-        timestamp_millis: i64,
-        id: u64,
-        pinned: bool,
-        content_type: &ContentType,
-    ) -> Result<(), RepositoryError> {
-        let key = Self::encode_key(timestamp_millis, id);
-        let val = Self::encode_value(pinned, content_type);
-        self.entries.insert(&key, &val)
     }
 
     /// Clear all entries.
@@ -165,19 +216,6 @@ impl<T: KvTree> TimeIndex<T> {
         Ok(result)
     }
 
-    /// Remove entry associated with the given `id`.
-    fn remove_by_id(&self, id: u64) -> Result<(), RepositoryError> {
-        let id_key = id.to_be_bytes();
-        let Some(timestamp_bytes) = self.id_lookup.get(&id_key)? else {
-            return Ok(());
-        };
-        let timestamp = Self::decode_lookup_timestamp(&timestamp_bytes)?;
-        let key = Self::encode_key(timestamp, id);
-        self.entries.remove(&key)?;
-        self.id_lookup.remove(&id_key)?;
-        Ok(())
-    }
-
     // ── Encoding helpers ──────────────────────────────────────────
 
     pub(crate) fn encode_key(timestamp_millis: i64, id: u64) -> [u8; 16] {
@@ -245,7 +283,7 @@ mod tests {
 
     use super::*;
     use crate::repository::backend::{
-        BackendFactory, StorageBackend,
+        BackendFactory,
         memory::{MemoryTreeHandle, memory_backend_factory},
         redb::redb_backend_factory,
     };
@@ -360,69 +398,6 @@ mod tests {
 
     // ── CRUD Tests ────────────────────────────────────────────────
 
-    fn assert_upsert_new_record_with<B: StorageBackend>(factory: BackendFactory<B>) {
-        let (_temp_dir, index) = create_test_time_index_with(factory);
-        let record = ClipboardRecord {
-            id: 1,
-            content: "test".to_string(),
-            created_at: chrono::Local::now(),
-            content_type: ContentType::Text,
-            pinned: false,
-            rich_text_meta: None,
-        };
-
-        index
-            .upsert(&record)
-            .unwrap_or_else(|error| panic!("Failed to upsert: {error}"));
-
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids, vec![1]);
-    }
-
-    #[test]
-    fn test_upsert_new_record_redb() {
-        assert_upsert_new_record_with(redb_backend_factory);
-    }
-
-    #[test]
-    fn test_upsert_new_record_memory() {
-        assert_upsert_new_record_with(memory_backend_factory);
-    }
-
-    #[test]
-    fn test_upsert_updates_timestamp() {
-        let index = create_test_time_index();
-        let now = chrono::Local::now();
-        let later = now + chrono::Duration::milliseconds(100);
-
-        // Insert initial record
-        let record1 = ClipboardRecord {
-            id: 1,
-            content: "test".to_string(),
-            created_at: now,
-            content_type: ContentType::Text,
-            pinned: false,
-            rich_text_meta: None,
-        };
-        index.upsert(&record1).expect("Failed to upsert first");
-
-        // Upsert same id with later timestamp
-        let record2 = ClipboardRecord {
-            id: 1,
-            content: "test".to_string(),
-            created_at: later,
-            content_type: ContentType::Text,
-            pinned: false,
-            rich_text_meta: None,
-        };
-        index.upsert(&record2).expect("Failed to upsert second");
-
-        // Should only have one entry
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids.len(), 1);
-        assert_eq!(ids[0], 1);
-    }
-
     #[test]
     fn test_remove() {
         let index = create_test_time_index();
@@ -447,28 +422,6 @@ mod tests {
         index
             .remove(12345, 99999)
             .expect("Should not fail on non-existent");
-    }
-
-    #[test]
-    fn test_update_pinned() {
-        let index = create_test_time_index();
-        let timestamp = chrono::Local::now().timestamp_millis();
-
-        index.insert_raw(timestamp, 1, false, &ContentType::Text);
-
-        // Verify initially unpinned
-        let ids = select_display_ids_without_favorites(&index, 10);
-        // Unpinned records are not returned first, so this verifies it's unpinned
-        assert_eq!(ids, vec![1]);
-
-        // Update to pinned
-        index
-            .update_pinned(timestamp, 1, true, &ContentType::Text)
-            .expect("Failed to update pinned");
-
-        // Verify now pinned (should appear in results even with limit 0)
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids, vec![1]);
     }
 
     #[test]
@@ -690,53 +643,6 @@ mod tests {
         assert_eq!(&key[8..], &id.to_be_bytes());
     }
 
-    // ── remove_by_id Tests ────────────────────────────────────────
-
-    #[test]
-    fn test_remove_by_id() {
-        let index = create_test_time_index();
-
-        index.insert_raw(1000, 1, false, &ContentType::Text);
-        index.insert_raw(2000, 2, false, &ContentType::Text);
-
-        // Use internal method to remove by id
-        index.remove_by_id(1).expect("Failed to remove by id");
-
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids, vec![2]);
-    }
-
-    #[test]
-    fn test_remove_by_id_nonexistent() {
-        let index = create_test_time_index();
-
-        index.insert_raw(1000, 1, false, &ContentType::Text);
-
-        // Should not error
-        index
-            .remove_by_id(999)
-            .expect("Should not fail on non-existent");
-
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids, vec![1]);
-    }
-
-    #[test]
-    fn test_remove_by_id_multiple_same_id() {
-        // This shouldn't happen in practice, but test the behavior
-        let index = create_test_time_index();
-
-        // Insert two entries with same id but different timestamps
-        index.insert_raw(1000, 1, false, &ContentType::Text);
-        index.insert_raw(2000, 1, false, &ContentType::Text);
-
-        // remove_by_id should only remove one (the first found in reverse iteration)
-        index.remove_by_id(1).expect("Failed to remove by id");
-
-        let ids = select_display_ids_without_favorites(&index, 10);
-        assert_eq!(ids.len(), 1);
-    }
-
     // ── Edge Cases and Error Handling ─────────────────────────────
 
     #[test]
@@ -751,36 +657,6 @@ mod tests {
         // Implementation doesn't validate value length, so this returns Some
         assert!(entry.is_some());
         assert!(entry.expect("Should have entry").is_pinned);
-    }
-
-    #[test]
-    fn test_concurrent_upserts() {
-        let index = create_test_time_index();
-        let index = std::sync::Arc::new(index);
-        let mut handles = vec![];
-
-        for i in 0..10 {
-            let idx = index.clone();
-            let handle = std::thread::spawn(move || {
-                let record = ClipboardRecord {
-                    id: i as u64,
-                    content: format!("thread {i}"),
-                    created_at: chrono::Local::now(),
-                    content_type: ContentType::Text,
-                    pinned: false,
-                    rich_text_meta: None,
-                };
-                idx.upsert(&record).expect("Failed to upsert");
-            });
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.join().expect("Thread panicked");
-        }
-
-        let ids = select_display_ids_without_favorites(&index, 20);
-        assert_eq!(ids.len(), 10);
     }
 
     #[test]
