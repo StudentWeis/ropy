@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::repository::{
-    backend::{KvTree, StorageBackend, TreeKey},
+    backend::{KvTree, StorageBackend, TreeKey, TreeWrite},
     errors::RepositoryError,
 };
 
@@ -72,6 +72,32 @@ impl StorageBackend for MemoryBackend {
             results.push(removed);
         }
         Ok(results)
+    }
+
+    fn write_batch(&self, writes: &[TreeWrite<'_>]) -> Result<(), RepositoryError> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        if self.fail_next_batch.swap(false, Ordering::SeqCst) {
+            return Err(RepositoryError::Insert(
+                "injected transaction failure".into(),
+            ));
+        }
+        let mut trees = recover_lock(self.trees.lock());
+        for write in writes {
+            let key = match write {
+                TreeWrite::Insert(key, _) | TreeWrite::Remove(key) => key,
+            };
+            let tree = trees.entry(key.tree.to_string()).or_default();
+            let mut entries = recover_lock(tree.entries.write());
+            match write {
+                TreeWrite::Insert(_, value) => {
+                    entries.insert(key.key.to_vec(), value.to_vec());
+                }
+                TreeWrite::Remove(_) => {
+                    entries.remove(key.key);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn clear_batch(&self, tree_names: &[&'static str]) -> Result<(), RepositoryError> {

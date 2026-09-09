@@ -30,6 +30,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// record no longer exists, so the favorites tree can't accumulate
     /// dangling pointers.
     pub(crate) fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
+        let _operation = self.lock_operation();
         if self.get_by_id(id)?.is_none() {
             return Err(RepositoryError::Query("record not found".to_string()));
         }

@@ -23,6 +23,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// "Clear history" without losing user-curated records: pinned and
     /// favorited entries survive.
     pub(crate) fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
+        let _operation = self.lock_operation();
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
@@ -33,6 +34,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Trim ordinary records down to the most recent `keep_count`. Pinned
     /// entries are skipped so users can't lose deliberately-kept records.
     pub(crate) fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
+        let _operation = self.lock_operation();
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
@@ -52,6 +54,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         &self,
         keep_count: usize,
     ) -> Result<usize, RepositoryError> {
+        let _operation = self.lock_operation();
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
@@ -95,6 +98,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             let record = self
                 .get_raw(&rec_key)?
                 .and_then(|value| postcard::from_bytes::<ClipboardRecord>(&value).ok());
+            // Check the current record as well as the index before deleting.
+            if record.as_ref().is_some_and(|record| record.pinned) {
+                continue;
+            }
             self.backend.remove_batch(&[
                 TreeKey::new(RECORDS_TREE, &rec_key),
                 TreeKey::new(TIME_INDEX_TREE, &ti_key),

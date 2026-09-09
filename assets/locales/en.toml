@@ -112,3 +112,5 @@ help_cycle_filter = "Cycle category filter"
 help_toggle_favorites_filter = "Toggle favorites filter"
 help_hide = "Hide window"
 help_pin = "Toggle window pin"
+
+settings_hotkey_update_failed = "Could not update the hotkey. The previous setting was kept. Please try again."

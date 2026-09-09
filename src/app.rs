@@ -20,7 +20,7 @@ use {
 };
 
 use crate::{
-    clipboard::{self, ClipboardEvent, LastCopyState},
+    clipboard::{self, ClipboardCapture, CopyTracker},
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
     gui::board::{
@@ -60,7 +60,7 @@ const UI_NOTIFY_CHANNEL_CAPACITY: usize = 256;
 /// repository read + UI refresh. This avoids redundant full-list refreshes
 /// when many records arrive in rapid succession.
 fn start_clipboard_event_handler(
-    clipboard_rx: async_channel::Receiver<ClipboardEvent>,
+    clipboard_rx: async_channel::Receiver<ClipboardCapture>,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
@@ -74,16 +74,7 @@ fn start_clipboard_event_handler(
         while let Ok(event) = clipboard_rx.recv().await
             && let Some(ref repo) = bg_repository
         {
-            let result = match event {
-                ClipboardEvent::Text(text) => repo.save_text(text),
-                ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
-                ClipboardEvent::Files(paths) => repo.save_files(&paths),
-                ClipboardEvent::RichText {
-                    plain_text,
-                    html,
-                    rtf,
-                } => repo.save_rich_text(plain_text, html.as_deref(), rtf.as_deref()),
-            };
+            let result = event.persist(repo);
 
             match result {
                 Ok(_record) => {
@@ -184,10 +175,10 @@ fn sync_autostart_on_launch(autostart_enabled: bool) {
 
 fn start_clipboard_monitor(
     cx: &App,
-    last_copy: Arc<Mutex<LastCopyState>>,
-) -> async_channel::Receiver<ClipboardEvent> {
+    last_copy: Arc<Mutex<CopyTracker>>,
+) -> async_channel::Receiver<ClipboardCapture> {
     let (clipboard_tx, clipboard_rx) =
-        async_channel::bounded::<ClipboardEvent>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
+        async_channel::bounded::<ClipboardCapture>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
     clipboard::start_clipboard_monitor(clipboard_tx, cx, last_copy);
     clipboard_rx
 }
@@ -208,7 +199,7 @@ fn setup_hotkey_listener(
     window_handle: WindowHandle<Root>,
     hotkey_str: String,
     cx: &App,
-) -> async_channel::Sender<String> {
+) -> async_channel::Sender<crate::gui::hotkey::HotkeyUpdate> {
     crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app| {
         async_app
             .update(|cx| {
@@ -282,7 +273,7 @@ pub(crate) fn launch() {
             cx.set_global(GlobalRepository::new(repository));
 
             let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
-            let last_copy = Arc::new(Mutex::new(LastCopyState::Text(String::new())));
+            let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
             let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(cx);
 
@@ -337,7 +328,10 @@ mod tests {
     use std::{thread, time::Duration};
 
     use super::*;
-    use crate::repository::backend::memory::{MemoryBackend, memory_backend_factory};
+    use crate::{
+        clipboard::ClipboardEvent,
+        repository::backend::memory::{MemoryBackend, memory_backend_factory},
+    };
 
     fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository<MemoryBackend>) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");

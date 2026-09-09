@@ -13,8 +13,14 @@ use clipboard_rs::{
 use gpui::{App, AppContext as _};
 use image::DynamicImage;
 
-use super::{ClipboardEvent, LastCopyState};
-use crate::utils::{hash_file_paths, lock_or_recover, normalize_file_paths};
+use super::{
+    ClipboardCapture, ClipboardEvent, CopyTracker, LastCopyState, capture::CopyAttempt,
+    utils::ImageSaveError,
+};
+use crate::{
+    repository::ContentType,
+    utils::{content_hash, hash_file_paths, normalize_file_paths, serialize_file_paths},
+};
 
 /// Capacity for the image processing channel between the OS clipboard
 /// callback and the image-encoding background task. Images are large
@@ -30,11 +36,11 @@ const IMAGE_PROCESSING_CHANNEL_CAPACITY: usize = 1;
 /// On a full channel, the oldest queued image is drained via `image_drain` and
 /// the new payload is then enqueued. Returns `Ok(())` if the new payload is
 /// eventually enqueued, `Err(_)` only if the channel is closed.
-fn try_send_image_overwrite(
-    image_tx: &Sender<(DynamicImage, u64)>,
-    image_drain: &Receiver<(DynamicImage, u64)>,
-    payload: (DynamicImage, u64),
-) -> Result<(), async_channel::TrySendError<(DynamicImage, u64)>> {
+fn try_send_image_overwrite<T>(
+    image_tx: &Sender<T>,
+    image_drain: &Receiver<T>,
+    payload: T,
+) -> Result<(), async_channel::TrySendError<T>> {
     match image_tx.try_send(payload) {
         Ok(()) => Ok(()),
         Err(async_channel::TrySendError::Full(payload)) => {
@@ -49,24 +55,24 @@ fn try_send_image_overwrite(
 
 /// Clipboard monitor that sends clipboard text changes through a channel.
 struct ClipboardMonitor {
-    tx: Sender<ClipboardEvent>,
-    image_tx: Sender<(DynamicImage, u64)>,
+    tx: Sender<ClipboardCapture>,
+    image_tx: Sender<ImageCapture>,
     /// Producer-side handle on the image channel used solely to drop the
     /// oldest queued image when the single-slot channel is full
     /// (newest-wins overwrite policy). Cloned from the same channel as
     /// `image_tx`, so this neither prevents the consumer task from receiving
     /// nor counts as an additional consumer of meaningful events.
-    image_drain: Receiver<(DynamicImage, u64)>,
+    image_drain: Receiver<ImageCapture>,
     ctx: ClipboardContext,
-    last_copy: Arc<Mutex<LastCopyState>>,
+    last_copy: Arc<Mutex<CopyTracker>>,
 }
 
 impl ClipboardMonitor {
     fn new(
-        tx: Sender<ClipboardEvent>,
-        image_tx: Sender<(DynamicImage, u64)>,
-        image_drain: Receiver<(DynamicImage, u64)>,
-        last_copy: Arc<Mutex<LastCopyState>>,
+        tx: Sender<ClipboardCapture>,
+        image_tx: Sender<ImageCapture>,
+        image_drain: Receiver<ImageCapture>,
+        last_copy: Arc<Mutex<CopyTracker>>,
     ) -> Option<Self> {
         let ctx = match ClipboardContext::new() {
             Ok(ctx) => ctx,
@@ -83,14 +89,6 @@ impl ClipboardMonitor {
             last_copy,
         })
     }
-}
-
-const fn should_forward_image(last_copy: &LastCopyState, hash: u64) -> bool {
-    !matches!(last_copy, LastCopyState::Image(last_hash) if *last_hash == hash)
-}
-
-fn should_forward_text(last_copy: &LastCopyState, text: &str) -> bool {
-    !matches!(last_copy, LastCopyState::Text(last_text) if last_text == text)
 }
 
 fn write_optional_content(hasher: &mut seahash::SeaHasher, content: Option<&str>) {
@@ -113,16 +111,6 @@ fn rich_text_content_hash(plain_text: &str, html: Option<&str>, rtf: Option<&str
     hasher.finish()
 }
 
-fn should_forward_rich_text(
-    last_copy: &LastCopyState,
-    plain_text: &str,
-    html: Option<&str>,
-    rtf: Option<&str>,
-) -> bool {
-    let hash = rich_text_content_hash(plain_text, html, rtf);
-    !matches!(last_copy, LastCopyState::RichText(last_hash) if *last_hash == hash)
-}
-
 fn image_content_hash(image: &DynamicImage) -> u64 {
     let mut hasher = seahash::SeaHasher::new();
     hasher.write_u32(image.width());
@@ -133,10 +121,6 @@ fn image_content_hash(image: &DynamicImage) -> u64 {
     hasher.write_u8(u8::from(color.has_color()));
     hasher.write(image.as_bytes());
     hasher.finish()
-}
-
-const fn should_forward_files(last_copy: &LastCopyState, hash: u64) -> bool {
-    !matches!(last_copy, LastCopyState::Files(last_hash) if *last_hash == hash)
 }
 
 enum ClipboardPayload {
@@ -207,116 +191,118 @@ fn detect_clipboard_payload(ctx: &ClipboardContext) -> Option<ClipboardPayload> 
 }
 
 impl ClipboardHandler for ClipboardMonitor {
-    // Don't send duplicate clipboard contents.
-    //
-    // Important: `LastCopyState` is advanced only after a successful enqueue.
-    // Updating it after a dropped/Full event would let the dedup gate filter
-    // out the next legitimate retry of the same content once the channel
-    // drains, turning "drop one event" into "permanently miss this content".
     fn on_clipboard_change(&mut self) {
-        // Hold the mutex only across the dedup-check + dispatch + state
-        // advance, then release it. Keeping the guard in a tight scope
-        // satisfies clippy's `significant_drop_tightening` and avoids
-        // serializing unrelated readers on heavy clipboard activity.
-        let mut last_copy_guard = lock_or_recover(&self.last_copy);
-        if let Some(new_state) = self.dispatch_payload(&last_copy_guard) {
-            *last_copy_guard = new_state;
+        if let Some(payload) = detect_clipboard_payload(&self.ctx) {
+            dispatch_payload(
+                payload,
+                &self.tx,
+                &self.image_tx,
+                &self.image_drain,
+                &self.last_copy,
+            );
         }
     }
 }
 
-impl ClipboardMonitor {
-    /// Detect the current clipboard payload and forward it through the
-    /// appropriate channel.
-    ///
-    /// Returns `Some(new_state)` only when the event was successfully enqueued,
-    /// so the caller advances `LastCopyState` in lockstep with the channel —
-    /// dropped/Full events never poison the dedup gate.
-    fn dispatch_payload(&self, last_copy: &LastCopyState) -> Option<LastCopyState> {
-        match detect_clipboard_payload(&self.ctx)? {
-            ClipboardPayload::Files(files) => {
-                let hash = hash_file_paths(&files);
-                if !should_forward_files(last_copy, hash) {
-                    return None;
-                }
-                // try_send: never block the OS clipboard callback thread.
-                // If the channel is full, drop the event and warn — losing
-                // a single event is preferable to stalling clipboard
-                // notifications system-wide. Dedup state is left untouched
-                // so the next copy of the same files can still get through.
-                match self.tx.try_send(ClipboardEvent::Files(files)) {
-                    Ok(()) => Some(LastCopyState::Files(hash)),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dropping files clipboard event (channel full or closed)");
-                        None
-                    }
-                }
+#[derive(Debug)]
+struct ImageCapture {
+    image: DynamicImage,
+    hash: u64,
+    attempt: CopyAttempt,
+}
+
+impl ImageCapture {
+    fn encode(
+        self,
+        save: impl FnOnce(&DynamicImage, u64) -> Result<String, ImageSaveError>,
+    ) -> Result<ClipboardCapture, ImageSaveError> {
+        let path = save(&self.image, self.hash)?;
+        Ok(ClipboardCapture {
+            event: ClipboardEvent::Image(path, self.hash),
+            attempt: self.attempt,
+        })
+    }
+}
+
+fn dispatch_payload(
+    payload: ClipboardPayload,
+    tx: &Sender<ClipboardCapture>,
+    image_tx: &Sender<ImageCapture>,
+    image_drain: &Receiver<ImageCapture>,
+    last_copy: &Arc<Mutex<CopyTracker>>,
+) {
+    let (event, identity, record_id) = match payload {
+        ClipboardPayload::Image(image) => {
+            let hash = image_content_hash(&image);
+            if let Some(attempt) = CopyTracker::begin(last_copy, LastCopyState::Image(hash), hash)
+                && let Err(error) = try_send_image_overwrite(
+                    image_tx,
+                    image_drain,
+                    ImageCapture {
+                        image,
+                        hash,
+                        attempt,
+                    },
+                )
+            {
+                tracing::warn!(%error, "dropping image capture (processing channel unavailable)");
             }
-            ClipboardPayload::Image(dyn_img) => {
-                let hash = image_content_hash(&dyn_img);
-                if !should_forward_image(last_copy, hash) {
-                    return None;
-                }
-                // Newest-wins overwrite: on a full single-slot channel,
-                // drop the oldest queued image to make room for this one.
-                match try_send_image_overwrite(&self.image_tx, &self.image_drain, (dyn_img, hash)) {
-                    Ok(()) => Some(LastCopyState::Image(hash)),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dropping image clipboard event (processing channel closed)");
-                        None
-                    }
-                }
+            return;
+        }
+        ClipboardPayload::Text(text) => {
+            let id = content_hash(&text, &ContentType::Text);
+            let identity = LastCopyState::Text(text.clone());
+            (ClipboardEvent::Text(text), identity, id)
+        }
+        ClipboardPayload::Files(files) => {
+            let files = normalize_file_paths(&files);
+            if files.is_empty() {
+                return;
             }
-            ClipboardPayload::RichText {
-                plain_text,
-                html,
-                rtf,
-            } => {
-                if !should_forward_rich_text(
-                    last_copy,
-                    &plain_text,
-                    html.as_deref(),
-                    rtf.as_deref(),
-                ) {
-                    return None;
-                }
-                let hash = rich_text_content_hash(&plain_text, html.as_deref(), rtf.as_deref());
-                match self.tx.try_send(ClipboardEvent::RichText {
+            let Ok(content) = serialize_file_paths(&files) else {
+                return;
+            };
+            let id = content_hash(&content, &ContentType::FilePath);
+            let identity = LastCopyState::Files(hash_file_paths(&files));
+            (ClipboardEvent::Files(files), identity, id)
+        }
+        ClipboardPayload::RichText {
+            plain_text,
+            html,
+            rtf,
+        } => {
+            let id = content_hash(&plain_text, &ContentType::RichText);
+            let identity = LastCopyState::RichText(rich_text_content_hash(
+                &plain_text,
+                html.as_deref(),
+                rtf.as_deref(),
+            ));
+            (
+                ClipboardEvent::RichText {
                     plain_text,
                     html,
                     rtf,
-                }) {
-                    Ok(()) => Some(LastCopyState::RichText(hash)),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dropping rich text clipboard event (channel full or closed)");
-                        None
-                    }
-                }
-            }
-            ClipboardPayload::Text(text) => {
-                if !should_forward_text(last_copy, &text) {
-                    return None;
-                }
-                match self.tx.try_send(ClipboardEvent::Text(text.clone())) {
-                    Ok(()) => Some(LastCopyState::Text(text)),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "dropping text clipboard event (channel full or closed)");
-                        None
-                    }
-                }
-            }
+                },
+                identity,
+                id,
+            )
         }
+    };
+    if let Some(attempt) = CopyTracker::begin(last_copy, identity, record_id)
+        && let Err(error) = tx.try_send(ClipboardCapture { event, attempt })
+    {
+        tracing::warn!(%error, "dropping clipboard capture (channel full or closed)");
     }
 }
 
 /// Spawn a clipboard listener thread that watches for clipboard changes.
 pub(crate) fn start_clipboard_monitor(
-    tx: Sender<ClipboardEvent>,
+    tx: Sender<ClipboardCapture>,
     cx: &App,
-    last_copy: Arc<Mutex<LastCopyState>>,
+    last_copy: Arc<Mutex<CopyTracker>>,
 ) {
     let (image_tx, image_rx) =
-        async_channel::bounded::<(DynamicImage, u64)>(IMAGE_PROCESSING_CHANNEL_CAPACITY);
+        async_channel::bounded::<ImageCapture>(IMAGE_PROCESSING_CHANNEL_CAPACITY);
     // Producer keeps a clone of the receiver as a drain handle so the OS
     // callback thread can evict the oldest queued image when the single-slot
     // channel is full. The encoder task also holds `image_rx` and is the
@@ -327,14 +313,14 @@ pub(crate) fn start_clipboard_monitor(
     };
 
     cx.background_spawn(async move {
-        while let Ok((image, hash)) = image_rx.recv().await {
-            if let Some(path) = super::save_image(&image, hash) {
-                // This task is async, so awaiting send() here is safe and
-                // applies natural backpressure to image processing without
-                // blocking the OS clipboard callback thread.
-                if let Err(e) = tx.send(ClipboardEvent::Image(path, hash)).await {
-                    tracing::warn!(error = %e, "failed to send image event to clipboard channel");
+        while let Ok(image) = image_rx.recv().await {
+            match image.encode(super::save_image) {
+                Ok(capture) => {
+                    if let Err(error) = tx.send(capture).await {
+                        tracing::warn!(%error, "failed to send image capture");
+                    }
                 }
+                Err(error) => tracing::warn!(%error, "failed to encode clipboard image"),
             }
         }
     })
@@ -360,6 +346,273 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[test]
+    fn test_dispatch_payload_failed_capture_allows_identical_retry() {
+        let (tx, rx) = async_channel::bounded(1);
+        let (image_tx, image_rx) = async_channel::bounded(1);
+        let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
+        dispatch_payload(
+            ClipboardPayload::Text("retry".into()),
+            &tx,
+            &image_tx,
+            &image_rx,
+            &last_copy,
+        );
+        // The persistence consumer failed and discarded this event.
+        drop(rx.try_recv().expect("first capture"));
+        dispatch_payload(
+            ClipboardPayload::Text("retry".into()),
+            &tx,
+            &image_tx,
+            &image_rx,
+            &last_copy,
+        );
+        assert!(rx.try_recv().is_ok());
+    }
+
+    struct CaptureFixture {
+        dir: tempfile::TempDir,
+        backend: crate::repository::backend::memory::MemoryBackend,
+        repo: crate::repository::ClipboardRepository<
+            crate::repository::backend::memory::MemoryBackend,
+        >,
+        tracker: Arc<Mutex<CopyTracker>>,
+        tx: Sender<ClipboardCapture>,
+        rx: Receiver<ClipboardCapture>,
+        image_tx: Sender<ImageCapture>,
+        image_rx: Receiver<ImageCapture>,
+    }
+
+    impl CaptureFixture {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("fixture directory");
+            let backend = crate::repository::backend::memory::MemoryBackend::new();
+            let repo = crate::repository::ClipboardRepository::from_backend(
+                backend.clone(),
+                dir.path().join("images"),
+            )
+            .expect("fixture repository");
+            let (tx, rx) = async_channel::bounded(1);
+            let (image_tx, image_rx) = async_channel::bounded(1);
+            Self {
+                dir,
+                backend,
+                repo,
+                tracker: Arc::default(),
+                tx,
+                rx,
+                image_tx,
+                image_rx,
+            }
+        }
+
+        fn dispatch(&self, payload: ClipboardPayload) {
+            dispatch_payload(
+                payload,
+                &self.tx,
+                &self.image_tx,
+                &self.image_rx,
+                &self.tracker,
+            );
+        }
+
+        fn text(&self, text: &str) {
+            self.dispatch(ClipboardPayload::Text(text.into()));
+        }
+    }
+
+    fn fixture_payload(kind: ClipboardPayloadKind) -> ClipboardPayload {
+        match kind {
+            ClipboardPayloadKind::Text => ClipboardPayload::Text("retry".into()),
+            ClipboardPayloadKind::Files => ClipboardPayload::Files(vec!["/fixture/a".into()]),
+            ClipboardPayloadKind::RichText => ClipboardPayload::RichText {
+                plain_text: "retry".into(),
+                html: Some("<b>retry</b>".into()),
+                rtf: None,
+            },
+            ClipboardPayloadKind::Image => ClipboardPayload::Image(make_test_image(1)),
+        }
+    }
+
+    #[rstest]
+    #[case(ClipboardPayloadKind::Text)]
+    #[case(ClipboardPayloadKind::Files)]
+    #[case(ClipboardPayloadKind::RichText)]
+    fn test_dispatch_committed_then_deleted_same_content_is_recaptured(
+        #[case] kind: ClipboardPayloadKind,
+    ) {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(fixture_payload(kind));
+        let record = fixture
+            .rx
+            .try_recv()
+            .expect("capture")
+            .persist(&fixture.repo)
+            .expect("persist");
+        fixture.dispatch(fixture_payload(kind));
+        assert!(fixture.rx.is_empty(), "committed duplicates are suppressed");
+        super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
+            .expect("delete");
+        fixture.dispatch(fixture_payload(kind));
+        fixture
+            .rx
+            .try_recv()
+            .expect("recaptured")
+            .persist(&fixture.repo)
+            .expect("persist retry");
+        assert_eq!(fixture.repo.count(), 1);
+    }
+
+    #[test]
+    fn test_dispatch_database_failure_same_content_is_retryable() {
+        let fixture = CaptureFixture::new();
+        fixture.text("retry");
+        fixture.backend.fail_next_batch();
+        assert!(
+            fixture
+                .rx
+                .try_recv()
+                .expect("capture")
+                .persist(&fixture.repo)
+                .is_err()
+        );
+        fixture.text("retry");
+        fixture
+            .rx
+            .try_recv()
+            .expect("retry")
+            .persist(&fixture.repo)
+            .expect("persist retry");
+        assert_eq!(fixture.repo.count(), 1);
+    }
+
+    #[test]
+    fn test_dispatch_failed_or_unrelated_deletion_retains_dedup() {
+        let fixture = CaptureFixture::new();
+        let other = fixture
+            .repo
+            .save_text("other".into())
+            .expect("other record");
+        fixture.text("retry");
+        let record = fixture
+            .rx
+            .try_recv()
+            .expect("capture")
+            .persist(&fixture.repo)
+            .expect("persist");
+        super::super::delete_tracked_record(&fixture.repo, other.id, &fixture.tracker)
+            .expect("unrelated deletion");
+        fixture.backend.fail_next_batch();
+        assert!(
+            super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
+                .is_err()
+        );
+        fixture.text("retry");
+        assert!(fixture.rx.is_empty());
+    }
+
+    #[test]
+    fn test_dispatch_late_failure_does_not_invalidate_new_generation_of_same_content() {
+        let fixture = CaptureFixture::new();
+        fixture.text("a");
+        let old_a = fixture.rx.try_recv().expect("old a");
+        fixture.text("b");
+        let b = fixture.rx.try_recv().expect("b");
+        fixture.text("a");
+        fixture
+            .rx
+            .try_recv()
+            .expect("new a")
+            .persist(&fixture.repo)
+            .expect("commit new a");
+        drop(old_a);
+        drop(b);
+        fixture.text("a");
+        assert!(fixture.rx.is_empty());
+    }
+
+    #[rstest]
+    #[case(ClipboardPayloadKind::Text)]
+    #[case(ClipboardPayloadKind::Files)]
+    #[case(ClipboardPayloadKind::RichText)]
+    fn test_dispatch_full_channel_allows_retry_after_drain(#[case] kind: ClipboardPayloadKind) {
+        let fixture = CaptureFixture::new();
+        fixture.text("filler");
+        fixture.dispatch(fixture_payload(kind));
+        drop(fixture.rx.try_recv().expect("drain filler"));
+        fixture.dispatch(fixture_payload(kind));
+        assert!(fixture.rx.try_recv().is_ok());
+    }
+
+    #[test]
+    fn test_dispatch_image_encoding_failure_then_delete_allows_retry() {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        let capture = fixture.image_rx.try_recv().expect("image capture");
+        assert!(
+            capture
+                .encode(|_, _| Err(std::io::Error::other("injected encoder failure").into()))
+                .is_err()
+        );
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        let capture = fixture.image_rx.try_recv().expect("image retry");
+        let path = fixture.dir.path().join("image.png");
+        let record = capture
+            .encode(|image, _| {
+                image.save_with_format(&path, image::ImageFormat::Png)?;
+                Ok(path.to_string_lossy().into_owned())
+            })
+            .expect("encode")
+            .persist(&fixture.repo)
+            .expect("persist image");
+        super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
+            .expect("delete image");
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        assert!(fixture.image_rx.try_recv().is_ok());
+    }
+
+    #[test]
+    fn test_dispatch_image_overwrite_and_late_failure_preserves_newest_attempt() {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(1)));
+        let encoding = fixture.image_rx.try_recv().expect("encoding image");
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(2)));
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(3)));
+        assert!(
+            encoding
+                .encode(|_, _| Err(std::io::Error::other("late failure").into()))
+                .is_err()
+        );
+        let newest = fixture.image_rx.try_recv().expect("newest image");
+        assert_eq!(newest.hash, image_content_hash(&make_test_image(3)));
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(3)));
+        assert!(
+            fixture.image_rx.is_empty(),
+            "pending identical copy is suppressed"
+        );
+        drop(newest);
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(3)));
+        assert!(fixture.image_rx.try_recv().is_ok());
+    }
+
+    #[test]
+    fn test_dispatch_rich_text_changed_markup_is_recaptured() {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::RichText));
+        fixture
+            .rx
+            .try_recv()
+            .expect("capture")
+            .persist(&fixture.repo)
+            .expect("persist");
+        fixture.dispatch(ClipboardPayload::RichText {
+            plain_text: "retry".into(),
+            html: Some("<i>retry</i>".into()),
+            rtf: None,
+        });
+        assert!(fixture.rx.try_recv().is_ok());
+    }
 
     #[rstest]
     #[case(true, true, true, true, Some(ClipboardPayloadKind::Files))]
@@ -388,95 +641,6 @@ mod tests {
     }
 
     #[test]
-    fn test_should_forward_text_when_same_text_returns_false() {
-        let last_copy = LastCopyState::Text("hello".to_string());
-
-        assert!(!should_forward_text(&last_copy, "hello"));
-    }
-
-    #[test]
-    fn test_should_forward_text_when_different_text_returns_true() {
-        let last_copy = LastCopyState::Text("hello".to_string());
-
-        assert!(should_forward_text(&last_copy, "world"));
-    }
-
-    #[test]
-    fn test_should_forward_text_when_last_copy_is_image_returns_true() {
-        let last_copy = LastCopyState::Image(42);
-
-        assert!(should_forward_text(&last_copy, "hello"));
-    }
-
-    #[test]
-    fn test_should_forward_text_when_last_copy_is_rich_text_returns_true() {
-        let last_copy = LastCopyState::RichText(42);
-
-        assert!(should_forward_text(&last_copy, "hello"));
-    }
-
-    #[test]
-    fn test_should_forward_rich_text_when_markup_changes_returns_true() {
-        let first_hash = rich_text_content_hash("hello", Some("<b>hello</b>"), None);
-        let last_copy = LastCopyState::RichText(first_hash);
-
-        assert!(should_forward_rich_text(
-            &last_copy,
-            "hello",
-            Some("<i>hello</i>"),
-            None,
-        ));
-    }
-
-    #[test]
-    fn test_should_forward_rich_text_when_payload_is_unchanged_returns_false() {
-        let hash = rich_text_content_hash("hello", Some("<b>hello</b>"), None);
-        let last_copy = LastCopyState::RichText(hash);
-
-        assert!(!should_forward_rich_text(
-            &last_copy,
-            "hello",
-            Some("<b>hello</b>"),
-            None,
-        ));
-    }
-
-    #[test]
-    fn test_should_forward_files_when_same_hash_returns_false() {
-        let last_copy = LastCopyState::Files(42);
-
-        assert!(!should_forward_files(&last_copy, 42));
-    }
-
-    #[test]
-    fn test_should_forward_files_when_different_hash_returns_true() {
-        let last_copy = LastCopyState::Files(42);
-
-        assert!(should_forward_files(&last_copy, 7));
-    }
-
-    #[test]
-    fn test_should_forward_image_when_same_hash_returns_false() {
-        let last_copy = LastCopyState::Image(42);
-
-        assert!(!should_forward_image(&last_copy, 42));
-    }
-
-    #[test]
-    fn test_should_forward_image_when_different_hash_returns_true() {
-        let last_copy = LastCopyState::Image(42);
-
-        assert!(should_forward_image(&last_copy, 7));
-    }
-
-    #[test]
-    fn test_should_forward_image_when_last_copy_is_text_returns_true() {
-        let last_copy = LastCopyState::Text("hello".to_string());
-
-        assert!(should_forward_image(&last_copy, 42));
-    }
-
-    #[test]
     fn test_image_content_hash_when_dimensions_differ_returns_different_hashes() {
         let horizontal = DynamicImage::ImageRgba8(
             image::ImageBuffer::from_raw(2, 1, vec![1, 2, 3, 4, 5, 6, 7, 8])
@@ -491,13 +655,6 @@ mod tests {
             image_content_hash(&horizontal),
             image_content_hash(&vertical)
         );
-    }
-
-    #[test]
-    fn test_should_forward_files_when_last_copy_is_text_returns_true() {
-        let last_copy = LastCopyState::Text("hello".to_string());
-
-        assert!(should_forward_files(&last_copy, 42));
     }
 
     /// Build a tiny `DynamicImage` for tests. Avoids decoding real image data.
@@ -546,71 +703,5 @@ mod tests {
             result,
             Err(async_channel::TrySendError::Closed(_))
         ));
-    }
-
-    /// Mirrors the `Text` branch of `on_clipboard_change`: when `try_send`
-    /// fails, `LastCopyState` must NOT advance, so a subsequent identical
-    /// copy can still be forwarded once the channel drains.
-    #[test]
-    fn test_text_branch_when_send_fails_does_not_advance_last_copy_state() {
-        let (tx, rx) = async_channel::bounded::<ClipboardEvent>(1);
-        // Saturate the channel so the next try_send returns Full.
-        tx.try_send(ClipboardEvent::Text("filler".to_string()))
-            .expect("Failed to fill channel");
-
-        let mut last_copy = LastCopyState::Text(String::new());
-        let new_text = "hello".to_string();
-
-        // Replicate the production logic: only advance state on Ok.
-        if should_forward_text(&last_copy, &new_text)
-            && tx.try_send(ClipboardEvent::Text(new_text.clone())).is_ok()
-        {
-            last_copy = LastCopyState::Text(new_text);
-        }
-
-        assert!(matches!(last_copy, LastCopyState::Text(ref t) if t.is_empty()));
-        // After draining, the same content must still be forwardable.
-        let _ = rx.try_recv();
-        assert!(should_forward_text(&last_copy, "hello"));
-    }
-
-    /// Mirrors the `Files` branch: dropped event must not poison the dedup
-    /// gate against the same files arriving again.
-    #[test]
-    fn test_files_branch_when_send_fails_does_not_advance_last_copy_state() {
-        let (tx, _rx) = async_channel::bounded::<ClipboardEvent>(1);
-        tx.try_send(ClipboardEvent::Text("filler".to_string()))
-            .expect("Failed to fill channel");
-
-        let mut last_copy = LastCopyState::Files(0);
-        let files = vec!["/tmp/a".to_string()];
-        let hash = hash_file_paths(&files);
-
-        if should_forward_files(&last_copy, hash)
-            && tx.try_send(ClipboardEvent::Files(files)).is_ok()
-        {
-            last_copy = LastCopyState::Files(hash);
-        }
-
-        // State stayed at the original hash (0), so the next retry of the
-        // same files (hash) still passes the dedup gate.
-        assert!(matches!(last_copy, LastCopyState::Files(0)));
-        assert!(should_forward_files(&last_copy, hash));
-    }
-
-    #[test]
-    fn test_text_branch_when_send_succeeds_advances_last_copy_state() {
-        let (tx, _rx) = async_channel::bounded::<ClipboardEvent>(8);
-
-        let mut last_copy = LastCopyState::Text(String::new());
-        let new_text = "hello".to_string();
-
-        if should_forward_text(&last_copy, &new_text)
-            && tx.try_send(ClipboardEvent::Text(new_text.clone())).is_ok()
-        {
-            last_copy = LastCopyState::Text(new_text);
-        }
-
-        assert!(matches!(last_copy, LastCopyState::Text(ref t) if t == "hello"));
     }
 }

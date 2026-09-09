@@ -13,6 +13,7 @@ use crate::{config::LayoutMode, gui::theme::ThemeId, i18n::Language};
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) struct HotkeyEditorState {
     pub(crate) recording: bool,
+    pub(crate) saving: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

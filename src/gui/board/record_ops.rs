@@ -11,7 +11,7 @@ use super::{
     search::ContentFilter,
 };
 use crate::{
-    clipboard::LastCopyState,
+    clipboard::delete_tracked_record,
     config::Settings,
     repository::GlobalRepository,
     utils::{lock_or_recover, read_or_recover, write_or_recover},
@@ -162,13 +162,13 @@ impl RopyBoard {
     /// just-cleared content — is recaptured by the listener.
     pub(crate) fn clear_last_copy_state(&self) {
         let mut guard = lock_or_recover(&self.last_copy);
-        *guard = LastCopyState::Text(String::new());
+        guard.clear();
     }
 
     pub(crate) fn delete_record(&mut self, id: u64, cx: &Context<'_, Self>) {
         GlobalRepository::read(cx, |repo| {
             if let Some(repo) = repo {
-                if let Err(e) = repo.delete(id) {
+                if let Err(e) = delete_tracked_record(repo, id, &self.last_copy) {
                     tracing::warn!(error = %e, "failed to delete clipboard record");
                 } else {
                     self.ui_state.deletion = crate::gui::board::DeletionState::Deleting;

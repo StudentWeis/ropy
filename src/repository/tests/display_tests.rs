@@ -365,7 +365,7 @@ fn test_multiple_operations_sequence() {
 }
 
 #[test]
-fn test_concurrent_save_and_delete() {
+fn test_concurrent_saves_then_deletes_remove_selected_records() {
     let repo = create_test_repo();
     let repo = std::sync::Arc::new(repo);
     let mut handles = vec![];

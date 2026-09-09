@@ -5,6 +5,7 @@ use std::{
 };
 
 use image::{DynamicImage, GenericImageView};
+use thiserror::Error;
 
 use crate::repository::RichTextMeta;
 
@@ -35,33 +36,55 @@ pub(crate) fn thumb_path_for(original: &Path) -> PathBuf {
     )
 }
 
+#[derive(Debug, Error)]
+pub(crate) enum ImageSaveError {
+    #[error("application data directory unavailable")]
+    DataDirNotFound,
+    #[error("failed to write image cache: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("failed to encode image cache: {0}")]
+    Encode(#[from] image::ImageError),
+}
+
+fn write_image_atomically(
+    path: &Path,
+    encode: impl FnOnce(&mut fs::File) -> Result<(), ImageSaveError>,
+) -> Result<(), ImageSaveError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("image path has no parent"))?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    encode(temporary.as_file_mut())?;
+    temporary.as_file().sync_all()?;
+    temporary.persist(path).map_err(|error| error.error)?;
+    Ok(())
+}
+
+fn save_png(image: &DynamicImage, path: &Path) -> Result<(), ImageSaveError> {
+    write_image_atomically(path, |file| {
+        image.write_to(file, image::ImageFormat::Png)?;
+        Ok(())
+    })
+}
+
 fn save_image_to_dir(
     image: &DynamicImage,
     image_content_hash: u64,
     data_dir: &Path,
-) -> Option<PathBuf> {
-    if !data_dir.exists() {
-        fs::create_dir_all(data_dir).ok()?;
-    }
-
+) -> Result<PathBuf, ImageSaveError> {
+    fs::create_dir_all(data_dir)?;
     let file_path = image_path_for_hash(data_dir, image_content_hash);
     let thumb_file_path = thumb_path_for(&file_path);
-    let image_exists = file_path.exists();
 
-    if !image_exists {
-        image
-            .save_with_format(&file_path, image::ImageFormat::Png)
-            .ok()?;
+    // Decode the complete PNG: existence or a readable header cannot certify
+    // a previous write completed. A fresh capture can repair either asset.
+    if image::open(&file_path).is_err() {
+        save_png(image, &file_path)?;
     }
-
-    if !image_exists || !thumb_file_path.exists() {
-        let thumb = create_thumbnail(image);
-        thumb
-            .save_with_format(&thumb_file_path, image::ImageFormat::Png)
-            .ok()?;
+    if image::open(&thumb_file_path).is_err() {
+        save_png(&create_thumbnail(image), &thumb_file_path)?;
     }
-
-    Some(file_path)
+    Ok(file_path)
 }
 
 fn rich_text_dir_path(data_dir: &Path) -> PathBuf {
@@ -107,8 +130,14 @@ pub(crate) fn save_rich_text_files_to_dir(
     }
 }
 
-pub(crate) fn save_image(image: &DynamicImage, image_content_hash: u64) -> Option<String> {
-    let data_dir = dirs::data_local_dir()?.join("ropy").join("images");
+pub(crate) fn save_image(
+    image: &DynamicImage,
+    image_content_hash: u64,
+) -> Result<String, ImageSaveError> {
+    let data_dir = dirs::data_local_dir()
+        .ok_or(ImageSaveError::DataDirNotFound)?
+        .join("ropy")
+        .join("images");
 
     save_image_to_dir(image, image_content_hash, &data_dir)
         .map(|file_path| file_path.to_string_lossy().to_string())
@@ -151,6 +180,60 @@ mod tests {
         load_rich_text_rtf, remove_rich_text_files, save_image_to_dir, save_rich_text_files_to_dir,
         thumb_path_for,
     };
+
+    #[rstest::rstest]
+    #[case(b"")]
+    #[case(b"\x89PNG\r\n\x1a\n")]
+    fn test_save_image_to_dir_corrupt_cache_repairs_pixels(#[case] corrupt: &[u8]) {
+        let dir = tempdir().expect("fixture directory");
+        let image = DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            20,
+            10,
+            image::Rgba([12, 34, 56, 255]),
+        ));
+        let path = image_path_for_hash(dir.path(), 42);
+        std::fs::write(&path, corrupt).expect("corrupt fixture");
+        std::fs::write(thumb_path_for(&path), corrupt).expect("corrupt thumbnail");
+
+        let saved = save_image_to_dir(&image, 42, dir.path()).expect("repair cache");
+
+        assert_eq!(
+            image::open(saved).expect("decode original").to_rgba8(),
+            image.to_rgba8()
+        );
+        assert_eq!(
+            image::open(thumb_path_for(&path))
+                .expect("decode thumbnail")
+                .to_rgba8(),
+            image.to_rgba8()
+        );
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_write_image_atomically_failed_encoding_preserves_destination(#[case] existing: bool) {
+        use std::io::Write as _;
+        let dir = tempdir().expect("fixture directory");
+        let path = dir.path().join("42.png");
+        let image = DynamicImage::new_rgba8(10, 10);
+        if existing {
+            super::save_png(&image, &path).expect("initial image");
+        }
+        let before = std::fs::read(&path).ok();
+        let result = super::write_image_atomically(&path, |file| {
+            file.write_all(b"partial PNG")?;
+            Err(std::io::Error::other("injected write failure").into())
+        });
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&path).ok(), before);
+        assert_eq!(
+            std::fs::read_dir(dir.path())
+                .expect("list fixtures")
+                .count(),
+            usize::from(existing)
+        );
+    }
 
     #[test]
     fn test_create_thumbnail_scales_large_image_within_limit() {
