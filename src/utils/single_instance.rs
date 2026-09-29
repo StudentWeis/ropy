@@ -8,6 +8,10 @@ use windows_sys::Win32::{
 
 use crate::gui::app::MAIN_WINDOW_TITLE;
 
+/// Ensures only one Ropy instance runs; when an existing instance is
+/// detected, its window is restored and `false` is returned so the caller
+/// can exit.
+#[must_use]
 pub fn ensure_single_instance() -> bool {
     let mutex_name = "RopySingleInstanceMutex";
     let wide_name: Vec<u16> = OsStr::new(mutex_name)

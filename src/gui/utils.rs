@@ -161,12 +161,12 @@ fn window_frame_extents(hwnd: *mut std::ffi::c_void) -> WindowFrameExtents {
         }
 
         let mut window_rect = std::mem::zeroed::<RECT>();
-        if GetWindowRect(hwnd, &mut window_rect) == 0 {
+        if GetWindowRect(hwnd, &raw mut window_rect) == 0 {
             return WindowFrameExtents::default();
         }
 
         let mut client_rect = std::mem::zeroed::<RECT>();
-        if GetClientRect(hwnd, &mut client_rect) == 0 {
+        if GetClientRect(hwnd, &raw mut client_rect) == 0 {
             return WindowFrameExtents::default();
         }
 
@@ -178,8 +178,8 @@ fn window_frame_extents(hwnd: *mut std::ffi::c_void) -> WindowFrameExtents {
             x: client_rect.right,
             y: client_rect.bottom,
         };
-        if ClientToScreen(hwnd, &mut client_top_left) == 0
-            || ClientToScreen(hwnd, &mut client_bottom_right) == 0
+        if ClientToScreen(hwnd, &raw mut client_top_left) == 0
+            || ClientToScreen(hwnd, &raw mut client_bottom_right) == 0
         {
             return WindowFrameExtents::default();
         }
@@ -205,8 +205,13 @@ fn current_monitor_scale_factor(hwnd: *mut std::ffi::c_void) -> Option<f32> {
     let mut dpi_y = 0;
     // SAFETY: `monitor` came from `MonitorFromWindow` above and out-pointers
     // address the locals just declared.
-    let status = unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) };
+    let status =
+        unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &raw mut dpi_x, &raw mut dpi_y) };
     if status == 0 && dpi_x > 0 && dpi_x == dpi_y {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "DPI values are far below f32's 24-bit exact-integer range"
+        )]
         return Some(dpi_x as f32 / USER_DEFAULT_SCREEN_DPI as f32);
     }
 
@@ -217,6 +222,10 @@ fn current_monitor_scale_factor(hwnd: *mut std::ffi::c_void) -> Option<f32> {
     } else {
         USER_DEFAULT_SCREEN_DPI
     };
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "DPI values are far below f32's 24-bit exact-integer range"
+    )]
     Some(effective_dpi as f32 / USER_DEFAULT_SCREEN_DPI as f32)
 }
 
@@ -231,12 +240,18 @@ fn reset_window_geometry_with_current_monitor_dpi(
         return false;
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "MONITORINFO is a fixed 40-byte Win32 struct; the size always fits u32"
+    )]
     let mut monitor_info = MONITORINFO {
         cbSize: size_of::<MONITORINFO>() as u32,
+        // SAFETY: `MONITORINFO` contains only integers; an all-zero bit
+        // pattern is a valid value (cbSize is overwritten above).
         ..unsafe { std::mem::zeroed() }
     };
     // SAFETY: `monitor` is the handle just returned by `MonitorFromWindow`.
-    if unsafe { GetMonitorInfoW(monitor, &mut monitor_info) } == 0 {
+    if unsafe { GetMonitorInfoW(monitor, &raw mut monitor_info) } == 0 {
         return false;
     }
 
