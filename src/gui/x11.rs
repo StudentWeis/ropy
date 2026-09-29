@@ -2,7 +2,7 @@ use std::{error::Error, io};
 
 use x11rb::{
     connection::Connection,
-    protocol::xproto::{AtomEnum, ClientMessageEvent, ConnectionExt, EventMask},
+    protocol::xproto::{AtomEnum, ClientMessageEvent, ConnectionExt, EventMask, MapState},
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
@@ -191,5 +191,20 @@ impl X11 {
         self.connection.sync()?;
 
         Ok(())
+    }
+
+    /// Returns whether the window is currently mapped (visible on screen).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the X11 connection fails or the window attributes
+    /// cannot be read.
+    pub fn window_is_visible(&self) -> Result<bool, Box<dyn Error>> {
+        let attributes = self
+            .connection
+            .get_window_attributes(self.window_id)?
+            .reply()?;
+
+        Ok(attributes.map_state == MapState::VIEWABLE)
     }
 }

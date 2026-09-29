@@ -69,8 +69,8 @@ use {
         UI::{
             HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI},
             WindowsAndMessaging::{
-                GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE, SWP_NOACTIVATE,
-                SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
+                GetClientRect, GetWindowRect, IsIconic, IsWindowVisible, SW_HIDE, SW_RESTORE,
+                SWP_NOACTIVATE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
                 USER_DEFAULT_SCREEN_DPI,
             },
         },
@@ -334,6 +334,37 @@ pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: b
             }
         }
         _ => {}
+    }
+}
+
+/// Returns whether the application window is currently visible on screen.
+///
+/// Used to decide whether a repeated activation (global hotkey) should hide
+/// the panel instead of showing it again.
+#[cfg_attr(target_os = "linux", expect(unused_variables))]
+pub(crate) fn window_is_visible(window: &Window) -> bool {
+    cfg_select! {
+        target_os = "windows" => {
+            if let Ok(window_handle) = HasWindowHandle::window_handle(window)
+                && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
+            {
+                let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
+                // SAFETY: see module-level note. Read-only visibility query.
+                unsafe { IsWindowVisible(hwnd) != 0 }
+            } else {
+                false
+            }
+        }
+        target_os = "macos" => {
+            // gpui exposes no visibility query; the window auto-hides on
+            // focus-out, so "active" is a faithful proxy for "visible".
+            window.is_window_active()
+        }
+        target_os = "linux" => crate::app::X11_INSTANCE
+            .get()
+            .and_then(|x11| x11.window_is_visible().ok())
+            .unwrap_or(false),
+        _ => false,
     }
 }
 
