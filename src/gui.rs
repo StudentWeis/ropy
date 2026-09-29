@@ -25,4 +25,5 @@ pub(crate) use tray::start_tray_handler;
 pub(crate) use utils::set_activation_policy_accessory;
 pub(crate) use utils::{
     active_window, hide_window, reset_window_geometry_for_activation, surface_with_opacity,
+    window_is_visible,
 };

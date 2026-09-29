@@ -8,7 +8,7 @@ use crate::{
         constants::default_window_size,
         hide_window,
         panel::settings,
-        reset_window_geometry_for_activation,
+        reset_window_geometry_for_activation, window_is_visible,
     },
 };
 
@@ -291,6 +291,13 @@ impl RopyBoard {
             return;
         }
 
+        // The activation key toggles the panel: while it is already on
+        // screen, pressing the key again hides it instead of re-activating.
+        if window_is_visible(window) {
+            self.hide_panel(window, cx);
+            return;
+        }
+
         self.selected_index = 0;
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
@@ -309,6 +316,13 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.hide_panel(window, cx);
+    }
+
+    /// Dismiss the panel: peel off overlays / sub-panels (same layering as
+    /// the `Hide` action) and hide the window once only the clipboard list
+    /// remains.
+    fn hide_panel(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             self.cancel_hotkey_recording(window, cx);
             return;
