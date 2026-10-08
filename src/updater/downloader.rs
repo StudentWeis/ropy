@@ -382,7 +382,6 @@ mod tests {
 
     #[test]
     #[expect(clippy::unwrap_used)]
-    #[expect(clippy::float_cmp)]
     fn test_progress_channel_send_blocking_delivers_values() {
         let (sender, receiver) = async_channel::unbounded::<f32>();
 

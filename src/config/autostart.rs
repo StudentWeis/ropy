@@ -227,7 +227,7 @@ mod tests {
         let path = AutoStartManager::get_app_path();
         assert!(path.is_ok());
         let path_str = path.unwrap();
-        assert!(!path_str.is_empty());
+        assert_ne!(path_str, "");
     }
 
     #[test]

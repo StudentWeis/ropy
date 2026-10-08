@@ -411,7 +411,7 @@ mod tests {
         index.remove(timestamp, 1).expect("Failed to remove");
 
         let ids_after = select_display_ids_without_favorites(&index, 10);
-        assert!(ids_after.is_empty());
+        assert_eq!(ids_after, Vec::<u64>::new());
     }
 
     #[test]
@@ -440,7 +440,7 @@ mod tests {
         assert_eq!(index.entries.len(), 0);
         assert_eq!(index.id_lookup.len(), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
-        assert!(ids.is_empty());
+        assert_eq!(ids, Vec::<u64>::new());
     }
 
     // ── Query Tests ───────────────────────────────────────────────
@@ -450,7 +450,7 @@ mod tests {
         let index = create_test_time_index();
 
         let ids = select_display_ids_without_favorites(&index, 10);
-        assert!(ids.is_empty());
+        assert_eq!(ids, Vec::<u64>::new());
     }
 
     fn assert_select_display_ids_ordering_with<B: StorageBackend>(factory: BackendFactory<B>) {
@@ -576,7 +576,7 @@ mod tests {
         let index = create_test_time_index();
 
         let result = index.oldest_unpinned(10).expect("Failed to get oldest");
-        assert!(result.is_empty());
+        assert_eq!(result, []);
     }
 
     #[test]
@@ -678,7 +678,7 @@ mod tests {
         let ids = select_display_ids_without_favorites(&index, 100);
         // Pinned records (i % 3 == 0): 0, 3, 6, ... 999 = 334 records
         // All pinned records should be included even if exceeding limit
-        assert!(!ids.is_empty());
+        assert_ne!(ids, Vec::<u64>::new());
 
         // Verify we get all pinned records plus the requested ordinary window.
         let expected_pinned_count = (0..count).filter(|i| i % 3 == 0).count();
@@ -716,6 +716,6 @@ mod tests {
         assert_eq!(index.entries.len(), 0);
         assert_eq!(index.id_lookup.len(), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
-        assert!(ids.is_empty());
+        assert_eq!(ids, Vec::<u64>::new());
     }
 }

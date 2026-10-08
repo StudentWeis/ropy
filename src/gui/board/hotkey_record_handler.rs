@@ -19,8 +19,8 @@ fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
 
     if keystroke.modifiers.platform {
         let platform_token = cfg_select! {
-            target_os = "macos" => { "cmd" },
-            _ => { "super" },
+            target_os = "macos" => "cmd",
+            _ => "super",
         };
         parts.push(platform_token);
     }
@@ -64,8 +64,8 @@ const fn has_supported_modifier(modifiers: Modifiers) -> bool {
 
 const fn control_token() -> &'static str {
     cfg_select! {
-        target_os = "macos" => { "control" },
-        _ => { "ctrl" },
+        target_os = "macos" => "control",
+        _ => "ctrl",
     }
 }
 

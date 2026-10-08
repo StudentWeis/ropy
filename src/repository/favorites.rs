@@ -79,7 +79,7 @@ mod tests {
 
         let ids = repo.favorite_ids().expect("Failed to get favorite ids");
 
-        assert!(ids.is_empty());
+        assert_eq!(ids, Vec::<u64>::new());
     }
 
     #[test]
@@ -131,7 +131,7 @@ mod tests {
         assert!(!second_toggle, "second toggle should unfavorite");
 
         let ids = repo.favorite_ids().expect("Failed to get favorite ids");
-        assert!(ids.is_empty());
+        assert_eq!(ids, Vec::<u64>::new());
     }
 
     #[test]
@@ -171,7 +171,7 @@ mod tests {
         repo.remove_favorite(record.id)
             .expect("Failed to remove favorite");
 
-        assert!(repo.favorite_ids().expect("query").is_empty());
+        assert_eq!(repo.favorite_ids().expect("query"), Vec::<u64>::new());
     }
 
     #[test]
@@ -186,6 +186,6 @@ mod tests {
         repo.remove_favorite(record.id)
             .expect("Failed to remove favorite");
 
-        assert!(repo.favorite_ids().expect("query").is_empty());
+        assert_eq!(repo.favorite_ids().expect("query"), Vec::<u64>::new());
     }
 }

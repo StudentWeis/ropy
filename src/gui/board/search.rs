@@ -754,7 +754,7 @@ mod tests {
             false,
         );
 
-        assert!(result.is_empty());
+        assert_eq!(result, Vec::<usize>::new());
     }
 
     #[test]
@@ -776,7 +776,7 @@ mod tests {
             &empty_favorites(),
             false,
         );
-        assert!(result.is_empty());
+        assert_eq!(result, Vec::<usize>::new());
     }
 
     #[test]
@@ -798,7 +798,7 @@ mod tests {
             &empty_favorites(),
             false,
         );
-        assert!(result.is_empty());
+        assert_eq!(result, Vec::<usize>::new());
     }
 
     #[test]
@@ -1036,6 +1036,6 @@ mod tests {
             &empty_favorites(),
             true,
         );
-        assert!(result.is_empty());
+        assert_eq!(result, Vec::<usize>::new());
     }
 }

@@ -273,8 +273,8 @@ impl Default for HotkeySettings {
     fn default() -> Self {
         Self {
             activation_key: cfg_select! {
-                target_os = "macos" => { "control+shift+d".to_string() },
-                _ => { "ctrl+shift+d".to_string() },
+                target_os = "macos" => "control+shift+d".to_string(),
+                _ => "ctrl+shift+d".to_string(),
             },
         }
     }
@@ -571,7 +571,7 @@ opacity_percent = 72
         assert_eq!(settings.window.opacity_percent, 72);
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
         assert!(settings.update.auto_check);
-        assert!(!settings.hotkey.activation_key.is_empty());
+        assert_ne!(settings.hotkey.activation_key, "");
         assert_eq!(settings.theme.code(), "ropy-light");
         assert_eq!(settings.language.code(), "en");
     }
@@ -852,7 +852,7 @@ enabled = true
     fn test_hotkey_settings_default() {
         let hotkey = HotkeySettings::default();
         // Default hotkey should be valid
-        assert!(!hotkey.activation_key.is_empty());
+        assert_ne!(hotkey.activation_key, "");
         // Verify it's a valid hotkey string
         assert!(global_hotkey::hotkey::HotKey::from_str(&hotkey.activation_key).is_ok());
     }
