@@ -2,13 +2,29 @@
 set -euo pipefail
 
 # Usage:
-#   scripts/precheck.sh           # local mode: auto-fix formatting, then check
-#   scripts/precheck.sh --check   # CI mode: verify only, fail on any drift
+#   scripts/precheck.sh                  # local: fix formatting, then all checks
+#   scripts/precheck.sh --check          # CI: verify without changing files
+#   scripts/precheck.sh --check --light  # formatting, resources, scripts, dependencies
+#   scripts/precheck.sh --check --rust   # clippy, tests, documentation
 
 CHECK_ONLY=0
-if [[ "${1:-}" == "--check" ]]; then
-	CHECK_ONLY=1
-fi
+PHASE=all
+for arg in "$@"; do
+	case "$arg" in
+	--check) CHECK_ONLY=1 ;;
+	--light | --rust)
+		if [[ "$PHASE" != all ]]; then
+			echo "Choose only one of --light or --rust" >&2
+			exit 2
+		fi
+		PHASE="${arg#--}"
+		;;
+	*)
+		echo "Unknown precheck option: $arg" >&2
+		exit 2
+		;;
+	esac
+done
 
 # Determine which command to use for Rust operations
 if command -v rtk &>/dev/null; then
@@ -17,27 +33,29 @@ else
 	CARGO_CMD="cargo"
 fi
 
-# In check mode, skip auto-formatting entirely — formatting is for local fixups,
-# CI just verifies that the committed code already builds and passes lints/tests.
-if [[ $CHECK_ONLY -eq 0 ]]; then
-	$CARGO_CMD +nightly fmt
-	if command -v shfmt &>/dev/null; then
-		shfmt -w **/*.sh
+if [[ "$PHASE" != rust ]]; then
+	if [[ $CHECK_ONLY -eq 1 ]]; then
+		$CARGO_CMD +nightly fmt --check
+	else
+		$CARGO_CMD +nightly fmt
+		if command -v shfmt &>/dev/null; then
+			shfmt -w ./**/*.sh
+		fi
+	fi
+
+	# Fail on inexpensive checks before compiling any application code.
+	python3 scripts/check/check_i18n.py
+	python3 scripts/check/check_icons.py
+	python3 scripts/check/check_themes.py
+	python3 -m unittest discover -s scripts/tests
+	if command -v cargo-machete &>/dev/null; then
+		$CARGO_CMD machete
 	fi
 fi
 
-python3 -m unittest discover -s scripts/tests
-
-$CARGO_CMD check --all-targets --all-features
-$CARGO_CMD clippy --all-targets --all-features
-$CARGO_CMD test
-RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --no-deps
-
-# Check unused dependencies
-if command -v cargo-machete &>/dev/null; then
-	$CARGO_CMD machete
+if [[ "$PHASE" != light ]]; then
+	# Clippy already performs the compiler checks for the same target/feature set.
+	$CARGO_CMD clippy --all-targets --all-features
+	$CARGO_CMD test --all-targets --all-features
+	RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --no-deps
 fi
-
-python3 scripts/check/check_i18n.py
-python3 scripts/check/check_icons.py
-python3 scripts/check/check_themes.py
