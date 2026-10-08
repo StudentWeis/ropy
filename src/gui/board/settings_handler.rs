@@ -1,7 +1,11 @@
 use std::str::FromStr;
 
-use gpui::{BorrowAppContext, Context, Window, prelude::Styled, px};
-use gpui_component::{WindowExt, notification::Notification};
+use gpui_kit::{
+    BorrowAppContext, Context, Window,
+    component::{WindowExt, notification::Notification},
+    prelude::Styled,
+    px,
+};
 
 use super::{RopyBoard, settings_editor};
 use crate::{
@@ -34,7 +38,7 @@ impl RopyBoard {
     fn notify_settings_warning(
         window: &mut Window,
         cx: &mut Context<'_, Self>,
-        message: impl Into<gpui::SharedString>,
+        message: impl Into<gpui_kit::SharedString>,
     ) {
         Self::push_settings_notification(window, Notification::warning(message.into()), cx);
     }
@@ -42,7 +46,7 @@ impl RopyBoard {
     fn notify_settings_success(
         window: &mut Window,
         cx: &mut Context<'_, Self>,
-        message: impl Into<gpui::SharedString>,
+        message: impl Into<gpui_kit::SharedString>,
     ) {
         Self::push_settings_notification(window, Notification::success(message.into()), cx);
     }
@@ -93,7 +97,7 @@ impl RopyBoard {
         self.settings_editor.selected_theme = theme_idx;
         self.settings_editor.theme_select.update(cx, |state, cx| {
             state.set_selected_index(
-                Some(gpui_component::IndexPath::default().row(theme_idx)),
+                Some(gpui_kit::component::IndexPath::default().row(theme_idx)),
                 window,
                 cx,
             );
@@ -111,7 +115,7 @@ impl RopyBoard {
             .language_select
             .update(cx, |state, cx| {
                 state.set_selected_index(
-                    Some(gpui_component::IndexPath::default().row(language_idx)),
+                    Some(gpui_kit::component::IndexPath::default().row(language_idx)),
                     window,
                     cx,
                 );

@@ -11,8 +11,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use gpui::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle};
-use gpui_component::Root;
+use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle, component::Root};
 #[cfg(target_os = "linux")]
 use {
     crate::gui::x11::X11,
@@ -108,7 +107,7 @@ fn start_clipboard_event_handler(
             // of saves results in a single repository read + UI refresh.
             drain_pending_notifications(&notify_rx);
 
-            let _ = async_app.update(|cx| {
+            async_app.update(|cx| {
                 let max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
 
                 GlobalRepository::read(cx, |repo| {
@@ -201,15 +200,13 @@ fn setup_hotkey_listener(
     cx: &App,
 ) -> async_channel::Sender<crate::gui::hotkey::HotkeyUpdate> {
     crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app| {
-        async_app
-            .update(|cx| {
-                window_handle
-                    .update(cx, |_, window, cx| {
-                        window.dispatch_action(Box::new(Active), cx);
-                    })
-                    .ok();
-            })
-            .ok();
+        async_app.update(|cx| {
+            window_handle
+                .update(cx, |_, window, cx| {
+                    window.dispatch_action(Box::new(Active), cx);
+                })
+                .ok();
+        });
     })
 }
 
@@ -249,13 +246,13 @@ fn load_settings() -> Settings {
 
 /// Entry point: initialize all subsystems and launch the application.
 pub(crate) fn launch() {
-    gpui::Application::new()
+    gpui_kit::application()
         .with_assets(crate::gui::Assets)
         .run(move |cx| {
             #[cfg(target_os = "macos")]
             crate::gui::set_activation_policy_accessory();
 
-            gpui_component::init(cx);
+            gpui_kit::init(cx);
             bind_application_keys(cx);
 
             // Settings must be installed before the I18n / repository

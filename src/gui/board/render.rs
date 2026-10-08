@@ -1,8 +1,8 @@
-use gpui::{
+use gpui_kit::{
     AnyElement, Context, Render, Window,
+    component::{ActiveTheme, v_flex},
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
-use gpui_component::{ActiveTheme, WindowExt, v_flex};
 
 use super::{
     ActivePanel, RopyBoard, clear_confirm, delete_confirm, header::render_header,
@@ -28,7 +28,7 @@ impl Render for RopyBoard {
             .bg(surface_bg);
 
         if !self.activated {
-            return gpui::div().size_full().child(base).into_any_element();
+            return gpui_kit::div().size_full().child(base).into_any_element();
         }
 
         let body: AnyElement = match self.active_panel {
@@ -59,13 +59,10 @@ impl Render for RopyBoard {
                 .into_any_element(),
         };
 
-        // Render each notification directly in a bottom-right column.
-        let notifs: Vec<_> = window.notifications(cx).iter().cloned().collect();
-        let has_notifs = !notifs.is_empty();
         let show_clear_confirm = self.ui_state.clear_confirm_visible();
         let show_delete_confirm = self.ui_state.delete_confirm_visible();
         let clear_confirm_action = self.clear_confirm_action;
-        gpui::div()
+        gpui_kit::div()
             .relative()
             .size_full()
             .child(body)
@@ -77,17 +74,6 @@ impl Render for RopyBoard {
             })
             .when(show_delete_confirm, |this| {
                 this.child(delete_confirm::render_delete_confirm_overlay(cx))
-            })
-            .when(has_notifs, move |this| {
-                this.child(
-                    v_flex()
-                        .absolute()
-                        .bottom_4()
-                        .right_3()
-                        .gap_2()
-                        .opacity(0.9)
-                        .children(notifs),
-                )
             })
             .into_any_element()
     }

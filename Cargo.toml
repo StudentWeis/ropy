@@ -13,8 +13,7 @@ publish = false
 
 [dependencies]
 clipboard-rs = "0.3.5"
-gpui = { version = "0.2.2", default-features = false }
-gpui-component = { version = "0.5.1", default-features = false }
+gpui-kit = { version = "0.7.1", default-features = false, features = ["component"] }
 global-hotkey = "0.8.0"
 redb = "4.1.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -81,6 +80,7 @@ image = { version = "0.25.10", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+gpui-kit = { version = "0.7.1", default-features = false, features = ["component", "test-support"] }
 rstest = "0.26.1"
 
 [lints.rust]

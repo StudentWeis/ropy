@@ -10,7 +10,7 @@ use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
     ContentFormat, common::RustImage,
 };
-use gpui::{App, AppContext as _};
+use gpui_kit::{App, AppContext as _};
 use image::DynamicImage;
 
 use super::{

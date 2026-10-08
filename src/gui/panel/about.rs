@@ -1,12 +1,13 @@
-use gpui::{
-    Context, ImageSource, Resource, StatefulInteractiveElement, div, img,
+use gpui_kit::{
+    Context, ImageSource, Resource, StatefulInteractiveElement,
+    component::{
+        ActiveTheme, Icon, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex, v_flex,
+    },
+    div, img,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
-};
-use gpui_component::{
-    ActiveTheme, Icon, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex, v_flex,
 };
 
 use crate::{
@@ -50,10 +51,12 @@ pub(crate) fn render_about_content(
         panel_back_button("back-button")
             .on_click(cx.listener(|board, _, window, cx| {
                 board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
-                window.focus(&board.focus_handle);
+                window.focus(&board.focus_handle, cx);
                 cx.notify();
             }))
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            }),
         cx,
     );
 
@@ -76,7 +79,7 @@ pub(crate) fn render_about_content(
                 div()
                     .text_sm()
                     .text_color(cx.theme().foreground)
-                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .font_weight(gpui_kit::FontWeight::MEDIUM)
                     .child(format!(
                         "{} {}",
                         I18n::translate(cx, "about_version"),
@@ -125,7 +128,7 @@ pub(crate) fn render_about_content(
 }
 
 fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let status_text: gpui::SharedString = match &board.update_manager.status {
+    let status_text: gpui_kit::SharedString = match &board.update_manager.status {
         UpdateStatus::Idle => I18n::translate(cx, "update_check_now").into(),
         UpdateStatus::Checking => I18n::translate(cx, "update_checking").into(),
         UpdateStatus::Available(info) => format!(
@@ -163,7 +166,7 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
     // under dark themes when the window is in transparent mode, where
     // `muted_foreground` blends into the translucent background.
     let status_color = match &board.update_manager.status {
-        UpdateStatus::Error(_) => gpui::rgb(0x00cc_3333).into(),
+        UpdateStatus::Error(_) => gpui_kit::rgb(0x00cc_3333).into(),
         _ => cx.theme().foreground,
     };
 

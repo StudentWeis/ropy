@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use gpui::Context;
+use gpui_kit::Context;
 
 use super::{
     RopyBoard,
@@ -67,7 +67,7 @@ impl RopyBoard {
         }
     }
 
-    pub(super) fn load_favorite_ids(cx: &gpui::App) -> HashSet<u64> {
+    pub(super) fn load_favorite_ids(cx: &gpui_kit::App) -> HashSet<u64> {
         GlobalRepository::read(cx, |repo| {
             repo.and_then(|repo| repo.favorite_ids().ok())
                 .map(|ids| ids.into_iter().collect())

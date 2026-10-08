@@ -1,7 +1,7 @@
 use std::{cfg_select, str::FromStr};
 
 use global_hotkey::hotkey::HotKey;
-use gpui::{Context, Focusable, Keystroke, Modifiers, Window};
+use gpui_kit::{Context, Focusable, Keystroke, Modifiers, Window};
 
 use super::RopyBoard;
 
@@ -152,7 +152,7 @@ impl RopyBoard {
             .update(cx, |input, cx| {
                 input.set_value("", window, cx);
             });
-        window.focus(&self.focus_handle);
+        window.focus(&self.focus_handle, cx);
         cx.notify();
     }
 
@@ -169,6 +169,7 @@ impl RopyBoard {
                 .settings_editor
                 .settings_activation_key_input
                 .focus_handle(cx),
+            cx,
         );
         cx.notify();
     }
@@ -189,13 +190,14 @@ impl RopyBoard {
                 .settings_editor
                 .settings_activation_key_input
                 .focus_handle(cx),
+            cx,
         );
         cx.notify();
     }
 
     pub(crate) fn on_settings_key_down(
         &mut self,
-        event: &gpui::KeyDownEvent,
+        event: &gpui_kit::KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
@@ -230,6 +232,7 @@ impl RopyBoard {
                 .settings_editor
                 .settings_activation_key_input
                 .focus_handle(cx),
+            cx,
         );
         cx.notify();
     }

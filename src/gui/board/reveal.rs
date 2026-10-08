@@ -1,4 +1,4 @@
-use gpui::{Bounds, Pixels, Point, px};
+use gpui_kit::{Bounds, Pixels, Point, px};
 
 use super::{RopyBoard, records_list};
 use crate::config::LayoutMode;

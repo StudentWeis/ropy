@@ -1,17 +1,18 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
-use gpui::{
-    AnyElement, AnyView, App, Context, Window, anchored, deferred, div, img,
+use gpui_kit::{
+    AnyElement, AnyView, App, Context, Window, anchored,
+    component::{
+        ActiveTheme, Icon, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex, v_flex,
+    },
+    deferred, div, img,
     prelude::{
         FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
         Styled,
     },
     px,
-};
-use gpui_component::{
-    ActiveTheme, Icon, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex, v_flex,
 };
 
 use super::{
@@ -56,7 +57,7 @@ fn render_image_record(record: &ClipboardRecord, compact: bool) -> AnyElement {
     img(display_path).max_h(px(max_height)).into_any_element()
 }
 
-fn render_color_swatch(color: ClipboardColor, compact: bool, cx: &App) -> gpui::Div {
+fn render_color_swatch(color: ClipboardColor, compact: bool, cx: &App) -> gpui_kit::Div {
     let swatch = div()
         .bg(color.to_gpui_rgba())
         .border_1()
@@ -92,7 +93,7 @@ fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         .w_full()
         .min_w_0()
         .text_color(cx.theme().secondary_foreground)
-        .line_height(gpui::relative(if compact { 1.25 } else { 1.5 }))
+        .line_height(gpui_kit::relative(if compact { 1.25 } else { 1.5 }))
         .child(text);
     let text_element = if compact {
         text_element.text_xs()
@@ -159,7 +160,7 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
             div()
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
-                .line_height(gpui::relative(1.4))
+                .line_height(gpui_kit::relative(1.4))
                 .child(truncate(
                     &detail,
                     if compact {
@@ -173,7 +174,7 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         .into_any_element()
 }
 
-fn render_rich_text_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
+fn render_rich_text_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()
@@ -187,7 +188,7 @@ fn render_rich_text_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
         .child(Icon::empty().path("icons/filter-text.svg").size(px(12.0)))
 }
 
-fn render_file_badge(badge_background: gpui::Hsla, cx: &App) -> gpui::Div {
+fn render_file_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()
@@ -249,12 +250,12 @@ impl PreviewData {
 }
 
 struct ItemStyle {
-    selected_background: gpui::Hsla,
-    normal_background: gpui::Hsla,
-    border: gpui::Hsla,
-    hover_border: gpui::Hsla,
-    meta_background: gpui::Hsla,
-    badge_background: gpui::Hsla,
+    selected_background: gpui_kit::Hsla,
+    normal_background: gpui_kit::Hsla,
+    border: gpui_kit::Hsla,
+    hover_border: gpui_kit::Hsla,
+    meta_background: gpui_kit::Hsla,
+    badge_background: gpui_kit::Hsla,
 }
 
 impl ItemStyle {
@@ -327,7 +328,7 @@ pub(super) struct RenderContext<'a> {
     layout_mode: LayoutMode,
     opacity_percent: u8,
     overlay_visible: bool,
-    view: &'a gpui::WeakEntity<RopyBoard>,
+    view: &'a gpui_kit::WeakEntity<RopyBoard>,
 }
 
 pub(super) struct RecordsListState {
@@ -340,7 +341,7 @@ pub(super) struct RecordsListState {
     hover_preview_enabled: bool,
     overlay_visible: bool,
     opacity_percent: u8,
-    pub(super) view: gpui::WeakEntity<RopyBoard>,
+    pub(super) view: gpui_kit::WeakEntity<RopyBoard>,
 }
 
 impl RecordsListState {
@@ -466,12 +467,12 @@ const fn should_render_selected_preview(flags: RenderFlags) -> bool {
 fn render_record_meta(
     index: usize,
     record: &ClipboardRecord,
-    meta_background: gpui::Hsla,
-    badge_background: gpui::Hsla,
+    meta_background: gpui_kit::Hsla,
+    badge_background: gpui_kit::Hsla,
     show_timestamp: bool,
     with_top_margin: bool,
     cx: &App,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let mut meta = h_flex().items_center().gap_1();
 
     if with_top_margin {
@@ -507,7 +508,11 @@ fn render_record_meta(
     meta
 }
 
-fn render_grid_record_header(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> gpui::Div {
+fn render_grid_record_header(
+    ctx: &RenderContext<'_>,
+    styles: &ItemStyle,
+    cx: &App,
+) -> gpui_kit::Div {
     h_flex()
         .w_full()
         .justify_between()
@@ -546,7 +551,9 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
                 .label("☆")
         };
         button
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
             .on_click(move |_event, _window, cx| {
                 view_favorite
                     .update(cx, |this, cx| {
@@ -565,7 +572,9 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            })
             .on_click(move |_event, _window, cx| {
                 view_pin
                     .update(cx, |this, cx| {
@@ -580,7 +589,9 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         .xsmall()
         .ghost()
         .label("×")
-        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation();
+        })
         .on_click(move |_event, _window, cx| {
             view_delete
                 .update(cx, |this, cx| {
@@ -629,7 +640,7 @@ fn render_selected_preview(
 }
 
 fn decorate_record_card(
-    card: gpui::Div,
+    card: gpui_kit::Div,
     ctx: &RenderContext<'_>,
     styles: &ItemStyle,
 ) -> AnyElement {

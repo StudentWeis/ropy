@@ -1,6 +1,6 @@
 //! Storage limit handlers (`max_history_records`, `max_storage_records`).
 
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
 use crate::{config::Settings, i18n::I18n, repository::GlobalRepository};

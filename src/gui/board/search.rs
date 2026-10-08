@@ -1,15 +1,16 @@
 use std::{borrow::Cow, collections::HashSet};
 
-use gpui::{
-    Context, div,
+use gpui_kit::{
+    Context,
+    component::{
+        ActiveTheme, Icon, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex,
+        input::Input,
+    },
+    div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
-};
-use gpui_component::{
-    ActiveTheme, Icon, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex,
-    input::Input,
 };
 
 use super::RopyBoard;
@@ -180,16 +181,16 @@ pub(super) fn filter_records_by_query(
 
 fn create_search_option_button(
     opacity_percent: u8,
-    element_id: impl Into<gpui::ElementId>,
-    label: impl Into<gpui::SharedString>,
+    element_id: impl Into<gpui_kit::ElementId>,
+    label: impl Into<gpui_kit::SharedString>,
     is_active: bool,
-    tooltip: impl Into<gpui::SharedString>,
-    cx: &gpui::App,
+    tooltip: impl Into<gpui_kit::SharedString>,
+    cx: &gpui_kit::App,
 ) -> Button {
     let id = element_id.into();
     let button = if is_active {
         let accent = surface_with_opacity(cx.theme().accent, opacity_percent);
-        let variant = gpui_component::button::ButtonCustomVariant::new(cx)
+        let variant = gpui_kit::component::button::ButtonCustomVariant::new(cx)
             .color(accent)
             .foreground(cx.theme().accent_foreground)
             .hover(accent)
@@ -222,7 +223,9 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
         this.sync_filtered_records_and_reveal(cx);
         cx.notify();
     }))
-    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+        cx.stop_propagation();
+    })
 }
 
 fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> Button {
@@ -239,7 +242,9 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
         this.sync_filtered_records_and_reveal(cx);
         cx.notify();
     }))
-    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+        cx.stop_propagation();
+    })
 }
 
 /// Render the search icon
@@ -260,7 +265,7 @@ fn render_search_input_box(board: &RopyBoard) -> impl IntoElement {
 }
 
 /// Render the search separator
-fn render_search_separator(cx: &gpui::App) -> impl IntoElement {
+fn render_search_separator(cx: &gpui_kit::App) -> impl IntoElement {
     div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45)
 }
 
@@ -335,7 +340,9 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                     this.sync_filtered_records_and_reveal(cx);
                     cx.notify();
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
         .child(
             image_button
@@ -347,7 +354,9 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                     this.sync_filtered_records_and_reveal(cx);
                     cx.notify();
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
         .child(
             files_button
@@ -359,7 +368,9 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                     this.sync_filtered_records_and_reveal(cx);
                     cx.notify();
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
 }
 
@@ -391,7 +402,9 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
                     this.sync_filtered_records_and_reveal(cx);
                     cx.notify();
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
 }
 

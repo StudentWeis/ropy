@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gpui::{App, Global, ReadGlobal};
+use gpui_kit::{App, Global, ReadGlobal};
 
 /// Storage backend traits and implementations (memory, redb).
 pub mod backend;
