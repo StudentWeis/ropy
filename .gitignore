@@ -3,3 +3,4 @@
 
 # Local Codex configuration can contain MCP credentials.
 /.codex/config.toml
+/scripts/tests/__pycache__

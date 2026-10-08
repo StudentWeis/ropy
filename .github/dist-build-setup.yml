@@ -1,0 +1,23 @@
+# Included by dist in build-local-artifacts; this is not a standalone workflow.
+- name: Install cargo-bundle (macOS)
+  if: runner.os == 'macOS'
+  shell: bash
+  run: cargo install cargo-bundle --version 0.12.0 --locked
+
+- name: Build macOS bundles
+  if: runner.os == 'macOS'
+  shell: bash
+  env:
+    BUNDLE_TARGETS: ${{ join(matrix.targets, ' ') }}
+  run: |
+    for bundle_target in $BUNDLE_TARGETS; do
+      bash scripts/build_macos_dmg.sh "$bundle_target"
+    done
+
+- name: Upload macOS bundles
+  if: runner.os == 'macOS'
+  uses: actions/upload-artifact@v7
+  with:
+    name: artifacts-macos-bundle-${{ join(matrix.targets, '_') }}
+    path: target/distrib/ropy-*.dmg
+    if-no-files-found: error

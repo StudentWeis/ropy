@@ -26,6 +26,8 @@ if [[ $CHECK_ONLY -eq 0 ]]; then
 	fi
 fi
 
+python3 -m unittest discover -s scripts/tests
+
 $CARGO_CMD check --all-targets --all-features
 $CARGO_CMD clippy --all-targets --all-features
 $CARGO_CMD test

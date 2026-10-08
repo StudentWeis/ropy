@@ -127,6 +127,26 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
+      - name: "Install cargo-bundle (macOS)"
+        if: "runner.os == 'macOS'"
+        run: "cargo install cargo-bundle --version 0.12.0 --locked"
+        shell: "bash"
+      - name: "Build macOS bundles"
+        if: "runner.os == 'macOS'"
+        run: |
+          for bundle_target in $BUNDLE_TARGETS; do
+            bash scripts/build_macos_dmg.sh "$bundle_target"
+          done
+        shell: "bash"
+        env:
+          "BUNDLE_TARGETS": "${{ join(matrix.targets, ' ') }}"
+      - name: "Upload macOS bundles"
+        uses: "actions/upload-artifact@v7"
+        if: "runner.os == 'macOS'"
+        with:
+          "if-no-files-found": "error"
+          "name": "artifacts-macos-bundle-${{ join(matrix.targets, '_') }}"
+          "path": "target/distrib/ropy-*.dmg"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
@@ -136,58 +156,9 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
-
-      - name: Install GTK system deps (Ubuntu)
-        if: runner.os == 'Linux' && matrix.container == null
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libatk1.0-dev libgtk-3-dev libgdk-pixbuf2.0-dev libcairo2-dev libpango1.0-dev libxdo-dev libxkbcommon-x11-dev
-
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-
-      - name: Install cargo-bundle (macOS)
-        if: ${{ runner.os == 'macOS' }}
-        shell: bash
-        run: |
-          cargo install cargo-bundle --locked
-
-      - id: macos-bundle
-        name: Build macOS bundle (dmg)
-        if: ${{ runner.os == 'macOS' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # dist's matrix entry typically has a single target; take the first just in case.
-          targets='${{ join(matrix.targets, ' ') }}'
-          target="${targets%% *}"
-
-          # cargo-bundle's macOS format is 'osx' (it may output an .app and/or .dmg)
-          cargo bundle --release --target "$target" --format osx
-
-          mkdir -p target/distrib
-          out="target/distrib/ropy-${target}.dmg"
-
-          dmg="$(find target -maxdepth 12 -type f -name '*.dmg' -path '*bundle/osx/*' -print | head -n 1 || true)"
-          if [ -n "$dmg" ]; then
-            cp "$dmg" "$out"
-            echo "bundle_dmg=$out" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          app="$(find target -maxdepth 12 -type d -name '*.app' -path '*bundle/osx/*' -print | head -n 1 || true)"
-          if [ -z "$app" ]; then
-            echo "cargo-bundle did not produce a .dmg or .app under target/**/bundle/osx/**" >&2
-            exit 1
-          fi
-
-          stage_dir="$(mktemp -d)"
-          cp -R "$app" "$stage_dir/"
-          ln -s /Applications "$stage_dir/Applications"
-          hdiutil create -volname "Ropy" -srcfolder "$stage_dir" -ov -format UDZO "$out"
-          echo "bundle_dmg=$out" >> "$GITHUB_OUTPUT"
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
@@ -206,13 +177,6 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-
-      - name: "Upload macOS bundle"
-        if: ${{ runner.os == 'macOS' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts-macos-bundle-${{ join(matrix.targets, '_') }}
-          path: ${{ steps.macos-bundle.outputs.bundle_dmg }}
       - name: "Upload artifacts"
         uses: actions/upload-artifact@v7
         with:
@@ -267,14 +231,24 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+
+  custom-release-update-manifest:
+    needs:
+      - plan
+      - build-local-artifacts
+    uses: ./.github/workflows/release-update-manifest.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
   # Determines if we should publish/announce
   host:
     needs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
+      - custom-release-update-manifest
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.custom-release-update-manifest.result == 'skipped' || needs.custom-release-update-manifest.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"
@@ -322,24 +296,16 @@ jobs:
         run: |
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
-      - name: Generate update manifest
-        env:
-          RELEASE_TAG: "${{ needs.plan.outputs.tag }}"
-          ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
-        run: |
-          printf '%s' "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
-          bash scripts/generate_update_manifest.sh \
-            artifacts \
-            "$GITHUB_REPOSITORY" \
-            "$RELEASE_TAG" \
-            "$RUNNER_TEMP/notes.txt" \
-            artifacts/latest.json
       - name: Create GitHub Release
         env:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
+          ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
+          # Write and read notes from a file to avoid quoting breaking things
+          echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
+
           gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
   announce:
