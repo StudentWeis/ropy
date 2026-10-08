@@ -2,7 +2,8 @@
 pub mod app;
 /// Main clipboard board UI and interactions.
 pub mod board;
-mod constants;
+/// Default application window geometry.
+pub mod constants;
 /// Global hotkey registration and updates.
 pub mod hotkey;
 /// Secondary panels embedded in the board UI.
@@ -20,6 +21,7 @@ pub mod utils;
 pub mod x11;
 
 pub(crate) use app::{Assets, create_window};
+pub(crate) use constants::default_window_size;
 pub(crate) use tray::start_tray_handler;
 #[cfg(target_os = "macos")]
 pub(crate) use utils::set_activation_policy_accessory;
