@@ -71,6 +71,21 @@ cargo build --release
 ./target/release/ropy
 ```
 
+### 开发命令
+
+安装 GNU Make、Bash 和 `awk` 后（Windows 可使用 MSYS2 等兼容环境），执行 `make` 或 `make help` 查看开发命令。Cargo 使用 `rust-toolchain.toml` 中固定的 Rust 版本；格式化还需要 nightly rustfmt（`rustup toolchain install nightly --profile minimal --component rustfmt`）。
+
+```sh
+make build          # 调试构建
+make build-release  # 优化构建
+make run            # 启动调试版应用
+make test           # 运行测试
+make fmt-check      # 检查 Rust 格式
+make precheck       # 格式化代码并执行完整的提交前检查
+```
+
+其他目标包括 `check`、`clippy`、`fmt`、`doc` 和 `clean`。`make setup` 调用 `scripts/init.sh` 安装开发工具及 Git hooks。预检查脚本需要 Python 3 和 Clippy（`rustup component add clippy`）。直接调用 Cargo 的目标支持 `make build CARGO="rtk cargo"` 等覆盖方式；脚本目标沿用各自的命令选择逻辑。
+
 ## 使用
 
 - 启动 Ropy —— 它会隐藏在系统托盘中并开始记录剪贴板历史。
