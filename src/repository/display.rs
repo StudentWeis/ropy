@@ -150,7 +150,7 @@ mod tests {
 
         ClipboardRepository::sort_for_display(&mut records);
 
-        assert!(records.is_empty());
+        assert_eq!(records, []);
     }
 
     #[test]

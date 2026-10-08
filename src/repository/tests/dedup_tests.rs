@@ -218,10 +218,9 @@ fn test_favorite_toggle_record_updates_membership() {
         .save_text("Favorite me".to_string())
         .expect("Failed to save");
 
-    assert!(
-        repo.favorite_ids()
-            .expect("Failed to load favorite ids")
-            .is_empty()
+    assert_eq!(
+        repo.favorite_ids().expect("Failed to load favorite ids"),
+        Vec::<u64>::new()
     );
 
     let is_favorite = repo
@@ -236,10 +235,9 @@ fn test_favorite_toggle_record_updates_membership() {
         .toggle_favorite(record.id)
         .expect("Failed to remove favorite");
     assert!(!is_favorite);
-    assert!(
-        repo.favorite_ids()
-            .expect("Failed to load favorite ids")
-            .is_empty()
+    assert_eq!(
+        repo.favorite_ids().expect("Failed to load favorite ids"),
+        Vec::<u64>::new()
     );
 }
 
@@ -259,10 +257,9 @@ fn test_delete_favorite_record_removes_membership() {
 
     let deleted = repo.delete(record.id).expect("Failed to delete");
     assert!(deleted);
-    assert!(
-        repo.favorite_ids()
-            .expect("Failed to load favorite ids")
-            .is_empty()
+    assert_eq!(
+        repo.favorite_ids().expect("Failed to load favorite ids"),
+        Vec::<u64>::new()
     );
 }
 

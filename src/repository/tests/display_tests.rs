@@ -194,7 +194,7 @@ fn test_get_display_records_zero_limit() {
     repo.save_text("Test".to_string()).expect("Failed to save");
 
     let result = load_display_records(&repo, 0);
-    assert!(result.is_empty());
+    assert_eq!(result, []);
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn test_get_display_records_empty_repo() {
     let repo = create_test_repo();
 
     let result = load_display_records(&repo, 10);
-    assert!(result.is_empty());
+    assert_eq!(result, []);
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn test_count_empty() {
 fn test_sort_for_display_empty() {
     let mut records: Vec<ClipboardRecord> = vec![];
     ClipboardRepository::sort_for_display(&mut records);
-    assert!(records.is_empty());
+    assert_eq!(records, []);
 }
 
 #[test]

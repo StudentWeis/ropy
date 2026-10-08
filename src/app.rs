@@ -215,8 +215,8 @@ fn setup_hotkey_listener(
 
 fn bind_application_keys(cx: &mut App) {
     let quit_key_binding = cfg_select! {
-        target_os = "macos" => { KeyBinding::new("cmd-q", Quit, None) },
-        _ => { KeyBinding::new("alt-f4", Quit, None) },
+        target_os = "macos" => KeyBinding::new("cmd-q", Quit, None),
+        _ => KeyBinding::new("alt-f4", Quit, None),
     };
 
     cx.bind_keys([
@@ -351,7 +351,7 @@ mod tests {
         let records =
             load_initial_records::<crate::repository::backend::redb::RedbBackend>(None, 10);
 
-        assert!(records.is_empty());
+        assert_eq!(records, []);
     }
 
     #[test]

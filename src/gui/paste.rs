@@ -43,8 +43,8 @@ const fn paste_delay() -> Duration {
 
 const fn paste_modifier_key() -> Key {
     cfg_select! {
-        target_os = "macos" => { Key::Meta },
-        _ => { Key::Control },
+        target_os = "macos" => Key::Meta,
+        _ => Key::Control,
     }
 }
 
