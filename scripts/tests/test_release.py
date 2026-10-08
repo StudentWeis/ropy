@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 
@@ -12,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_bundle_macos_settings_use_supported_schema(self):
+        with (ROOT / "Cargo.toml").open("rb") as manifest:
+            bundle = tomllib.load(manifest)["package"]["metadata"]["bundle"]
+        self.assertNotIn("osx_minimum_system_version", bundle)
+        self.assertEqual(bundle["macos"]["minimum_system_version"], "10.15")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
