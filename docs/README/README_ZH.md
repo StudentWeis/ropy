@@ -84,7 +84,7 @@ make fmt-check      # 检查 Rust 格式
 make precheck       # 格式化代码并执行完整的提交前检查
 ```
 
-其他目标包括 `check`、`clippy`、`fmt`、`doc` 和 `clean`。`make setup` 调用 `scripts/init.sh` 安装开发工具及 Git hooks。预检查脚本需要 Python 3 和 Clippy（`rustup component add clippy`）。直接调用 Cargo 的目标支持 `make build CARGO="rtk cargo"` 等覆盖方式；脚本目标沿用各自的命令选择逻辑。
+其他目标包括 `check`、`clippy`、`fmt`、`doc` 和 `clean`。`make setup` 调用 `scripts/init.sh` 安装开发工具及 hk Git hooks（hk 2.5+）。请先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)；YAML、TOML 和 JSON 检查通过 `uvx` 运行固定版本的解析器。安装脚本会替换现有的 pre-commit hook。使用 `hk check --all` 检查文件，使用 `hk fix --all` 修复文件。如果提交钩子修改了文件，请审阅并暂存修改后重新提交。预检查脚本需要 Python 3 和 Clippy（`rustup component add clippy`）。直接调用 Cargo 的目标支持 `make build CARGO="rtk cargo"` 等覆盖方式；脚本目标沿用各自的命令选择逻辑。
 
 ## 使用
 

@@ -1,0 +1,38 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+
+min_hk_version = "2.4.0"
+fail_fast = false
+
+// Keep fixes unstaged so contributors can review them before retrying the commit.
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stage = false
+    fail_on_fix = true
+    stash = "git"
+  }
+}
+
+steps {
+  ["check-yaml"] {
+    glob = List("**/*.yaml", "**/*.yml")
+    check = "uvx --from pre-commit-hooks==6.0.0 check-yaml {{files}}"
+  }
+  ["check-toml"] {
+    glob = "**/*.toml"
+    check = "uvx --from pre-commit-hooks==6.0.0 check-toml {{files}}"
+  }
+  ["check-json"] {
+    glob = "**/*.json"
+    check = "uvx --from pre-commit-hooks==6.0.0 check-json {{files}}"
+  }
+  ["check-added-large-files"] = (Builtins.check_added_large_files) { allow_binary = true }
+  ["check-merge-conflict"] = Builtins.check_merge_conflict
+  ["check-case-conflict"] = (Builtins.check_case_conflict) { allow_binary = true }
+  ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
+  ["trailing-whitespace"] = Builtins.trailing_whitespace
+  ["end-of-file-fixer"] = Builtins.newlines
+  ["mixed-line-ending"] = Builtins.mixed_line_ending
+  ["fix-byte-order-marker"] = Builtins.byte_order_marker
+}
