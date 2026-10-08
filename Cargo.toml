@@ -162,7 +162,9 @@ pre-release-hook = ["bash", "scripts/release_prepare.sh"]
 name = "Ropy"
 identifier = "com.ropy.app"
 icon = ["assets/logo.png"]
-osx_minimum_system_version = "10.15"
+
+[package.metadata.bundle.macos]
+minimum_system_version = "10.15"
 
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
