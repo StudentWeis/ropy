@@ -1,0 +1,41 @@
+name: Build update manifest
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: artifacts-build-local-*
+          path: artifacts
+          merge-multiple: true
+      - name: Generate update manifest
+        env:
+          RELEASE_TAG: ${{ fromJson(inputs.plan).announcement_tag }}
+          ANNOUNCEMENT_BODY: ${{ fromJson(inputs.plan).announcement_github_body }}
+        run: |
+          printf '%s' "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          bash scripts/generate_update_manifest.sh \
+            artifacts \
+            "$GITHUB_REPOSITORY" \
+            "$RELEASE_TAG" \
+            "$RUNNER_TEMP/notes.txt" \
+            artifacts/latest.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-update-manifest
+          path: artifacts/latest.json
+          if-no-files-found: error

@@ -5,8 +5,6 @@ members = ["cargo:."]
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.32.0"
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -17,3 +15,17 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
+
+# Keep release.yml generated; project-specific work uses dist's extension points.
+github-build-setup = "../dist-build-setup.yml"
+global-artifacts-jobs = ["./release-update-manifest"]
+
+[dist.dependencies.apt]
+pkg-config = "*"
+"libatk1.0-dev" = "*"
+libgtk-3-dev = "*"
+"libgdk-pixbuf2.0-dev" = "*"
+libcairo2-dev = "*"
+"libpango1.0-dev" = "*"
+libxdo-dev = "*"
+libxkbcommon-x11-dev = "*"
