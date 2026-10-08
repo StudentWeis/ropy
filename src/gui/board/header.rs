@@ -1,9 +1,10 @@
 use gpui_kit::{
     Context,
     component::{
-        ActiveTheme, Icon,
+        ActiveTheme, Icon, Sizable,
         button::{Button, ButtonVariants},
         h_flex,
+        spinner::Spinner,
     },
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
@@ -42,6 +43,9 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
             h_flex()
                 .gap_2()
                 .items_center()
+                .when(board.copy_in_progress, |this| {
+                    this.child(Spinner::new().small())
+                })
                 .child(
                     if is_pinned {
                         Button::new("pin-button").primary()

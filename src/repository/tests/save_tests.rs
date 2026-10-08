@@ -256,3 +256,86 @@ fn test_binary_serialization_round_trip() {
     assert_eq!(records[0].content, "binary record");
     assert!(!records[0].pinned);
 }
+
+#[test]
+fn test_save_rich_text_failed_commit_preserves_previous_sidecar() {
+    let dir = tempfile::tempdir().expect("dir");
+    let backend = crate::repository::backend::memory::MemoryBackend::new();
+    let repo = crate::repository::ClipboardRepository::from_backend(
+        backend.clone(),
+        dir.path().join("images"),
+    )
+    .expect("repo");
+    let original = repo
+        .save_rich_text("same".into(), Some("<b>old formatting</b>"), None)
+        .expect("save");
+    backend.fail_next_batch();
+    assert!(
+        repo.save_rich_text("same".into(), Some("<i>new formatting</i>"), None)
+            .is_err()
+    );
+    let record = repo.get_by_id(original.id).expect("read").expect("record");
+    let actual =
+        crate::clipboard::load_rich_text_html(record.rich_text_meta.as_ref().expect("meta"));
+    assert_eq!(
+        actual.as_deref(),
+        Some("<b>old formatting</b>"),
+        "failed save mutated previously committed content"
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("rich_text"))
+            .unwrap()
+            .count(),
+        1,
+        "failed replacement left an orphaned sidecar"
+    );
+}
+
+#[test]
+fn test_save_rich_text_failed_insert_removes_new_sidecars() {
+    let dir = tempfile::tempdir().unwrap();
+    let backend = crate::repository::backend::memory::MemoryBackend::new();
+    let repo = crate::repository::ClipboardRepository::from_backend(
+        backend.clone(),
+        dir.path().join("images"),
+    )
+    .unwrap();
+    backend.fail_next_batch();
+    assert!(
+        repo.save_rich_text(
+            "new record".into(),
+            Some("<b>new</b>"),
+            Some("{\\rtf1 new}")
+        )
+        .is_err()
+    );
+    assert_eq!(repo.get_display_records(10).unwrap().len(), 0);
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("rich_text"))
+            .unwrap()
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn test_save_rich_text_successful_replacement_removes_old_sidecars() {
+    let (_dir, repo) = create_test_repo_with(memory_backend_factory);
+    let original = repo
+        .save_rich_text("same".into(), Some("<b>old</b>"), Some("{\\rtf1 old}"))
+        .unwrap();
+    let previous = original.rich_text_meta.unwrap();
+    let updated = repo
+        .save_rich_text("same".into(), Some("<i>new</i>"), None)
+        .unwrap();
+    assert_eq!(original.id, updated.id);
+    let meta = updated.rich_text_meta.unwrap();
+    assert_ne!(previous.html_path, meta.html_path);
+    assert_eq!(
+        crate::clipboard::load_rich_text_html(&meta).as_deref(),
+        Some("<i>new</i>")
+    );
+    assert!(meta.rtf_path.is_none());
+    assert!(!std::path::Path::new(previous.html_path.as_ref().unwrap()).exists());
+    assert!(!std::path::Path::new(previous.rtf_path.as_ref().unwrap()).exists());
+}

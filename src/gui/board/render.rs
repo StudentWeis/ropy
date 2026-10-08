@@ -1,13 +1,10 @@
 use gpui_kit::{
     AnyElement, Context, Render, Window,
     component::{ActiveTheme, v_flex},
-    prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
+    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
 };
 
-use super::{
-    ActivePanel, RopyBoard, clear_confirm, delete_confirm, header::render_header,
-    search::render_search_input,
-};
+use super::{ActivePanel, RopyBoard, header::render_header, search::render_search_input};
 use crate::gui::panel::{
     about::render_about_content, help::render_help_content, settings::render_settings_content,
 };
@@ -59,22 +56,6 @@ impl Render for RopyBoard {
                 .into_any_element(),
         };
 
-        let show_clear_confirm = self.ui_state.clear_confirm_visible();
-        let show_delete_confirm = self.ui_state.delete_confirm_visible();
-        let clear_confirm_action = self.clear_confirm_action;
-        gpui_kit::div()
-            .relative()
-            .size_full()
-            .child(body)
-            .when(show_clear_confirm, |this| {
-                this.child(clear_confirm::render_clear_confirm_overlay(
-                    clear_confirm_action,
-                    cx,
-                ))
-            })
-            .when(show_delete_confirm, |this| {
-                this.child(delete_confirm::render_delete_confirm_overlay(cx))
-            })
-            .into_any_element()
+        body
     }
 }

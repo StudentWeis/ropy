@@ -23,7 +23,7 @@ use super::{
     time_index::TimeIndex,
 };
 use crate::{
-    clipboard::save_rich_text_files_to_dir,
+    clipboard::{remove_rich_text_files, save_rich_text_files_to_dir},
     utils::{content_hash, normalize_file_paths, serialize_file_paths},
 };
 
@@ -237,17 +237,27 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let id = content_hash(&plain_text, &ContentType::RichText);
         let key = id.to_be_bytes();
         let now = Local::now();
+        let existing = self.get_raw(&key)?;
+        let existing: Option<ClipboardRecord> = existing
+            .map(|bytes| {
+                postcard::from_bytes(&bytes)
+                    .map_err(|error| RepositoryError::Deserialization(error.to_string()))
+            })
+            .transpose()?;
         let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root());
 
-        if let Some(existing) = self.get_raw(&key)? {
-            let mut record: ClipboardRecord = postcard::from_bytes(&existing)
-                .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
+        if let Some(mut record) = existing {
             record.created_at = now;
             let previous_meta = record.rich_text_meta.clone();
-            if let Some(meta) = rich_text_meta {
-                record.rich_text_meta = Some(meta);
+            if let Some(meta) = rich_text_meta.as_ref() {
+                record.rich_text_meta = Some(meta.clone());
             }
-            self.put_indexed_record(&key, &record)?;
+            if let Err(error) = self.put_indexed_record(&key, &record) {
+                if let Some(meta) = rich_text_meta.as_ref() {
+                    remove_rich_text_files(meta);
+                }
+                return Err(error);
+            }
             if let Some(meta) = record.rich_text_meta.as_ref() {
                 remove_superseded_rich_text_files(previous_meta.as_ref(), meta);
             }
@@ -262,7 +272,12 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             pinned: false,
             rich_text_meta,
         };
-        self.put_indexed_record(&key, &record)?;
+        if let Err(error) = self.put_indexed_record(&key, &record) {
+            if let Some(meta) = record.rich_text_meta.as_ref() {
+                remove_rich_text_files(meta);
+            }
+            return Err(error);
+        }
         Ok(record)
     }
 }

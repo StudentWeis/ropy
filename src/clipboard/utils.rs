@@ -91,18 +91,24 @@ fn rich_text_dir_path(data_dir: &Path) -> PathBuf {
     data_dir.join("rich_text")
 }
 
-fn rich_text_file_path(data_dir: &Path, record_id: u64, extension: &str) -> PathBuf {
-    rich_text_dir_path(data_dir).join(format!("{record_id}.{extension}"))
-}
-
-fn write_rich_text_file(path: &Path, content: &str) -> Option<String> {
-    let parent = path.parent()?;
-    if !parent.exists() {
-        fs::create_dir_all(parent).ok()?;
-    }
-
-    fs::write(path, content).ok()?;
-    Some(path.to_string_lossy().to_string())
+fn write_rich_text_file(
+    data_dir: &Path,
+    record_id: u64,
+    extension: &str,
+    content: &str,
+) -> Option<String> {
+    use std::io::Write;
+    let directory = rich_text_dir_path(data_dir);
+    fs::create_dir_all(&directory).ok()?;
+    let mut file = tempfile::Builder::new()
+        .prefix(&format!("{record_id}-"))
+        .suffix(&format!(".{extension}"))
+        .tempfile_in(directory)
+        .ok()?;
+    file.write_all(content.as_bytes()).ok()?;
+    file.as_file().sync_all().ok()?;
+    let (_, path) = file.keep().ok()?;
+    Some(path.to_string_lossy().into_owned())
 }
 
 pub(crate) fn save_rich_text_files_to_dir(
@@ -111,14 +117,10 @@ pub(crate) fn save_rich_text_files_to_dir(
     rtf: Option<&str>,
     data_dir: &Path,
 ) -> Option<RichTextMeta> {
-    let html_path = html.and_then(|content| {
-        let path = rich_text_file_path(data_dir, record_id, "html");
-        write_rich_text_file(&path, content)
-    });
-    let rtf_path = rtf.and_then(|content| {
-        let path = rich_text_file_path(data_dir, record_id, "rtf");
-        write_rich_text_file(&path, content)
-    });
+    let html_path =
+        html.and_then(|content| write_rich_text_file(data_dir, record_id, "html", content));
+    let rtf_path =
+        rtf.and_then(|content| write_rich_text_file(data_dir, record_id, "rtf", content));
 
     if html_path.is_none() && rtf_path.is_none() {
         None

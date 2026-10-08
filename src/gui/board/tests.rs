@@ -1,4 +1,4 @@
-#![cfg_attr(test, allow(clippy::panic))]
+#![cfg_attr(test, allow(clippy::panic, clippy::expect_used, clippy::unwrap_used))]
 
 use std::collections::HashSet;
 
@@ -25,25 +25,37 @@ use crate::{
     updater::models::UpdateStatus,
 };
 
-#[test]
-fn test_wait_for_clipboard_write_when_writer_succeeds_returns_true() {
-    let (tx, rx) = std::sync::mpsc::channel();
-    assert!(tx.send(Ok(())).is_ok());
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI test contexts stay on the UI thread"
+)]
+async fn test_wait_for_clipboard_write_when_writer_succeeds_returns_true(
+    cx: &gpui_kit::TestAppContext,
+) {
+    let (tx, rx) = async_channel::bounded(1);
+    assert!(tx.try_send(Ok(())).is_ok());
 
-    assert!(wait_for_clipboard_write(&rx));
+    assert!(wait_for_clipboard_write(&rx, &cx.background_executor).await);
 }
 
-#[test]
-fn test_wait_for_clipboard_write_when_writer_fails_returns_false() {
-    let (tx, rx) = std::sync::mpsc::channel();
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI test contexts stay on the UI thread"
+)]
+async fn test_wait_for_clipboard_write_when_writer_fails_returns_false(
+    cx: &gpui_kit::TestAppContext,
+) {
+    let (tx, rx) = async_channel::bounded(1);
     assert!(
-        tx.send(Err(ClipboardWriteError::Clipboard(
+        tx.try_send(Err(ClipboardWriteError::Clipboard(
             "injected failure".to_string(),
         )))
         .is_ok()
     );
 
-    assert!(!wait_for_clipboard_write(&rx));
+    assert!(!wait_for_clipboard_write(&rx, &cx.background_executor).await);
 }
 
 #[rstest]
@@ -54,26 +66,6 @@ fn test_focus_out_auto_hide_for_pin_state_matches_expected(
     #[case] expected: bool,
 ) {
     assert_eq!(RopyBoard::should_auto_hide_on_focus_out(pinned), expected);
-}
-
-#[test]
-fn test_open_settings_panel_hides_opacity_slider_until_next_frame() {
-    let mut slider_visible = true;
-    let show_settings = true;
-
-    if show_settings {
-        slider_visible = false;
-    }
-
-    assert!(!slider_visible);
-}
-
-#[test]
-fn test_window_opacity_slider_reveals_only_while_settings_open() {
-    let reveal_slider = |show_settings: bool| show_settings;
-
-    assert!(reveal_slider(true));
-    assert!(!reveal_slider(false));
 }
 
 fn test_datetime(hour: u32) -> chrono::DateTime<Local> {
