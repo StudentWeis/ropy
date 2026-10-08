@@ -1,14 +1,15 @@
 #[cfg(target_os = "windows")]
-use gpui::InteractiveElement;
-use gpui::{
-    Context, SharedString, div,
+use gpui_kit::InteractiveElement;
+use gpui_kit::{
+    Context, SharedString,
+    component::{
+        ActiveTheme, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex,
+    },
+    div,
     prelude::{IntoElement, ParentElement, Styled},
     px,
-};
-use gpui_component::{
-    ActiveTheme, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex,
 };
 
 const PANEL_SIDE_WIDTH_PX: f32 = 72.0;
@@ -47,13 +48,13 @@ where
                 .text_center()
                 .text_lg()
                 .text_color(cx.theme().foreground)
-                .font_weight(gpui::FontWeight::BOLD)
+                .font_weight(gpui_kit::FontWeight::BOLD)
                 .child(title.into()),
         )
         .child(trailing);
 
     #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
+    let header = header.on_mouse_down(gpui_kit::MouseButton::Left, |_, window, _cx| {
         crate::gui::utils::start_window_drag(window);
     });
 

@@ -4,7 +4,7 @@
 //! `save_hotkey` path. Shared notification and persistence helpers live
 //! in the parent module.
 
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
 use crate::{
@@ -17,7 +17,7 @@ impl RopyBoard {
     pub(crate) fn hotkey_placeholder_text(
         hotkey: &str,
         cx: &Context<'_, Self>,
-    ) -> gpui::SharedString {
+    ) -> gpui_kit::SharedString {
         if hotkey.trim().is_empty() {
             I18n::translate(cx, "settings_hotkey_empty").into()
         } else {

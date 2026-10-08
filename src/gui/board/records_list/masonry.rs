@@ -1,9 +1,10 @@
-use gpui::{
-    App, RenderOnce, ScrollHandle, Window, div,
+use gpui_kit::{
+    App, RenderOnce, ScrollHandle, Window,
+    component::scroll::{Scrollbar, ScrollbarMode},
+    div,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
 };
-use gpui_component::scroll::{Scrollbar, ScrollbarShow};
 
 use super::{
     SCROLLBAR_OVERLAY_RIGHT_OFFSET,
@@ -82,11 +83,11 @@ fn build_masonry_layout(
     }
 }
 
-pub(super) fn grid_available_width(window: &Window) -> gpui::Pixels {
+pub(super) fn grid_available_width(window: &Window) -> gpui_kit::Pixels {
     (window.bounds().size.width - px(BOARD_HORIZONTAL_PADDING)).max(px(1.0))
 }
 
-fn grid_card_width(available_width: gpui::Pixels) -> gpui::Pixels {
+fn grid_card_width(available_width: gpui_kit::Pixels) -> gpui_kit::Pixels {
     ((available_width - px(GRID_COLUMN_GAP)) / GRID_COLUMN_COUNT_F32).max(px(1.0))
 }
 
@@ -132,14 +133,14 @@ fn masonry_placement_is_visible(
 pub(super) struct GridMasonry {
     state: RecordsListState,
     scroll_handle: ScrollHandle,
-    available_width: gpui::Pixels,
+    available_width: gpui_kit::Pixels,
 }
 
 impl GridMasonry {
     pub(super) const fn new(
         state: RecordsListState,
         scroll_handle: ScrollHandle,
-        available_width: gpui::Pixels,
+        available_width: gpui_kit::Pixels,
     ) -> Self {
         Self {
             state,
@@ -229,10 +230,7 @@ impl RenderOnce for GridMasonry {
                     .left_0()
                     .right(px(SCROLLBAR_OVERLAY_RIGHT_OFFSET))
                     .bottom_0()
-                    .child(
-                        Scrollbar::vertical(&self.scroll_handle)
-                            .scrollbar_show(ScrollbarShow::Scrolling),
-                    ),
+                    .child(Scrollbar::vertical(&self.scroll_handle).mode(ScrollbarMode::Scrolling)),
             )
     }
 }

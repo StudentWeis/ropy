@@ -31,11 +31,10 @@ pub(crate) use actions::{
     Quit, SelectLeft, SelectNext, SelectPrev, SelectRight, ToggleFavoritesFilter,
 };
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
-use gpui::{
+use gpui_kit::{
     AppContext, Bounds, Context, Entity, FocusHandle, ListAlignment, ListState, Pixels, Point,
-    ScrollHandle, Subscription, Window,
+    ScrollHandle, Subscription, Window, component::input::InputState,
 };
-use gpui_component::input::InputState;
 pub(crate) use search::{ContentFilter, SearchOptions};
 use settings_editor::{
     SettingsEditor, UpdateManager, build_language_select, build_layout_select, build_theme_select,
@@ -217,7 +216,7 @@ impl RopyBoard {
         Self::window_pin_available(self.confirm_mode)
     }
 
-    pub(crate) fn main_panel_surface(&self, color: gpui::Hsla) -> gpui::Hsla {
+    pub(crate) fn main_panel_surface(&self, color: gpui_kit::Hsla) -> gpui_kit::Hsla {
         surface_with_opacity(color, self.settings_editor.window_opacity_percent)
     }
 
@@ -231,8 +230,8 @@ impl RopyBoard {
 
     fn reveal_selected_grid_item(&self) {
         let viewport_bounds = self.grid_scroll_handle.bounds();
-        if viewport_bounds.size.width > gpui::px(0.0)
-            && viewport_bounds.size.height > gpui::px(0.0)
+        if viewport_bounds.size.width > gpui_kit::px(0.0)
+            && viewport_bounds.size.height > gpui_kit::px(0.0)
             && let Some(item_bounds) = self.grid_scroll_handle.bounds_for_item(self.selected_index)
             && let Some(offset) = grid_reveal_offset(
                 viewport_bounds,
@@ -265,13 +264,12 @@ impl RopyBoard {
         }
     }
 
-    #[expect(clippy::needless_pass_by_ref_mut)]
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.active_panel = ActivePanel::Settings;
         self.settings_editor
             .panel_state
             .window_opacity_slider_visible = false;
-        window.focus(&self.focus_handle);
+        window.focus(&self.focus_handle, cx);
 
         let weak_entity = cx.entity().downgrade();
         window.on_next_frame(move |window, cx| {
@@ -284,7 +282,7 @@ impl RopyBoard {
                     .settings_editor
                     .panel_state
                     .window_opacity_slider_visible = true;
-                window.focus(&board.focus_handle);
+                window.focus(&board.focus_handle, cx);
                 cx.notify();
             });
         });
@@ -349,7 +347,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
-        window.focus(&focus_handle);
+        window.focus(&focus_handle, cx);
 
         // Subscribe to focus out events to hide the window
         let focus_out_subscription =
@@ -441,7 +439,7 @@ impl RopyBoard {
         let list_state = ListState::new(
             records_list::visible_list_len(initial_filtered_record_indices.len(), layout_mode),
             ListAlignment::Top,
-            gpui::px(160.),
+            gpui_kit::px(160.),
         );
         let search_input_subscription = cx.observe(&search_input, |this, _, cx| {
             let next_query = this.search_input.read(cx).value().to_string();

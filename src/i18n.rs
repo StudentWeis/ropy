@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gpui::{App, Global, ReadGlobal};
+use gpui_kit::{App, Global, ReadGlobal};
 use language::LocaleAssets;
 
 /// I18n loading and parse error types.

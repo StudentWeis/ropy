@@ -2,12 +2,13 @@ mod masonry;
 mod metrics;
 mod row;
 
-use gpui::{
-    AnyElement, Context, Window, div, list,
+use gpui_kit::{
+    AnyElement, Context, Window,
+    component::scroll::{Scrollbar, ScrollbarMode},
+    div, list,
     prelude::{IntoElement, ParentElement, Styled},
     px,
 };
-use gpui_component::scroll::{Scrollbar, ScrollbarShow};
 use masonry::{GridMasonry, grid_available_width};
 pub(super) use metrics::{list_row_for_selected_index, visible_list_len};
 use row::RecordsListState;
@@ -53,10 +54,7 @@ impl RopyBoard {
                     .left_0()
                     .right(px(SCROLLBAR_OVERLAY_RIGHT_OFFSET))
                     .bottom_0()
-                    .child(
-                        Scrollbar::vertical(&scrollbar_state)
-                            .scrollbar_show(ScrollbarShow::Scrolling),
-                    ),
+                    .child(Scrollbar::vertical(&scrollbar_state).mode(ScrollbarMode::Scrolling)),
             )
             .into_any_element()
     }

@@ -1,6 +1,6 @@
 //! Update-check settings handlers (`auto_check`, `include_prerelease`).
 
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
 use crate::{config::Settings, i18n::I18n};

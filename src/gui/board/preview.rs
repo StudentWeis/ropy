@@ -3,10 +3,10 @@
 
 use std::path::PathBuf;
 
-use gpui::{
-    AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, Window, div, img, px,
+use gpui_kit::{
+    AnyView, App, AppContext, IntoElement, ParentElement, Render, Styled, Window,
+    component::ActiveTheme, div, img, px,
 };
-use gpui_component::ActiveTheme;
 use image::ImageReader;
 
 const TOOLTIP_HORIZONTAL_MARGIN_PX: f32 = 40.0;
@@ -32,7 +32,7 @@ impl Render for TooltipView {
     fn render(
         &mut self,
         _window: &mut Window,
-        cx: &mut gpui::Context<'_, Self>,
+        cx: &mut gpui_kit::Context<'_, Self>,
     ) -> impl IntoElement {
         div()
             .flex()
@@ -52,7 +52,7 @@ impl Render for TooltipView {
                     .min_w_0()
                     .text_sm()
                     .text_color(cx.theme().popover_foreground)
-                    .line_height(gpui::relative(1.5))
+                    .line_height(gpui_kit::relative(1.5))
                     .overflow_hidden()
                     .child(self.content.clone()),
             )
@@ -84,9 +84,9 @@ pub(super) fn image_tooltip(
 
 fn calculate_image_size(
     path: &str,
-    max_w: gpui::Pixels,
-    max_h: gpui::Pixels,
-) -> (gpui::Pixels, gpui::Pixels) {
+    max_w: gpui_kit::Pixels,
+    max_h: gpui_kit::Pixels,
+) -> (gpui_kit::Pixels, gpui_kit::Pixels) {
     if let Ok(reader) = ImageReader::open(path).and_then(ImageReader::with_guessed_format)
         && let Ok(dims) = reader.into_dimensions()
     {
@@ -107,15 +107,15 @@ fn calculate_image_size(
 
 struct ImageTooltipView {
     image_path: String,
-    width: gpui::Pixels,
-    height: gpui::Pixels,
+    width: gpui_kit::Pixels,
+    height: gpui_kit::Pixels,
 }
 
 impl Render for ImageTooltipView {
     fn render(
         &mut self,
         _window: &mut Window,
-        cx: &mut gpui::Context<'_, Self>,
+        cx: &mut gpui_kit::Context<'_, Self>,
     ) -> impl IntoElement {
         div().flex().flex_row().min_w_0().child(
             div()

@@ -1,12 +1,13 @@
-use gpui::{
-    Context, div,
+use gpui_kit::{
+    Context,
+    component::{
+        ActiveTheme, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex, v_flex,
+    },
+    div,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
     px,
-};
-use gpui_component::{
-    ActiveTheme, Sizable,
-    button::{Button, ButtonVariants},
-    h_flex, v_flex,
 };
 
 use super::RopyBoard;
@@ -23,7 +24,7 @@ pub(super) fn render_delete_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl
         .top_0()
         .left_0()
         .size_full()
-        .bg(gpui::rgba(0x0000_0050))
+        .bg(gpui_kit::rgba(0x0000_0050))
         .flex()
         .items_center()
         .justify_center()
@@ -41,11 +42,13 @@ pub(super) fn render_delete_confirm_overlay(cx: &Context<'_, RopyBoard>) -> impl
                 .rounded_lg()
                 .gap_3()
                 .id("delete-confirm-card")
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                })
                 .child(
                     div()
                         .text_base()
-                        .font_weight(gpui::FontWeight::BOLD)
+                        .font_weight(gpui_kit::FontWeight::BOLD)
                         .text_color(cx.theme().foreground)
                         .child(title),
                 )

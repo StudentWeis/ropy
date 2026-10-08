@@ -1,18 +1,19 @@
-use gpui::{
-    Context, StatefulInteractiveElement, div,
+use gpui_kit::{
+    Context, StatefulInteractiveElement,
+    component::{
+        ActiveTheme, Icon, IndexPath, Sizable, StyledExt,
+        button::{Button, ButtonVariants},
+        h_flex,
+        input::Input,
+        select::Select,
+        separator::Separator,
+        slider::Slider,
+        switch::Switch,
+        v_flex,
+    },
+    div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
-};
-use gpui_component::{
-    ActiveTheme, Icon, IndexPath, Sizable, StyledExt,
-    button::{Button, ButtonVariants},
-    divider::Divider,
-    h_flex,
-    input::Input,
-    select::Select,
-    slider::Slider,
-    switch::Switch,
-    v_flex,
 };
 
 use crate::{
@@ -25,7 +26,7 @@ use crate::{
 };
 
 fn settings_row<C: IntoElement>(
-    label: impl Into<gpui::SharedString>,
+    label: impl Into<gpui_kit::SharedString>,
     control: C,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
@@ -45,7 +46,7 @@ fn settings_row<C: IntoElement>(
 }
 
 fn settings_section_header(
-    label: impl Into<gpui::SharedString>,
+    label: impl Into<gpui_kit::SharedString>,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     div()
@@ -58,7 +59,7 @@ fn settings_section_header(
         .child(label.into())
 }
 
-fn settings_card(cx: &Context<'_, RopyBoard>) -> gpui::Div {
+fn settings_card(cx: &Context<'_, RopyBoard>) -> gpui_kit::Div {
     v_flex()
         .w_full()
         .mt_3()
@@ -68,8 +69,8 @@ fn settings_card(cx: &Context<'_, RopyBoard>) -> gpui::Div {
 }
 
 fn section_card(
-    title: impl Into<gpui::SharedString>,
-    rows: Vec<gpui::AnyElement>,
+    title: impl Into<gpui_kit::SharedString>,
+    rows: Vec<gpui_kit::AnyElement>,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let mut card = settings_card(cx).child(settings_section_header(title, cx));
@@ -77,7 +78,7 @@ fn section_card(
     for (index, row) in rows.into_iter().enumerate() {
         card = card.child(row);
         if index < last_index {
-            card = card.child(Divider::horizontal());
+            card = card.child(Separator::horizontal());
         }
     }
     card
@@ -154,7 +155,9 @@ fn render_settings_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
             .on_click(cx.listener(|board, _click_event, window, cx| {
                 reset_settings_dialog(board, window, cx);
             }))
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            }),
         cx,
     )
 }
@@ -236,13 +239,13 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
                     .child(format!("{}%", board.settings_editor.window_opacity_percent)),
             )
             .on_mouse_up(
-                gpui::MouseButton::Left,
+                gpui_kit::MouseButton::Left,
                 cx.listener(|board, _, window, cx| {
                     board.save_window_opacity(window, cx);
                 }),
             )
             .on_mouse_up_out(
-                gpui::MouseButton::Left,
+                gpui_kit::MouseButton::Left,
                 cx.listener(|board, _, window, cx| {
                     board.save_window_opacity(window, cx);
                 }),
@@ -310,7 +313,9 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
                         board.start_hotkey_recording(window, cx);
                     }
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
         .child(
             save_button
@@ -321,7 +326,9 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_hotkey(cx, window);
                 }))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
         )
 }
 
@@ -362,7 +369,9 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.save_max_history(cx, window);
                     }))
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                    .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    }),
             ),
         cx,
     )
@@ -405,7 +414,9 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.save_max_storage(cx, window);
                     }))
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                    .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    }),
             ),
         cx,
     )
@@ -575,7 +586,7 @@ fn render_include_prerelease_row(
 
 pub(crate) fn reset_settings_dialog(
     board: &mut RopyBoard,
-    window: &mut gpui::Window,
+    window: &mut gpui_kit::Window,
     cx: &mut Context<'_, RopyBoard>,
 ) {
     // Reset selections to persisted values from GPUI Global
@@ -678,6 +689,6 @@ pub(crate) fn reset_settings_dialog(
     board.sync_activation_key_input("", &current_hotkey, window, cx);
 
     board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
-    window.focus(&board.focus_handle);
+    window.focus(&board.focus_handle, cx);
     cx.notify();
 }

@@ -1,4 +1,4 @@
-use gpui::{AppContext as _, Context};
+use gpui_kit::{AppContext as _, Context};
 
 use super::RopyBoard;
 use crate::{

@@ -1,5 +1,5 @@
 use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
-use gpui::{App, AppContext as _};
+use gpui_kit::{App, AppContext as _};
 use image::ImageReader;
 
 use super::{ClipboardWriteError, ClipboardWriteResult, CopyRequest};

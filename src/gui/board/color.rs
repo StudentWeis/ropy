@@ -1,4 +1,4 @@
-use gpui::Rgba;
+use gpui_kit::Rgba;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct ClipboardColor {
@@ -20,7 +20,7 @@ impl ClipboardColor {
     }
 
     pub(super) fn to_gpui_rgba(self) -> Rgba {
-        gpui::rgba(self.to_rgba_u32())
+        gpui_kit::rgba(self.to_rgba_u32())
     }
 
     pub(super) const fn to_rgba_u32(self) -> u32 {

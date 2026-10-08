@@ -91,7 +91,7 @@ cargo build --release
 ## Acknowledgements
 
 - Inspired by clipboard managers such as Ditto, Maccy and CopyQ.
-- Thanks to the Rust community and all upstream projects used by Ropy: [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui), [clipboard-rs](https://github.com/ChurchTao/clipboard-rs), [redb](https://github.com/cberner/redb) and others.
+- Thanks to the Rust community and all upstream projects used by Ropy: [GPUI Kit](https://github.com/longbridge/gpui-kit), [clipboard-rs](https://github.com/ChurchTao/clipboard-rs), [redb](https://github.com/cberner/redb) and others.
 
 ## Star History
 

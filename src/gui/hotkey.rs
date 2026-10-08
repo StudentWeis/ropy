@@ -1,5 +1,5 @@
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
-use gpui::{App, AsyncApp, ReadGlobal as _};
+use gpui_kit::{App, AsyncApp, ReadGlobal as _};
 use thiserror::Error;
 
 use crate::config::Settings;
@@ -72,17 +72,15 @@ where
                 message,
                 &mut register_hotkey,
                 &mut |hotkey| {
-                    async_app
-                        .update(|cx| {
-                            let mut settings = Settings::global(cx).clone();
-                            settings.hotkey.activation_key = hotkey.to_string();
-                            settings.save().map_err(|error| {
-                                HotkeyUpdateError::Persistence(error.to_string())
-                            })?;
-                            cx.set_global(settings);
-                            Ok(())
-                        })
-                        .map_err(|_| HotkeyUpdateError::Disconnected)?
+                    async_app.update(|cx| {
+                        let mut settings = Settings::global(cx).clone();
+                        settings.hotkey.activation_key = hotkey.to_string();
+                        settings
+                            .save()
+                            .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))?;
+                        cx.set_global(settings);
+                        Ok(())
+                    })
                 },
                 &mut || on_hotkey(async_app),
             );

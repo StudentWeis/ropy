@@ -1,9 +1,11 @@
-use gpui::{App, AppContext, Context, Entity, SharedString, Window};
-use gpui_component::{
-    IndexPath,
-    input::InputState,
-    select::{SelectEvent, SelectState},
-    slider::{SliderEvent, SliderState},
+use gpui_kit::{
+    App, AppContext, Context, Entity, SharedString, Window,
+    component::{
+        IndexPath,
+        input::InputState,
+        select::{SelectEvent, SelectState},
+        slider::{SliderEvent, SliderState},
+    },
 };
 
 use super::RopyBoard;
@@ -155,7 +157,9 @@ pub(super) fn build_window_opacity_slider(
         &slider,
         window,
         |this, _, event: &SliderEvent, window, cx| {
-            let SliderEvent::Change(value) = event;
+            let SliderEvent::Change(value) = event else {
+                return;
+            };
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,

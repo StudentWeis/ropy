@@ -1,6 +1,6 @@
 //! Visual / locale settings handlers: theme, language, and window opacity.
 
-use gpui::{BorrowAppContext, Context, Window};
+use gpui_kit::{BorrowAppContext, Context, Window};
 
 use super::RopyBoard;
 use crate::{

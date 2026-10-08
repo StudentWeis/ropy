@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use chrono::{Local, TimeZone};
-use gpui::{Bounds, Pixels, point, px, size};
+use gpui_kit::{Bounds, Pixels, point, px, size};
 use rstest::rstest;
 
 use super::{
@@ -253,7 +253,7 @@ fn test_grid_reveal_offset_scrolls_left_to_show_item_right_edge() {
 
 #[test]
 fn test_surface_with_opacity_scales_alpha() {
-    let color = gpui::hsla(0.4, 0.5, 0.6, 1.0);
+    let color = gpui_kit::hsla(0.4, 0.5, 0.6, 1.0);
     let faded = crate::gui::surface_with_opacity(color, 65);
 
     assert!((faded.a - 0.65).abs() < 0.000_1);

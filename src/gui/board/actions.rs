@@ -1,4 +1,4 @@
-use gpui::{Bounds, Context, Focusable, KeyDownEvent, KeyUpEvent, Pixels, Window};
+use gpui_kit::{Bounds, Context, Focusable, KeyDownEvent, KeyUpEvent, Pixels, Window};
 
 use crate::{
     config::LayoutMode,
@@ -19,16 +19,16 @@ impl RopyBoard {
             input.set_value("", window, cx);
         });
         // Blur the search input to remove focus
-        window.focus(&self.focus_handle);
+        window.focus(&self.focus_handle, cx);
     }
 }
 
 #[expect(
     clippy::derive_partial_eq_without_eq,
-    reason = "gpui::actions! macro generates PartialEq; we cannot inject Eq from outside"
+    reason = "gpui_kit::actions! macro generates PartialEq; we cannot inject Eq from outside"
 )]
 mod generated_actions {
-    gpui::actions!(
+    gpui_kit::actions!(
         board,
         [
             Hide,
@@ -341,7 +341,7 @@ impl RopyBoard {
         if let Some(focused_handle) = window.focused(cx)
             && focused_handle == self.search_input.focus_handle(cx)
         {
-            window.focus(&self.focus_handle);
+            window.focus(&self.focus_handle, cx);
             return;
         }
         // Clear search input when hiding the window
@@ -393,7 +393,7 @@ impl RopyBoard {
 
         match event.keystroke.key.as_str() {
             "/" => {
-                window.focus(&self.search_input.focus_handle(cx));
+                window.focus(&self.search_input.focus_handle(cx), cx);
             }
             "space"
                 if self

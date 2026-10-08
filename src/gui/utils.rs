@@ -14,7 +14,7 @@
 
 use std::cfg_select;
 
-use gpui::{Context, Hsla, Pixels, Size, Window, hsla};
+use gpui_kit::{Context, Hsla, Pixels, Size, Window, hsla};
 
 pub(crate) fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
     hsla(
@@ -432,7 +432,7 @@ pub(crate) fn set_activation_policy_accessory() {
 mod tests {
     use std::{sync::mpsc, time::Duration};
 
-    use gpui::{px, size};
+    use gpui_kit::{px, size};
 
     use super::{
         MonitorWorkArea, WindowFrameExtents, calculate_activation_window_geometry,

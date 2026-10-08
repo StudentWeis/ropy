@@ -93,7 +93,7 @@ cargo build --release
 ## 致谢
 
 - 灵感来自其他剪贴板管理器，如 Ditto、Maccy 和 CopyQ。
-- 感谢 Rust 社区以及 Ropy 使用的所有上游项目：[GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui)、[clipboard-rs](https://github.com/ChurchTao/clipboard-rs)、[redb](https://github.com/cberner/redb) 以及其他依赖项目。
+- 感谢 Rust 社区以及 Ropy 使用的所有上游项目：[GPUI Kit](https://github.com/longbridge/gpui-kit)、[clipboard-rs](https://github.com/ChurchTao/clipboard-rs)、[redb](https://github.com/cberner/redb) 以及其他依赖项目。
 
 ## Star 历史
 

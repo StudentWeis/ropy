@@ -1,11 +1,11 @@
-use gpui::{
+use gpui_kit::{
     Context,
+    component::{
+        ActiveTheme, Icon,
+        button::{Button, ButtonVariants},
+        h_flex,
+    },
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
-};
-use gpui_component::{
-    ActiveTheme, Icon,
-    button::{Button, ButtonVariants},
-    h_flex,
 };
 
 use super::RopyBoard;
@@ -24,17 +24,17 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
     #[cfg(target_os = "windows")]
-    let header = header.on_mouse_down(gpui::MouseButton::Left, |_, window, _cx| {
+    let header = header.on_mouse_down(gpui_kit::MouseButton::Left, |_, window, _cx| {
         crate::gui::utils::start_window_drag(window);
     });
 
     header
         .child(
             h_flex().items_center().gap_2().child(
-                gpui::div()
+                gpui_kit::div()
                     .text_lg()
                     .text_color(cx.theme().foreground)
-                    .font_weight(gpui::FontWeight::BOLD)
+                    .font_weight(gpui_kit::FontWeight::BOLD)
                     .child(APP_NAME),
             ),
         )
@@ -56,7 +56,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                         cx.notify();
                     }))
                     .on_mouse_down(
-                        gpui::MouseButton::Left,
+                        gpui_kit::MouseButton::Left,
                         cx.listener(|_, _, _, cx| cx.stop_propagation()),
                     ),
                 )
@@ -69,7 +69,9 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                             this.active_panel = crate::gui::board::ActivePanel::Help;
                             cx.notify();
                         }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
+                        }),
                 )
                 .child(
                     Button::new("about-button")
@@ -80,7 +82,9 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                             this.active_panel = crate::gui::board::ActivePanel::About;
                             cx.notify();
                         }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
+                        }),
                 )
                 .child(
                     Button::new("settings-button")
@@ -91,7 +95,9 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                             this.open_settings_panel(window, cx);
                             cx.notify();
                         }))
-                        .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+                        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                            cx.stop_propagation();
+                        }),
                 ),
         )
 }

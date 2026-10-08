@@ -1,6 +1,6 @@
 //! Layout-mode selection handler.
 
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
 use crate::{

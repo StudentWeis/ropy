@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use gpui::{App, Global, ReadGlobal, SharedString};
+use gpui_kit::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

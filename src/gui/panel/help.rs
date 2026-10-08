@@ -1,9 +1,10 @@
-use gpui::{
-    Context, StatefulInteractiveElement, div,
+use gpui_kit::{
+    Context, StatefulInteractiveElement,
+    component::{ActiveTheme, h_flex, v_flex},
+    div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
-use gpui_component::{ActiveTheme, h_flex, v_flex};
 
 use crate::{
     config::LayoutMode,
@@ -109,10 +110,12 @@ pub(crate) fn render_help_content(
         panel_back_button("help-back-button")
             .on_click(cx.listener(|board, _, window, cx| {
                 board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
-                window.focus(&board.focus_handle);
+                window.focus(&board.focus_handle, cx);
                 cx.notify();
             }))
-            .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation()),
+            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
+            }),
         cx,
     );
 
@@ -129,7 +132,7 @@ pub(crate) fn render_help_content(
             div()
                 .w(px(100.))
                 .text_sm()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
                 .child(I18n::translate(cx, "help_key")),
         )
@@ -137,7 +140,7 @@ pub(crate) fn render_help_content(
             div()
                 .flex_1()
                 .text_sm()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
                 .child(I18n::translate(cx, "help_action")),
         );
