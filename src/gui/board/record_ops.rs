@@ -76,6 +76,8 @@ impl RopyBoard {
     }
 
     pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<'_, Self>) {
+        let selected_id = self.filtered_record_id_at(self.selected_index);
+        let scroll_position = self.list_state.logical_scroll_top();
         let max_history_records = Settings::read(cx, |s| s.storage.max_history_records);
 
         GlobalRepository::read(cx, |repo| {
@@ -104,6 +106,18 @@ impl RopyBoard {
         });
 
         self.sync_filtered_records(cx);
+        if let Some(index) = selected_id.and_then(|id| {
+            let records = read_or_recover(&self.records);
+            self.filtered_record_indices
+                .iter()
+                .position(|&index| records.get(index).is_some_and(|record| record.id == id))
+        }) {
+            self.selected_index = index;
+        }
+        // Record content and order may change while positional indices stay equal.
+        self.list_state
+            .reset(self.visible_list_len(self.filtered_record_len()));
+        self.list_state.scroll_to(scroll_position);
     }
 
     /// Wipe everything — including pinned and favorited records — used by
@@ -142,10 +156,12 @@ impl RopyBoard {
     pub(in crate::gui) fn open_clear_confirm(
         &mut self,
         action: ClearConfirmAction,
+        window: &mut gpui_kit::Window,
         cx: &mut Context<'_, Self>,
     ) {
         self.clear_confirm_action = action;
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Visible;
+        super::clear_confirm::open(action, window, cx);
         cx.notify();
     }
 
@@ -189,10 +205,16 @@ impl RopyBoard {
     /// Requests deletion of a record. If the record is non-ordinary (pinned or
     /// favorited), a confirmation dialog is shown first.
     /// Returns `true` when a confirmation dialog was shown (deletion deferred).
-    pub(crate) fn request_delete_record(&mut self, id: u64, cx: &mut Context<'_, Self>) -> bool {
+    pub(crate) fn request_delete_record(
+        &mut self,
+        id: u64,
+        window: &mut gpui_kit::Window,
+        cx: &mut Context<'_, Self>,
+    ) -> bool {
         if self.is_record_special(id) {
             self.pending_delete_id = Some(id);
             self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Visible;
+            super::delete_confirm::open(window, cx);
             cx.notify();
             true
         } else {
@@ -201,21 +223,11 @@ impl RopyBoard {
         }
     }
 
-    /// Clamps `selected_index` to stay within bounds after a record deletion.
-    pub(crate) fn clamp_selection_after_delete(&mut self) {
-        if self.selected_index > 0
-            && self.selected_index >= self.filtered_record_len().saturating_sub(1)
-        {
-            self.selected_index -= 1;
-        }
-        self.reveal_selected_record();
-    }
-
     /// Confirms and executes the pending single-record deletion.
     pub(crate) fn confirm_pending_delete(&mut self, cx: &mut Context<'_, Self>) {
         if let Some(id) = self.pending_delete_id.take() {
             self.delete_record(id, cx);
-            self.clamp_selection_after_delete();
+            self.reveal_selected_record();
         }
         self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Hidden;
         cx.notify();

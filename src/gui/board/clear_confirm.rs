@@ -1,102 +1,51 @@
 use gpui_kit::{
-    Context,
-    component::{
-        ActiveTheme, Sizable,
-        button::{Button, ButtonVariants},
-        h_flex, v_flex,
-    },
-    div,
-    prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
-    px,
+    Context, Window,
+    component::{WindowExt, button::ButtonVariant, dialog::DialogButtonProps},
 };
 
 use super::{RopyBoard, filtering::ClearConfirmAction};
 use crate::i18n::I18n;
 
-pub(super) fn render_clear_confirm_overlay(
+pub(super) fn open(
     action: ClearConfirmAction,
-    cx: &Context<'_, RopyBoard>,
-) -> impl IntoElement {
-    let (title, message) = match action {
-        ClearConfirmAction::AllHistory => (
-            I18n::translate(cx, "clear_confirm_title"),
-            I18n::translate(cx, "clear_confirm_message"),
-        ),
-        ClearConfirmAction::OrdinaryRecords => (
-            I18n::translate(cx, "clear_ordinary_confirm_title"),
-            I18n::translate(cx, "clear_ordinary_confirm_message"),
-        ),
-    };
-    let cancel_label = I18n::translate(cx, "clear_confirm_cancel");
-    let confirm_label = I18n::translate(cx, "clear_confirm_button");
-
-    div()
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full()
-        .bg(gpui_kit::rgba(0x0000_0050))
-        .flex()
-        .items_center()
-        .justify_center()
-        .id("clear-confirm-backdrop")
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
-            cx.notify();
-        }))
-        .child(
-            v_flex()
-                .w(px(300.0))
-                .p_5()
-                .bg(cx.theme().background)
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_lg()
-                .gap_3()
-                .id("clear-confirm-card")
-                .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
-                    cx.stop_propagation();
-                })
-                .child(
-                    div()
-                        .text_base()
-                        .font_weight(gpui_kit::FontWeight::BOLD)
-                        .text_color(cx.theme().foreground)
-                        .child(title),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(message),
-                )
-                .child(
-                    h_flex()
-                        .justify_end()
-                        .gap_2()
-                        .child(
-                            Button::new("clear-confirm-cancel")
-                                .small()
-                                .ghost()
-                                .label(cancel_label)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.ui_state.clear_confirm =
-                                        crate::gui::board::ClearConfirmState::Hidden;
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            Button::new("clear-confirm-ok")
-                                .small()
-                                .danger()
-                                .label(confirm_label)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.confirm_clear_action(cx);
-                                    this.ui_state.clear_confirm =
-                                        crate::gui::board::ClearConfirmState::Hidden;
-                                    cx.notify();
-                                })),
-                        ),
-                ),
-        )
+    window: &mut Window,
+    cx: &mut Context<'_, RopyBoard>,
+) {
+    let owner = cx.entity().downgrade();
+    window.open_alert_dialog(cx, move |dialog, _, cx| {
+        let (title, message) = match action {
+            ClearConfirmAction::AllHistory => (
+                I18n::translate(cx, "clear_confirm_title"),
+                I18n::translate(cx, "clear_confirm_message"),
+            ),
+            ClearConfirmAction::OrdinaryRecords => (
+                I18n::translate(cx, "clear_ordinary_confirm_title"),
+                I18n::translate(cx, "clear_ordinary_confirm_message"),
+            ),
+        };
+        let confirm_owner = owner.clone();
+        let close_owner = owner.clone();
+        dialog
+            .confirm()
+            .title(title)
+            .description(message)
+            .button_props(
+                DialogButtonProps::default()
+                    .ok_variant(ButtonVariant::Danger)
+                    .ok_text(I18n::translate(cx, "clear_confirm_button"))
+                    .cancel_text(I18n::translate(cx, "clear_confirm_cancel")),
+            )
+            .on_ok(move |_, _, cx| {
+                let _ = confirm_owner.update(cx, |this, cx| {
+                    this.confirm_clear_action(cx);
+                });
+                true
+            })
+            .on_close(move |_, _, cx| {
+                let _ = close_owner.update(cx, |this, cx| {
+                    this.ui_state.clear_confirm = super::ClearConfirmState::Hidden;
+                    cx.notify();
+                });
+            })
+    });
 }

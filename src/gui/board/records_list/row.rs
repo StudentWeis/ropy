@@ -425,7 +425,10 @@ fn render_record_body(
     cx: &App,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
-    let mut content = div().flex_1().min_w_0().id(("record-content", ctx.index));
+    let mut content = div()
+        .flex_1()
+        .min_w_0()
+        .id(("record-content", ctx.record.id));
 
     if !ctx.flags.preview_visible() && ctx.flags.hover_preview_enabled() {
         let preview_content_type = preview_data.content_type.clone();
@@ -532,7 +535,6 @@ fn render_grid_record_header(
 
 fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
-    let index = ctx.index;
     let record_id = ctx.record.id;
     let view_favorite = ctx.view.clone();
     let view_pin = ctx.view.clone();
@@ -540,12 +542,12 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
 
     let favorite_button = {
         let button = if ctx.flags.is_favorite() {
-            Button::new(("favorite-btn", index))
+            Button::new(("favorite-btn", record_id))
                 .xsmall()
                 .primary()
                 .label("★")
         } else {
-            Button::new(("favorite-btn", index))
+            Button::new(("favorite-btn", record_id))
                 .xsmall()
                 .ghost()
                 .label("☆")
@@ -566,9 +568,9 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
 
     let pin_button = {
         let button = if ctx.record.pinned {
-            Button::new(("pin-btn", index)).xsmall().primary()
+            Button::new(("pin-btn", record_id)).xsmall().primary()
         } else {
-            Button::new(("pin-btn", index)).xsmall().ghost()
+            Button::new(("pin-btn", record_id)).xsmall().ghost()
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
@@ -585,17 +587,17 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
             })
     };
 
-    let delete_button = Button::new(("delete-btn", index))
+    let delete_button = Button::new(("delete-btn", record_id))
         .xsmall()
         .ghost()
         .label("×")
         .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
             cx.stop_propagation();
         })
-        .on_click(move |_event, _window, cx| {
+        .on_click(move |_event, window, cx| {
             view_delete
                 .update(cx, |this, cx| {
-                    this.request_delete_record(record_id, cx);
+                    this.request_delete_record(record_id, window, cx);
                 })
                 .ok();
         });
@@ -668,7 +670,7 @@ fn decorate_record_card(
             })
             .cursor_pointer()
         })
-        .id(("record", ctx.index))
+        .id(("record", ctx.record.id))
         .on_click(move |event, window, cx| {
             if overlay_visible {
                 return;

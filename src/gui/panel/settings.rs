@@ -495,8 +495,8 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                     .border_color(cx.theme().border)
                     .label(I18n::translate(cx, "clear_ordinary"))
                     .tooltip(I18n::translate(cx, "clear_ordinary_tooltip"))
-                    .on_click(cx.listener(|board, _, _, cx| {
-                        board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, cx);
+                    .on_click(cx.listener(|board, _, window, cx| {
+                        board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, window, cx);
                     })),
             )
             .child(
@@ -505,8 +505,8 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                     .danger()
                     .label(I18n::translate(cx, "clear_all"))
                     .tooltip(I18n::translate(cx, "clear_all_tooltip"))
-                    .on_click(cx.listener(|board, _, _, cx| {
-                        board.open_clear_confirm(ClearConfirmAction::AllHistory, cx);
+                    .on_click(cx.listener(|board, _, window, cx| {
+                        board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
                     })),
             ),
         cx,

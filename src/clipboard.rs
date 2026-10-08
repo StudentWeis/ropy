@@ -1,5 +1,4 @@
-use std::sync::mpsc::Sender as CompletionSender;
-
+use async_channel::Sender as CompletionSender;
 use thiserror::Error;
 
 /// Capture acknowledgements and retryable deduplication.
@@ -157,7 +156,6 @@ pub(crate) enum LastCopyState {
 #[cfg(test)]
 #[expect(clippy::panic, clippy::unwrap_used)]
 mod tests {
-    use std::{sync::mpsc, time::Duration};
 
     use super::*;
 
@@ -180,13 +178,13 @@ mod tests {
 
     #[test]
     fn test_copy_request_text_with_completion_sends_signal() {
-        let (completion_tx, completion_rx) = mpsc::channel();
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
         let request = CopyRequest::text_with_completion("hello".to_string(), completion_tx);
 
         match request {
             CopyRequest::Text { text, completion } => {
                 assert_eq!(text, "hello");
-                completion.unwrap().send(Ok(())).unwrap();
+                completion.unwrap().try_send(Ok(())).unwrap();
             }
             CopyRequest::Image { .. }
             | CopyRequest::Files { .. }
@@ -195,10 +193,7 @@ mod tests {
             }
         }
 
-        assert!(matches!(
-            completion_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(Ok(()))
-        ));
+        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
     }
 
     #[test]
@@ -219,24 +214,21 @@ mod tests {
     #[test]
     #[expect(clippy::unwrap_used)]
     fn test_copy_request_image_with_completion_sends_signal() {
-        let (completion_tx, completion_rx) = mpsc::channel();
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
         let request =
             CopyRequest::image_with_completion("/tmp/example.png".to_string(), completion_tx);
 
         match request {
             CopyRequest::Image { path, completion } => {
                 assert_eq!(path, "/tmp/example.png");
-                completion.unwrap().send(Ok(())).unwrap();
+                completion.unwrap().try_send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Files { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected image copy request")
             }
         }
 
-        assert!(matches!(
-            completion_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(Ok(()))
-        ));
+        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
     }
 
     #[test]
@@ -257,24 +249,21 @@ mod tests {
     #[test]
     #[expect(clippy::unwrap_used)]
     fn test_copy_request_files_with_completion_sends_signal() {
-        let (completion_tx, completion_rx) = mpsc::channel();
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
         let request =
             CopyRequest::files_with_completion(vec!["/tmp/example.txt".to_string()], completion_tx);
 
         match request {
             CopyRequest::Files { paths, completion } => {
                 assert_eq!(paths, vec!["/tmp/example.txt"]);
-                completion.unwrap().send(Ok(())).unwrap();
+                completion.unwrap().try_send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::RichText { .. } => {
                 panic!("expected files copy request")
             }
         }
 
-        assert!(matches!(
-            completion_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(Ok(()))
-        ));
+        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
     }
 
     #[test]
@@ -306,7 +295,7 @@ mod tests {
     #[test]
     #[expect(clippy::unwrap_used)]
     fn test_copy_request_rich_text_with_completion_sends_signal() {
-        let (completion_tx, completion_rx) = mpsc::channel();
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
         let request = CopyRequest::rich_text_with_completion(
             "hello".to_string(),
             Some("<p>hello</p>".to_string()),
@@ -324,16 +313,13 @@ mod tests {
                 assert_eq!(plain_text, "hello");
                 assert_eq!(html.as_deref(), Some("<p>hello</p>"));
                 assert_eq!(rtf.as_deref(), Some("{\\rtf1 hello}"));
-                completion.unwrap().send(Ok(())).unwrap();
+                completion.unwrap().try_send(Ok(())).unwrap();
             }
             CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
                 panic!("expected rich text copy request")
             }
         }
 
-        assert!(matches!(
-            completion_rx.recv_timeout(Duration::from_secs(1)),
-            Ok(Ok(()))
-        ));
+        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
     }
 }

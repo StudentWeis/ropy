@@ -130,21 +130,19 @@ fn set_rich_text(
 }
 
 fn notify_completion(
-    completion: Option<std::sync::mpsc::Sender<ClipboardWriteResult>>,
+    completion: Option<async_channel::Sender<ClipboardWriteResult>>,
     result: ClipboardWriteResult,
 ) {
     if let Err(error) = &result {
         tracing::warn!(error = %error, "failed to write clipboard content");
     }
     if let Some(tx) = completion {
-        let _ = tx.send(result);
+        let _ = tx.try_send(result);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::mpsc, time::Duration};
-
     use super::*;
 
     #[test]
@@ -183,12 +181,12 @@ mod tests {
 
     #[test]
     fn test_notify_completion_when_sender_exists_sends_result() {
-        let (completion_tx, completion_rx) = mpsc::channel();
+        let (completion_tx, completion_rx) = async_channel::bounded(1);
 
         notify_completion(Some(completion_tx), Err(ClipboardWriteError::EmptyFileList));
 
         assert!(matches!(
-            completion_rx.recv_timeout(Duration::from_secs(1)),
+            completion_rx.try_recv(),
             Ok(Err(ClipboardWriteError::EmptyFileList))
         ));
     }

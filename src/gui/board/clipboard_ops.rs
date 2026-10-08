@@ -1,6 +1,6 @@
-use std::{sync::mpsc, time::Duration};
+use std::{future::poll_fn, pin::pin, task::Poll, time::Duration};
 
-use gpui_kit::{Context, Window};
+use gpui_kit::{AppContext, BackgroundExecutor, Context, Window};
 
 use super::RopyBoard;
 use crate::{
@@ -23,7 +23,7 @@ pub(in crate::gui::board) enum ConfirmFormat {
 pub(in crate::gui::board) fn build_copy_request(
     content: &str,
     content_type: &ContentType,
-    completion: Option<mpsc::Sender<ClipboardWriteResult>>,
+    completion: Option<async_channel::Sender<ClipboardWriteResult>>,
 ) -> Option<CopyRequest> {
     match content_type {
         ContentType::Text => Some(completion.map_or_else(
@@ -56,7 +56,7 @@ pub(in crate::gui::board) fn build_copy_request(
 pub(in crate::gui::board) fn build_copy_request_for_record(
     record: &ClipboardRecord,
     confirm_format: ConfirmFormat,
-    completion: Option<mpsc::Sender<ClipboardWriteResult>>,
+    completion: Option<async_channel::Sender<ClipboardWriteResult>>,
 ) -> Option<CopyRequest> {
     if confirm_format == ConfirmFormat::PlainText && record.content_type == ContentType::RichText {
         return Some(completion.map_or_else(
@@ -79,75 +79,58 @@ pub(in crate::gui::board) fn build_copy_request_for_record(
     })
 }
 
-pub(in crate::gui::board) fn wait_for_clipboard_write(
-    rx: &mpsc::Receiver<ClipboardWriteResult>,
+pub(in crate::gui::board) async fn wait_for_clipboard_write(
+    rx: &async_channel::Receiver<ClipboardWriteResult>,
+    executor: &BackgroundExecutor,
 ) -> bool {
-    match rx.recv_timeout(Duration::from_millis(CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS)) {
-        Ok(Ok(())) => true,
-        Ok(Err(error)) => {
-            tracing::warn!(error = %error, "clipboard write failed");
-            false
+    let mut result = pin!(rx.recv());
+    let mut timeout =
+        pin!(executor.timer(Duration::from_millis(CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS)));
+    poll_fn(|cx| {
+        if let Poll::Ready(result) = result.as_mut().poll(cx) {
+            return Poll::Ready(match result {
+                Ok(Ok(())) => true,
+                error => {
+                    tracing::warn!(?error, "clipboard write failed");
+                    false
+                }
+            });
         }
-        Err(error) => {
-            tracing::warn!(error = %error, "timed out waiting for clipboard write completion");
-            false
+        if timeout.as_mut().poll(cx).is_ready() {
+            tracing::warn!("timed out waiting for clipboard write completion");
+            return Poll::Ready(false);
         }
-    }
+        Poll::Pending
+    })
+    .await
 }
 
 impl RopyBoard {
-    /// Write confirmed content to the clipboard before the confirm action completes.
-    pub(super) fn write_content_to_clipboard(
-        &self,
-        record: &ClipboardRecord,
-        confirm_format: ConfirmFormat,
-    ) -> bool {
-        let completion = self
-            .confirm_mode
-            .requires_clipboard_completion()
-            .then(mpsc::channel);
-        let request = build_copy_request_for_record(
-            record,
-            confirm_format,
-            completion.as_ref().map(|(tx, _)| tx.clone()),
-        );
-
-        if let Some(req) = request {
-            if self.copy_tx.send_blocking(req).is_err() {
-                tracing::warn!("failed to send clipboard write request");
-                return false;
-            }
-            if let Some((_, rx)) = completion
-                && !wait_for_clipboard_write(&rx)
-            {
-                return false;
-            }
-            return true;
-        }
-
-        false
-    }
-
     /// Confirm selection: copy record to clipboard and hide.
     /// The clipboard listener will re-capture the copy event and the
     /// repository layer handles deduplication via content hash upsert.
-    pub(crate) fn confirm_record(&self, window: &mut Window, cx: &Context<'_, Self>, index: usize) {
+    pub(crate) fn confirm_record(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<'_, Self>,
+        index: usize,
+    ) {
         self.confirm_record_with_format(window, cx, index, ConfirmFormat::Default);
     }
 
     pub(crate) fn confirm_record_as_plain_text(
-        &self,
-        window: &mut Window,
-        cx: &Context<'_, Self>,
+        &mut self,
+        window: &Window,
+        cx: &mut Context<'_, Self>,
         index: usize,
     ) {
         self.confirm_record_with_format(window, cx, index, ConfirmFormat::PlainText);
     }
 
     fn confirm_record_with_format(
-        &self,
-        window: &mut Window,
-        cx: &Context<'_, Self>,
+        &mut self,
+        window: &Window,
+        cx: &mut Context<'_, Self>,
         index: usize,
         confirm_format: ConfirmFormat,
     ) {
@@ -169,22 +152,70 @@ impl RopyBoard {
             record
         };
 
-        if !self.write_content_to_clipboard(&record, confirm_format) {
+        if self.copy_in_progress {
             return;
         }
-
-        match self.confirm_mode {
-            ConfirmMode::CopyToClipboard => {
-                if !self.pinned {
-                    hide_window(window, cx, self.pinned);
+        self.copy_in_progress = true;
+        self.copy_generation = self.copy_generation.wrapping_add(1);
+        let generation = self.copy_generation;
+        let mode = self.confirm_mode;
+        let copy_tx = self.copy_tx.clone();
+        // Rich-text sidecars are read off the UI thread.
+        let request = cx.background_spawn(async move {
+            let completion = mode
+                .requires_clipboard_completion()
+                .then(|| async_channel::bounded(1));
+            let request = build_copy_request_for_record(
+                &record,
+                confirm_format,
+                completion.as_ref().map(|(tx, _)| tx.clone()),
+            );
+            (request, completion.map(|(_, rx)| rx))
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let (request, completion) = request.await;
+            let success = if let Some(request) = request {
+                if copy_tx.send(request).await.is_err() {
+                    tracing::warn!("failed to send clipboard write request");
+                    false
+                } else if let Some(rx) = completion {
+                    wait_for_clipboard_write(&rx, cx.background_executor()).await
+                } else {
+                    true
                 }
-            }
-            ConfirmMode::PasteImmediately => {
-                hide_window(window, cx, false);
-                if let Err(error) = paste::trigger_paste() {
-                    tracing::warn!(error = %error, "failed to trigger immediate paste");
+            } else {
+                false
+            };
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.copy_in_progress = false;
+                cx.notify();
+                // A dismissed/reopened board must not hide or paste on a stale completion.
+                if !success
+                    || this.copy_generation != generation
+                    || this.active_panel != super::ActivePanel::ClipboardList
+                    || this.ui_state.any_overlay_visible()
+                {
+                    return;
                 }
-            }
-        }
+                match mode {
+                    ConfirmMode::CopyToClipboard => {
+                        if !this.pinned {
+                            hide_window(window, cx, this.pinned);
+                        }
+                    }
+                    ConfirmMode::PasteImmediately => {
+                        hide_window(window, cx, false);
+                        cx.background_spawn(async {
+                            if let Err(error) = paste::trigger_paste() {
+                                tracing::warn!(error = %error, "failed to trigger immediate paste");
+                            }
+                        })
+                        .detach();
+                    }
+                }
+            });
+        })
+        .detach();
+        cx.notify();
     }
 }

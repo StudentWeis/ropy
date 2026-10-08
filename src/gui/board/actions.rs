@@ -212,10 +212,6 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.ui_state.delete_confirm_visible() {
-            self.confirm_pending_delete(cx);
-            return;
-        }
         self.confirm_record(window, cx, self.selected_index);
     }
 
@@ -266,16 +262,16 @@ impl RopyBoard {
     pub(crate) fn on_delete_record(
         &mut self,
         _: &DeleteRecord,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
         if self.ui_state.delete_confirm_visible() {
             return;
         }
         if let Some(id) = self.filtered_record_id_at(self.selected_index) {
-            let showed_confirm = self.request_delete_record(id, cx);
+            let showed_confirm = self.request_delete_record(id, window, cx);
             if !showed_confirm {
-                self.clamp_selection_after_delete();
+                self.reveal_selected_record();
                 cx.notify();
             }
         }
@@ -291,6 +287,7 @@ impl RopyBoard {
             return;
         }
 
+        self.copy_generation = self.copy_generation.wrapping_add(1);
         self.selected_index = 0;
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
@@ -325,6 +322,7 @@ impl RopyBoard {
             return;
         }
 
+        self.copy_generation = self.copy_generation.wrapping_add(1);
         match self.active_panel {
             ActivePanel::Settings => {
                 settings::reset_settings_dialog(self, window, cx);
@@ -377,16 +375,6 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        // Handle delete-confirm dialog keys before the general ignore guard
-        if self.ui_state.delete_confirm_visible() {
-            match event.keystroke.key.as_str() {
-                "d" | "enter" => self.confirm_pending_delete(cx),
-                "escape" => self.cancel_pending_delete(cx),
-                _ => {}
-            }
-            return;
-        }
-
         if self.should_ignore_board_key_event(window, cx) {
             return;
         }

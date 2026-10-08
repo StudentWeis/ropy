@@ -19,6 +19,8 @@ mod updater_ui;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod ui_tests;
 
 use std::{
     collections::HashSet,
@@ -33,7 +35,8 @@ pub(crate) use actions::{
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui_kit::{
     AppContext, Bounds, Context, Entity, FocusHandle, ListAlignment, ListState, Pixels, Point,
-    ScrollHandle, Subscription, Window, component::input::InputState,
+    ScrollHandle, Subscription, Window,
+    component::{WindowExt, input::InputState},
 };
 pub(crate) use search::{ContentFilter, SearchOptions};
 use settings_editor::{
@@ -182,6 +185,8 @@ pub(crate) struct RopyBoard {
     pub(crate) grid_scroll_handle: ScrollHandle,
     pub(crate) ui_state: UiState,
     pub(crate) selected_index: usize,
+    pub(super) copy_in_progress: bool,
+    pub(super) copy_generation: u64,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
@@ -353,7 +358,9 @@ impl RopyBoard {
         let focus_out_subscription =
             cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
                 // When the window loses focus, hide the window (unless pinned).
-                if Self::should_auto_hide_on_focus_out(this.pinned) {
+                if Self::should_auto_hide_on_focus_out(this.pinned) && !window.has_active_dialog(cx)
+                {
+                    this.copy_generation = this.copy_generation.wrapping_add(1);
                     // Clear search input when hiding the window
                     this.clear_search(window, cx);
                     hide_window(window, cx, this.pinned);
@@ -495,6 +502,8 @@ impl RopyBoard {
             filtered_record_indices: Arc::new(initial_filtered_record_indices),
             favorite_ids,
             copy_tx,
+            copy_in_progress: false,
+            copy_generation: 0,
             active_panel: ActivePanel::default(),
             settings_editor,
             confirm_mode,
