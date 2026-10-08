@@ -69,6 +69,21 @@ cargo build --release
 ./target/release/ropy
 ```
 
+### Development commands
+
+With GNU Make, Bash and `awk` installed (on Windows, use a compatible shell such as MSYS2), run `make` or `make help` to list the development commands. Cargo uses the Rust version pinned in `rust-toolchain.toml`; formatting additionally requires nightly rustfmt (`rustup toolchain install nightly --profile minimal --component rustfmt`).
+
+```sh
+make build          # Debug build
+make build-release  # Optimized build
+make run            # Launch the debug application
+make test           # Run tests
+make fmt-check      # Verify Rust formatting
+make precheck       # Format code and run the complete pre-commit gate
+```
+
+Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` runs `scripts/init.sh` to install development tools and Git hooks. The precheck script requires Python 3 and Clippy (`rustup component add clippy`). Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets use their existing command selection.
+
 ## Usage
 
 - Launch Ropy — it starts hidden in the system tray and begins recording clipboard history.
