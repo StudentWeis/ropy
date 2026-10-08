@@ -82,7 +82,7 @@ make fmt-check      # Verify Rust formatting
 make precheck       # Format code and run the complete pre-commit gate
 ```
 
-Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` runs `scripts/init.sh` to install development tools and Git hooks. The precheck script requires Python 3 and Clippy (`rustup component add clippy`). Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets use their existing command selection.
+Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` runs `scripts/init.sh` to install development tools and hk Git hooks (hk 2.5+). Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first; YAML, TOML and JSON checks use `uvx` to run pinned parsers. Setup replaces the existing pre-commit hook. Run `hk check --all` to check files or `hk fix --all` to fix them. If a commit hook fixes files, review and stage the changes before committing again. The precheck script requires Python 3 and Clippy (`rustup component add clippy`). Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets use their existing command selection.
 
 ## Usage
 
