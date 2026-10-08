@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.6] - 2026-10-08
+
+### 🚀 Features
+- Add code quality review skill (#156) by @StudentWeis in [#156](https://github.com/StudentWeis/ropy/pull/156)
+
+### 🐛 Bug Fixes
+- Recover history and hotkeys after failed operations (#168) by @StudentWeis in [#168](https://github.com/StudentWeis/ropy/pull/168)
+- Resolve repository quality audit findings (#158) by @StudentWeis in [#158](https://github.com/StudentWeis/ropy/pull/158)
+- Open history from tray left-click (#154) by @StudentWeis in [#154](https://github.com/StudentWeis/ropy/pull/154)
+
+### 💼 Other
+- Add development makefile (#176) by @StudentWeis in [#176](https://github.com/StudentWeis/ropy/pull/176)
+
+### 🚜 Refactor
+- Parallelize checks and restore dist release ownership (#182) by @StudentWeis in [#182](https://github.com/StudentWeis/ropy/pull/182)
+- Adopt and apply official gpui kit guidance (#178) by @StudentWeis in [#178](https://github.com/StudentWeis/ropy/pull/178)
+- Replace prek with hk (#180) by @StudentWeis in [#180](https://github.com/StudentWeis/ropy/pull/180)
+- Migrate to gpui kit 0.7.1 (#174) by @StudentWeis in [#174](https://github.com/StudentWeis/ropy/pull/174)
+- Upgrade to rust 1.99 and improve test diagnostics (#172) by @StudentWeis in [#172](https://github.com/StudentWeis/ropy/pull/172)
+
+### 🧪 Testing
+- Document cross-platform gui workflow (#160) by @StudentWeis in [#160](https://github.com/StudentWeis/ropy/pull/160)
+
+### ⚙️ Miscellaneous Tasks
+- Ignore local Codex MCP credentials (#166) by @StudentWeis in [#166](https://github.com/StudentWeis/ropy/pull/166)
+- Remove obsolete CLAUDE files by @StudentWeis
+
 ## [0.5.5] - 2026-08-03
 
 ### 🐛 Bug Fixes
