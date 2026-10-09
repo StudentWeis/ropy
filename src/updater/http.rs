@@ -29,6 +29,10 @@ impl CurlCommandBuilder {
         let mut command = Command::new("curl");
         command.args([
             "-sSL",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
             "-H",
             &format!("User-Agent: ropy/{}", env!("CARGO_PKG_VERSION")),
         ]);

@@ -338,3 +338,57 @@ fn test_delete_dialog_confirm_button_deletes_only_target(cx: &mut TestAppContext
     assert!(repo.get_by_id(other.id).unwrap().is_some());
     cx.update(|cx| assert!(!board.read(cx).ui_state.delete_confirm_visible()));
 }
+
+#[gpui_kit::test]
+fn test_update_restart_failure_keeps_retry_action_available(cx: &mut TestAppContext) {
+    use crate::updater::{errors::UpdateFailure, models::UpdateStatus};
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.active_panel = ActivePanel::About;
+            board.update_manager.status = UpdateStatus::ReadyToRestart;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("update-restart-button", cx);
+        assert_eq!(
+            board.read(cx).update_manager.status,
+            UpdateStatus::Restarting
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            board.read(cx).update_manager.status,
+            UpdateStatus::Error(UpdateFailure::Restart)
+        );
+        assert!(board.read(cx).update_manager.restart_child.is_none());
+        assert!(window.find("update-restart-button").visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_update_managed_installation_never_offers_download(cx: &mut TestAppContext) {
+    use crate::updater::models::{ReleaseInfo, UpdateStatus};
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.active_panel = ActivePanel::About;
+            board.update_manager.managed = true;
+            board.update_manager.status = UpdateStatus::Available(ReleaseInfo {
+                version: "9.0.0".into(),
+                release_notes: String::new(),
+                download_url: "https://example.invalid/archive".into(),
+                checksum_url: String::new(),
+                asset_size: 0,
+            });
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("update-download-button").is_none());
+    })
+    .unwrap();
+}

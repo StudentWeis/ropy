@@ -1,5 +1,7 @@
 """Exercise release packaging without compiling Ropy or publishing a release."""
 
+import hashlib
+import tarfile
 import json
 import os
 from pathlib import Path
@@ -63,6 +65,22 @@ cp "$stage/Ropy.app/binary" "${@: -1}"
                     (self.work / f"target/distrib/ropy-{target}.dmg").read_text(), target
                 )
                 self.assertFalse(Path((self.work / "stage-path").read_text()).exists())
+
+    def test_bundle_update_archive_contains_complete_application_and_checksum(self):
+        self.command("cargo", '''
+mkdir -p target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Contents/MacOS
+printf binary > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Contents/MacOS/ropy
+printf metadata > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Contents/Info.plist
+''')
+        self.command("hdiutil", "exit 0\n")
+        result = self.bundle("aarch64-apple-darwin")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        archive = self.work / "target/distrib/ropy-aarch64-apple-darwin-app.tar.xz"
+        with tarfile.open(archive) as payload:
+            self.assertEqual(payload.extractfile("Ropy.app/Contents/Info.plist").read(), b"metadata")
+            self.assertEqual(payload.extractfile("Ropy.app/Contents/MacOS/ropy").read(), b"binary")
+        checksum = Path(str(archive) + ".sha256").read_text().split()[0]
+        self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
 
     def test_dmg_missing_bundle_fails_without_using_stale_output(self):
         other = self.work / "target/stale/release/bundle/osx/Ropy.app"

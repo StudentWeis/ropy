@@ -6492,6 +6492,7 @@ dependencies = [
  "gpui-kit",
  "gtk",
  "image",
+ "libc",
  "objc2 0.6.5",
  "postcard",
  "raw-window-handle",
@@ -6499,7 +6500,6 @@ dependencies = [
  "rstest",
  "rust-embed",
  "seahash",
- "self-replace",
  "semver",
  "serde",
  "serde_json",
@@ -6893,17 +6893,6 @@ checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
 dependencies = [
  "core-foundation-sys",
  "libc",
-]
-
-[[package]]
-name = "self-replace"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03ec815b5eab420ab893f63393878d89c90fdd94c0bcc44c07abb8ad95552fb7"
-dependencies = [
- "fastrand",
- "tempfile",
- "windows-sys 0.52.0",
 ]
 
 [[package]]

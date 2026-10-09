@@ -117,20 +117,44 @@ impl SettingsEditor {
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) struct UpdateManager {
     pub(crate) status: crate::updater::models::UpdateStatus,
+    pub(crate) managed: bool,
+    pub(crate) release: Option<crate::updater::models::ReleaseInfo>,
+    pub(crate) schedule: crate::updater::schedule::CheckSchedule,
+    pub(crate) restart_child: Option<std::process::Child>,
 }
 
 impl UpdateManager {
-    pub(super) const fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             status: crate::updater::models::UpdateStatus::Idle,
+            managed: matches!(
+                crate::updater::installation::Installation::current(),
+                Ok(crate::updater::installation::Installation::Managed)
+            ),
+            release: None,
+            schedule: crate::updater::schedule::CheckSchedule::load(),
+            restart_child: None,
         }
     }
 
     pub(super) fn begin_check(&mut self) -> bool {
-        if matches!(self.status, crate::updater::models::UpdateStatus::Checking) {
+        if matches!(
+            self.status,
+            crate::updater::models::UpdateStatus::Checking
+                | crate::updater::models::UpdateStatus::Downloading(_)
+                | crate::updater::models::UpdateStatus::Verifying
+                | crate::updater::models::UpdateStatus::Extracting
+                | crate::updater::models::UpdateStatus::Staging
+                | crate::updater::models::UpdateStatus::Restarting
+                | crate::updater::models::UpdateStatus::ReadyToRestart
+                | crate::updater::models::UpdateStatus::Error(
+                    crate::updater::errors::UpdateFailure::Restart
+                )
+        ) {
             return false;
         }
 
+        self.release = None;
         self.status = crate::updater::models::UpdateStatus::Checking;
         true
     }

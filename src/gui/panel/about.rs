@@ -6,7 +6,7 @@ use gpui_kit::{
         h_flex, v_flex,
     },
     div, img,
-    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
+    prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
 
@@ -145,52 +145,71 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         )
         .into(),
         UpdateStatus::ReadyToRestart => I18n::translate(cx, "update_restart").into(),
-        UpdateStatus::Error(msg) => {
-            // Surface a localized "network problem" hint for the most common
-            // class of update failures so users aren't shown raw curl /
-            // TLS errors.
-            let friendly_msg = if msg.to_ascii_lowercase().contains("rate limit") {
-                I18n::translate(cx, "update_error_rate_limited")
-            } else if msg.contains("curl")
-                || msg.contains("SSL")
-                || msg.contains("HTTP request failed")
-            {
+        UpdateStatus::Verifying => I18n::translate(cx, "update_verifying").into(),
+        UpdateStatus::Extracting => I18n::translate(cx, "update_extracting").into(),
+        UpdateStatus::Staging => I18n::translate(cx, "update_staging").into(),
+        UpdateStatus::RolledBack => I18n::translate(cx, "update_rolled_back").into(),
+        UpdateStatus::Restarting => I18n::translate(cx, "update_restarting").into(),
+        UpdateStatus::Error(error) => match error {
+            crate::updater::errors::UpdateFailure::Network => {
                 I18n::translate(cx, "update_error_network")
-            } else {
-                I18n::translate(cx, "update_error")
-            };
-            friendly_msg.into()
+            }
+            crate::updater::errors::UpdateFailure::RateLimited => {
+                I18n::translate(cx, "update_error_rate_limited")
+            }
+            crate::updater::errors::UpdateFailure::Verification => {
+                I18n::translate(cx, "update_error_verification")
+            }
+            crate::updater::errors::UpdateFailure::Installation => {
+                I18n::translate(cx, "update_error_installation")
+            }
+            crate::updater::errors::UpdateFailure::Restart => {
+                I18n::translate(cx, "update_error_restart")
+            }
+            crate::updater::errors::UpdateFailure::Managed => I18n::translate(cx, "update_managed"),
+            crate::updater::errors::UpdateFailure::Release => I18n::translate(cx, "update_error"),
         }
+        .into(),
     };
     // Use `foreground` for every non-error status so the text stays legible
     // under dark themes when the window is in transparent mode, where
     // `muted_foreground` blends into the translucent background.
     let status_color = match &board.update_manager.status {
-        UpdateStatus::Error(_) => gpui_kit::rgb(0x00cc_3333).into(),
+        UpdateStatus::Error(_) => cx.theme().danger,
         _ => cx.theme().foreground,
     };
 
     let action_button: Option<Button> = match &board.update_manager.status {
+        UpdateStatus::Available(_) if board.update_manager.managed => None,
         UpdateStatus::Available(_) => Some(
             Button::new("update-download-button")
                 .small()
                 .primary()
                 .label(I18n::translate(cx, "update_download"))
-                .on_click(cx.listener(|board, _, _, cx| board.download_and_install_update(cx))),
+                .on_click(cx.listener(|board, _, _, cx| board.download_update(cx))),
         ),
-        UpdateStatus::ReadyToRestart => Some(
+        UpdateStatus::ReadyToRestart
+        | UpdateStatus::Error(crate::updater::errors::UpdateFailure::Restart) => Some(
             Button::new("update-restart-button")
                 .small()
                 .primary()
                 .label(I18n::translate(cx, "update_restart_button"))
-                .on_click(cx.listener(|_, _, _, cx| {
-                    if let Ok(exe) = std::env::current_exe() {
-                        let _ = std::process::Command::new(exe).spawn();
-                    }
-                    cx.quit();
-                })),
+                .on_click(cx.listener(|board, _, _, cx| board.restart_after_update(cx))),
         ),
-        UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_) => Some(
+        UpdateStatus::Error(_)
+            if board.update_manager.release.is_some() && !board.update_manager.managed =>
+        {
+            Some(
+                Button::new("update-retry-button")
+                    .small()
+                    .label(I18n::translate(cx, "update_retry"))
+                    .on_click(cx.listener(|board, _, _, cx| board.download_update(cx))),
+            )
+        }
+        UpdateStatus::Idle
+        | UpdateStatus::UpToDate
+        | UpdateStatus::RolledBack
+        | UpdateStatus::Error(_) => Some(
             Button::new("update-check-button")
                 .small()
                 .ghost()
@@ -200,9 +219,16 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         _ => None,
     };
 
-    h_flex()
-        .items_center()
+    v_flex()
         .gap_2()
-        .child(div().text_xs().text_color(status_color).child(status_text))
-        .children(action_button)
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_2()
+                .child(div().text_xs().text_color(status_color).child(status_text))
+                .children(action_button),
+        )
+        .when(board.update_manager.managed, |this| {
+            this.child(div().text_xs().child(I18n::translate(cx, "update_managed")))
+        })
 }

@@ -132,6 +132,23 @@ fn test_update_manager_begin_check_ignores_duplicate_in_flight_request() {
     assert!(!manager.begin_check());
 }
 
+#[rstest::rstest]
+#[case(UpdateStatus::Downloading(0.5))]
+#[case(UpdateStatus::Verifying)]
+#[case(UpdateStatus::Extracting)]
+#[case(UpdateStatus::Staging)]
+#[case(UpdateStatus::ReadyToRestart)]
+#[case(UpdateStatus::Restarting)]
+#[case(UpdateStatus::Error(crate::updater::errors::UpdateFailure::Restart))]
+fn test_update_manager_busy_or_staged_rejects_check_without_losing_state(
+    #[case] status: UpdateStatus,
+) {
+    let mut manager = UpdateManager::new();
+    manager.status = status.clone();
+    assert!(!manager.begin_check());
+    assert_eq!(manager.status, status);
+}
+
 #[test]
 fn test_preview_state_is_visible_only_while_space_is_held() {
     let mut ui_state = UiState::default();

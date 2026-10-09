@@ -56,7 +56,7 @@ scoop install ropy
 ```
 
 > [!NOTE]
-> If you install Ropy via Scoop, it is recommended to disable Ropy's built-in auto-update feature to avoid conflicts with Scoop's package management. You can disable auto-updates in Ropy's settings.
+> Ropy detects standard Scoop installations and leaves installation to Scoop. Use `scoop update ropy`; in-app update checks remain available.
 
 ### Build from source
 

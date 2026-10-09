@@ -31,3 +31,9 @@ cp -R "$app" "$stage_dir/"
 ln -s /Applications "$stage_dir/Applications"
 hdiutil create -volname "Ropy" -srcfolder "$stage_dir" -ov -format UDZO \
 	"target/distrib/ropy-$bundle_target.dmg"
+
+# Preserve the complete application for in-app updates, independently of the
+# binary-only cargo-dist archives used by standalone installations.
+archive="target/distrib/ropy-$bundle_target-app.tar.xz"
+COPYFILE_DISABLE=1 tar -cJf "$archive" -C "$(dirname "$app")" Ropy.app
+(cd target/distrib && shasum -a 256 "${archive##*/}" >"${archive##*/}.sha256")

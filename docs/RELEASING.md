@@ -20,11 +20,14 @@ publishing. Tag builds run the full pipeline:
 2. The macOS build setup installs a pinned cargo-bundle and invokes
    `scripts/build_macos_dmg.sh` for each target. The script uses only that target's
    `Ropy.app`, creates a DMG with an Applications shortcut, and cleans temporary
-   staging files even if image creation fails.
-3. dist builds binary archives and SHA-256 sidecars. These remain the inputs to
-   Ropy's updater; DMGs are separate downloads for manual installation.
+   staging files even if image creation fails. It also creates
+   `ropy-<target>-app.tar.xz` plus its SHA-256 sidecar from that complete app.
+3. dist builds binary archives and SHA-256 sidecars for standalone installations.
+   Installed macOS bundles use the `-app.tar.xz` payload, which updates resources
+   and `Info.plist` together with the executable. DMGs remain manual downloads.
 4. The `release-update-manifest.yml` reusable workflow runs after all local
-   artifacts finish. It generates `latest.json` from the downloaded archives and
+   artifacts finish. It downloads both dist archives and complete macOS bundles,
+   then generates `latest.json` from the downloaded archives and
    the release plan, then uploads it as an `artifacts-*` workflow artifact. A
    missing archive or checksum fails this job and blocks release publication.
 5. dist's generated host job collects all artifacts, including the DMGs and
@@ -44,3 +47,78 @@ These tests cover architecture selection, staging cleanup, failure propagation,
 and the updater manifest contract. They replace cargo-bundle and hdiutil with
 fixtures; an actual macOS package build is still needed to validate the produced
 application and disk image. `scripts/precheck.sh` also runs these tests.
+
+## Update behavior and recovery
+
+Automatic checks run at startup when due, then every 24 hours while Ropy is
+running. The board samples the schedule every minute, including after resume.
+Check timing and the selected channel are stored in `update-check.json` beside
+`config.toml`. Failures retry after 15 minutes, doubling up to 24 hours; success
+resets the backoff. Manual checks bypass timing. Disabling automatic checks is
+respected by the next timer tick. A channel change invalidates a stale result.
+
+Stable checks continue to use the release asset `latest.json` without the
+GitHub API. Opting into prereleases queries the most recent 100 releases,
+filters drafts and incompatible payloads, and selects the highest semantic
+version. Turning prereleases off never downgrades an installed version.
+
+Ropy detects standard Scoop, Homebrew prefix, Nix, Snap, Flatpak and system
+binary paths as externally managed. These installations can check for releases
+but cannot self-replace. Detection is conservative and path-based, not a universal
+package receipt lookup. Publishers using another prefix can place `.ropy-managed`
+next to the executable, or at `Ropy.app/Contents/.ropy-managed` for an app bundle.
+They must preserve that marker in subsequent packages.
+
+Downloads require HTTPS, their declared size and a valid SHA-256 sidecar. The
+checksum verifies integrity, not publisher identity; release signatures are not
+part of this update protocol. Archive entries and expanded size are bounded,
+and symbolic links are rejected. The macOS payload must contain a complete
+`Ropy.app`, including `Contents/Info.plist` and `Contents/MacOS/ropy`.
+
+A verified payload is staged beside the installation in `.<filename>-update`
+(for example `/Applications/.Ropy.app-update`). No installed file is changed
+until the user chooses to restart. The directory must be writable without
+privilege escalation. A helper copied outside the target confirms readiness;
+only then does the old application quit. The helper waits for the parent's
+actual process exit, including release of the Windows single-instance mutex.
+
+The helper moves the old installation to `backup`, installs the staged payload
+on the same filesystem, and launches the new version. After its window and
+repository initialize and the UI event loop runs for two seconds, the new
+version acknowledges startup. The helper retains the backup until that
+acknowledgment. If launch fails or no acknowledgment arrives within 45 seconds,
+it stops the new process, restores the backup and launches the old version.
+A rollback notice remains in About until the next manual check. A normal launch
+also resumes an interrupted transaction when a backup exists and no helper
+holds the transaction lock. An acknowledged healthy installation is never
+rolled back merely because backup cleanup failed.
+
+This recovers application files only. Future database format changes must remain
+backward compatible with the prior version; the updater does not roll back
+clipboard data. Unexpected helper errors are written to `helper.log` in the
+transaction directory. If filesystem permissions prevent recovery, the `backup`
+remains available for manual restoration. A power interruption between the two
+renames can leave the installation path absent; restore the backup manually in
+that case. The transaction directory and small metadata files are retained for
+reuse; the old executable/bundle is removed after successful startup.
+
+Old Ropy clients still use the binary-only archive contract. The first release
+containing this updater installs through that existing path; subsequent updates
+from a macOS bundle use full app payloads. Manual DMG installation also installs
+the complete new bundle immediately.
+
+## Updater verification
+
+`cargo test --test update_handoff` runs the real updater helper against isolated
+fixture processes. It checks that the parent is still usable before handoff,
+that replacement waits for process exit, and that a failed startup restores and
+launches the old executable. The fixture is compiled with the host `rustc` and
+these tests run on macOS, Windows and Linux without accessing clipboard history.
+Unit tests cover scheduling, selection, download bounds, staging and rollback;
+GUI integration tests cover retry and managed-installation controls. The full
+`scripts/precheck.sh` gate includes these tests.
+
+Before publishing, smoke-test packaged upgrades on each platform, including a
+read-only installation, a failed download, a successful restart and a failing
+new executable. The process fixtures do not replace signed/notarized macOS
+bundle validation or testing an actual Windows installation under antivirus.

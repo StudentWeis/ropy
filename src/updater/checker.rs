@@ -38,11 +38,18 @@ fn expected_asset_name(target: &str) -> String {
 pub(crate) fn check_for_update(
     include_prerelease: bool,
 ) -> Result<Option<ReleaseInfo>, UpdateError> {
-    let release = fetch_latest_release(include_prerelease)?;
+    let releases = fetch_releases(include_prerelease)?;
     let current_version =
         Version::parse(CURRENT_VERSION).map_err(|e| UpdateError::Parse(e.to_string()))?;
 
-    resolve_release(release, &current_version, TARGET)
+    let installation = super::installation::Installation::current()?;
+    select_release(
+        releases,
+        &current_version,
+        TARGET,
+        include_prerelease,
+        installation.is_bundle(),
+    )
 }
 
 fn resolve_release(
@@ -81,23 +88,58 @@ fn resolve_release(
     }))
 }
 
+fn select_release(
+    releases: Vec<GitHubRelease>,
+    current: &Version,
+    target: &str,
+    prerelease: bool,
+    bundle: bool,
+) -> Result<Option<ReleaseInfo>, UpdateError> {
+    let mut candidates: Vec<_> = releases
+        .into_iter()
+        .filter_map(|release| {
+            let version = parse_version(&release.tag_name).ok()?;
+            (!release.draft
+                && (prerelease || (!release.prerelease && version.pre.is_empty()))
+                && version > *current)
+                .then_some((version, release))
+        })
+        .collect();
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    let asset_target = if bundle {
+        format!("{target}-app")
+    } else {
+        target.to_string()
+    };
+    let mut incompatible = None;
+    for (_, release) in candidates {
+        match resolve_release(release, current, &asset_target) {
+            Ok(info) => return Ok(info),
+            Err(
+                error @ (UpdateError::NoCompatibleAsset(_) | UpdateError::MissingChecksumAsset(_)),
+            ) => incompatible = Some(error),
+            Err(error) => return Err(error),
+        }
+    }
+    incompatible.map_or(Ok(None), Err)
+}
+
 /// Fetch the latest release manifest.
-fn fetch_latest_release(include_prerelease: bool) -> Result<GitHubRelease, UpdateError> {
+fn fetch_releases(include_prerelease: bool) -> Result<Vec<GitHubRelease>, UpdateError> {
     if include_prerelease {
         // GitHub's stable release redirect excludes prereleases, so the
         // opt-in prerelease path still uses the rate-limited API.
         let url =
-            format!("https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases?per_page=10");
+            format!("https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases?per_page=100");
         let body = http_get(&url)?;
         let releases: Vec<GitHubRelease> =
             serde_json::from_str(&body).map_err(|e| UpdateError::Parse(e.to_string()))?;
-        releases
-            .into_iter()
-            .next()
-            .ok_or_else(|| UpdateError::Parse("no releases found".into()))
+        Ok(releases)
     } else {
         let body = http_get(&stable_release_manifest_url())?;
-        serde_json::from_str(&body).map_err(|e| UpdateError::Parse(e.to_string()))
+        serde_json::from_str(&body)
+            .map(|release| vec![release])
+            .map_err(|e| UpdateError::Parse(e.to_string()))
     }
 }
 
@@ -125,6 +167,96 @@ fn http_get(url: &str) -> Result<String, UpdateError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[expect(clippy::unwrap_used)]
+    fn release(tag: &str, target: &str) -> GitHubRelease {
+        serde_json::from_value(serde_json::json!({
+            "tag_name": tag,
+            "assets": [
+                {"name": expected_asset_name(target), "size": 42, "browser_download_url": "https://example.com/archive"},
+                {"name": format!("{}.sha256", expected_asset_name(target)), "size": 64, "browser_download_url": "https://example.com/checksum"}
+            ]
+        })).unwrap()
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_select_release_unsorted_list_chooses_highest_compatible_semver() {
+        let releases = vec![
+            release("1.1.0", "linux"),
+            release("9.0.0", "windows"),
+            release("1.9.0", "linux"),
+            release("1.2.0", "linux"),
+        ];
+        assert_eq!(
+            select_release(releases, &Version::new(1, 0, 0), "linux", true, false)
+                .unwrap()
+                .unwrap()
+                .version,
+            "1.9.0"
+        );
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_select_release_stable_channel_excludes_drafts_and_prereleases() {
+        let mut draft = release("9.0.0", "linux");
+        draft.draft = true;
+        let releases = vec![
+            draft,
+            release("2.0.0-beta.1", "linux"),
+            release("1.1.0", "linux"),
+        ];
+        assert_eq!(
+            select_release(releases, &Version::new(1, 0, 0), "linux", false, false)
+                .unwrap()
+                .unwrap()
+                .version,
+            "1.1.0"
+        );
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_select_release_channel_switch_never_downgrades() {
+        assert!(
+            select_release(
+                vec![release("1.0.0", "linux")],
+                &Version::parse("2.0.0-beta.1").unwrap(),
+                "linux",
+                false,
+                false
+            )
+            .unwrap()
+            .is_none()
+        );
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_select_release_bundle_requires_complete_app_asset() {
+        assert!(
+            select_release(
+                vec![release("2.0.0", "aarch64-apple-darwin")],
+                &Version::new(1, 0, 0),
+                "aarch64-apple-darwin",
+                false,
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            select_release(
+                vec![release("2.0.0", "aarch64-apple-darwin-app")],
+                &Version::new(1, 0, 0),
+                "aarch64-apple-darwin",
+                false,
+                true
+            )
+            .unwrap()
+            .is_some()
+        );
+    }
 
     #[test]
     #[expect(clippy::unwrap_used)]
