@@ -15,7 +15,7 @@ aarch64-apple-darwin | x86_64-apple-darwin) ;;
 	;;
 esac
 
-cargo bundle --release --target "$bundle_target" --format osx
+cargo bundle --package ropy --release --target "$bundle_target" --format osx
 
 # Restrict the source to this target; a shared workspace can contain both architectures.
 app="target/$bundle_target/release/bundle/osx/Ropy.app"

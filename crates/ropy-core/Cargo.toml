@@ -1,0 +1,42 @@
+[package]
+name = "ropy-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Clipboard history persistence and portable settings for Ropy."
+authors = ["Student Wei <studentweis@gmail.com>"]
+repository = "https://github.com/StudentWeis/ropy"
+license = "MIT"
+keywords = ["clipboard", "storage", "settings"]
+categories = ["database", "data-structures"]
+publish = false
+
+[features]
+# Fault injection for desktop tests; excluded from normal application builds.
+test = []
+
+[dependencies]
+redb = "4.3.0"
+postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+image.workspace = true
+seahash.workspace = true
+tempfile.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+
+[lints]
+workspace = true
+
+[package.metadata.release]
+release = false
+
+[package.metadata.dist]
+dist = false

@@ -1,48 +1,41 @@
 use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
-use gpui_kit::{App, AppContext as _};
 use image::ImageReader;
 
 use super::{ClipboardWriteError, ClipboardWriteResult, CopyRequest};
 
-/// Spawn the single long-lived task that owns the OS [`ClipboardContext`].
-/// All copy operations funnel through the returned channel so we don't pay
+/// Run the single consumer that owns the OS [`ClipboardContext`].
+/// All copy operations funnel through the supplied channel so we don't pay
 /// the cost of recreating the context (and re-acquiring platform handles)
 /// on every write.
-pub(crate) fn start_clipboard_writer(cx: &App) -> async_channel::Sender<CopyRequest> {
-    let (tx, rx) = async_channel::unbounded();
-
-    cx.background_spawn(async move {
-        let ctx = match ClipboardContext::new() {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                tracing::error!(error = %e, "failed to create clipboard output context");
-                return;
+pub(crate) async fn write_clipboard(rx: async_channel::Receiver<CopyRequest>) {
+    let ctx = match ClipboardContext::new() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to create clipboard output context");
+            return;
+        }
+    };
+    while let Ok(req) = rx.recv().await {
+        match req {
+            CopyRequest::Text { text, completion } => {
+                notify_completion(completion, set_text(&ctx, text));
             }
-        };
-        while let Ok(req) = rx.recv().await {
-            match req {
-                CopyRequest::Text { text, completion } => {
-                    notify_completion(completion, set_text(&ctx, text));
-                }
-                CopyRequest::Image { path, completion } => {
-                    notify_completion(completion, set_image(&ctx, &path));
-                }
-                CopyRequest::Files { paths, completion } => {
-                    notify_completion(completion, set_files(&ctx, &paths));
-                }
-                CopyRequest::RichText {
-                    plain_text,
-                    html,
-                    rtf,
-                    completion,
-                } => {
-                    notify_completion(completion, set_rich_text(&ctx, plain_text, html, rtf));
-                }
+            CopyRequest::Image { path, completion } => {
+                notify_completion(completion, set_image(&ctx, &path));
+            }
+            CopyRequest::Files { paths, completion } => {
+                notify_completion(completion, set_files(&ctx, &paths));
+            }
+            CopyRequest::RichText {
+                plain_text,
+                html,
+                rtf,
+                completion,
+            } => {
+                notify_completion(completion, set_rich_text(&ctx, plain_text, html, rtf));
             }
         }
-    })
-    .detach();
-    tx
+    }
 }
 
 fn load_image_from_path(path: &str) -> image::ImageResult<image::DynamicImage> {

@@ -8,11 +8,15 @@ use gpui_kit::{
 use super::{ActivePanel, RopyBoard, header::render_header, search::render_search_input};
 use crate::{
     config::Settings,
-    gui::panel::{
-        about::render_about_content, help::render_help_content, settings::render_settings_content,
+    gui::{
+        panel::{
+            about::render_about_content, help::render_help_content,
+            settings::render_settings_content,
+        },
+        repository::GlobalRepository,
+        settings::GlobalSettings,
     },
     i18n::I18n,
-    repository::GlobalRepository,
 };
 
 impl Render for RopyBoard {
@@ -34,7 +38,7 @@ impl Render for RopyBoard {
             return gpui_kit::div().size_full().child(base).into_any_element();
         }
 
-        if Settings::read(cx, Settings::is_recovery_required) {
+        if GlobalSettings::read(cx, Settings::is_recovery_required) {
             let message = I18n::translate(cx, "settings_recovery_required");
             base = base.child(
                 gpui_kit::div()

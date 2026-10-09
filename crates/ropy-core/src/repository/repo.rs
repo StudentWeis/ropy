@@ -22,16 +22,18 @@ use super::{
     },
     time_index::TimeIndex,
 };
-use crate::{
-    clipboard::{remove_rich_text_files, save_rich_text_files_to_dir},
-    utils::{content_hash, normalize_file_paths, serialize_file_paths},
+use crate::repository::{
+    assets::{remove_rich_text_files, save_rich_text_files_to_dir},
+    content_hash, normalize_file_paths, serialize_file_paths,
 };
 
 /// Bump whenever the on-disk key/value layout changes — a mismatch wipes the
 /// database on startup so stale records can't be misinterpreted.
 const SCHEMA_VERSION: u64 = 3;
 
-pub(crate) struct ClipboardRepository<B: StorageBackend = RedbBackend> {
+/// Thread-safe clipboard history with atomic index mutations and owned payload paths.
+#[derive(Debug)]
+pub struct ClipboardRepository<B: StorageBackend = RedbBackend> {
     // Protect complete repository read/modify/write operations, including sidecar cleanup.
     operation_lock: Mutex<()>,
     pub(super) backend: B,
@@ -43,13 +45,25 @@ pub(crate) struct ClipboardRepository<B: StorageBackend = RedbBackend> {
 }
 
 impl ClipboardRepository<RedbBackend> {
-    pub(crate) fn new() -> Result<Self, RepositoryError> {
+    /// Open history in the current user's default application data directory.
+    ///
+    /// # Errors
+    /// Returns an error if the data directory is unavailable or storage initialization fails.
+    pub fn new() -> Result<Self, RepositoryError> {
         let db_path = Self::default_db_path()?;
         let images_dir = dirs::data_local_dir()
             .ok_or(RepositoryError::DataDirNotFound)?
             .join("ropy")
             .join("images");
         Self::init(&db_path, images_dir, redb_backend_factory)
+    }
+
+    /// Open a repository at application-selected database and image paths.
+    ///
+    /// # Errors
+    /// Returns an error if storage cannot be opened, migrated or repaired.
+    pub fn open(db_path: &Path, images_dir: PathBuf) -> Result<Self, RepositoryError> {
+        Self::init(&db_path.to_path_buf(), images_dir, redb_backend_factory)
     }
 
     fn default_db_path() -> Result<PathBuf, RepositoryError> {
@@ -64,7 +78,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Build a repository against an explicitly chosen backend. Tests use
     /// this seam to inject the in-memory backend; production goes through
     /// [`ClipboardRepository::new`].
-    pub(crate) fn init(
+    ///
+    /// # Errors
+    /// Returns an error if backend creation, schema initialization or index repair fails.
+    pub fn init(
         db_path: &PathBuf,
         images_dir: PathBuf,
         factory: BackendFactory<B>,
@@ -72,7 +89,12 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Self::from_backend(factory(db_path)?, images_dir)
     }
 
-    pub(crate) fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
+    /// Initialize history metadata and repair indexes using the supplied backend.
+    /// Rich-text sidecars use a sibling directory of `images_dir`.
+    ///
+    /// # Errors
+    /// Returns an error if schema initialization or index repair fails.
+    pub fn from_backend(backend: B, images_dir: PathBuf) -> Result<Self, RepositoryError> {
         let meta = backend.open_tree(META_TREE)?;
         let records = backend.open_tree(RECORDS_TREE)?;
         let time_index = TimeIndex::new(
@@ -111,7 +133,16 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(repository)
     }
 
-    pub(crate) fn flush(&self) -> Result<(), RepositoryError> {
+    /// Return the directory where captures must persist image payloads.
+    pub fn images_dir(&self) -> &Path {
+        &self.images_dir
+    }
+
+    /// Flush pending backend changes.
+    ///
+    /// # Errors
+    /// Returns an error if the backend cannot flush pending writes.
+    pub fn flush(&self) -> Result<(), RepositoryError> {
         self.backend.flush()
     }
 
@@ -143,7 +174,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Insert or refresh a record keyed by its content hash. A duplicate
     /// hash bumps `created_at` only — the existing payload is preserved so
     /// re-copies surface at the top of the board without churning storage.
-    pub(crate) fn save(
+    ///
+    /// # Errors
+    /// Returns an error if record decoding, encoding or the index transaction fails.
+    pub fn save(
         &self,
         content: String,
         content_type: ContentType,
@@ -176,7 +210,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Persist an image record whose payload already lives at `file_path`.
     /// On a duplicate hash the new file is deleted to avoid leaking sidecar
     /// blobs, and only `created_at` is bumped on the existing record.
-    pub(crate) fn save_image_from_path(
+    ///
+    /// # Errors
+    /// Returns an error if record decoding or the index transaction fails.
+    pub fn save_image_from_path(
         &self,
         file_path: String,
         image_content_hash: u64,
@@ -209,13 +246,20 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(record)
     }
 
-    pub(crate) fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
+    /// Insert or refresh a plain-text record.
+    ///
+    /// # Errors
+    /// Returns an error if record encoding, decoding or the index transaction fails.
+    pub fn save_text(&self, content: String) -> Result<ClipboardRecord, RepositoryError> {
         self.save(content, ContentType::Text)
     }
 
     /// Normalize and persist a file list. Errors when the list is empty so
     /// callers don't accidentally insert a record with no payload.
-    pub(crate) fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error for an empty file list, serialization failure or failed index transaction.
+    pub fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
         let normalized = normalize_file_paths(paths);
         if normalized.is_empty() {
             return Err(RepositoryError::Query("file list is empty".to_string()));
@@ -227,7 +271,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         self.save(content, ContentType::FilePath)
     }
 
-    pub(crate) fn save_rich_text(
+    /// Persist rich-text representations and atomically replace their record metadata.
+    ///
+    /// # Errors
+    /// Returns an error if payload staging or the record/index transaction fails.
+    pub fn save_rich_text(
         &self,
         plain_text: String,
         html: Option<&str>,
@@ -283,7 +331,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    pub(crate) fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
+    /// Load a record by its stable content identity.
+    ///
+    /// # Errors
+    /// Returns an error if the record cannot be read or decoded.
+    pub fn get_by_id(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let key = id.to_be_bytes();
         match self.get_raw(&key)? {
             Some(value) => {
@@ -295,13 +347,18 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         }
     }
 
-    pub(crate) fn count(&self) -> usize {
+    /// Return the number of stored records.
+    pub fn count(&self) -> usize {
         self.records.len()
     }
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    pub(crate) fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
+    /// Toggle a record's pinned state; an absent record is left unchanged.
+    ///
+    /// # Errors
+    /// Returns an error if the record cannot be read, encoded or transactionally updated.
+    pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let _operation = self.lock_operation();
         let mut record = self
             .get_by_id(id)?
@@ -314,7 +371,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         Ok(())
     }
 
-    pub(crate) fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
+    /// Delete a record and its payload files, returning whether it existed.
+    ///
+    /// # Errors
+    /// Returns an error if the record cannot be read or its deletion transaction fails.
+    pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let _operation = self.lock_operation();
         let record = self.get_by_id(id)?;
         let key = id.to_be_bytes();
@@ -343,7 +404,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 
     /// Wipe every record and its on-disk sidecars (images + rich text).
-    pub(crate) fn clear(&self) -> Result<(), RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error if the backend cannot commit the clear operation.
+    pub fn clear(&self) -> Result<(), RepositoryError> {
         let _operation = self.lock_operation();
         self.backend.clear_batch(&[
             RECORDS_TREE,

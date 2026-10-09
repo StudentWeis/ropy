@@ -15,7 +15,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Pinned records stay at the top. Favorited records do not consume the
     /// ordinary `limit`, but otherwise remain in the default chronological
     /// ordering with other unpinned records.
-    pub(crate) fn get_display_records(
+    ///
+    /// # Errors
+    /// Returns an error if favorites or the display index cannot be queried.
+    pub fn get_display_records(
         &self,
         limit: usize,
     ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
@@ -29,13 +32,16 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 }
 
 impl ClipboardRepository<RedbBackend> {
-    pub(crate) fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
+    /// Compare pinned priority first, then newest capture time.
+    #[must_use]
+    pub fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
         Self::display_priority(left)
             .cmp(&Self::display_priority(right))
             .then_with(|| right.created_at.cmp(&left.created_at))
     }
 
-    pub(crate) fn sort_for_display(records: &mut [ClipboardRecord]) {
+    /// Sort records by pinned priority and newest capture time.
+    pub fn sort_for_display(records: &mut [ClipboardRecord]) {
         records.sort_unstable_by(Self::compare_for_display);
     }
 

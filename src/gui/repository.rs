@@ -1,27 +1,10 @@
+//! GPUI access to the application-owned repository.
+
 use std::sync::Arc;
 
 use gpui_kit::{App, Global, ReadGlobal};
 
-/// Storage backend traits and implementations (memory, redb).
-pub mod backend;
-mod cleanup;
-mod display;
-/// Repository error types.
-pub mod errors;
-mod favorites;
-/// Persisted clipboard record models.
-pub mod models;
-/// Repository entry points and persistence APIs.
-pub mod repo;
-mod sidecar;
-#[cfg(test)]
-mod test_helpers;
-#[cfg(test)]
-mod tests;
-mod time_index;
-
-pub(crate) use models::{ClipboardRecord, ContentType, RichTextMeta, SharedRecords};
-pub(crate) use repo::ClipboardRepository;
+use crate::repository::ClipboardRepository;
 
 /// GPUI Global wrapper for the clipboard repository.
 ///

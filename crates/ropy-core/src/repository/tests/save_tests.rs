@@ -38,7 +38,7 @@ fn test_save_rich_text_sidecar_write_failure_preserves_committed_record(#[case] 
         let actual = repo.get_by_id(original.id).unwrap().unwrap();
         assert_eq!(actual.created_at, original.created_at);
         assert_eq!(
-            crate::clipboard::load_rich_text_html(actual.rich_text_meta.as_ref().unwrap())
+            crate::repository::assets::load_rich_text_html(actual.rich_text_meta.as_ref().unwrap())
                 .as_deref(),
             Some("<b>old</b>")
         );
@@ -48,7 +48,8 @@ fn test_save_rich_text_sidecar_write_failure_preserves_committed_record(#[case] 
         .save_rich_text("same".into(), Some("<i>new</i>"), None)
         .unwrap();
     assert_eq!(
-        crate::clipboard::load_rich_text_html(retried.rich_text_meta.as_ref().unwrap()).as_deref(),
+        crate::repository::assets::load_rich_text_html(retried.rich_text_meta.as_ref().unwrap())
+            .as_deref(),
         Some("<i>new</i>")
     );
 }
@@ -316,8 +317,9 @@ fn test_save_rich_text_failed_commit_preserves_previous_sidecar() {
             .is_err()
     );
     let record = repo.get_by_id(original.id).expect("read").expect("record");
-    let actual =
-        crate::clipboard::load_rich_text_html(record.rich_text_meta.as_ref().expect("meta"));
+    let actual = crate::repository::assets::load_rich_text_html(
+        record.rich_text_meta.as_ref().expect("meta"),
+    );
     assert_eq!(
         actual.as_deref(),
         Some("<b>old formatting</b>"),
@@ -373,7 +375,7 @@ fn test_save_rich_text_successful_replacement_removes_old_sidecars() {
     let meta = updated.rich_text_meta.unwrap();
     assert_ne!(previous.html_path, meta.html_path);
     assert_eq!(
-        crate::clipboard::load_rich_text_html(&meta).as_deref(),
+        crate::repository::assets::load_rich_text_html(&meta).as_deref(),
         Some("<i>new</i>")
     );
     assert!(meta.rtf_path.is_none());

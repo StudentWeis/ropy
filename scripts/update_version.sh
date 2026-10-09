@@ -57,5 +57,5 @@ if [ "$execute_requested" = false ]; then
 	echo "Running cargo release dry-run (release preparation hook will skip mutations)."
 fi
 
-echo "Running: cargo release ${release_args[*]}"
-exec cargo release "${release_args[@]}"
+echo "Running: cargo release --package ropy ${release_args[*]}"
+exec cargo release --package ropy "${release_args[@]}"

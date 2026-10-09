@@ -46,10 +46,8 @@ use settings_editor::{
 
 use crate::{
     clipboard::CopyTracker,
-    config::{ConfirmMode, LayoutMode, Settings},
-    gui::{hide_window, surface_with_opacity, theme::ThemeId},
-    i18n::Language,
-    repository::SharedRecords,
+    config::{ConfirmMode, LayoutMode},
+    gui::{SharedRecords, hide_window, settings::GlobalSettings, surface_with_opacity},
     utils::read_or_recover,
 };
 
@@ -382,7 +380,7 @@ impl RopyBoard {
             include_prerelease_enabled,
             hover_preview_enabled,
             space_preview_enabled,
-        ) = Settings::read(cx, |s| {
+        ) = GlobalSettings::read(cx, |s| {
             (
                 s.storage.max_history_records,
                 s.storage.max_storage_records,
@@ -409,7 +407,7 @@ impl RopyBoard {
         let settings_window_opacity_slider =
             build_window_opacity_slider(window_opacity_percent, window, cx);
 
-        let selected_theme = ThemeId::all()
+        let selected_theme = crate::gui::theme::available_themes()
             .iter()
             .position(|theme_id| theme_id == &theme)
             .unwrap_or_default();
@@ -421,7 +419,7 @@ impl RopyBoard {
             .unwrap_or_default();
         let layout_select = build_layout_select(selected_layout, window, cx);
 
-        let selected_language = Language::all()
+        let selected_language = crate::i18n::language::available_languages()
             .iter()
             .position(|lang| lang == &language)
             .unwrap_or(0);

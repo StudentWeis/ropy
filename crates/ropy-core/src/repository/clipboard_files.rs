@@ -46,25 +46,35 @@ fn normalize_file_path(path: &str) -> Option<String> {
     Some(uri_path.map_or_else(|| trimmed.to_string(), decode_percent_encoded))
 }
 
-pub(crate) fn normalize_file_paths(paths: &[String]) -> Vec<String> {
+/// Normalize file URIs while preserving literal filesystem percent characters.
+#[must_use]
+pub fn normalize_file_paths(paths: &[String]) -> Vec<String> {
     paths
         .iter()
         .filter_map(|path| normalize_file_path(path))
         .collect()
 }
 
-pub(crate) fn serialize_file_paths(paths: &[String]) -> Result<String, serde_json::Error> {
+/// Encode normalized file paths as a JSON array.
+///
+/// # Errors
+/// Returns a JSON serialization error if the normalized paths cannot be encoded.
+pub fn serialize_file_paths(paths: &[String]) -> Result<String, serde_json::Error> {
     serde_json::to_string(&normalize_file_paths(paths))
 }
 
-pub(crate) fn deserialize_file_paths(content: &str) -> Vec<String> {
+/// Decode a file-list record, accepting a legacy single-path value.
+#[must_use]
+pub fn deserialize_file_paths(content: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(content).map_or_else(
         |_| normalize_file_paths(&[content.to_string()]),
         |paths| normalize_file_paths(&paths),
     )
 }
 
-pub(crate) fn hash_file_paths(paths: &[String]) -> u64 {
+/// Hash the normalized JSON file list for capture deduplication.
+#[must_use]
+pub fn hash_file_paths(paths: &[String]) -> u64 {
     serialize_file_paths(paths).map_or(0, |serialized| seahash::hash(serialized.as_bytes()))
 }
 

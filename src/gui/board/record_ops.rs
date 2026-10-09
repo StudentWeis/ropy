@@ -12,8 +12,7 @@ use super::{
 };
 use crate::{
     clipboard::delete_tracked_record,
-    config::Settings,
-    repository::GlobalRepository,
+    gui::{repository::GlobalRepository, settings::GlobalSettings},
     utils::{lock_or_recover, read_or_recover, write_or_recover},
 };
 
@@ -78,7 +77,7 @@ impl RopyBoard {
     pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<'_, Self>) {
         let selected_id = self.filtered_record_id_at(self.selected_index);
         let scroll_position = self.list_state.logical_scroll_top();
-        let max_history_records = Settings::read(cx, |s| s.storage.max_history_records);
+        let max_history_records = GlobalSettings::read(cx, |s| s.storage.max_history_records);
 
         GlobalRepository::read(cx, |repo| {
             let Some(repo) = repo else {

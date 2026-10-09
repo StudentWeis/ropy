@@ -17,8 +17,7 @@ use super::RopyBoard;
 use crate::{
     gui::surface_with_opacity,
     i18n::I18n,
-    repository::{ClipboardRecord, models::ContentType},
-    utils::deserialize_file_paths,
+    repository::{ClipboardRecord, ContentType, deserialize_file_paths},
 };
 
 /// Content type filter for the clipboard history view.
@@ -473,30 +472,24 @@ mod tests {
     /// Helper: build a mixed set of test records (2 text + 1 image)
     fn mixed_records() -> Vec<ClipboardRecord> {
         vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "Goodbye World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: "image_data".to_string(),
-                content_type: ContentType::Image,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Hello World".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "Goodbye World".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                3,
+                "image_data".to_string(),
+                chrono::Local::now(),
+                ContentType::Image,
+            ),
         ]
     }
 
@@ -533,22 +526,18 @@ mod tests {
     #[test]
     fn test_filter_all_with_query_matches_rich_text_records() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello World".to_string(),
-                content_type: ContentType::RichText,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "image_data".to_string(),
-                content_type: ContentType::Image,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Hello World".to_string(),
+                chrono::Local::now(),
+                ContentType::RichText,
+            ),
+            ClipboardRecord::new(
+                2,
+                "image_data".to_string(),
+                chrono::Local::now(),
+                ContentType::Image,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -566,22 +555,18 @@ mod tests {
     #[test]
     fn test_filter_text_includes_rich_text_records() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Plain text".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "Formatted text".to_string(),
-                content_type: ContentType::RichText,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Plain text".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "Formatted text".to_string(),
+                chrono::Local::now(),
+                ContentType::RichText,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -599,22 +584,18 @@ mod tests {
     #[test]
     fn test_search_contains_case_insensitive_matches_all_variants() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "HELLO world".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Hello World".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "HELLO world".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -631,22 +612,18 @@ mod tests {
     #[test]
     fn test_search_contains_case_sensitive_matches_only_same_case() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "hello world".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Hello World".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "hello world".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -667,30 +644,24 @@ mod tests {
     #[test]
     fn test_search_whole_word_case_insensitive_matches_token_boundaries() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "Say hello world".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "say HELLO again".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 3,
-                content: "shelloworld".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "Say hello world".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "say HELLO again".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                3,
+                "shelloworld".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -711,22 +682,18 @@ mod tests {
     #[test]
     fn test_search_whole_word_case_sensitive_rejects_case_mismatch() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "say Hello again".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "say hello again".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "say Hello again".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
+            ClipboardRecord::new(
+                2,
+                "say hello again".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -746,14 +713,12 @@ mod tests {
 
     #[test]
     fn test_search_whole_word_partial_token_returns_no_match() {
-        let records = vec![ClipboardRecord {
-            id: 1,
-            content: "hello_world hello2".to_string(),
-            content_type: ContentType::Text,
-            created_at: chrono::Local::now(),
-            pinned: false,
-            rich_text_meta: None,
-        }];
+        let records = vec![ClipboardRecord::new(
+            1,
+            "hello_world hello2".to_string(),
+            chrono::Local::now(),
+            ContentType::Text,
+        )];
 
         let result = filter_records_by_query(
             &records,
@@ -772,14 +737,12 @@ mod tests {
 
     #[test]
     fn test_filter_all_with_query_no_matches() {
-        let records = vec![ClipboardRecord {
-            id: 1,
-            content: "Hello".to_string(),
-            content_type: ContentType::Text,
-            created_at: chrono::Local::now(),
-            pinned: false,
-            rich_text_meta: None,
-        }];
+        let records = vec![ClipboardRecord::new(
+            1,
+            "Hello".to_string(),
+            chrono::Local::now(),
+            ContentType::Text,
+        )];
 
         let result = filter_records_by_query(
             &records,
@@ -794,14 +757,12 @@ mod tests {
 
     #[test]
     fn test_filter_all_with_query_excludes_image() {
-        let records = vec![ClipboardRecord {
-            id: 1,
-            content: "Image content".to_string(),
-            content_type: ContentType::Image,
-            created_at: chrono::Local::now(),
-            pinned: false,
-            rich_text_meta: None,
-        }];
+        let records = vec![ClipboardRecord::new(
+            1,
+            "Image content".to_string(),
+            chrono::Local::now(),
+            ContentType::Image,
+        )];
 
         let result = filter_records_by_query(
             &records,
@@ -817,22 +778,18 @@ mod tests {
     #[test]
     fn test_filter_all_with_query_matches_file_path_records() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "[\"/tmp/final-report.pdf\",\"/tmp/notes.txt\"]".to_string(),
-                content_type: ContentType::FilePath,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "Hello World".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "[\"/tmp/final-report.pdf\",\"/tmp/notes.txt\"]".to_string(),
+                chrono::Local::now(),
+                ContentType::FilePath,
+            ),
+            ClipboardRecord::new(
+                2,
+                "Hello World".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -849,14 +806,12 @@ mod tests {
 
     #[test]
     fn test_filter_favorites_with_query_matches_file_path_records() {
-        let records = vec![ClipboardRecord {
-            id: 7,
-            content: "/tmp/archive.zip".to_string(),
-            content_type: ContentType::FilePath,
-            created_at: chrono::Local::now(),
-            pinned: false,
-            rich_text_meta: None,
-        }];
+        let records = vec![ClipboardRecord::new(
+            7,
+            "/tmp/archive.zip".to_string(),
+            chrono::Local::now(),
+            ContentType::FilePath,
+        )];
         let favorites = HashSet::from([7]);
 
         let result = filter_records_by_query(
@@ -943,22 +898,18 @@ mod tests {
     #[test]
     fn test_filter_files_no_query_returns_files_only() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "[\"/tmp/report.pdf\"]".to_string(),
-                content_type: ContentType::FilePath,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "hello".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "[\"/tmp/report.pdf\"]".to_string(),
+                chrono::Local::now(),
+                ContentType::FilePath,
+            ),
+            ClipboardRecord::new(
+                2,
+                "hello".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(
@@ -976,22 +927,18 @@ mod tests {
     #[test]
     fn test_filter_files_with_query_matches_file_paths_only() {
         let records = vec![
-            ClipboardRecord {
-                id: 1,
-                content: "[\"/tmp/report.pdf\",\"/tmp/notes.txt\"]".to_string(),
-                content_type: ContentType::FilePath,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
-            ClipboardRecord {
-                id: 2,
-                content: "report body".to_string(),
-                content_type: ContentType::Text,
-                created_at: chrono::Local::now(),
-                pinned: false,
-                rich_text_meta: None,
-            },
+            ClipboardRecord::new(
+                1,
+                "[\"/tmp/report.pdf\",\"/tmp/notes.txt\"]".to_string(),
+                chrono::Local::now(),
+                ContentType::FilePath,
+            ),
+            ClipboardRecord::new(
+                2,
+                "report body".to_string(),
+                chrono::Local::now(),
+                ContentType::Text,
+            ),
         ];
 
         let result = filter_records_by_query(

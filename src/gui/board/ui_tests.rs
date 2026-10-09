@@ -14,8 +14,9 @@ use super::{ActivePanel, RopyBoard, filtering::ClearConfirmAction};
 use crate::{
     clipboard::{ClipboardWriteError, CopyRequest, CopyTracker},
     config::{ConfirmMode, Settings},
+    gui::{repository::GlobalRepository, settings::GlobalSettings},
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository},
+    repository::{ClipboardRecord, ClipboardRepository},
 };
 
 fn open_board(
@@ -29,7 +30,7 @@ fn open_board(
     let (tx, rx) = async_channel::unbounded();
     cx.update(|cx| {
         gpui_kit::init(cx);
-        cx.set_global(Settings::default());
+        cx.set_global(GlobalSettings::new(Settings::default()));
         cx.set_global(I18n::default());
         cx.set_global(GlobalRepository::new(None));
         cx.bind_keys([
@@ -60,14 +61,13 @@ fn open_board(
 }
 
 fn record(id: u64) -> ClipboardRecord {
-    ClipboardRecord {
+    ClipboardRecord::new(
         id,
-        content: format!("record {id}"),
-        created_at: chrono::Local::now(),
-        content_type: crate::repository::models::ContentType::Text,
-        pinned: true,
-        rich_text_meta: None,
-    }
+        format!("record {id}"),
+        chrono::Local::now(),
+        crate::repository::ContentType::Text,
+    )
+    .pinned(true)
 }
 
 #[gpui_kit::test]
@@ -416,7 +416,7 @@ fn test_startup_repository_failure_remains_visible_across_panels(cx: &mut TestAp
 #[gpui_kit::test]
 fn test_startup_settings_failure_remains_visible_and_rejects_updates(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![]);
-    cx.update(|cx| cx.set_global(Settings::recovery_defaults()));
+    cx.update(|cx| cx.set_global(GlobalSettings::new(Settings::recovery_defaults())));
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| {
             board.active_panel = ActivePanel::Settings;
@@ -426,7 +426,7 @@ fn test_startup_settings_failure_remains_visible_and_rejects_updates(cx: &mut Te
         assert!(window.find("settings-recovery").visible());
         window.click("confirm-mode-toggle", cx);
         assert_eq!(
-            Settings::read(cx, |settings| settings.confirm.mode),
+            GlobalSettings::read(cx, |settings| settings.confirm.mode),
             ConfirmMode::CopyToClipboard
         );
     })

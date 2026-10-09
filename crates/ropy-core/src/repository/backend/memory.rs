@@ -16,19 +16,23 @@ use crate::repository::{
     errors::RepositoryError,
 };
 
-#[derive(Clone, Default)]
-pub(crate) struct MemoryBackend {
+/// Shared in-memory storage with atomic batch failure injection for tests.
+#[derive(Debug, Clone, Default)]
+pub struct MemoryBackend {
     trees: Arc<Mutex<HashMap<String, Arc<MemoryTree>>>>,
     transaction_lock: Arc<Mutex<()>>,
     fail_next_batch: Arc<AtomicBool>,
 }
 
 impl MemoryBackend {
-    pub(crate) fn new() -> Self {
+    /// Create empty in-memory storage.
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn fail_next_batch(&self) {
+    /// Make the next batch mutation fail before changing any entries.
+    pub fn fail_next_batch(&self) {
         self.fail_next_batch.store(true, Ordering::SeqCst);
     }
 }
@@ -122,18 +126,23 @@ impl StorageBackend for MemoryBackend {
     }
 }
 
-#[expect(clippy::unnecessary_wraps)]
-pub(crate) fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
+/// Create an in-memory backend using the repository factory signature.
+/// The database path is ignored.
+///
+/// # Errors
+/// This implementation always succeeds; the result matches the backend factory contract.
+pub fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, RepositoryError> {
     Ok(MemoryBackend::new())
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct MemoryTree {
     entries: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
-#[derive(Clone)]
-pub(crate) struct MemoryTreeHandle {
+/// Shared handle to a tree guarded by the backend transaction lock.
+#[derive(Debug, Clone)]
+pub struct MemoryTreeHandle {
     tree: Arc<MemoryTree>,
     transaction_lock: Arc<Mutex<()>>,
 }

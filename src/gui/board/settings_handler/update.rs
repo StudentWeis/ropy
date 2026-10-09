@@ -3,7 +3,7 @@
 use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
-use crate::{config::Settings, i18n::I18n};
+use crate::{gui::settings::GlobalSettings, i18n::I18n};
 
 impl RopyBoard {
     pub(crate) fn save_auto_check_enabled(
@@ -12,7 +12,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_value = Settings::read(cx, |s| s.update.auto_check);
+        let previous_value = GlobalSettings::read(cx, |s| s.update.auto_check);
         if enabled == previous_value {
             return;
         }
@@ -35,7 +35,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_value = Settings::read(cx, |s| s.update.include_prerelease);
+        let previous_value = GlobalSettings::read(cx, |s| s.update.include_prerelease);
         if enabled == previous_value {
             return;
         }

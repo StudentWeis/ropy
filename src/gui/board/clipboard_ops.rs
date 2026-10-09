@@ -4,11 +4,15 @@ use gpui_kit::{AppContext, BackgroundExecutor, Context, Window};
 
 use super::RopyBoard;
 use crate::{
-    clipboard::{ClipboardWriteResult, CopyRequest, load_rich_text_html, load_rich_text_rtf},
+    clipboard::{ClipboardWriteResult, CopyRequest},
     config::ConfirmMode,
     gui::{hide_window, paste},
-    repository::{ClipboardRecord, models::ContentType},
-    utils::{deserialize_file_paths, read_or_recover},
+    repository::{
+        ClipboardRecord, ContentType,
+        assets::{load_rich_text_html, load_rich_text_rtf},
+        deserialize_file_paths,
+    },
+    utils::read_or_recover,
 };
 
 const CLIPBOARD_WRITE_COMPLETION_TIMEOUT_MS: u64 = 500;

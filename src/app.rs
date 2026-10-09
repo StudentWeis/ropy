@@ -8,6 +8,7 @@
 
 use std::{
     cfg_select,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -19,16 +20,20 @@ use {
 };
 
 use crate::{
-    clipboard::{self, ClipboardCapture, CopyTracker},
+    clipboard::{ClipboardCapture, CopyTracker},
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
-    gui::board::{
-        Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev,
-        Hide, Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
-        ToggleFavoritesFilter,
+    gui::{
+        board::{
+            Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev,
+            Hide, Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
+            ToggleFavoritesFilter,
+        },
+        repository::GlobalRepository,
+        settings::GlobalSettings,
     },
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, GlobalRepository, backend::StorageBackend},
+    repository::{ClipboardRecord, ClipboardRepository, backend::StorageBackend},
 };
 
 #[cfg(target_os = "linux")]
@@ -103,7 +108,7 @@ fn start_clipboard_event_handler(
             drain_pending_notifications(&notify_rx);
 
             async_app.update(|cx| {
-                let max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
+                let max_storage = GlobalSettings::read(cx, |s| s.storage.max_storage_records);
 
                 GlobalRepository::read(cx, |repo| {
                     if let Some(repo) = repo
@@ -169,11 +174,20 @@ fn sync_autostart_on_launch(autostart_enabled: bool) {
 
 fn start_clipboard_monitor(
     cx: &App,
+    images_dir: PathBuf,
     last_copy: Arc<Mutex<CopyTracker>>,
 ) -> async_channel::Receiver<ClipboardCapture> {
     let (clipboard_tx, clipboard_rx) =
         async_channel::bounded::<ClipboardCapture>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
-    clipboard::start_clipboard_monitor(clipboard_tx, cx, last_copy);
+    if let Some((encode, watch)) =
+        crate::clipboard::listener::prepare_clipboard_monitor(images_dir, clipboard_tx, last_copy)
+    {
+        cx.background_spawn(encode).detach();
+        cx.background_spawn(async move {
+            watch();
+        })
+        .detach();
+    }
     clipboard_rx
 }
 
@@ -228,9 +242,10 @@ fn bind_application_keys(cx: &mut App) {
 
 fn load_settings() -> Settings {
     match Settings::load() {
-        Ok(s) => {
+        Ok(mut settings) => {
+            crate::gui::settings::validate_hotkey(&mut settings);
             tracing::info!("settings loaded successfully");
-            s
+            settings
         }
         Err(e) => {
             tracing::warn!(error = %e, "failed to load settings; using defaults");
@@ -253,7 +268,7 @@ pub(crate) fn launch() {
             // Settings must be installed before the I18n / repository
             // globals because both read from it during their own init.
             let settings = load_settings();
-            cx.set_global(settings.clone());
+            cx.set_global(GlobalSettings::new(settings.clone()));
             cx.set_global(I18n::load_i18n(settings.language.clone()));
             crate::gui::tray::TrayState::register(cx);
 
@@ -269,12 +284,15 @@ pub(crate) fn launch() {
 
             let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
             let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
-            let copy_tx = clipboard::start_clipboard_writer(cx);
+            let (copy_tx, copy_rx) = async_channel::unbounded();
+            cx.background_spawn(crate::clipboard::writer::write_clipboard(copy_rx))
+                .detach();
 
             let window_handle =
                 crate::gui::create_window(cx, shared_records, last_copy.clone(), copy_tx);
             if let Some(repo) = GlobalRepository::global(cx).cloned() {
-                let clipboard_rx = start_clipboard_monitor(cx, last_copy);
+                let clipboard_rx =
+                    start_clipboard_monitor(cx, repo.images_dir().to_path_buf(), last_copy);
                 start_clipboard_event_handler(repo, clipboard_rx, window_handle, cx);
             }
             let hotkey_tx =

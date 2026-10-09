@@ -21,7 +21,7 @@ use crate::{
     clipboard::ClipboardWriteError,
     config::{ConfirmMode, LayoutMode},
     gui::board::{RopyBoard, UiState},
-    repository::{ClipboardRecord, models::ContentType},
+    repository::{ClipboardRecord, ContentType},
     updater::models::UpdateStatus,
 };
 
@@ -82,14 +82,7 @@ fn test_record(
     pinned: bool,
     created_at: chrono::DateTime<Local>,
 ) -> ClipboardRecord {
-    ClipboardRecord {
-        id,
-        content: content.to_string(),
-        content_type,
-        pinned,
-        created_at,
-        rich_text_meta: None,
-    }
+    ClipboardRecord::new(id, content.to_string(), created_at, content_type).pinned(pinned)
 }
 
 #[test]

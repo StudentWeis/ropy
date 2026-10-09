@@ -12,7 +12,11 @@ use super::{
 };
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    pub(crate) fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
+    /// Return the identifiers currently marked as favorites.
+    ///
+    /// # Errors
+    /// Returns an error if the favorites tree cannot be read.
+    pub fn favorite_ids(&self) -> Result<Vec<u64>, RepositoryError> {
         let mut ids = Vec::new();
 
         self.favorites.scan_ascending(&mut |key, _value| {
@@ -29,7 +33,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Flip favorite state and return the new value. Errors if the target
     /// record no longer exists, so the favorites tree can't accumulate
     /// dangling pointers.
-    pub(crate) fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error if the favorite mutation cannot be committed.
+    pub fn toggle_favorite(&self, id: u64) -> Result<bool, RepositoryError> {
         let _operation = self.lock_operation();
         if self.get_by_id(id)?.is_none() {
             return Err(RepositoryError::Query("record not found".to_string()));

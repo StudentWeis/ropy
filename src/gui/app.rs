@@ -16,14 +16,14 @@ use rust_embed::RustEmbed;
 
 use crate::{
     clipboard::CopyTracker,
-    config::Settings,
     gui::{
+        SharedRecords,
         board::RopyBoard,
         constants::default_window_size,
+        settings::GlobalSettings,
         theme::{ThemeDefinition, ThemeId, ThemeMode},
         utils::surface_with_opacity,
     },
-    repository::SharedRecords,
 };
 
 pub(crate) const MAIN_WINDOW_TITLE: &str = "Ropy";
@@ -56,7 +56,7 @@ pub(crate) fn create_window(
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
     let bounds = Bounds::centered(None, default_window_size(), cx);
-    let window_opacity_percent = Settings::read(cx, |s| s.window.opacity_percent);
+    let window_opacity_percent = GlobalSettings::read(cx, |s| s.window.opacity_percent);
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -69,7 +69,7 @@ pub(crate) fn create_window(
         |window, cx| {
             window.set_window_title(MAIN_WINDOW_TITLE);
             // Apply the application theme based on settings
-            let theme_id = Settings::read(cx, |s| s.theme.clone());
+            let theme_id = GlobalSettings::read(cx, |s| s.theme.clone());
             set_app_theme(window, cx, &theme_id, window_opacity_percent);
             apply_window_opacity(window, window_opacity_percent);
 
@@ -148,10 +148,7 @@ mod tests {
     use rstest::rstest;
 
     use super::set_app_theme;
-    use crate::gui::{
-        theme::{ThemeDefinition, ThemeId},
-        utils::surface_with_opacity,
-    };
+    use crate::gui::{theme::ThemeDefinition, utils::surface_with_opacity};
 
     #[rstest]
     #[case(0)]
@@ -161,7 +158,7 @@ mod tests {
         let mut cx = TestAppContext::single();
         cx.update(gpui_kit::init);
         let cx = cx.add_empty_window();
-        for theme_id in ThemeId::all() {
+        for theme_id in crate::gui::theme::available_themes() {
             cx.update(|window, cx| {
                 set_app_theme(window, cx, &theme_id, opacity);
                 let definition = ThemeDefinition::load_or_default(&theme_id);

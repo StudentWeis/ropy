@@ -9,7 +9,7 @@ use gpui_kit::{
 };
 
 use super::RopyBoard;
-use crate::{config::LayoutMode, gui::theme::ThemeId, i18n::Language};
+use crate::config::LayoutMode;
 
 #[derive(Debug, Clone, Copy, Default)]
 #[expect(clippy::redundant_pub_crate)]
@@ -191,7 +191,7 @@ pub(super) fn build_window_opacity_slider(
             )]
             let opacity_percent = value.start().round() as u8;
             this.settings_editor.window_opacity_percent = opacity_percent;
-            let theme = ThemeId::all()
+            let theme = crate::gui::theme::available_themes()
                 .get(this.settings_editor.selected_theme)
                 .cloned()
                 .unwrap_or_default();
@@ -208,7 +208,7 @@ pub(super) fn build_window_opacity_slider(
 fn layout_mode_items(cx: &App) -> Vec<SharedString> {
     LayoutMode::all()
         .iter()
-        .map(|mode| mode.label(cx))
+        .map(|mode| crate::gui::settings::layout_label(*mode, cx))
         .collect()
 }
 
@@ -264,9 +264,9 @@ pub(super) fn build_theme_select(
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
-    let theme_items: Vec<SharedString> = ThemeId::all()
+    let theme_items: Vec<SharedString> = crate::gui::theme::available_themes()
         .iter()
-        .map(|theme_id| SharedString::from(theme_id.display_name()))
+        .map(|theme_id| SharedString::from(crate::gui::theme::theme_display_name(theme_id)))
         .collect();
     let theme_select = cx.new(|cx| {
         SelectState::new(
@@ -281,10 +281,10 @@ pub(super) fn build_theme_select(
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
             if let SelectEvent::Confirm(Some(val)) = event {
-                let themes = ThemeId::all();
+                let themes = crate::gui::theme::available_themes();
                 if let Some(idx) = themes
                     .iter()
-                    .position(|theme| theme.display_name() == val.as_ref())
+                    .position(|theme| crate::gui::theme::theme_display_name(theme) == val.as_ref())
                 {
                     this.settings_editor.selected_theme = idx;
                     this.save_selected_theme(window, cx);
@@ -302,9 +302,9 @@ pub(super) fn build_language_select(
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
-    let language_items: Vec<SharedString> = Language::all()
+    let language_items: Vec<SharedString> = crate::i18n::language::available_languages()
         .iter()
-        .map(|l| SharedString::from(l.display_name()))
+        .map(|l| SharedString::from(crate::i18n::language::language_display_name(l)))
         .collect();
     let language_select = cx.new(|cx| {
         SelectState::new(
@@ -319,8 +319,11 @@ pub(super) fn build_language_select(
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
             if let SelectEvent::Confirm(Some(val)) = event {
-                let langs = Language::all();
-                if let Some(idx) = langs.iter().position(|l| l.display_name() == val.as_ref()) {
+                let langs = crate::i18n::language::available_languages();
+                if let Some(idx) = langs
+                    .iter()
+                    .position(|l| crate::i18n::language::language_display_name(l) == val.as_ref())
+                {
                     this.settings_editor.selected_language = idx;
                     this.save_selected_language(window, cx);
                 }

@@ -9,6 +9,10 @@ pub mod hotkey;
 /// Secondary panels embedded in the board UI.
 pub mod panel;
 mod paste;
+/// GPUI repository access.
+pub mod repository;
+/// GPUI settings access and localized labels.
+pub mod settings;
 /// Theme identifiers and bundled theme loading.
 pub mod theme;
 /// Tray icon lifecycle and menu events.
@@ -28,3 +32,7 @@ pub(crate) use utils::set_activation_policy_accessory;
 pub(crate) use utils::{
     active_window, hide_window, reset_window_geometry_for_activation, surface_with_opacity,
 };
+
+/// Shared board projection of persisted history.
+pub(crate) type SharedRecords =
+    std::sync::Arc<std::sync::RwLock<Vec<ropy_core::repository::ClipboardRecord>>>;

@@ -2,7 +2,7 @@ use gpui_kit::{AppContext as _, Context};
 
 use super::RopyBoard;
 use crate::{
-    config::Settings,
+    gui::settings::GlobalSettings,
     updater::{errors::UpdateError, models::UpdateStatus},
 };
 
@@ -32,7 +32,7 @@ impl RopyBoard {
             return;
         }
         let (enabled, prerelease) =
-            Settings::read(cx, |s| (s.update.auto_check, s.update.include_prerelease));
+            GlobalSettings::read(cx, |s| (s.update.auto_check, s.update.include_prerelease));
         if enabled
             && (self
                 .update_manager
@@ -79,7 +79,7 @@ impl RopyBoard {
         }
         cx.notify();
 
-        let include_prerelease = Settings::read(cx, |s| s.update.include_prerelease);
+        let include_prerelease = GlobalSettings::read(cx, |s| s.update.include_prerelease);
         let mut schedule = self.update_manager.schedule.clone();
         let background_task = cx.background_spawn(async move {
             let result = crate::updater::checker::check_for_update(include_prerelease);
@@ -98,7 +98,7 @@ impl RopyBoard {
             let _ = this.update(cx, |board, cx| {
                 board.update_manager.schedule = schedule;
                 // Changing channels during a request invalidates its result.
-                if Settings::read(cx, |s| s.update.include_prerelease) != include_prerelease {
+                if GlobalSettings::read(cx, |s| s.update.include_prerelease) != include_prerelease {
                     board.update_manager.status = UpdateStatus::Idle;
                     cx.notify();
                     return;
@@ -132,7 +132,7 @@ impl RopyBoard {
             },
             _ => return,
         };
-        if !Settings::read(cx, |s| s.update.include_prerelease)
+        if !GlobalSettings::read(cx, |s| s.update.include_prerelease)
             && semver::Version::parse(&release.version).is_ok_and(|version| !version.pre.is_empty())
         {
             self.update_manager.release = None;

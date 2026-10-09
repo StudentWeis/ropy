@@ -31,11 +31,10 @@ use super::{
     },
 };
 use crate::{
-    clipboard::thumb_path_for,
     config::LayoutMode,
-    gui::surface_with_opacity,
+    gui::{SharedRecords, surface_with_opacity},
     i18n::I18n,
-    repository::{ClipboardRecord, SharedRecords, models::ContentType},
+    repository::{ClipboardRecord, ContentType, assets::thumb_path_for},
     utils::read_or_recover,
 };
 
@@ -123,7 +122,7 @@ fn render_text_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
 }
 
 fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyElement {
-    let files = crate::utils::deserialize_file_paths(&record.content);
+    let files = crate::repository::deserialize_file_paths(&record.content);
     if files.is_empty() {
         return div()
             .text_sm()

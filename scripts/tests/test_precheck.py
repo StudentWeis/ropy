@@ -45,10 +45,10 @@ fi
 
     def test_precheck_format_drift_stops_before_compilation(self):
         result, commands = self.run_precheck(
-            "--check", fail_command="cargo +nightly fmt --check"
+            "--check", fail_command="cargo +nightly fmt --all --check"
         )
         self.assertEqual(result.returncode, 17, result.stderr)
-        self.assertEqual(commands, ["cargo +nightly fmt --check"])
+        self.assertEqual(commands, ["cargo +nightly fmt --all --check"])
 
     def test_precheck_resource_failure_stops_before_compilation(self):
         result, commands = self.run_precheck(
@@ -60,7 +60,7 @@ fi
     def test_precheck_light_phase_avoids_compilation(self):
         result, commands = self.run_precheck("--check", "--light")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("cargo +nightly fmt --check", commands)
+        self.assertIn("cargo +nightly fmt --all --check", commands)
         self.assertIn("cargo machete", commands)
         self.assertIn("python3 scripts/check/check_icons.py", commands)
         self.assertIn("python3 scripts/check/check_themes.py", commands)
@@ -86,9 +86,9 @@ fi
         result, rust = self.run_precheck("--check", "--rust")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(full, light + rust)
-        self.assertIn("cargo clippy --all-targets --all-features", rust)
-        self.assertIn("cargo test --all-targets --all-features", rust)
-        self.assertIn("cargo doc --no-deps", rust)
+        self.assertIn("cargo clippy --workspace --all-targets --all-features", rust)
+        self.assertIn("cargo test --workspace --all-targets --all-features", rust)
+        self.assertIn("cargo doc --workspace --no-deps", rust)
         self.assertFalse(any(c.startswith("cargo check") for c in full))
 
     def test_precheck_invalid_arguments_fail_before_running_checks(self):

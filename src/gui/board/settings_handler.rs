@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use gpui_kit::{
-    BorrowAppContext, Context, Window,
+    Context, Window,
     component::{WindowExt, notification::Notification},
     prelude::Styled,
     px,
@@ -10,6 +10,7 @@ use gpui_kit::{
 use super::{RopyBoard, settings_editor};
 use crate::{
     config::{ConfirmMode, Settings},
+    gui::settings::GlobalSettings,
     i18n::I18n,
 };
 
@@ -68,13 +69,13 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
         updater: impl FnOnce(&mut Settings),
     ) -> Result<(), String> {
-        if Settings::read(cx, Settings::is_recovery_required) {
+        if GlobalSettings::read(cx, Settings::is_recovery_required) {
             return Err(I18n::translate(cx, "settings_recovery_required"));
         }
         let mut result = Ok(());
         let mut updater = Some(updater);
 
-        cx.update_global::<Settings, _>(|settings, _cx| {
+        GlobalSettings::update(cx, |settings| {
             let previous = settings.clone();
 
             if let Some(updater) = updater.take() {
@@ -145,7 +146,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn toggle_autostart(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let previous_value = Settings::read(cx, |s| s.autostart.enabled);
+        let previous_value = GlobalSettings::read(cx, |s| s.autostart.enabled);
         let next_value = !self.settings_editor.autostart.enabled;
 
         if let Err(error_message) = Self::persist_settings_update(cx, |settings| {
@@ -162,7 +163,8 @@ impl RopyBoard {
             }) {
                 Self::notify_settings_save_failed(window, cx, &rollback_error);
             }
-            self.settings_editor.autostart.enabled = Settings::read(cx, |s| s.autostart.enabled);
+            self.settings_editor.autostart.enabled =
+                GlobalSettings::read(cx, |s| s.autostart.enabled);
             Self::notify_settings_warning(
                 window,
                 cx,
@@ -183,7 +185,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_mode = Settings::read(cx, |s| s.confirm.mode);
+        let previous_mode = GlobalSettings::read(cx, |s| s.confirm.mode);
         if confirm_mode == previous_mode {
             return;
         }
@@ -206,7 +208,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_value = Settings::read(cx, |s| s.preview.hover_preview_enabled);
+        let previous_value = GlobalSettings::read(cx, |s| s.preview.hover_preview_enabled);
         if enabled == previous_value {
             return;
         }
@@ -229,7 +231,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_value = Settings::read(cx, |s| s.preview.space_preview_enabled);
+        let previous_value = GlobalSettings::read(cx, |s| s.preview.space_preview_enabled);
         if enabled == previous_value {
             return;
         }
