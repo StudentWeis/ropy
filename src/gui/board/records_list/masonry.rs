@@ -7,8 +7,8 @@ use gpui_kit::{
 };
 
 use super::{
-    SCROLLBAR_OVERLAY_RIGHT_OFFSET,
     metrics::{GRID_COLUMN_COUNT, GRID_COLUMN_COUNT_F32, estimated_grid_card_height},
+    render_records_scrollbar,
     row::{RecordsListState, render_list_item_with_grid_height},
 };
 use crate::utils::read_or_recover;
@@ -223,15 +223,9 @@ impl RenderOnce for GridMasonry {
                     .overflow_y_scroll()
                     .children(children),
             )
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right(px(SCROLLBAR_OVERLAY_RIGHT_OFFSET))
-                    .bottom_0()
-                    .child(Scrollbar::vertical(&self.scroll_handle).mode(ScrollbarMode::Scrolling)),
-            )
+            .child(render_records_scrollbar(
+                Scrollbar::vertical(&self.scroll_handle).mode(ScrollbarMode::Scrolling),
+            ))
     }
 }
 
