@@ -146,7 +146,7 @@ jobs:
         with:
           "if-no-files-found": "error"
           "name": "artifacts-macos-bundle-${{ join(matrix.targets, '_') }}"
-          "path": "target/distrib/ropy-*.dmg"
+          "path": "target/distrib/ropy-*-apple-darwin*"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest

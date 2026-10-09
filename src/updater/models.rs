@@ -9,6 +9,10 @@ pub(crate) struct GitHubRelease {
     pub tag_name: String,
     pub body: Option<String>,
     pub assets: Vec<GitHubAsset>,
+    #[serde(default)]
+    pub draft: bool,
+    #[serde(default)]
+    pub prerelease: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -29,7 +33,7 @@ pub(crate) struct ReleaseInfo {
     pub asset_size: u64,
 }
 
-/// Update lifecycle state shared with the UI as a `Global`. Variants are
+/// Update lifecycle state owned by the board update controller. Variants are
 /// observable, hence `PartialEq` for cheap change detection.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum UpdateStatus {
@@ -39,9 +43,14 @@ pub(crate) enum UpdateStatus {
     UpToDate,
     /// Download progress in `0.0..=1.0`.
     Downloading(f32),
-    /// New binary is on disk; user-initiated restart is required to apply it.
+    Verifying,
+    Extracting,
+    Staging,
+    Restarting,
+    /// A verified payload is staged; restart installs it and confirms startup.
     ReadyToRestart,
-    Error(String),
+    RolledBack,
+    Error(super::errors::UpdateFailure),
 }
 
 #[cfg(test)]
@@ -90,8 +99,8 @@ mod tests {
 
     #[test]
     fn test_update_status_error_when_compared_tracks_message() {
-        let left = UpdateStatus::Error("network failed".to_string());
-        let right = UpdateStatus::Error("network failed".to_string());
+        let left = UpdateStatus::Error(super::super::errors::UpdateFailure::Network);
+        let right = UpdateStatus::Error(super::super::errors::UpdateFailure::Network);
 
         assert_eq!(left, right);
     }

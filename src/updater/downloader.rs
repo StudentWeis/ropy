@@ -1,4 +1,4 @@
-//! Download, verify, extract, and replace the running binary.
+//! Download, verify and stage an update without changing the running installation.
 
 use std::{
     io::Read,
@@ -7,19 +7,21 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use super::{errors::UpdateError, models::ReleaseInfo};
+use super::{
+    errors::UpdateError,
+    models::{ReleaseInfo, UpdateStatus},
+};
 
 const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
 
-/// Download the release asset, verify its checksum, extract the binary, and
-/// replace the running executable.
-///
-/// `progress_tx` is an `async_channel` sender that reports download progress
-/// (values between 0.0 and 1.0) to the UI thread.
-pub(crate) fn download_and_install(
+/// Download and verify a release, then stage its executable or application bundle.
+/// Progress and phase changes are sent to the foreground update controller.
+pub(crate) fn download_and_stage(
     release: &ReleaseInfo,
-    progress_tx: &async_channel::Sender<f32>,
+    progress_tx: &async_channel::Sender<UpdateStatus>,
 ) -> Result<(), UpdateError> {
+    let installation = super::installation::Installation::current()?;
+    let target = installation.target()?;
     let checksum_url = required_checksum_url(release)?;
     let tmp_dir = tempfile::tempdir().map_err(UpdateError::Io)?;
     let asset_name = release
@@ -27,6 +29,10 @@ pub(crate) fn download_and_install(
         .rsplit('/')
         .next()
         .unwrap_or("ropy-update");
+    if asset_name.is_empty() || asset_name == "." || asset_name == ".." || asset_name.contains('\\')
+    {
+        return Err(UpdateError::Parse("invalid archive filename".into()));
+    }
     let asset_path = tmp_dir.path().join(asset_name);
 
     // 1. Download the archive
@@ -40,26 +46,28 @@ pub(crate) fn download_and_install(
 
     // 2. Verify checksum before extracting executable content.
     tracing::info!("verifying checksum");
+    let _ = progress_tx.send_blocking(UpdateStatus::Verifying);
     verify_checksum(&asset_path, checksum_url)?;
 
-    // 3. Extract the binary from the archive
-    tracing::info!("extracting binary from archive");
-    let binary_path = extract_binary(&asset_path, tmp_dir.path())?;
-
-    // 4. Replace the running executable
-    tracing::info!("replacing running executable");
-    self_replace::self_replace(&binary_path).map_err(|e| UpdateError::Replace(e.to_string()))?;
-
-    // 5. On Unix set the executable permission (self_replace should handle this, but be safe)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(exe) = std::env::current_exe() {
-            let _ = std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755));
+    let _ = progress_tx.send_blocking(UpdateStatus::Extracting);
+    let extracted = tmp_dir.path().join("extracted");
+    std::fs::create_dir(&extracted)?;
+    let binary_path = extract_binary(&asset_path, &extracted)?;
+    let payload = if installation.is_bundle() {
+        let app = extracted.join("Ropy.app");
+        if !app.join("Contents/Info.plist").is_file() || !app.join("Contents/MacOS/ropy").is_file()
+        {
+            return Err(UpdateError::Extract(
+                "archive does not contain a complete Ropy.app".into(),
+            ));
         }
-    }
-
-    tracing::info!("update installed successfully – restart required");
+        app
+    } else {
+        binary_path
+    };
+    let _ = progress_tx.send_blocking(UpdateStatus::Staging);
+    super::transaction::Transaction::stage(target, &payload, installation.is_bundle())?;
+    tracing::info!("update staged; restart required");
     Ok(())
 }
 
@@ -81,7 +89,7 @@ fn download_file(
     url: &str,
     dest: &Path,
     total_size: u64,
-    progress_tx: &async_channel::Sender<f32>,
+    progress_tx: &async_channel::Sender<UpdateStatus>,
 ) -> Result<(), UpdateError> {
     use std::process::Stdio;
 
@@ -89,56 +97,66 @@ fn download_file(
         .with_download_timeouts()
         .into_command();
 
+    let mut file = std::fs::File::create(dest)?;
     let mut child = curl_command
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| {
-            tracing::error!(url = %url, error = %e, "failed to launch curl");
-            UpdateError::Network(format!("failed to launch curl: {e}"))
-        })?;
-
-    let mut reader = child
+        .map_err(|error| UpdateError::Network(format!("failed to launch curl: {error}")))?;
+    let result = child
         .stdout
         .take()
-        .ok_or_else(|| UpdateError::Network("failed to capture curl stdout".into()))?;
-
-    let mut file = std::fs::File::create(dest).map_err(UpdateError::Io)?;
-
-    let mut downloaded: u64 = 0;
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buf).map_err(|e| {
-            tracing::error!(url = %url, error = %e, "failed reading curl output");
-            UpdateError::Io(e)
-        })?;
-        if n == 0 {
-            break;
-        }
-        std::io::Write::write_all(&mut file, &buf[..n]).map_err(UpdateError::Io)?;
-        downloaded += n as u64;
-        if total_size > 0 {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "download progress only needs sub-percent accuracy"
-            )]
-            let progress = downloaded as f32 / total_size as f32;
-            let _ = progress_tx.send_blocking(progress);
-        }
+        .ok_or_else(|| UpdateError::Network("failed to capture curl stdout".into()))
+        .and_then(|mut reader| stream_download(&mut reader, &mut file, total_size, progress_tx));
+    if result.is_err() {
+        let _ = child.kill();
     }
-
-    let status = child.wait().map_err(|e| {
-        tracing::error!(error = %e, "failed to wait for curl");
-        UpdateError::Io(e)
-    })?;
-
+    let status = child.wait()?;
+    result?;
     if !status.success() {
         return Err(UpdateError::Network(format!(
             "curl download failed (exit {status})"
         )));
     }
+    file.sync_all()?;
+    Ok(())
+}
 
-    let _ = progress_tx.send_blocking(1.0);
+fn stream_download(
+    reader: &mut impl Read,
+    file: &mut impl std::io::Write,
+    total_size: u64,
+    progress_tx: &async_channel::Sender<UpdateStatus>,
+) -> Result<(), UpdateError> {
+    let mut downloaded = 0_u64;
+    let mut last_progress = std::time::Instant::now();
+    let mut buf = [0_u8; 8192];
+    loop {
+        let count = reader.read(&mut buf)?;
+        if count == 0 {
+            break;
+        }
+        downloaded += count as u64;
+        if downloaded > total_size || downloaded > 512 * 1024 * 1024 {
+            return Err(UpdateError::Network(
+                "download exceeded expected size".into(),
+            ));
+        }
+        file.write_all(&buf[..count])?;
+        if total_size > 0 && last_progress.elapsed() >= std::time::Duration::from_millis(100) {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "progress only needs sub-percent accuracy"
+            )]
+            let progress = downloaded as f32 / total_size as f32;
+            let _ = progress_tx.try_send(UpdateStatus::Downloading(progress.min(1.0)));
+            last_progress = std::time::Instant::now();
+        }
+    }
+    if downloaded != total_size {
+        return Err(UpdateError::Network("incomplete update download".into()));
+    }
+    let _ = progress_tx.send_blocking(UpdateStatus::Downloading(1.0));
     Ok(())
 }
 
@@ -222,9 +240,22 @@ fn extract_tar_xz(archive_path: &Path, out_dir: &Path) -> Result<PathBuf, Update
     let decompressor = xz2::read::XzDecoder::new(file);
     let mut archive = tar::Archive::new(decompressor);
 
-    archive
-        .unpack(out_dir)
-        .map_err(|e| UpdateError::Extract(e.to_string()))?;
+    let mut total = 0_u64;
+    for (count, entry) in archive.entries()?.enumerate() {
+        let mut entry = entry?;
+        total = total.saturating_add(entry.size());
+        let kind = entry.header().entry_type();
+        if count > 10_000 || total > 1024 * 1024 * 1024 || !(kind.is_file() || kind.is_dir()) {
+            return Err(UpdateError::Extract(
+                "unsupported or oversized archive entry".into(),
+            ));
+        }
+        if !entry.unpack_in(out_dir)? {
+            return Err(UpdateError::Extract(
+                "archive entry escapes destination".into(),
+            ));
+        }
+    }
 
     find_binary_in_dir(out_dir)
 }
@@ -243,6 +274,24 @@ fn extract_zip(archive_path: &Path, out_dir: &Path) -> Result<PathBuf, UpdateErr
     let file = std::fs::File::open(archive_path)?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| UpdateError::Extract(e.to_string()))?;
+    let mut total = 0_u64;
+    for ix in 0..archive.len() {
+        let entry = archive
+            .by_index(ix)
+            .map_err(|error| UpdateError::Extract(error.to_string()))?;
+        total = total.saturating_add(entry.size());
+        if ix > 10_000
+            || total > 1024 * 1024 * 1024
+            || entry.enclosed_name().is_none()
+            || entry
+                .unix_mode()
+                .is_some_and(|mode| mode & 0o170_000 == 0o120_000)
+        {
+            return Err(UpdateError::Extract(
+                "unsupported or oversized archive entry".into(),
+            ));
+        }
+    }
     archive
         .extract(out_dir)
         .map_err(|e| UpdateError::Extract(e.to_string()))?;
@@ -289,6 +338,28 @@ fn walkdir(dir: &Path) -> Result<Vec<PathBuf>, UpdateError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case(b"abc", 4)]
+    #[case(b"abcde", 4)]
+    fn test_stream_download_wrong_length_rejects_payload(
+        #[case] bytes: &[u8],
+        #[case] expected: u64,
+    ) {
+        let (tx, _rx) = async_channel::bounded(8);
+        let mut output = Vec::new();
+        assert!(stream_download(&mut &bytes[..], &mut output, expected, &tx).is_err());
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_stream_download_valid_payload_reports_completion() {
+        let (tx, rx) = async_channel::bounded(8);
+        let mut output = Vec::new();
+        stream_download(&mut &b"archive"[..], &mut output, 7, &tx).unwrap();
+        assert_eq!(output, b"archive");
+        assert_eq!(rx.try_recv().unwrap(), UpdateStatus::Downloading(1.0));
+    }
 
     #[test]
     #[expect(clippy::expect_used)]

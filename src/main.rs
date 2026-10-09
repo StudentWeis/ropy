@@ -25,11 +25,16 @@ pub mod utils;
 /// Isolated promotional renders and lossless screenshot composition.
 pub mod promo;
 
-fn main() -> Result<(), promo::PromoError> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(command) =
         promo::PromoCommand::parse(&std::env::args_os().skip(1).collect::<Vec<_>>())?
     {
-        return command.run();
+        command.run()?;
+        return Ok(());
+    }
+
+    if updater::transaction::handle_startup()? {
+        return Ok(());
     }
 
     let _logging_guard = utils::init_logging();

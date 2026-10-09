@@ -265,6 +265,7 @@ pub(crate) fn launch() {
             sync_autostart_on_launch(settings.autostart.enabled);
 
             let repository = initialize_repository();
+            let repository_ready = repository.is_some();
             let initial_records =
                 load_initial_records(repository.as_ref(), settings.storage.max_history_records);
             cx.set_global(GlobalRepository::new(repository));
@@ -277,7 +278,7 @@ pub(crate) fn launch() {
             let window_handle = crate::gui::create_window(cx, shared_records, last_copy, copy_tx);
             start_clipboard_event_handler(clipboard_rx, window_handle, cx);
             let hotkey_tx =
-                setup_hotkey_listener(window_handle, settings.hotkey.activation_key.clone(), cx);
+                setup_hotkey_listener(window_handle, settings.hotkey.activation_key, cx);
             // Tray initialization needs the loaded I18n; the resulting
             // handle is stashed in the global so menu refreshes after a
             // language change can reach it.
@@ -296,11 +297,18 @@ pub(crate) fn launch() {
                     board.set_hotkey_tx(hotkey_tx);
                 });
 
-                if settings.update.auto_check {
-                    board.update(cx, |board, cx| {
-                        board.check_for_update_async(cx);
-                    });
-                }
+                board.update(cx, RopyBoard::start_update_checks);
+                cx.spawn(async move |cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(2))
+                        .await;
+                    if repository_ready
+                        && let Err(error) = crate::updater::transaction::confirm_startup()
+                    {
+                        tracing::error!(%error, "failed to confirm updated application startup");
+                    }
+                })
+                .detach();
             } else {
                 tracing::error!("failed to downcast root view to RopyBoard");
             }

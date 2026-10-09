@@ -58,7 +58,7 @@ scoop install ropy
 ```
 
 > [!NOTE]
-> 如果您通过 Scoop 安装 Ropy，建议禁用 Ropy 内置的自动更新功能，以避免与 Scoop 的包管理产生冲突。您可以在 Ropy 的设置中禁用自动更新。
+> Ropy 会识别标准路径下的 Scoop 安装，并交由 Scoop 更新。请运行 `scoop update ropy`；应用内仍可检查新版本。
 
 ### 从源码构建
 

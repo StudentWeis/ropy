@@ -19,5 +19,5 @@
   uses: actions/upload-artifact@v7
   with:
     name: artifacts-macos-bundle-${{ join(matrix.targets, '_') }}
-    path: target/distrib/ropy-*.dmg
+    path: target/distrib/ropy-*-apple-darwin*
     if-no-files-found: error

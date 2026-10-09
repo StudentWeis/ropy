@@ -50,6 +50,14 @@ impl RopyBoard {
         self.settings_editor
             .update_settings
             .include_prerelease_enabled = enabled;
+        if matches!(
+            self.update_manager.status,
+            crate::updater::models::UpdateStatus::Available(_)
+                | crate::updater::models::UpdateStatus::UpToDate
+        ) {
+            self.update_manager.status = crate::updater::models::UpdateStatus::Idle;
+            self.update_manager.release = None;
+        }
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }
