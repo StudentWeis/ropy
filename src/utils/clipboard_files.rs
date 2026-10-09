@@ -37,12 +37,13 @@ fn normalize_file_path(path: &str) -> Option<String> {
         return None;
     }
 
-    let without_uri_prefix = trimmed
+    let uri_path = trimmed
         .strip_prefix("file://localhost")
-        .or_else(|| trimmed.strip_prefix("file://"))
-        .unwrap_or(trimmed);
+        .or_else(|| trimmed.strip_prefix("file://"));
 
-    Some(decode_percent_encoded(without_uri_prefix))
+    // Percent escapes belong to URIs; decoding a filesystem path changes
+    // literal filenames and makes repeated normalization destructive.
+    Some(uri_path.map_or_else(|| trimmed.to_string(), decode_percent_encoded))
 }
 
 pub(crate) fn normalize_file_paths(paths: &[String]) -> Vec<String> {
@@ -71,6 +72,25 @@ pub(crate) fn hash_file_paths(paths: &[String]) -> u64 {
 #[expect(clippy::panic)]
 mod tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case("/tmp/report%20final.txt")]
+    #[case("/tmp/report%25final.txt")]
+    #[case("/tmp/report%2520final.txt")]
+    fn test_file_paths_literal_percent_encoding_round_trip_preserves_path(#[case] path: &str) {
+        let paths = vec![path.to_string()];
+        assert_eq!(normalize_file_paths(&paths), paths);
+        let serialized = serialize_file_paths(&paths)
+            .unwrap_or_else(|error| panic!("serialize should succeed: {error}"));
+        assert_eq!(deserialize_file_paths(&serialized), paths);
+    }
+
+    #[test]
+    fn test_normalize_file_paths_encoded_percent_uri_repeated_calls_preserve_path() {
+        let normalized = normalize_file_paths(&["file:///tmp/report%2520final.txt".into()]);
+        assert_eq!(normalized, vec!["/tmp/report%20final.txt"]);
+        assert_eq!(normalize_file_paths(&normalized), normalized);
+    }
 
     #[test]
     fn test_normalize_file_paths_strips_uri_prefix_and_decodes_percent_encoding() {

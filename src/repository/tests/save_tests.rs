@@ -12,6 +12,47 @@ use crate::repository::{
     test_helpers::{create_test_repo, create_test_repo_with},
 };
 
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_save_rich_text_sidecar_write_failure_preserves_committed_record(#[case] existing: bool) {
+    let (dir, repo) = create_test_repo_with(memory_backend_factory);
+    let original = existing.then(|| {
+        repo.save_rich_text("same".into(), Some("<b>old</b>"), None)
+            .unwrap()
+    });
+    let sidecars = dir.path().join("rich_text");
+    let backup = dir.path().join("previous-sidecars");
+    if existing {
+        std::fs::rename(&sidecars, &backup).unwrap();
+    }
+    std::fs::write(&sidecars, b"directory blocker").unwrap();
+    assert!(
+        repo.save_rich_text("same".into(), Some("<i>new</i>"), None)
+            .is_err()
+    );
+    assert_eq!(repo.count(), usize::from(existing));
+    std::fs::remove_file(&sidecars).unwrap();
+    if let Some(original) = original {
+        std::fs::rename(backup, sidecars).unwrap();
+        let actual = repo.get_by_id(original.id).unwrap().unwrap();
+        assert_eq!(actual.created_at, original.created_at);
+        assert_eq!(
+            crate::clipboard::load_rich_text_html(actual.rich_text_meta.as_ref().unwrap())
+                .as_deref(),
+            Some("<b>old</b>")
+        );
+    }
+    // A failed capture must be retryable once the filesystem is usable.
+    let retried = repo
+        .save_rich_text("same".into(), Some("<i>new</i>"), None)
+        .unwrap();
+    assert_eq!(
+        crate::clipboard::load_rich_text_html(retried.rich_text_meta.as_ref().unwrap()).as_deref(),
+        Some("<i>new</i>")
+    );
+}
+
 fn assert_save_and_get_text_with<B: StorageBackend>(factory: BackendFactory<B>) {
     let (_temp_dir, repo) = create_test_repo_with(factory);
 

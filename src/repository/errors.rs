@@ -2,6 +2,8 @@
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RepositoryError {
+    #[error("Rich-text sidecar write failed: {0}")]
+    Sidecar(#[from] std::io::Error),
     #[error("Data directory not found")]
     DataDirNotFound,
     #[error("Database open failed: {0}")]

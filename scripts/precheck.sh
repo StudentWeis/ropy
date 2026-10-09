@@ -48,6 +48,7 @@ if [[ "$PHASE" != rust ]]; then
 	python3 scripts/check/check_icons.py
 	python3 scripts/check/check_themes.py
 	python3 -m unittest discover -s scripts/tests
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .agents/skills/repo-coordination/tests
 	if command -v cargo-machete &>/dev/null; then
 		$CARGO_CMD machete
 	fi

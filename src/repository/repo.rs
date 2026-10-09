@@ -244,7 +244,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
                     .map_err(|error| RepositoryError::Deserialization(error.to_string()))
             })
             .transpose()?;
-        let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root());
+        let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root())?;
 
         if let Some(mut record) = existing {
             record.created_at = now;
