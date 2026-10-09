@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-<img src="https://www.imgur.la/images/2026/04/08/pic_1775632236468.png" alt="Ropy" width="80%">
+<img src="https://raw.githubusercontent.com/StudentWeis/ropy-images/main/screenshots/2026-10-09/ropy-themes.png" alt="Ropy" width="80%">
 </p>
 
 ## 特性
