@@ -65,8 +65,16 @@ fi
         self.assertIn("python3 scripts/check/check_icons.py", commands)
         self.assertIn("python3 scripts/check/check_themes.py", commands)
         self.assertIn("python3 -m unittest discover -s scripts/tests", commands)
+        self.assertIn("python3 -m unittest discover -s .agents/skills/repo-coordination/tests", commands)
         self.assertFalse(any("clippy" in c or "cargo test" in c for c in commands))
         self.assertFalse(any(c.startswith("shfmt -w") for c in commands))
+
+    def test_precheck_coordination_failure_stops_before_compilation(self):
+        result, commands = self.run_precheck(
+            "--check", fail_command="python3 -m unittest discover -s .agents/skills/repo-coordination/tests"
+        )
+        self.assertEqual(result.returncode, 17, result.stderr)
+        self.assertFalse(any("clippy" in command or "cargo test" in command for command in commands))
 
     def test_precheck_split_phases_match_full_ci_gate(self):
         result, full = self.run_precheck("--check")

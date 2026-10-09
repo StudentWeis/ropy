@@ -2,13 +2,14 @@
 """
 i18n locale file checker.
 
-Checks two things:
+Checks three things:
   1. Whether every key in en.toml is actually referenced in the Rust source.
   2. Whether every non-template locale file has exactly the same keys as en.toml
      (no missing keys, no extra keys).
+  3. Whether source translation references exist in en.toml.
 
 Usage:
-    python3 scripts/check_i18n.py [--root <project-root>]
+    python3 scripts/check/check_i18n.py [--root <project-root>]
 
 Exit code is non-zero when any issue is found.
 """
@@ -53,12 +54,11 @@ def collect_used_keys(src_root: Path) -> set[str]:
       * I18n::translate(cx, "key")
       * I18n::translate_count(cx, "key", count)
       * i18n.t("key")
-      * translations.get("key")
       * any_field_key: "key"  (struct field ending with ``_key``, used for
                                indirect i18n lookups like ``i18n.t(row.label_key)``)
     """
-    # Direct I18n::translate / .t() / .get() call patterns
-    direct_pattern = re.compile(r'I18n::translate(?:_count)?\(\s*\w+\s*,\s*"([^"]+)"|\.t\(\s*"([^"]+)"\s*\)|\.get\(\s*"([^"]+)"\s*\)')
+    # Generic .get() calls are map lookups, not translation references.
+    direct_pattern = re.compile(r'I18n::translate(?:_count)?\(\s*\w+\s*,\s*"([^"]+)"|\.t\(\s*"([^"]+)"\s*\)')
     # Struct field whose name ends with ``_key`` assigned a string literal,
     # e.g. ``label_key: "help_search"``
     field_key_pattern = re.compile(r'\b\w+_key\s*:\s*"([^"]+)"')
@@ -66,7 +66,7 @@ def collect_used_keys(src_root: Path) -> set[str]:
     for rs_file in src_root.rglob("*.rs"):
         text = rs_file.read_text(encoding="utf-8")
         for m in direct_pattern.finditer(text):
-            key = m.group(1) or m.group(2) or m.group(3)
+            key = m.group(1) or m.group(2)
             used.add(key)
         for m in field_key_pattern.finditer(text):
             used.add(m.group(1))
@@ -79,7 +79,8 @@ def collect_used_keys(src_root: Path) -> set[str]:
 
 def check_unused_keys(template_keys: list[str], used_keys: set[str]) -> list[str]:
     """Return keys that exist in the template but are never used in source."""
-    return [k for k in template_keys if k not in used_keys]
+    # Locale discovery reads language_name as metadata, not through I18n.
+    return [k for k in template_keys if k != "language_name" and k not in used_keys]
 
 
 def check_locale_consistency(
@@ -151,6 +152,11 @@ def main() -> int:
     # Collect all check results first
     check_results = []
 
+    missing_references = sorted(used_keys - set(template_keys))
+    if missing_references:
+        issues += 1
+        verbose = True
+
     # ------------------------------------------------------------------
     # Check 1 – unused keys in template
     # ------------------------------------------------------------------
@@ -181,6 +187,10 @@ def main() -> int:
     # Output (verbose only when issues found)
     # ------------------------------------------------------------------
     if verbose:
+        if missing_references:
+            print_section("Source translation keys missing from en.toml")
+            for key in missing_references:
+                print(f"  {_color('MISSING', _RED)}  {key}")
         # Print Check 1 details
         if unused:
             print_section("Check 1 · Keys in en.toml not referenced in source code")

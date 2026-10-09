@@ -96,19 +96,22 @@ fn write_rich_text_file(
     record_id: u64,
     extension: &str,
     content: &str,
-) -> Option<String> {
+) -> std::io::Result<tempfile::NamedTempFile> {
     use std::io::Write;
     let directory = rich_text_dir_path(data_dir);
-    fs::create_dir_all(&directory).ok()?;
+    fs::create_dir_all(&directory)?;
     let mut file = tempfile::Builder::new()
         .prefix(&format!("{record_id}-"))
         .suffix(&format!(".{extension}"))
-        .tempfile_in(directory)
-        .ok()?;
-    file.write_all(content.as_bytes()).ok()?;
-    file.as_file().sync_all().ok()?;
-    let (_, path) = file.keep().ok()?;
-    Some(path.to_string_lossy().into_owned())
+        .tempfile_in(directory)?;
+    file.write_all(content.as_bytes())?;
+    file.as_file().sync_all()?;
+    Ok(file)
+}
+
+fn keep_rich_text_file(file: tempfile::NamedTempFile) -> std::io::Result<String> {
+    let (_, path) = file.keep().map_err(|error| error.error)?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 pub(crate) fn save_rich_text_files_to_dir(
@@ -116,19 +119,33 @@ pub(crate) fn save_rich_text_files_to_dir(
     html: Option<&str>,
     rtf: Option<&str>,
     data_dir: &Path,
-) -> Option<RichTextMeta> {
-    let html_path =
-        html.and_then(|content| write_rich_text_file(data_dir, record_id, "html", content));
-    let rtf_path =
-        rtf.and_then(|content| write_rich_text_file(data_dir, record_id, "rtf", content));
+) -> std::io::Result<Option<RichTextMeta>> {
+    // Stage both formats before retaining either file. On a write failure,
+    // NamedTempFile removes every new artifact and the record stays unchanged.
+    let html_file = html
+        .map(|content| write_rich_text_file(data_dir, record_id, "html", content))
+        .transpose()?;
+    let rtf_file = rtf
+        .map(|content| write_rich_text_file(data_dir, record_id, "rtf", content))
+        .transpose()?;
+    let html_path = html_file.map(keep_rich_text_file).transpose()?;
+    let rtf_path = match rtf_file.map(keep_rich_text_file).transpose() {
+        Ok(path) => path,
+        Err(error) => {
+            if let Some(path) = html_path.as_ref() {
+                let _ = fs::remove_file(path);
+            }
+            return Err(error);
+        }
+    };
 
     if html_path.is_none() && rtf_path.is_none() {
-        None
+        Ok(None)
     } else {
-        Some(RichTextMeta {
+        Ok(Some(RichTextMeta {
             html_path,
             rtf_path,
-        })
+        }))
     }
 }
 
@@ -338,6 +355,7 @@ mod tests {
             Some("{\\rtf1 hello}"),
             temp_dir.path(),
         )
+        .expect("Failed to save rich text")
         .expect("Expected rich text metadata");
 
         assert_eq!(load_rich_text_html(&meta).as_deref(), Some("<p>hello</p>"));
@@ -354,6 +372,7 @@ mod tests {
             Some("{\\rtf1 hello}"),
             temp_dir.path(),
         )
+        .expect("Failed to save rich text")
         .expect("Expected rich text metadata");
         let html_path = meta.html_path.clone().expect("Expected html path");
         let rtf_path = meta.rtf_path.clone().expect("Expected rtf path");

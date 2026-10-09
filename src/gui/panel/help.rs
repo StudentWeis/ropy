@@ -31,12 +31,12 @@ const SHORTCUTS: &[ShortcutRow] = &[
     },
     ShortcutRow {
         key: "↑ / ↓",
-        label_key: "help_nav_up_down",
+        label_key: "help_nav_up",
         grid_only: false,
     },
     ShortcutRow {
         key: "K / J",
-        label_key: "help_nav_up_down",
+        label_key: "help_nav_up",
         grid_only: false,
     },
     ShortcutRow {
@@ -155,7 +155,7 @@ pub(crate) fn render_help_content(
             // The "up / down" entry has no single translation key — compose
             // it from the per-direction strings so each language can phrase
             // them independently.
-            let label = if row.label_key == "help_nav_up_down" {
+            let label = if row.label_key == "help_nav_up" {
                 format!(
                     "{} / {}",
                     I18n::translate(cx, "help_nav_up"),
