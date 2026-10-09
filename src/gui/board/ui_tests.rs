@@ -392,3 +392,64 @@ fn test_update_managed_installation_never_offers_download(cx: &mut TestAppContex
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn test_startup_repository_failure_remains_visible_across_panels(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("repository-unavailable").visible());
+        assert_eq!(
+            window.find("repository-unavailable").label(),
+            Some(I18n::translate(cx, "repository_unavailable").as_str())
+        );
+        board.update(cx, |board, cx| {
+            board.active_panel = ActivePanel::Settings;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(window.find("repository-unavailable").visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_startup_settings_failure_remains_visible_and_rejects_updates(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| cx.set_global(Settings::recovery_defaults()));
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.active_panel = ActivePanel::Settings;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(window.find("settings-recovery").visible());
+        window.click("confirm-mode-toggle", cx);
+        assert_eq!(
+            Settings::read(cx, |settings| settings.confirm.mode),
+            ConfirmMode::CopyToClipboard
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_startup_ready_hides_recovery_alerts(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let repo = Arc::new(
+        ClipboardRepository::init(
+            &directory.path().join("clipboard.redb"),
+            directory.path().join("images"),
+            crate::repository::backend::redb::redb_backend_factory,
+        )
+        .expect("repository"),
+    );
+    let (handle, _, _) = open_board(cx, vec![]);
+    cx.update(|cx| cx.set_global(GlobalRepository::new(Some(repo))));
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("repository-unavailable").is_none());
+        assert!(window.try_find("settings-recovery").is_none());
+    })
+    .unwrap();
+}

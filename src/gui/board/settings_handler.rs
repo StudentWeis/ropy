@@ -68,6 +68,9 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
         updater: impl FnOnce(&mut Settings),
     ) -> Result<(), String> {
+        if Settings::read(cx, Settings::is_recovery_required) {
+            return Err(I18n::translate(cx, "settings_recovery_required"));
+        }
         let mut result = Ok(());
         let mut updater = Some(updater);
 

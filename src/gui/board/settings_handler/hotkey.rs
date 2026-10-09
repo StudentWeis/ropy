@@ -132,6 +132,14 @@ impl RopyBoard {
     }
 
     pub(crate) fn save_hotkey(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
+        if Settings::read(cx, Settings::is_recovery_required) {
+            Self::notify_settings_warning(
+                window,
+                cx,
+                I18n::translate(cx, "settings_recovery_required"),
+            );
+            return;
+        }
         let current_hotkey = Settings::read(cx, |s| s.hotkey.activation_key.clone());
         let activation_key = Self::normalize_hotkey_for_save(
             &self.resolve_activation_key_input(cx),
