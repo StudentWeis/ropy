@@ -8,7 +8,8 @@ use crate::repository::ContentType;
 ///
 /// The content type is encoded as a prefix byte to avoid collisions
 /// between different types with the same content.
-pub(crate) fn content_hash(content: &str, content_type: &ContentType) -> u64 {
+#[must_use]
+pub fn content_hash(content: &str, content_type: &ContentType) -> u64 {
     let type_tag = content_type.as_tag();
     let mut data = vec![type_tag];
     data.extend_from_slice(content.as_bytes());

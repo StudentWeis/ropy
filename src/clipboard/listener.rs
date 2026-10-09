@@ -370,7 +370,7 @@ mod tests {
     }
 
     struct CaptureFixture {
-        dir: tempfile::TempDir,
+        _dir: tempfile::TempDir,
         backend: crate::repository::backend::memory::MemoryBackend,
         repo: crate::repository::ClipboardRepository<
             crate::repository::backend::memory::MemoryBackend,
@@ -394,7 +394,7 @@ mod tests {
             let (tx, rx) = async_channel::bounded(1);
             let (image_tx, image_rx) = async_channel::bounded(1);
             Self {
-                dir,
+                _dir: dir,
                 backend,
                 repo,
                 tracker: Arc::default(),

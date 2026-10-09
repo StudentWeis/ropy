@@ -23,7 +23,8 @@ const DB_CACHE_CAPACITY: usize = 8 * 1024 * 1024;
 type RedbTableDefinition<'a> = TableDefinition<'a, &'static [u8], &'static [u8]>;
 
 /// A [`StorageBackend`] backed by the redb embedded database.
-pub(crate) struct RedbBackend {
+#[derive(Debug)]
+pub struct RedbBackend {
     db: Arc<Database>,
     #[cfg(test)]
     fail_write_after: std::sync::atomic::AtomicUsize,
@@ -31,7 +32,10 @@ pub(crate) struct RedbBackend {
 
 impl RedbBackend {
     /// Open a redb database at the given path with tuned defaults.
-    pub(crate) fn open(db_path: &PathBuf) -> Result<Self, RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error if the database cannot be opened or its parent directory created.
+    pub fn open(db_path: &PathBuf) -> Result<Self, RepositoryError> {
         if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|error| RepositoryError::DatabaseOpen(error.to_string()))?;
@@ -159,11 +163,16 @@ impl StorageBackend for RedbBackend {
 }
 
 /// Factory function that creates a [`RedbBackend`].
-pub(crate) fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, RepositoryError> {
+///
+/// # Errors
+/// Returns an error if the database cannot be opened or its parent directory created.
+pub fn redb_backend_factory(db_path: &PathBuf) -> Result<RedbBackend, RepositoryError> {
     RedbBackend::open(db_path)
 }
 
-pub(crate) struct RedbTree {
+/// A named table backed by shared redb transactions.
+#[derive(Debug)]
+pub struct RedbTree {
     db: Arc<Database>,
     name: String,
     write_lock: Mutex<()>,

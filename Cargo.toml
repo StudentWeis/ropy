@@ -12,35 +12,30 @@ license = "MIT"
 publish = false
 
 [dependencies]
+ropy-core = { path = "crates/ropy-core" }
 clipboard-rs = "0.3.5"
 gpui-kit = { version = "0.7.1", default-features = false, features = ["component"] }
 global-hotkey = "0.8.0"
-redb = "4.3.0"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
-chrono = { version = "0.4.45", default-features = false, features = [
-    "clock",
-    "serde",
-    "std",
-] }
-dirs = "7.0.0"
-thiserror = "2.0.21"
-toml = "1.1.7"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+image.workspace = true
 tray-icon = "0.26.1"
 auto-launch = "0.6.0"
 raw-window-handle = "0.6.2"
 async-channel = "2.5.0"
 rust-embed = "8.13.0"
-seahash = "4.1.0"
+seahash.workspace = true
 sha2 = { version = "0.11.0", default-features = false }
 semver = "1.0.28"
-tempfile = "3.27.0"
+tempfile.workspace = true
 enigo = "0.6.1"
 
 # Logging / tracing
-tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing.workspace = true
 tracing-appender = "0.2.5"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
@@ -84,10 +79,14 @@ image = { version = "0.25.10", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+ropy-core = { path = "crates/ropy-core", features = ["test"] }
 gpui-kit = { version = "0.7.1", default-features = false, features = ["component", "test-support"] }
-rstest = "0.27.0"
+rstest.workspace = true
 
-[lints.rust]
+[lints]
+workspace = true
+
+[workspace.lints.rust]
 # Code quality
 missing_debug_implementations = "deny"
 missing_docs = "warn"
@@ -121,7 +120,7 @@ unused_import_braces = "deny"
 unused_lifetimes = "deny"
 unused_macro_rules = "deny"
 
-[lints.clippy]
+[workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
@@ -177,3 +176,25 @@ copyright = "Copyright 2026 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"
 long_description = "A clipboard manager built with Rust and GPUI."
+
+[workspace]
+members = ["crates/ropy-core"]
+default-members = ["."]
+resolver = "3"
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+chrono = { version = "0.4.45", default-features = false, features = [
+    "clock",
+    "serde",
+    "std",
+] }
+dirs = "7.0.0"
+thiserror = "2.0.21"
+toml = "1.1.7"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+seahash = "4.1.0"
+tempfile = "3.27.0"
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+rstest = "0.27.0"

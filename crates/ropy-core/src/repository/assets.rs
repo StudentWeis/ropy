@@ -24,7 +24,9 @@ pub(super) fn image_path_for_hash(images_dir: &Path, image_content_hash: u64) ->
     images_dir.join(format!("{image_content_hash}.png"))
 }
 
-pub(crate) fn thumb_path_for(original: &Path) -> PathBuf {
+/// Derive the sibling thumbnail path for an image payload.
+#[must_use]
+pub fn thumb_path_for(original: &Path) -> PathBuf {
     let stem = original.file_stem().unwrap_or_default().to_string_lossy();
 
     original.extension().map_or_else(
@@ -36,10 +38,13 @@ pub(crate) fn thumb_path_for(original: &Path) -> PathBuf {
     )
 }
 
+/// Failure to encode or atomically persist an image payload.
 #[derive(Debug, Error)]
-pub(crate) enum ImageSaveError {
+pub enum ImageSaveError {
+    /// A payload file could not be staged or committed.
     #[error("failed to write image cache: {0}")]
     Io(#[from] std::io::Error),
+    /// Image encoding failed.
     #[error("failed to encode image cache: {0}")]
     Encode(#[from] image::ImageError),
 }
@@ -147,7 +152,11 @@ pub(crate) fn save_rich_text_files_to_dir(
     }
 }
 
-pub(crate) fn save_image(
+/// Persist or repair an image and thumbnail in the repository-selected directory.
+///
+/// # Errors
+/// Returns an error if image encoding or atomic file persistence fails.
+pub fn save_image(
     image: &DynamicImage,
     image_content_hash: u64,
     images_dir: &Path,
@@ -156,13 +165,17 @@ pub(crate) fn save_image(
         .map(|file_path| file_path.to_string_lossy().into_owned())
 }
 
-pub(crate) fn load_rich_text_html(meta: &RichTextMeta) -> Option<String> {
+/// Read the HTML sidecar, returning `None` if absent or unreadable.
+#[must_use]
+pub fn load_rich_text_html(meta: &RichTextMeta) -> Option<String> {
     meta.html_path
         .as_deref()
         .and_then(|path| fs::read_to_string(path).ok())
 }
 
-pub(crate) fn load_rich_text_rtf(meta: &RichTextMeta) -> Option<String> {
+/// Read the RTF sidecar, returning `None` if absent or unreadable.
+#[must_use]
+pub fn load_rich_text_rtf(meta: &RichTextMeta) -> Option<String> {
     meta.rtf_path
         .as_deref()
         .and_then(|path| fs::read_to_string(path).ok())

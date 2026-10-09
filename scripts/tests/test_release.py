@@ -40,6 +40,19 @@ class ReleaseTests(unittest.TestCase):
             cwd=self.work, env=self.env, capture_output=True, text=True,
         )
 
+    def test_version_dry_run_selects_only_the_desktop_package(self):
+        self.command("cargo", "printf '%s\\n' \"$@\"\n")
+        result = subprocess.run(
+            ["bash", str(ROOT / "scripts/update_version.sh"), "patch"],
+            cwd=self.work, env=self.env, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = result.stdout.splitlines()
+        self.assertIn("--package", args)
+        self.assertEqual(args[args.index("--package") + 1], "ropy")
+        self.assertIn("--no-verify", args)
+        self.assertNotIn("--execute", args)
+
     def test_dmg_selected_target_ignores_other_architecture(self):
         for target in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
             with self.subTest(target=target):
@@ -47,6 +60,7 @@ class ReleaseTests(unittest.TestCase):
                 other.mkdir(parents=True, exist_ok=True)
                 (other / "binary").write_text("wrong architecture")
                 self.command("cargo", '''
+[[ "$1" == bundle && "$2" == --package && "$3" == ropy ]]
 while [[ "$1" != "--target" ]]; do shift; done
 bundle="target/$2/release/bundle/osx/Ropy.app"
 mkdir -p "$bundle"

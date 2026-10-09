@@ -3,7 +3,7 @@ use std::path::Path;
 use super::super::color::parse_clipboard_color;
 use crate::{
     config::LayoutMode,
-    repository::{ClipboardRecord, deserialize_file_paths, models::ContentType},
+    repository::{ClipboardRecord, ContentType, deserialize_file_paths},
 };
 
 pub(super) const GRID_COLUMN_COUNT: usize = 2;
@@ -247,21 +247,19 @@ mod tests {
     };
     use crate::{
         config::LayoutMode,
-        repository::{ClipboardRecord, models::ContentType},
+        repository::{ClipboardRecord, ContentType},
     };
 
     fn test_record(content: &str, content_type: ContentType) -> ClipboardRecord {
-        ClipboardRecord {
-            id: 1,
-            content: content.to_string(),
-            content_type,
-            pinned: false,
-            created_at: Local
+        ClipboardRecord::new(
+            1,
+            content.to_string(),
+            Local
                 .with_ymd_and_hms(2026, 4, 18, 12, 0, 0)
                 .single()
                 .unwrap_or_else(|| panic!("invalid test datetime")),
-            rich_text_meta: None,
-        }
+            content_type,
+        )
     }
 
     #[test]

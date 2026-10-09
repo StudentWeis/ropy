@@ -8,16 +8,17 @@ use serde::{Deserialize, Serialize};
 /// existing `config.toml` files fully compatible.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub(crate) struct Language(String);
+pub struct Language(String);
 
 impl Language {
     /// Create a language from a locale code string.
-    pub(crate) fn new(code: impl Into<String>) -> Self {
+    pub fn new(code: impl Into<String>) -> Self {
         Self(code.into())
     }
 
     /// Return the locale code (e.g. `"en"`, `"zh-CN"`).
-    pub(crate) fn code(&self) -> &str {
+    #[must_use]
+    pub fn code(&self) -> &str {
         &self.0
     }
 }

@@ -26,6 +26,7 @@ pub(super) struct IndexEntry {
 /// A lightweight secondary index that maps `(timestamp, id)` to
 /// `(pinned, content_type)`, enabling chronological queries and
 /// type-based filtering without touching the main record store.
+#[derive(Debug)]
 pub(super) struct TimeIndex<T: KvTree> {
     entries: T,
     id_lookup: T,

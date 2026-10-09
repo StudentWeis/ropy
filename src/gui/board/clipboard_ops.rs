@@ -8,10 +8,9 @@ use crate::{
     config::ConfirmMode,
     gui::{hide_window, paste},
     repository::{
-        ClipboardRecord,
+        ClipboardRecord, ContentType,
         assets::{load_rich_text_html, load_rich_text_rtf},
         deserialize_file_paths,
-        models::ContentType,
     },
     utils::read_or_recover,
 };

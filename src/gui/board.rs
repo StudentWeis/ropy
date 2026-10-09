@@ -47,8 +47,7 @@ use settings_editor::{
 use crate::{
     clipboard::CopyTracker,
     config::{ConfirmMode, LayoutMode},
-    gui::{hide_window, settings::GlobalSettings, surface_with_opacity},
-    repository::SharedRecords,
+    gui::{SharedRecords, hide_window, settings::GlobalSettings, surface_with_opacity},
     utils::read_or_recover,
 };
 

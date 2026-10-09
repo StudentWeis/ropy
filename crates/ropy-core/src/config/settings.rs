@@ -3,7 +3,6 @@ use std::{
     cfg_select,
     io::Write as _,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use serde::{Deserialize, Serialize};
@@ -18,74 +17,114 @@ const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
 const MIN_WINDOW_OPACITY_PERCENT: u8 = 40;
 const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
+/// Failure to load or safely persist application settings.
 #[derive(Debug, Error)]
-pub(crate) enum SettingsError {
+pub enum SettingsError {
+    /// Saving is blocked until a previously invalid configuration has been repaired.
     #[error("settings recovery required; repair config.toml and restart before saving")]
     RecoveryRequired,
+    /// The platform has no usable configuration directory.
     #[error("config directory not found")]
     ConfigDirectoryNotFound,
+    /// A configuration file operation failed.
     #[error("failed to access settings file at {path:?}: {source}")]
     Io {
+        /// Configuration path associated with the failed operation.
         path: PathBuf,
+        /// Underlying filesystem error.
         #[source]
         source: std::io::Error,
     },
+    /// The configuration is not valid TOML or contains incompatible value types.
     #[error("failed to parse settings file: {0}")]
     Deserialize(#[from] toml::de::Error),
+    /// The settings cannot be represented as TOML.
     #[error("failed to serialize settings: {0}")]
     Serialize(#[from] toml::ser::Error),
 }
 
+/// Persisted preferences plus a non-serialized guard against overwriting invalid files.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub(crate) struct Settings {
+#[non_exhaustive]
+pub struct Settings {
+    /// Shortcut preferences; native key syntax is validated by the desktop adapter.
     pub hotkey: HotkeySettings,
+    /// History visibility and retention limits.
     pub storage: StorageSettings,
+    /// Selected bundled theme code.
     pub theme: ThemeId,
+    /// Window opacity preferences.
     pub window: WindowSettings,
+    /// History presentation mode.
     pub layout: LayoutSettings,
+    /// Requested operating-system login behavior.
     pub autostart: AutoStartSettings,
+    /// Selected locale code.
     pub language: Language,
+    /// Release-check preferences.
     pub update: UpdateSettings,
+    /// Preview activation preferences.
     pub preview: PreviewSettings,
+    /// Behavior when a history entry is confirmed.
     pub confirm: ConfirmSettings,
     /// Runtime protection after a failed load; never persisted in config.toml.
     #[serde(skip)]
-    pub(crate) recovery_required: bool,
+    recovery_required: bool,
 }
 
 impl Settings {
-    pub(crate) fn recovery_defaults() -> Self {
+    /// Return defaults that cannot be saved over an unreadable user configuration.
+    #[must_use]
+    pub fn recovery_defaults() -> Self {
         Self {
             recovery_required: true,
             ..Self::default()
         }
     }
 
-    pub(crate) const fn is_recovery_required(&self) -> bool {
+    /// Whether a failed configuration load prevents saving this value.
+    #[must_use]
+    pub const fn is_recovery_required(&self) -> bool {
         self.recovery_required
     }
 
-    pub(crate) fn config_dir() -> Result<PathBuf, SettingsError> {
+    /// Resolve the application configuration directory for the current user.
+    ///
+    /// # Errors
+    /// Returns `ConfigDirectoryNotFound` when the platform cannot resolve a user directory.
+    pub fn config_dir() -> Result<PathBuf, SettingsError> {
         dirs::config_dir()
             .map(|dir| dir.join("ropy"))
             .ok_or(SettingsError::ConfigDirectoryNotFound)
     }
 
-    pub(crate) fn config_file() -> Result<PathBuf, SettingsError> {
+    /// Resolve the current user's `config.toml` path.
+    ///
+    /// # Errors
+    /// Returns `ConfigDirectoryNotFound` when the platform cannot resolve a user directory.
+    pub fn config_file() -> Result<PathBuf, SettingsError> {
         Ok(Self::config_dir()?.join("config.toml"))
     }
 
     /// Load settings, layering the on-disk `config.toml` over the
     /// `Default` instance so partial files keep working across upgrades,
-    /// and clamping each value group via [`Self::validated`] so out-of-range
-    /// values on disk can't propagate into the running app.
-    pub(crate) fn load() -> Result<Self, SettingsError> {
+    /// and clamping storage limits and opacity to their supported ranges.
+    /// The application must validate native shortcut syntax before registration.
+    ///
+    /// # Errors
+    /// Returns an error if the configuration cannot be read or parsed.
+    pub fn load() -> Result<Self, SettingsError> {
         let config_dir = Self::config_dir()?;
         Self::load_from_dir(&config_dir)
     }
 
-    fn load_from_dir(config_dir: &Path) -> Result<Self, SettingsError> {
+    /// Load and validate `config.toml` from an explicit directory, using defaults if absent.
+    /// Native shortcut syntax must be validated by the application before registration.
+    ///
+    /// # Errors
+    /// Returns an error if the directory cannot be created or the file cannot be read or parsed.
+    pub fn load_from_dir(config_dir: &Path) -> Result<Self, SettingsError> {
         let config_file = config_dir.join("config.toml");
 
         std::fs::create_dir_all(config_dir).map_err(|source| SettingsError::Io {
@@ -115,12 +154,20 @@ impl Settings {
         Ok(settings.validated())
     }
 
-    pub(crate) fn save(&self) -> Result<(), SettingsError> {
+    /// Atomically persist settings to the current user's configuration file.
+    ///
+    /// # Errors
+    /// Returns an error during recovery protection, serialization or atomic file persistence.
+    pub fn save(&self) -> Result<(), SettingsError> {
         let config_file = Self::config_file()?;
         self.save_to_file(&config_file)
     }
 
-    fn save_to_file(&self, config_file: &Path) -> Result<(), SettingsError> {
+    /// Atomically persist settings to an explicit path, preserving the old file on failure.
+    ///
+    /// # Errors
+    /// Returns an error during recovery protection, serialization or atomic file persistence.
+    pub fn save_to_file(&self, config_file: &Path) -> Result<(), SettingsError> {
         if self.is_recovery_required() {
             return Err(SettingsError::RecoveryRequired);
         }
@@ -172,19 +219,9 @@ impl Settings {
     }
 
     fn validated(mut self) -> Self {
-        self.validate_hotkey();
         self.validate_window_opacity();
         self.validate_storage();
         self
-    }
-
-    /// Validate hotkey and reset to default if invalid.
-    fn validate_hotkey(&mut self) {
-        if self.hotkey.activation_key.is_empty()
-            || global_hotkey::hotkey::HotKey::from_str(&self.hotkey.activation_key).is_err()
-        {
-            self.hotkey.activation_key = Self::default().hotkey.activation_key;
-        }
     }
 
     fn validate_window_opacity(&mut self) {
@@ -200,49 +237,67 @@ impl Settings {
     }
 }
 
+/// Action to perform after confirming a history entry.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ConfirmMode {
+pub enum ConfirmMode {
+    /// Write the entry to the clipboard without synthesizing a paste action.
     #[default]
     CopyToClipboard,
+    /// Wait for the clipboard write before pasting into the previous application.
     PasteImmediately,
 }
 
 impl ConfirmMode {
-    pub(crate) const fn requires_clipboard_completion(self) -> bool {
+    /// Whether confirmation must await a successful native clipboard write.
+    #[must_use]
+    pub const fn requires_clipboard_completion(self) -> bool {
         matches!(self, Self::PasteImmediately)
     }
 }
 
+/// Persisted history layout preference.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum LayoutMode {
+pub enum LayoutMode {
+    /// Show history as a list.
     #[default]
     List,
+    /// Show history as a grid.
     Grid,
 }
 
 impl LayoutMode {
-    pub(crate) const fn all() -> [Self; 2] {
+    /// Return supported layouts in selector order.
+    #[must_use]
+    pub const fn all() -> [Self; 2] {
         [Self::List, Self::Grid]
     }
 }
 
+/// Preferences for the history layout.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub(crate) struct LayoutSettings {
+#[non_exhaustive]
+pub struct LayoutSettings {
+    /// Selected behavior for this preference group.
     pub mode: LayoutMode,
 }
 
+/// Preferences for confirming a history entry.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub(crate) struct ConfirmSettings {
+#[non_exhaustive]
+pub struct ConfirmSettings {
+    /// Selected behavior for this preference group.
     pub mode: ConfirmMode,
 }
 
+/// Persisted window appearance preferences.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct WindowSettings {
+#[non_exhaustive]
+pub struct WindowSettings {
     /// Allowed range is [`WindowSettings::MIN_OPACITY_PERCENT`] through
     /// [`WindowSettings::MAX_OPACITY_PERCENT`];
     /// values outside that band are clamped at load time.
@@ -258,21 +313,26 @@ impl Default for WindowSettings {
 }
 
 impl WindowSettings {
-    pub(crate) const MIN_OPACITY_PERCENT: u8 = MIN_WINDOW_OPACITY_PERCENT;
-    pub(crate) const MAX_OPACITY_PERCENT: u8 = MAX_WINDOW_OPACITY_PERCENT;
+    /// Lowest supported opacity, in percent.
+    pub const MIN_OPACITY_PERCENT: u8 = MIN_WINDOW_OPACITY_PERCENT;
+    /// Fully opaque window value, in percent.
+    pub const MAX_OPACITY_PERCENT: u8 = MAX_WINDOW_OPACITY_PERCENT;
 
-    pub(crate) fn normalize_opacity(&mut self) {
+    /// Clamp opacity to the supported range.
+    pub fn normalize_opacity(&mut self) {
         self.opacity_percent = self
             .opacity_percent
             .clamp(MIN_WINDOW_OPACITY_PERCENT, MAX_WINDOW_OPACITY_PERCENT);
     }
 }
 
+/// Serialized shortcut preferences; registration belongs to the desktop adapter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct HotkeySettings {
+#[non_exhaustive]
+pub struct HotkeySettings {
     /// `+`-separated chord parsed by `global_hotkey` (e.g. `cmd+shift+v`).
-    /// Invalid values are reset to the default by [`Settings::validate_hotkey`].
+    /// The desktop adapter validates native key syntax before registration.
     pub activation_key: String,
 }
 
@@ -287,9 +347,11 @@ impl Default for HotkeySettings {
     }
 }
 
+/// Limits for visible history and retained storage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct StorageSettings {
+#[non_exhaustive]
+pub struct StorageSettings {
     /// Soft cap on records visible in the board (1 – 10,000). Records past
     /// this point are kept on disk but hidden until older entries are
     /// pinned / cleared.
@@ -309,16 +371,23 @@ impl Default for StorageSettings {
     }
 }
 
+/// Requested login-startup preference.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub(crate) struct AutoStartSettings {
+#[non_exhaustive]
+pub struct AutoStartSettings {
+    /// Whether the application should start when the user logs in.
     pub enabled: bool,
 }
 
+/// Automatic update discovery preferences.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct UpdateSettings {
+#[non_exhaustive]
+pub struct UpdateSettings {
+    /// Whether periodic release checks are enabled.
     pub auto_check: bool,
+    /// Whether pre-release versions may be offered.
     pub include_prerelease: bool,
 }
 
@@ -331,10 +400,14 @@ impl Default for UpdateSettings {
     }
 }
 
+/// Activation preferences for record previews.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub(crate) struct PreviewSettings {
+#[non_exhaustive]
+pub struct PreviewSettings {
+    /// Whether hovering a record opens its preview.
     pub hover_preview_enabled: bool,
+    /// Whether the Space key opens a preview.
     pub space_preview_enabled: bool,
 }
 
@@ -518,63 +591,6 @@ mod tests {
         let loaded: Settings = toml::from_str(&content).expect("Failed to deserialize");
 
         assert_eq!(loaded.hotkey.activation_key, "ctrl+shift+x");
-    }
-
-    // ── Hotkey Validation Tests ───────────────────────────────────
-
-    #[test]
-    fn test_validate_hotkey_valid() {
-        let mut settings = Settings::default();
-        settings.hotkey.activation_key = "ctrl+shift+v".to_string();
-
-        settings.validate_hotkey();
-
-        // Valid hotkey should not be changed
-        assert_eq!(settings.hotkey.activation_key, "ctrl+shift+v");
-    }
-
-    #[test]
-    fn test_validate_hotkey_empty() {
-        let mut settings = Settings::default();
-        settings.hotkey.activation_key = String::new();
-
-        settings.validate_hotkey();
-
-        // Empty hotkey should be reset to default
-        let default = Settings::default();
-        assert_eq!(
-            settings.hotkey.activation_key,
-            default.hotkey.activation_key
-        );
-    }
-
-    #[test]
-    fn test_validate_hotkey_invalid() {
-        let mut settings = Settings::default();
-        settings.hotkey.activation_key = "not+a+valid+hotkey".to_string();
-
-        settings.validate_hotkey();
-
-        // Invalid hotkey should be reset to default
-        let default = Settings::default();
-        assert_eq!(
-            settings.hotkey.activation_key,
-            default.hotkey.activation_key
-        );
-    }
-
-    #[test]
-    fn test_validate_hotkey_gibberish() {
-        let mut settings = Settings::default();
-        settings.hotkey.activation_key = "@@@###".to_string();
-
-        settings.validate_hotkey();
-
-        let default = Settings::default();
-        assert_eq!(
-            settings.hotkey.activation_key,
-            default.hotkey.activation_key
-        );
     }
 
     // ── Config File Edge Cases ────────────────────────────────────
@@ -876,15 +892,6 @@ enabled = true
     }
 
     // ── HotkeySettings Tests ──────────────────────────────────────
-
-    #[test]
-    fn test_hotkey_settings_default() {
-        let hotkey = HotkeySettings::default();
-        // Default hotkey should be valid
-        assert_ne!(hotkey.activation_key, "");
-        // Verify it's a valid hotkey string
-        assert!(global_hotkey::hotkey::HotKey::from_str(&hotkey.activation_key).is_ok());
-    }
 
     // ── Language Tests ────────────────────────────────────────────
 

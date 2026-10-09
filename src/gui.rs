@@ -32,3 +32,7 @@ pub(crate) use utils::set_activation_policy_accessory;
 pub(crate) use utils::{
     active_window, hide_window, reset_window_geometry_for_activation, surface_with_opacity,
 };
+
+/// Shared board projection of persisted history.
+pub(crate) type SharedRecords =
+    std::sync::Arc<std::sync::RwLock<Vec<ropy_core::repository::ClipboardRecord>>>;

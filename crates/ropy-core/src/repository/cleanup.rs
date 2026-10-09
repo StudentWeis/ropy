@@ -22,7 +22,10 @@ const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
 impl<B: StorageBackend> ClipboardRepository<B> {
     /// "Clear history" without losing user-curated records: pinned and
     /// favorited entries survive.
-    pub(crate) fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error if selecting or deleting ordinary records fails.
+    pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
@@ -33,7 +36,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     /// Trim ordinary records down to the most recent `keep_count`. Pinned
     /// entries are skipped so users can't lose deliberately-kept records.
-    pub(crate) fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
+    ///
+    /// # Errors
+    /// Returns an error if querying retention exemptions or deleting old records fails.
+    pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
         let total = self.count();
         let favorite_ids = self.favorite_id_set()?;
@@ -50,7 +56,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// until ordinary record count exceeds `keep_count` by the buffer, so
     /// the common save → cleanup pair doesn't pay for an iteration on
     /// every insert.
-    pub(crate) fn cleanup_old_records_if_needed(
+    ///
+    /// # Errors
+    /// Returns an error if retention cleanup cannot query or delete records.
+    pub fn cleanup_old_records_if_needed(
         &self,
         keep_count: usize,
     ) -> Result<usize, RepositoryError> {

@@ -17,13 +17,13 @@ use rust_embed::RustEmbed;
 use crate::{
     clipboard::CopyTracker,
     gui::{
+        SharedRecords,
         board::RopyBoard,
         constants::default_window_size,
         settings::GlobalSettings,
         theme::{ThemeDefinition, ThemeId, ThemeMode},
         utils::surface_with_opacity,
     },
-    repository::SharedRecords,
 };
 
 pub(crate) const MAIN_WINDOW_TITLE: &str = "Ropy";

@@ -32,9 +32,9 @@ use super::{
 };
 use crate::{
     config::LayoutMode,
-    gui::surface_with_opacity,
+    gui::{SharedRecords, surface_with_opacity},
     i18n::I18n,
-    repository::{ClipboardRecord, SharedRecords, assets::thumb_path_for, models::ContentType},
+    repository::{ClipboardRecord, ContentType, assets::thumb_path_for},
     utils::read_or_recover,
 };
 

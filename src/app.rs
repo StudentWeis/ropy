@@ -242,9 +242,10 @@ fn bind_application_keys(cx: &mut App) {
 
 fn load_settings() -> Settings {
     match Settings::load() {
-        Ok(s) => {
+        Ok(mut settings) => {
+            crate::gui::settings::validate_hotkey(&mut settings);
             tracing::info!("settings loaded successfully");
-            s
+            settings
         }
         Err(e) => {
             tracing::warn!(error = %e, "failed to load settings; using defaults");

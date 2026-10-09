@@ -16,7 +16,7 @@ pub mod gui;
 /// Internationalization data and runtime translation helpers.
 pub mod i18n;
 /// Persistent clipboard storage and query logic.
-pub mod repository;
+pub use ropy_core::repository;
 /// Update checking and installation flows.
 pub mod updater;
 /// Cross-cutting utility helpers.

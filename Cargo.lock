@@ -6355,9 +6355,8 @@ dependencies = [
  "image",
  "libc",
  "objc2 0.6.5",
- "postcard",
  "raw-window-handle",
- "redb",
+ "ropy-core",
  "rstest",
  "rust-embed",
  "seahash",
@@ -6379,6 +6378,25 @@ dependencies = [
  "x11rb 0.14.0",
  "xz2",
  "zip",
+]
+
+[[package]]
+name = "ropy-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs 7.0.0",
+ "image",
+ "postcard",
+ "redb",
+ "rstest",
+ "seahash",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.7+spec-1.1.0",
+ "tracing",
 ]
 
 [[package]]

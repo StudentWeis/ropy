@@ -122,3 +122,12 @@ Before publishing, smoke-test packaged upgrades on each platform, including a
 read-only installation, a failed download, a successful restart and a failing
 new executable. The process fixtures do not replace signed/notarized macOS
 bundle validation or testing an actual Windows installation under antivirus.
+
+## Workspace package selection
+
+The root `ropy` package remains the sole release artifact. `ropy-core` is an
+internal path dependency with `publish = false`, cargo-release `release = false`
+and cargo-dist `dist = false`; its version is independent of the application.
+`scripts/update_version.sh` selects `--package ropy`, and macOS bundling selects
+the same package explicitly. Root application metadata, updater version lookup,
+resource paths and archive names remain unchanged.

@@ -7,14 +7,17 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// values keep working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
-pub(crate) struct ThemeId(String);
+pub struct ThemeId(String);
 
 impl ThemeId {
-    pub(crate) fn new(code: impl Into<String>) -> Self {
+    /// Normalize a theme code, accepting legacy light/dark aliases.
+    pub fn new(code: impl Into<String>) -> Self {
         Self(normalize_theme_code(&code.into()))
     }
 
-    pub(crate) fn code(&self) -> &str {
+    /// Return the canonical serialized theme code.
+    #[must_use]
+    pub fn code(&self) -> &str {
         &self.0
     }
 }

@@ -61,14 +61,13 @@ fn open_board(
 }
 
 fn record(id: u64) -> ClipboardRecord {
-    ClipboardRecord {
+    ClipboardRecord::new(
         id,
-        content: format!("record {id}"),
-        created_at: chrono::Local::now(),
-        content_type: crate::repository::models::ContentType::Text,
-        pinned: true,
-        rich_text_meta: None,
-    }
+        format!("record {id}"),
+        chrono::Local::now(),
+        crate::repository::ContentType::Text,
+    )
+    .pinned(true)
 }
 
 #[gpui_kit::test]

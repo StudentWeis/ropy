@@ -1,10 +1,20 @@
 # Architecture
 
-Ropy is a single Cargo package with one desktop executable. The module boundaries
-below prepare a possible `ropy-core` library without introducing a workspace
-before there is a need for independent compilation or another consumer.
+Ropy is a two-package Cargo workspace:
+
+- The root `ropy` package owns the desktop executable, GPUI, native clipboard
+  integration, resources, updater and packaging.
+- `crates/ropy-core` owns history persistence and portable configuration. It has
+  no GPUI, native clipboard, hotkey, tray or GTK dependency.
+
+The root package is the default member, so existing `cargo run`, bundle paths
+and application version metadata still refer to the desktop application. Use
+`--workspace` for checks of both packages, or `-p ropy-core` for core-only work.
 
 ## Dependency direction
+
+Core modules below live under `crates/ropy-core/src`; desktop modules live under
+`src`. Dependency arrows crossing the package boundary always point toward core.
 
 ```mermaid
 flowchart TD
@@ -34,8 +44,9 @@ serialization. Being independent of GPUI does not imply being free of I/O.
 | `gui/theme.rs`, `i18n/language.rs` | Discover bundled resources and resolve display names | Consume core identifiers through free functions |
 | `app.rs` | Bootstrap, channels, task scheduling and UI notification wiring | Connects native I/O, persistence and GPUI |
 
-`config/autostart.rs` remains a desktop adapter. The extractable settings boundary
-is the settings and identifier modules, not the entire `config` directory.
+`config/autostart.rs` remains a desktop adapter. The settings and identifier
+modules live in core; the desktop `config` module re-exports their types alongside
+the autostart adapter.
 Likewise, `utils` contains application facilities such as logging, lock recovery,
 file-manager launching and single-instance enforcement; it is not a core API.
 
@@ -101,52 +112,67 @@ store.
 `Settings` is a plain serializable value. `GlobalSettings` is the GPUI-owned live
 snapshot; UI callers read it through a closure and mutate it through the adapter.
 The existing settings workflow still restores the previous value if saving fails.
-Recovery defaults still block saving after an invalid configuration load, so a
+Core validates storage limits and opacity. After loading, the desktop
+adapter validates shortcut syntax with `global-hotkey` and restores the default
+for invalid values before native registration. The parser and its tests remain
+outside core. Recovery defaults still block saving after an invalid configuration load, so a
 broken user file is not overwritten by defaults.
 
 `ThemeId` and `Language` own stable serialized codes. Theme aliases are normalized
 in the core identifier type. Resource enumeration and display names belong to
 `available_themes`, `theme_display_name`, `available_languages` and
 `language_display_name` in the presentation modules. Localized layout labels also
-belong to the GUI adapter. These are free functions so a future external core
-crate does not require application-defined inherent methods on its types.
+belong to the GUI adapter. These are free functions so the desktop package does not need to define
+inherent methods on types owned by the core crate.
 
 The settings adapter is a newtype rather than an implementation of GPUI's
-`Global` on a future external `Settings` type. This keeps that future boundary
-compatible with Rust's trait coherence rules.
+`Global` on the external `Settings` type. This keeps the boundary compatible
+with Rust's trait coherence rules.
+
+## Public core API
+
+The library exports `config` and `repository`. Internal index, cleanup and
+serialization implementation modules remain private. Serializable record and
+settings structs use `#[non_exhaustive]`; consumers construct records through
+`ClipboardRecord::new` and settings through `Default` or the loading APIs.
+
+The existing generic storage seam is public because capture tests use its
+fault-injection backend. `backend::memory` is available only under core's `test`
+feature (or core unit tests); the desktop enables it through a dev-dependency.
+Normal desktop builds use redb without the in-memory backend. Repositories can
+be opened with explicit database/image paths, and settings can be loaded/saved
+at explicit paths, so consumers and integration tests need not touch user data.
 
 ## Verification
 
-`scripts/tests/test_architecture.py`, included in the normal precheck, rejects
-forbidden imports and qualified dependency paths in the core modules and GPUI
-references in clipboard modules. It is a source-level regression guard, not a
-Rust dependency resolver; a future crate boundary will provide the stronger
-compiler-enforced guarantee.
+The maintained precheck formats, lints, tests and documents the entire workspace.
+`scripts/check/check_core_dependencies.py` checks normal, build and dev dependency
+edges across all features and target platforms, rejecting desktop dependencies.
+CI also runs `cargo test --locked -p ropy-core --all-targets --all-features` in a
+separate Linux job without installing desktop system libraries. The aggregate CI
+gate requires that job as well as the existing desktop checks.
 
-Behavior remains covered at its existing owner: repository/backend tests,
-payload atomic-write and repair tests, capture retry/eviction tests, settings
-serialization and recovery tests, and GPUI interaction tests. Tests moved with
-the code they exercise. See [Testing](TESTING.md) for the complete gate and test
-conventions.
+`scripts/tests/test_architecture.py` retains a source-level check for module
+layering and clipboard scheduling, while the separate Cargo package prevents
+core from importing desktop application modules. Public API integration tests
+exercise real database reopen, rich-text persistence and settings recovery as an
+external consumer. Existing behavior tests moved with their owners. See
+[Testing](TESTING.md) for commands and coverage expectations.
 
-## Future workspace and runtime work
+## Build and release ownership
 
-A minimal workspace would keep the desktop package at the root and extract one
-`ropy-core` library containing the repository and settings/identifier modules.
-The desktop package would retain GPUI, native clipboard adapters, autostart,
-translations, themes, updater orchestration and packaging assets. Expose only
-needed operations and value types; keep backend implementation details private.
-Do not turn each module or helper into a crate.
+Both members inherit the same workspace lint policy and shared dependency
+versions. The private core library has its own internal version and disables
+cargo-release and cargo-dist participation. The version script explicitly selects
+`ropy`, as does macOS bundling. Root metadata, `build.rs`, assets and updater
+`CARGO_PKG_VERSION` therefore keep their application meaning.
 
-Before extraction, decide the core API's visibility, move any presentation-only
-aliases out of its models, and supply explicit application paths where needed.
-Then verify that `cargo test -p ropy-core` has no GPUI or native clipboard
-transitive dependency. Update checks to cover all workspace members and validate
-release scripts, resource paths and version metadata. The updater currently uses
-`CARGO_PKG_VERSION`; moving it to another package would change which version it
-reads.
+`cargo test -p ropy-core` builds only core and its test dependency graph. Full
+workspace tests still build GPUI. Independent compilation is verified, but no
+end-to-end build-time or runtime performance improvement is claimed without a
+controlled before/after measurement.
 
-Two runtime changes are deliberately separate follow-ups:
+## Separate runtime follow-ups
 
 - Move history cleanup and list queries off the GPUI foreground path. Return a
   coherent snapshot with a request revision so stale results cannot overwrite
@@ -154,5 +180,5 @@ Two runtime changes are deliberately separate follow-ups:
 - Give long-lived native services explicit stop/completion ownership if restart
   or shutdown requirements need it.
 
-Measure core-only test time and full application build time before claiming a
-workspace improves either. The current single-package gate still builds GPUI.
+The workspace extraction preserves the current runtime scheduling and persisted
+formats; these runtime changes require their own behavioral validation.

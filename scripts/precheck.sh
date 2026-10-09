@@ -35,9 +35,9 @@ fi
 
 if [[ "$PHASE" != rust ]]; then
 	if [[ $CHECK_ONLY -eq 1 ]]; then
-		$CARGO_CMD +nightly fmt --check
+		$CARGO_CMD +nightly fmt --all --check
 	else
-		$CARGO_CMD +nightly fmt
+		$CARGO_CMD +nightly fmt --all
 		if command -v shfmt &>/dev/null; then
 			shfmt -w ./**/*.sh
 		fi
@@ -55,8 +55,9 @@ if [[ "$PHASE" != rust ]]; then
 fi
 
 if [[ "$PHASE" != light ]]; then
+	python3 scripts/check/check_core_dependencies.py
 	# Clippy already performs the compiler checks for the same target/feature set.
-	$CARGO_CMD clippy --all-targets --all-features
-	$CARGO_CMD test --all-targets --all-features
-	RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --no-deps
+	$CARGO_CMD clippy --workspace --all-targets --all-features
+	$CARGO_CMD test --workspace --all-targets --all-features
+	RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --workspace --no-deps
 fi

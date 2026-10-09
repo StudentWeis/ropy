@@ -38,6 +38,27 @@ jobs:
       - name: Run lightweight precheck
         run: ./scripts/precheck.sh --check --light
 
+  core:
+    name: Core (no desktop dependencies)
+    needs: light-check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pinned toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Verify core dependency boundary
+        run: python3 scripts/check/check_core_dependencies.py
+
+      - name: Test core without desktop system libraries
+        run: cargo test --locked -p ropy-core --all-targets --all-features
+
   precheck:
     name: Linux (clippy + test + docs)
     needs: light-check
@@ -95,15 +116,15 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build all targets
-        run: cargo build --all-targets --all-features
+        run: cargo build --workspace --all-targets --all-features
 
       - name: Run unit tests
-        run: cargo test --all-targets --all-features
+        run: cargo test --workspace --all-targets --all-features
 
   ci:
     # Preserve the previous required check, now aggregating every platform.
     name: Precheck (fmt + clippy + test + i18n/icons/themes)
-    needs: [light-check, precheck, cross-build]
+    needs: [light-check, core, precheck, cross-build]
     if: always()
     runs-on: ubuntu-22.04
     timeout-minutes: 3
@@ -111,9 +132,11 @@ jobs:
       - name: Require all checks to pass
         env:
           LIGHT_RESULT: ${{ needs.light-check.result }}
+          CORE_RESULT: ${{ needs.core.result }}
           LINUX_RESULT: ${{ needs.precheck.result }}
           CROSS_RESULT: ${{ needs.cross-build.result }}
         run: |
           test "$LIGHT_RESULT" = success
+          test "$CORE_RESULT" = success
           test "$LINUX_RESULT" = success
           test "$CROSS_RESULT" = success

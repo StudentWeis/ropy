@@ -25,7 +25,7 @@ use crate::{
         settings::GlobalSettings, theme::ThemeId,
     },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, models::ContentType},
+    repository::{ClipboardRecord, ContentType},
 };
 
 const GAP: u32 = 12;
@@ -109,11 +109,9 @@ impl PromoCommand {
 }
 
 fn demo_settings(theme: ThemeId, language: Language) -> Settings {
-    let mut settings = Settings {
-        theme,
-        language,
-        ..Settings::default()
-    };
+    let mut settings = Settings::default();
+    settings.theme = theme;
+    settings.language = language;
     settings.layout.mode = LayoutMode::List;
     settings.window.opacity_percent = 100;
     settings.autostart.enabled = false;
@@ -137,13 +135,13 @@ fn demo_records(logo: &Path, i18n: &I18n) -> Result<Vec<ClipboardRecord>, PromoE
     ]
     .into_iter()
     .zip(0u32..)
-    .map(|((content, content_type), ix)| ClipboardRecord {
-        id: u64::from(ix) + 1,
-        content,
-        content_type,
-        created_at: created_at - chrono::Duration::seconds(i64::from(ix)),
-        pinned: false,
-        rich_text_meta: None,
+    .map(|((content, content_type), ix)| {
+        ClipboardRecord::new(
+            u64::from(ix) + 1,
+            content,
+            created_at - chrono::Duration::seconds(i64::from(ix)),
+            content_type,
+        )
     })
     .collect())
 }
