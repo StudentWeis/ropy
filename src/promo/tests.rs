@@ -73,29 +73,44 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn test_compose_preserves_opaque_pixels_and_adds_gray_margin() {
+fn test_compose_transparent_canvas_decorates_each_screenshot() {
     let temp = tempfile::tempdir().unwrap();
     let inputs = std::array::from_fn(|ix| temp.path().join(format!("{ix}.png")));
     for (path, value) in inputs.iter().zip([40, 80, 120, 160]) {
-        let mut image = RgbaImage::from_pixel(3, 4, Rgba([value, 0, 0, 255]));
+        let mut image = RgbaImage::from_pixel(40, 50, Rgba([value, 0, 0, 255]));
         image.put_pixel(1, 1, Rgba([0, value, 0, 255]));
-        image.put_pixel(0, 0, Rgba([0, 0, 0, 0]));
+        // A transparent corner must not acquire a rectangular frame.
+        for y in 0..8 {
+            for x in 0..8 {
+                image.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+            }
+        }
         image.save(path).unwrap();
     }
     let output = temp.path().join("output.png");
     compose(&output, &inputs).unwrap();
     let result = image::open(output).unwrap().into_rgba8();
-    assert_eq!(result.dimensions(), (42, 44));
-    for (path, (x, y)) in inputs.iter().zip([(12, 12), (27, 12), (12, 28), (27, 28)]) {
-        let mut original = image::open(path).unwrap().into_rgba8();
-        original.put_pixel(0, 0, Rgba([232, 234, 237, 255]));
-        assert_eq!(
-            image::imageops::crop_imm(&result, x, y, 3, 4).to_image(),
-            original
-        );
+    assert_eq!(result.dimensions(), (180, 200));
+    for (path, (x, y)) in inputs
+        .iter()
+        .zip([(28, 28), (112, 28), (28, 122), (112, 122)])
+    {
+        let original = image::open(path).unwrap().into_rgba8();
+        for (px, py, pixel) in original.enumerate_pixels() {
+            if pixel[3] == 255 {
+                assert_eq!(result.get_pixel(x + px, y + py), pixel);
+            }
+        }
+        let border = result.get_pixel(x - 1, y + 25);
+        assert!(border[3] >= 180);
+        assert!(border[0] > 80 && border[2] > border[0]);
+        let shadow = result.get_pixel(x + 20, y + 54);
+        assert_eq!(&shadow.0[..3], &[0, 0, 0]);
+        assert!(shadow[3] > 0 && shadow[3] < 80);
+        assert!(result.get_pixel(x, y)[3] < 180);
     }
-    for (x, y) in [(0, 0), (20, 20), (41, 43)] {
-        assert_eq!(*result.get_pixel(x, y), Rgba([232, 234, 237, 255]));
+    for (x, y) in [(0, 0), (90, 0), (179, 199)] {
+        assert_eq!(result.get_pixel(x, y)[3], 0);
     }
 }
 
