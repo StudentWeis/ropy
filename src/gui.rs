@@ -9,6 +9,10 @@ pub mod hotkey;
 /// Secondary panels embedded in the board UI.
 pub mod panel;
 mod paste;
+/// GPUI repository access.
+pub mod repository;
+/// GPUI settings access and localized labels.
+pub mod settings;
 /// Theme identifiers and bundled theme loading.
 pub mod theme;
 /// Tray icon lifecycle and menu events.

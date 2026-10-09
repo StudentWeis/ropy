@@ -7,17 +7,8 @@ pub(crate) use capture::{ClipboardCapture, CopyTracker, delete_tracked_record};
 
 /// Clipboard event monitoring and ingestion.
 pub mod listener;
-/// Clipboard asset persistence helpers.
-pub mod utils;
 /// Clipboard write-back pipeline.
 pub mod writer;
-
-pub(crate) use listener::start_clipboard_monitor;
-pub(crate) use utils::{
-    load_rich_text_html, load_rich_text_rtf, remove_rich_text_files, save_image,
-    save_rich_text_files_to_dir, thumb_path_for,
-};
-pub(crate) use writer::start_clipboard_writer;
 
 #[derive(Debug)]
 pub(crate) enum ClipboardEvent {

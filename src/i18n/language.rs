@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::OnceLock};
 
 use rust_embed::RustEmbed;
-use serde::{Deserialize, Serialize};
 
 /// Embedded locale TOML files from `assets/locales/`.
 /// Adding a new `<code>.toml` file to that directory automatically makes the
@@ -12,51 +11,21 @@ pub(super) struct LocaleAssets;
 
 static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 
-/// A language identified by its locale code (e.g. `"en"`, `"zh-CN"`).
-///
-/// Serializes / deserializes transparently as the locale code string, keeping
-/// existing `config.toml` files fully compatible.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub(crate) struct Language(String);
+pub(crate) use crate::config::language_id::Language;
 
-impl Language {
-    /// Create a language from a locale code string.
-    pub(crate) fn new(code: impl Into<String>) -> Self {
-        Self(code.into())
-    }
-
-    /// Return the locale code (e.g. `"en"`, `"zh-CN"`).
-    pub(crate) fn code(&self) -> &str {
-        &self.0
-    }
-
-    /// Return the human-readable display name read from the `language_name`
-    /// key inside the corresponding TOML file.  Falls back to the locale code
-    /// if the file or key is absent.
-    pub(crate) fn display_name(&self) -> String {
-        cached_display_names()
-            .get(self.code())
-            .cloned()
-            .unwrap_or_else(|| self.0.clone())
-    }
-
-    /// Return all languages discovered from `assets/locales/*.toml`, sorted
-    /// alphabetically by locale code.  No code change is required when new
-    /// TOML files are added to the directory.
-    pub(crate) fn all() -> Vec<Self> {
-        let mut codes: Vec<String> = LocaleAssets::iter()
-            .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
-            .collect();
-        codes.sort();
-        codes.into_iter().map(Self).collect()
-    }
+pub(crate) fn language_display_name(language: &Language) -> String {
+    cached_display_names()
+        .get(language.code())
+        .cloned()
+        .unwrap_or_else(|| language.code().to_owned())
 }
 
-impl Default for Language {
-    fn default() -> Self {
-        Self::new("en")
-    }
+pub(crate) fn available_languages() -> Vec<Language> {
+    let mut codes: Vec<String> = LocaleAssets::iter()
+        .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
+        .collect();
+    codes.sort();
+    codes.into_iter().map(Language::new).collect()
 }
 
 fn cached_display_names() -> &'static HashMap<String, String> {

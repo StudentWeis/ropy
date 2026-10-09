@@ -20,9 +20,12 @@ use thiserror::Error;
 use crate::{
     clipboard::CopyTracker,
     config::{LayoutMode, Settings},
-    gui::{Assets, app::set_app_theme, board::RopyBoard, theme::ThemeId},
+    gui::{
+        Assets, app::set_app_theme, board::RopyBoard, repository::GlobalRepository,
+        settings::GlobalSettings, theme::ThemeId,
+    },
     i18n::{I18n, Language},
-    repository::{ClipboardRecord, GlobalRepository, models::ContentType},
+    repository::{ClipboardRecord, models::ContentType},
 };
 
 const GAP: u32 = 12;
@@ -69,7 +72,9 @@ impl PromoCommand {
                 };
                 let theme = ThemeId::new(theme.to_str().ok_or(PromoError::Arguments)?);
                 let language = Language::new(language.to_str().ok_or(PromoError::Arguments)?);
-                if !ThemeId::all().contains(&theme) || !Language::all().contains(&language) {
+                if !crate::gui::theme::available_themes().contains(&theme)
+                    || !crate::i18n::language::available_languages().contains(&language)
+                {
                     return Err(PromoError::UnknownPreset);
                 }
                 Ok(Some(Self::Capture {
@@ -217,7 +222,7 @@ fn open_promo_window(
         cx,
         |window, cx| {
             window.set_window_title(crate::gui::app::MAIN_WINDOW_TITLE);
-            let theme = Settings::read(cx, |s| s.theme.clone());
+            let theme = GlobalSettings::read(cx, |s| s.theme.clone());
             set_app_theme(window, cx, &theme, 100);
             let (tx, rx) = async_channel::bounded(1);
             drop(rx);
@@ -259,7 +264,7 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
         #[cfg(target_os = "macos")]
         crate::gui::set_activation_policy_accessory();
         gpui_kit::init(cx);
-        cx.set_global(settings);
+        cx.set_global(GlobalSettings::new(settings));
         cx.set_global(i18n);
         cx.set_global(GlobalRepository::new(None));
         match open_promo_window(records, cx) {

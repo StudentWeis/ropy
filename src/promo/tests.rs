@@ -47,7 +47,10 @@ fn test_demo_records_repeatable_and_localized() {
 fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        cx.set_global(demo_settings(ThemeId::default(), Language::new("en")));
+        cx.set_global(GlobalSettings::new(demo_settings(
+            ThemeId::default(),
+            Language::new("en"),
+        )));
         cx.set_global(I18n::default());
         cx.set_global(GlobalRepository::new(None));
     });

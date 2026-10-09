@@ -6,14 +6,10 @@ use std::{
     str::FromStr,
 };
 
-use gpui_kit::{App, Global, ReadGlobal, SharedString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    gui::theme::ThemeId,
-    i18n::{I18n, Language},
-};
+use super::{language_id::Language, theme_id::ThemeId};
 
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 100;
 const DEFAULT_MAX_STORAGE_RECORDS: usize = 200;
@@ -230,14 +226,6 @@ impl LayoutMode {
     pub(crate) const fn all() -> [Self; 2] {
         [Self::List, Self::Grid]
     }
-
-    pub(crate) fn label(self, cx: &App) -> SharedString {
-        let label = match self {
-            Self::List => I18n::translate(cx, "settings_layout_list"),
-            Self::Grid => I18n::translate(cx, "settings_layout_grid"),
-        };
-        SharedString::from(label)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -356,16 +344,6 @@ impl Default for PreviewSettings {
             hover_preview_enabled: true,
             space_preview_enabled: true,
         }
-    }
-}
-
-impl Global for Settings {}
-
-impl Settings {
-    /// Closure-style accessor to the global instance — keeps call sites
-    /// from holding a borrow of `cx` longer than the field they need.
-    pub(crate) fn read<R>(cx: &App, reader: impl FnOnce(&Self) -> R) -> R {
-        reader(Self::global(cx))
     }
 }
 

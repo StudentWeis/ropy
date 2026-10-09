@@ -2,6 +2,7 @@
 
 use std::{
     hash::Hasher,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -10,16 +11,13 @@ use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
     ContentFormat, common::RustImage,
 };
-use gpui_kit::{App, AppContext as _};
 use image::DynamicImage;
 
-use super::{
-    ClipboardCapture, ClipboardEvent, CopyTracker, LastCopyState, capture::CopyAttempt,
-    utils::ImageSaveError,
-};
-use crate::{
-    repository::ContentType,
-    utils::{content_hash, hash_file_paths, normalize_file_paths, serialize_file_paths},
+use super::{ClipboardCapture, ClipboardEvent, CopyTracker, LastCopyState, capture::CopyAttempt};
+use crate::repository::{
+    ContentType,
+    assets::{ImageSaveError, save_image},
+    content_hash, hash_file_paths, normalize_file_paths, serialize_file_paths,
 };
 
 /// Capacity for the image processing channel between the OS clipboard
@@ -295,12 +293,15 @@ fn dispatch_payload(
     }
 }
 
-/// Spawn a clipboard listener thread that watches for clipboard changes.
-pub(crate) fn start_clipboard_monitor(
+/// Prepare image encoding and blocking OS-watcher work for the application to schedule.
+///
+/// The returned watcher owns its native context. The encoder owns queued images;
+/// dropping an unpersisted capture keeps that copy attempt retryable.
+pub(crate) fn prepare_clipboard_monitor(
+    images_dir: PathBuf,
     tx: Sender<ClipboardCapture>,
-    cx: &App,
     last_copy: Arc<Mutex<CopyTracker>>,
-) {
+) -> Option<(impl Future<Output = ()>, impl FnOnce())> {
     let (image_tx, image_rx) =
         async_channel::bounded::<ImageCapture>(IMAGE_PROCESSING_CHANNEL_CAPACITY);
     // Producer keeps a clone of the receiver as a drain handle so the OS
@@ -308,13 +309,11 @@ pub(crate) fn start_clipboard_monitor(
     // channel is full. The encoder task also holds `image_rx` and is the
     // primary consumer of meaningful events.
     let image_drain = image_rx.clone();
-    let Some(monitor) = ClipboardMonitor::new(tx.clone(), image_tx, image_drain, last_copy) else {
-        return;
-    };
+    let monitor = ClipboardMonitor::new(tx.clone(), image_tx, image_drain, last_copy)?;
 
-    cx.background_spawn(async move {
+    let encode = async move {
         while let Ok(image) = image_rx.recv().await {
-            match image.encode(super::save_image) {
+            match image.encode(|image, hash| save_image(image, hash, &images_dir)) {
                 Ok(capture) => {
                     if let Err(error) = tx.send(capture).await {
                         tracing::warn!(%error, "failed to send image capture");
@@ -323,10 +322,9 @@ pub(crate) fn start_clipboard_monitor(
                 Err(error) => tracing::warn!(%error, "failed to encode clipboard image"),
             }
         }
-    })
-    .detach();
+    };
 
-    cx.background_spawn(async move {
+    let watch = move || {
         let mut watcher = match ClipboardWatcherContext::new() {
             Ok(w) => w,
             Err(e) => {
@@ -336,8 +334,8 @@ pub(crate) fn start_clipboard_monitor(
         };
         watcher.add_handler(monitor);
         watcher.start_watch();
-    })
-    .detach();
+    };
+    Some((encode, watch))
 }
 
 #[cfg(test)]
@@ -557,17 +555,20 @@ mod tests {
         );
         fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
         let capture = fixture.image_rx.try_recv().expect("image retry");
-        let path = fixture.dir.path().join("image.png");
         let record = capture
-            .encode(|image, _| {
-                image.save_with_format(&path, image::ImageFormat::Png)?;
-                Ok(path.to_string_lossy().into_owned())
-            })
+            .encode(|image, hash| save_image(image, hash, fixture.repo.images_dir()))
             .expect("encode")
             .persist(&fixture.repo)
             .expect("persist image");
+        let path = std::path::Path::new(&record.content);
+        let thumbnail = crate::repository::assets::thumb_path_for(path);
+        assert_eq!(path.parent(), Some(fixture.repo.images_dir()));
+        assert!(path.is_file());
+        assert!(thumbnail.is_file());
         super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
             .expect("delete image");
+        assert!(!path.exists());
+        assert!(!thumbnail.exists());
         fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
         assert!(fixture.image_rx.try_recv().is_ok());
     }

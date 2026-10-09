@@ -36,3 +36,11 @@ this tradeoff. Runner queue time can still dominate even with parallel jobs.
 See [Promotional screenshots](PROMO_SCREENSHOTS.md) for the isolated macOS capture
 workflow and plain 2×2 output. This checks real rendering; it does not replace
 clipboard or platform integration tests.
+
+## Architecture boundaries
+
+The lightweight gate includes `scripts/tests/test_architecture.py`. It rejects
+presentation dependencies in repository/settings modules and GPUI runtime
+references in clipboard I/O. This source-level check protects the module seams
+described in [Architecture](ARCHITECTURE.md); behavioral tests remain responsible
+for persistence, capture acknowledgement, settings recovery and UI interactions.

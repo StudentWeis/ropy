@@ -1,8 +1,8 @@
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
-use gpui_kit::{App, AsyncApp, ReadGlobal as _};
+use gpui_kit::{App, AsyncApp};
 use thiserror::Error;
 
-use crate::config::Settings;
+use crate::gui::settings::GlobalSettings;
 
 #[derive(Clone)]
 enum ListenerMessage {
@@ -73,12 +73,12 @@ where
                 &mut register_hotkey,
                 &mut |hotkey| {
                     async_app.update(|cx| {
-                        let mut settings = Settings::global(cx).clone();
+                        let mut settings = GlobalSettings::read(cx, Clone::clone);
                         settings.hotkey.activation_key = hotkey.to_string();
                         settings
                             .save()
                             .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))?;
-                        cx.set_global(settings);
+                        cx.set_global(GlobalSettings::new(settings));
                         Ok(())
                     })
                 },

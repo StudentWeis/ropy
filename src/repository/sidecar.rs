@@ -1,15 +1,16 @@
 //! Filesystem side-effects for clipboard records.
 //!
-//! `repo.rs` owns the database (postcard + redb) encode/decode. Anything that
-//! actually touches the filesystem — image files, image thumbnails, rich-text
-//! HTML/RTF sidecar files, and the per-record directories that hold them —
-//! lives here as plain free functions so it can be reasoned about and tested
-//! independently of the repository struct.
+//! `repo.rs` owns database/index transactions; `assets.rs` owns payload reads,
+//! writes and thumbnail paths. This module composes best-effort removal for a
+//! record, superseded payload or whole repository. Callers hold the repository
+//! operation lock when cleanup is part of a mutation.
 
 use std::{fs, path::Path};
 
-use super::models::{ClipboardRecord, ContentType, RichTextMeta};
-use crate::clipboard::{remove_rich_text_files, thumb_path_for};
+use super::{
+    assets::{remove_rich_text_files, thumb_path_for},
+    models::{ClipboardRecord, ContentType, RichTextMeta},
+};
 
 /// Remove an image file together with its generated thumbnail.
 ///

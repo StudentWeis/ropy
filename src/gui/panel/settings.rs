@@ -20,9 +20,9 @@ use crate::{
     gui::{
         board::{RopyBoard, filtering::ClearConfirmAction},
         panel::common::{panel_back_button, panel_header_with_back},
-        theme::ThemeId,
+        settings::GlobalSettings,
     },
-    i18n::{I18n, Language},
+    i18n::I18n,
 };
 
 fn settings_row<C: IntoElement>(
@@ -603,12 +603,12 @@ pub(crate) fn reset_settings_dialog(
         confirm_mode,
         activation_key,
         window_opacity,
-    ) = crate::config::Settings::read(cx, |s| {
-        let lang = Language::all()
+    ) = GlobalSettings::read(cx, |s| {
+        let lang = crate::i18n::language::available_languages()
             .iter()
             .position(|lang| lang == &s.language)
             .unwrap_or(0);
-        let theme = ThemeId::all()
+        let theme = crate::gui::theme::available_themes()
             .iter()
             .position(|theme_id| theme_id == &s.theme)
             .unwrap_or_default();
@@ -682,7 +682,10 @@ pub(crate) fn reset_settings_dialog(
         .panel_state
         .window_opacity_slider_visible = false;
     board.sync_window_opacity_slider(window_opacity, window, cx);
-    let theme = ThemeId::all().get(theme_idx).cloned().unwrap_or_default();
+    let theme = crate::gui::theme::available_themes()
+        .get(theme_idx)
+        .cloned()
+        .unwrap_or_default();
     crate::gui::app::set_app_theme(window, cx, &theme, window_opacity);
     crate::gui::app::apply_window_opacity(window, window_opacity);
     let current_hotkey = board.settings_editor.pending_hotkey.clone();

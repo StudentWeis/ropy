@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::OnceLock};
 
 use rust_embed::RustEmbed;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
 
 /// Bundled theme TOML files. Adding a `<id>.toml` under `assets/themes/`
@@ -12,52 +12,21 @@ struct ThemeAssets;
 
 static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
 
-/// Theme identifier — the bundle file name without the `.toml` suffix.
-/// Serialized transparently as the raw string so existing `config.toml`
-/// values keep working.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
-pub(crate) struct ThemeId(String);
+pub(crate) use crate::config::theme_id::ThemeId;
 
-impl ThemeId {
-    pub(crate) fn new(code: impl Into<String>) -> Self {
-        Self(normalize_theme_code(&code.into()))
-    }
-
-    pub(crate) fn code(&self) -> &str {
-        &self.0
-    }
-
-    pub(crate) fn display_name(&self) -> String {
-        cached_display_names()
-            .get(self.code())
-            .cloned()
-            .unwrap_or_else(|| self.0.clone())
-    }
-
-    pub(crate) fn all() -> Vec<Self> {
-        let mut codes: Vec<String> = ThemeAssets::iter()
-            .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
-            .collect();
-        codes.sort();
-        codes.into_iter().map(Self).collect()
-    }
+pub(crate) fn theme_display_name(theme: &ThemeId) -> String {
+    cached_display_names()
+        .get(theme.code())
+        .cloned()
+        .unwrap_or_else(|| theme.code().to_owned())
 }
 
-impl Default for ThemeId {
-    fn default() -> Self {
-        Self::new("ropy-light")
-    }
-}
-
-impl<'de> Deserialize<'de> for ThemeId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-        Ok(Self::new(raw))
-    }
+pub(crate) fn available_themes() -> Vec<ThemeId> {
+    let mut codes: Vec<String> = ThemeAssets::iter()
+        .filter_map(|name| name.as_ref().strip_suffix(".toml").map(str::to_owned))
+        .collect();
+    codes.sort();
+    codes.into_iter().map(ThemeId::new).collect()
 }
 
 /// Appearance hint required by `gpui-component`'s theme runtime so it can
@@ -249,14 +218,6 @@ pub(crate) enum ThemeError {
     },
 }
 
-fn normalize_theme_code(code: &str) -> String {
-    match code.trim() {
-        "Ropy Light" | "Light" | "light" => "ropy-light".to_string(),
-        "Ropy Dark" | "Dark" | "dark" => "ropy-dark".to_string(),
-        other => other.to_string(),
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct ThemeDefinitionRaw {
     theme_name: String,
@@ -325,14 +286,11 @@ fn cached_display_names() -> &'static HashMap<String, String> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use rstest::rstest;
-    use serde::Deserialize;
-
     use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode, cached_display_names};
 
     #[test]
     fn test_theme_id_all_discovers_bundled_themes() {
-        let ids = ThemeId::all();
+        let ids = crate::gui::theme::available_themes();
         let codes: Vec<&str> = ids.iter().map(ThemeId::code).collect();
 
         assert!(codes.contains(&"ropy-dark"));
@@ -345,7 +303,7 @@ mod tests {
     fn test_theme_id_display_name_returns_theme_name() {
         let theme = ThemeId::new("ropy-dark");
 
-        assert_eq!(theme.display_name(), "Ropy Dark");
+        assert_eq!(crate::gui::theme::theme_display_name(&theme), "Ropy Dark");
     }
 
     #[test]
@@ -427,36 +385,5 @@ mod tests {
         let result = ThemeDefinition::load(&ThemeId::new("missing-theme"));
 
         assert!(matches!(result, Err(ThemeError::NotFound(code)) if code == "missing-theme"));
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct ThemeConfig {
-        theme: ThemeId,
-    }
-
-    #[rstest]
-    #[case("theme = \"ropy-light\"", "ropy-light")]
-    #[case("theme = \"ropy-dark\"", "ropy-dark")]
-    #[case("theme = \"everforest-night\"", "everforest-night")]
-    #[case("theme = \"nord-light\"", "nord-light")]
-    fn test_theme_id_deserialize_bundled_code_roundtrips(
-        #[case] toml_input: &str,
-        #[case] expected: &str,
-    ) {
-        let config: ThemeConfig = toml::from_str(toml_input).unwrap();
-
-        assert_eq!(config.theme.code(), expected);
-    }
-
-    #[rstest]
-    #[case("theme = \"Light\"", "ropy-light")]
-    #[case("theme = \"Dark\"", "ropy-dark")]
-    fn test_theme_id_deserialize_legacy_value_maps_to_bundled_theme(
-        #[case] toml_input: &str,
-        #[case] expected: &str,
-    ) {
-        let config: ThemeConfig = toml::from_str(toml_input).unwrap();
-
-        assert_eq!(config.theme.code(), expected);
     }
 }

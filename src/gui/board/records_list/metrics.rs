@@ -3,8 +3,7 @@ use std::path::Path;
 use super::super::color::parse_clipboard_color;
 use crate::{
     config::LayoutMode,
-    repository::{ClipboardRecord, models::ContentType},
-    utils::deserialize_file_paths,
+    repository::{ClipboardRecord, deserialize_file_paths, models::ContentType},
 };
 
 pub(super) const GRID_COLUMN_COUNT: usize = 2;

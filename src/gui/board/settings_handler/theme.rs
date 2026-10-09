@@ -3,16 +3,12 @@
 use gpui_kit::{BorrowAppContext, Context, Window};
 
 use super::RopyBoard;
-use crate::{
-    config::Settings,
-    gui::theme::ThemeId,
-    i18n::{I18n, Language},
-};
+use crate::{gui::settings::GlobalSettings, i18n::I18n};
 
 impl RopyBoard {
     pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let previous_theme = Settings::read(cx, |s| s.theme.clone());
-        let next_theme = ThemeId::all()
+        let previous_theme = GlobalSettings::read(cx, |s| s.theme.clone());
+        let next_theme = crate::gui::theme::available_themes()
             .get(self.settings_editor.selected_theme)
             .cloned()
             .unwrap_or_default();
@@ -25,7 +21,7 @@ impl RopyBoard {
         if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
             settings.theme = theme_to_save;
         }) {
-            let previous_theme_idx = ThemeId::all()
+            let previous_theme_idx = crate::gui::theme::available_themes()
                 .iter()
                 .position(|theme_id| theme_id == &previous_theme)
                 .unwrap_or_default();
@@ -60,8 +56,8 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        let previous_language = Settings::read(cx, |s| s.language.clone());
-        let next_language = Language::all()
+        let previous_language = GlobalSettings::read(cx, |s| s.language.clone());
+        let next_language = crate::i18n::language::available_languages()
             .get(self.settings_editor.selected_language)
             .cloned()
             .unwrap_or_default();
@@ -74,7 +70,7 @@ impl RopyBoard {
         if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
             settings.language = language_to_save;
         }) {
-            let previous_language_idx = Language::all()
+            let previous_language_idx = crate::i18n::language::available_languages()
                 .iter()
                 .position(|language| language == &previous_language)
                 .unwrap_or_default();
@@ -96,7 +92,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn save_window_opacity(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let previous_opacity = Settings::read(cx, |s| s.window.opacity_percent);
+        let previous_opacity = GlobalSettings::read(cx, |s| s.window.opacity_percent);
         let next_opacity = self.settings_editor.window_opacity_percent;
 
         if next_opacity == previous_opacity {
@@ -109,7 +105,7 @@ impl RopyBoard {
         }) {
             self.settings_editor.window_opacity_percent = previous_opacity;
             self.sync_window_opacity_slider(previous_opacity, window, cx);
-            let theme = ThemeId::all()
+            let theme = crate::gui::theme::available_themes()
                 .get(self.settings_editor.selected_theme)
                 .cloned()
                 .unwrap_or_default();

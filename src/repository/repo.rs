@@ -22,9 +22,9 @@ use super::{
     },
     time_index::TimeIndex,
 };
-use crate::{
-    clipboard::{remove_rich_text_files, save_rich_text_files_to_dir},
-    utils::{content_hash, normalize_file_paths, serialize_file_paths},
+use crate::repository::{
+    assets::{remove_rich_text_files, save_rich_text_files_to_dir},
+    content_hash, normalize_file_paths, serialize_file_paths,
 };
 
 /// Bump whenever the on-disk key/value layout changes — a mismatch wipes the
@@ -109,6 +109,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         };
         repository.repair_time_index()?;
         Ok(repository)
+    }
+
+    pub(crate) fn images_dir(&self) -> &Path {
+        &self.images_dir
     }
 
     pub(crate) fn flush(&self) -> Result<(), RepositoryError> {

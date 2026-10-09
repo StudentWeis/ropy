@@ -164,8 +164,14 @@ fn test_get_display_records_when_newest_records_are_favorited_still_returns_43()
 
     repo.toggle_pin(pinned.id).expect("Failed to pin");
 
-    let newest = repo.get_by_id(crate::utils::content_hash("Record 43", &ContentType::Text));
-    let second_newest = repo.get_by_id(crate::utils::content_hash("Record 42", &ContentType::Text));
+    let newest = repo.get_by_id(crate::repository::content_hash(
+        "Record 43",
+        &ContentType::Text,
+    ));
+    let second_newest = repo.get_by_id(crate::repository::content_hash(
+        "Record 42",
+        &ContentType::Text,
+    ));
 
     let newest = newest
         .expect("Failed to get newest")

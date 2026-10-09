@@ -17,8 +17,7 @@ use super::RopyBoard;
 use crate::{
     gui::surface_with_opacity,
     i18n::I18n,
-    repository::{ClipboardRecord, models::ContentType},
-    utils::deserialize_file_paths,
+    repository::{ClipboardRecord, deserialize_file_paths, models::ContentType},
 };
 
 /// Content type filter for the clipboard history view.

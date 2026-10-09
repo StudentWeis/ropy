@@ -3,14 +3,11 @@
 use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
-use crate::{
-    config::{LayoutMode, Settings},
-    i18n::I18n,
-};
+use crate::{config::LayoutMode, gui::settings::GlobalSettings, i18n::I18n};
 
 impl RopyBoard {
     pub(crate) fn save_selected_layout(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let previous_layout = Settings::read(cx, |s| s.layout.mode);
+        let previous_layout = GlobalSettings::read(cx, |s| s.layout.mode);
         let next_layout = LayoutMode::all()
             .get(self.settings_editor.selected_layout)
             .copied()

@@ -3,11 +3,14 @@
 use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
-use crate::{config::Settings, i18n::I18n, repository::GlobalRepository};
+use crate::{
+    gui::{repository::GlobalRepository, settings::GlobalSettings},
+    i18n::I18n,
+};
 
 impl RopyBoard {
     pub(crate) fn has_pending_max_history(&self, cx: &Context<'_, Self>) -> bool {
-        let current_max_history = Settings::read(cx, |s| s.storage.max_history_records);
+        let current_max_history = GlobalSettings::read(cx, |s| s.storage.max_history_records);
         let input = self
             .settings_editor
             .settings_max_history_input
@@ -18,7 +21,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn has_pending_max_storage(&self, cx: &Context<'_, Self>) -> bool {
-        let current_max_storage = Settings::read(cx, |s| s.storage.max_storage_records);
+        let current_max_storage = GlobalSettings::read(cx, |s| s.storage.max_storage_records);
         let input = self
             .settings_editor
             .settings_max_storage_input
@@ -29,7 +32,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn save_max_history(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
-        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
+        let (current_max_history, current_max_storage) = GlobalSettings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
         let max_history_input = self
@@ -97,7 +100,7 @@ impl RopyBoard {
     }
 
     pub(crate) fn save_max_storage(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
-        let (current_max_history, current_max_storage) = Settings::read(cx, |s| {
+        let (current_max_history, current_max_storage) = GlobalSettings::read(cx, |s| {
             (s.storage.max_history_records, s.storage.max_storage_records)
         });
         let max_storage_input = self

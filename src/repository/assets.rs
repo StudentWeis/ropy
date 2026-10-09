@@ -38,8 +38,6 @@ pub(crate) fn thumb_path_for(original: &Path) -> PathBuf {
 
 #[derive(Debug, Error)]
 pub(crate) enum ImageSaveError {
-    #[error("application data directory unavailable")]
-    DataDirNotFound,
     #[error("failed to write image cache: {0}")]
     Io(#[from] std::io::Error),
     #[error("failed to encode image cache: {0}")]
@@ -152,14 +150,10 @@ pub(crate) fn save_rich_text_files_to_dir(
 pub(crate) fn save_image(
     image: &DynamicImage,
     image_content_hash: u64,
+    images_dir: &Path,
 ) -> Result<String, ImageSaveError> {
-    let data_dir = dirs::data_local_dir()
-        .ok_or(ImageSaveError::DataDirNotFound)?
-        .join("ropy")
-        .join("images");
-
-    save_image_to_dir(image, image_content_hash, &data_dir)
-        .map(|file_path| file_path.to_string_lossy().to_string())
+    save_image_to_dir(image, image_content_hash, images_dir)
+        .map(|file_path| file_path.to_string_lossy().into_owned())
 }
 
 pub(crate) fn load_rich_text_html(meta: &RichTextMeta) -> Option<String> {

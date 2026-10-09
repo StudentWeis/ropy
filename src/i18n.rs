@@ -30,7 +30,7 @@ impl I18n {
     /// Create a new `I18n` instance for the given language.
     ///
     /// If the locale file for `language` is not found, falls back to the
-    /// first language returned by [`Language::all()`].
+    /// first language returned by [`language::available_languages()`].
     pub(crate) fn new(language: Language) -> Result<Self, I18nError> {
         let translations = Self::load_language(&language)?;
         Ok(Self {
@@ -45,7 +45,7 @@ impl I18n {
         let file = LocaleAssets::get(&file_name).or_else(|| {
             // Fall back to the first available locale when the requested one
             // is missing (e.g. after a locale file was removed).
-            Language::all()
+            language::available_languages()
                 .into_iter()
                 .next()
                 .and_then(|first| LocaleAssets::get(&format!("{}.toml", first.code())))
@@ -126,9 +126,18 @@ mod tests {
 
     #[test]
     fn test_language_display_name() {
-        assert_eq!(Language::new("en").display_name(), "English");
-        assert_eq!(Language::new("zh-CN").display_name(), "简体中文");
-        assert_eq!(Language::new("ja").display_name(), "日本語");
+        assert_eq!(
+            language::language_display_name(&Language::new("en")),
+            "English"
+        );
+        assert_eq!(
+            language::language_display_name(&Language::new("zh-CN")),
+            "简体中文"
+        );
+        assert_eq!(
+            language::language_display_name(&Language::new("ja")),
+            "日本語"
+        );
     }
 
     #[test]
@@ -176,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_language_all() {
-        let languages = Language::all();
+        let languages = language::available_languages();
         // Must contain at least the three bundled locales
         assert!(languages.len() >= 3);
         assert!(languages.iter().any(|l| l.code() == "en"));
