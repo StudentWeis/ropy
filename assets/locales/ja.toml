@@ -130,3 +130,7 @@ settings_hotkey_update_failed = "ホットキーを更新できませんでし�
 promo_name = "Ropy"
 promo_description = "Rust と GPUI で構築された軽量クロスプラットフォームのクリップボードマネージャー。"
 promo_code = 'fn main() { println!("Hello, Ropy!"); }'
+
+# Startup recovery
+settings_recovery_required = "設定を読み込めませんでした。設定ファイルを保護するため、変更の保存を停止し、自動起動の状態を維持しています。config.toml を修復して Ropy を再起動してください。"
+repository_unavailable = "クリップボード履歴を利用できません。新しくコピーした内容は保存されません。データフォルダーの権限を確認し、他の Ropy を終了してから再起動してください。"

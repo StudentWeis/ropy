@@ -24,6 +24,8 @@ const MAX_WINDOW_OPACITY_PERCENT: u8 = 100;
 
 #[derive(Debug, Error)]
 pub(crate) enum SettingsError {
+    #[error("settings recovery required; repair config.toml and restart before saving")]
+    RecoveryRequired,
     #[error("config directory not found")]
     ConfigDirectoryNotFound,
     #[error("failed to access settings file at {path:?}: {source}")]
@@ -51,9 +53,23 @@ pub(crate) struct Settings {
     pub update: UpdateSettings,
     pub preview: PreviewSettings,
     pub confirm: ConfirmSettings,
+    /// Runtime protection after a failed load; never persisted in config.toml.
+    #[serde(skip)]
+    pub(crate) recovery_required: bool,
 }
 
 impl Settings {
+    pub(crate) fn recovery_defaults() -> Self {
+        Self {
+            recovery_required: true,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) const fn is_recovery_required(&self) -> bool {
+        self.recovery_required
+    }
+
     pub(crate) fn config_dir() -> Result<PathBuf, SettingsError> {
         dirs::config_dir()
             .map(|dir| dir.join("ropy"))
@@ -109,6 +125,9 @@ impl Settings {
     }
 
     fn save_to_file(&self, config_file: &Path) -> Result<(), SettingsError> {
+        if self.is_recovery_required() {
+            return Err(SettingsError::RecoveryRequired);
+        }
         let toml_string = toml::to_string_pretty(self)?;
         let parent = config_file
             .parent()
@@ -355,6 +374,38 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn test_settings_recovery_after_invalid_load_blocks_save_and_preserves_file() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("config.toml");
+        let original = "[storage\nmax_history_records = nope";
+        std::fs::write(&path, original).expect("write config");
+        assert!(Settings::load_from_dir(directory.path()).is_err());
+        let mut settings = Settings::recovery_defaults();
+        settings.storage.max_history_records = 50;
+
+        assert!(settings.save_to_file(&path).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read config"),
+            original
+        );
+        assert!(settings.is_recovery_required());
+
+        std::fs::write(&path, "[storage]\nmax_history_records = 75").expect("repair config");
+        let loaded = Settings::load_from_dir(directory.path()).expect("reload config");
+        assert!(!loaded.is_recovery_required());
+        assert_eq!(loaded.storage.max_history_records, 75);
+        loaded.save_to_file(&path).expect("save after recovery");
+    }
+
+    #[test]
+    fn test_settings_recovery_defaults_do_not_serialize_runtime_state() {
+        let settings = Settings::recovery_defaults();
+        assert!(settings.is_recovery_required());
+        let content = toml::to_string(&settings).expect("serialize");
+        assert!(!content.contains("recovery_required"));
+    }
 
     #[test]
     fn test_default_settings() {

@@ -59,21 +59,16 @@ const UI_NOTIFY_CHANNEL_CAPACITY: usize = 256;
 /// repository read + UI refresh. This avoids redundant full-list refreshes
 /// when many records arrive in rapid succession.
 fn start_clipboard_event_handler(
+    bg_repository: Arc<ClipboardRepository>,
     clipboard_rx: async_channel::Receiver<ClipboardCapture>,
     window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
     let (notify_tx, notify_rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
 
-    // Clone the Arc before moving into the background task, since GPUI
-    // globals are not accessible from background threads.
-    let bg_repository = GlobalRepository::global(cx).cloned();
-
     cx.background_spawn(async move {
-        while let Ok(event) = clipboard_rx.recv().await
-            && let Some(ref repo) = bg_repository
-        {
-            let result = event.persist(repo);
+        while let Ok(event) = clipboard_rx.recv().await {
+            let result = event.persist(&bg_repository);
 
             match result {
                 Ok(_record) => {
@@ -239,7 +234,7 @@ fn load_settings() -> Settings {
         }
         Err(e) => {
             tracing::warn!(error = %e, "failed to load settings; using defaults");
-            Settings::default()
+            Settings::recovery_defaults()
         }
     }
 }
@@ -262,7 +257,9 @@ pub(crate) fn launch() {
             cx.set_global(I18n::load_i18n(settings.language.clone()));
             crate::gui::tray::TrayState::register(cx);
 
-            sync_autostart_on_launch(settings.autostart.enabled);
+            if !settings.is_recovery_required() {
+                sync_autostart_on_launch(settings.autostart.enabled);
+            }
 
             let repository = initialize_repository();
             let repository_ready = repository.is_some();
@@ -272,11 +269,14 @@ pub(crate) fn launch() {
 
             let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
             let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
-            let clipboard_rx = start_clipboard_monitor(cx, last_copy.clone());
             let copy_tx = clipboard::start_clipboard_writer(cx);
 
-            let window_handle = crate::gui::create_window(cx, shared_records, last_copy, copy_tx);
-            start_clipboard_event_handler(clipboard_rx, window_handle, cx);
+            let window_handle =
+                crate::gui::create_window(cx, shared_records, last_copy.clone(), copy_tx);
+            if let Some(repo) = GlobalRepository::global(cx).cloned() {
+                let clipboard_rx = start_clipboard_monitor(cx, last_copy);
+                start_clipboard_event_handler(repo, clipboard_rx, window_handle, cx);
+            }
             let hotkey_tx =
                 setup_hotkey_listener(window_handle, settings.hotkey.activation_key, cx);
             // Tray initialization needs the loaded I18n; the resulting

@@ -129,3 +129,7 @@ settings_hotkey_update_failed = "Could not update the hotkey. The previous setti
 promo_name = "Ropy"
 promo_description = "Cross-platform, lightweight clipboard manager built with Rust and GPUI."
 promo_code = 'fn main() { println!("Hello, Ropy!"); }'
+
+# Startup recovery
+settings_recovery_required = "Settings could not be loaded. To protect your configuration, changes cannot be saved and startup preferences are unchanged. Repair config.toml, then restart Ropy."
+repository_unavailable = "Clipboard history is unavailable. New copies cannot be saved. Check the data folder permissions and close other Ropy instances, then restart Ropy."
