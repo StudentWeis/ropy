@@ -29,3 +29,9 @@ cache uploads and retains the existing job-based cache keys. A PR that changes
 dependencies may need to rebuild them on each run until it merges; compare cache
 restore/save durations and end-to-end workflow duration in Actions when evaluating
 this tradeoff. Runner queue time can still dominate even with parallel jobs.
+
+## Promotional captures
+
+See [Promotional screenshots](PROMO_SCREENSHOTS.md) for the isolated macOS capture
+workflow and plain 2×2 output. This checks real rendering; it does not replace
+clipboard or platform integration tests.

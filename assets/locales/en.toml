@@ -114,3 +114,8 @@ help_hide = "Hide window"
 help_pin = "Toggle window pin"
 
 settings_hotkey_update_failed = "Could not update the hotkey. The previous setting was kept. Please try again."
+
+# Promotional screenshot fixtures
+promo_name = "Ropy"
+promo_description = "Cross-platform, lightweight clipboard manager built with Rust and GPUI."
+promo_code = 'fn main() { println!("Hello, Ropy!"); }'

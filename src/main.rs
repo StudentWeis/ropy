@@ -22,14 +22,24 @@ pub mod updater;
 /// Cross-cutting utility helpers.
 pub mod utils;
 
-fn main() {
+/// Isolated promotional renders and lossless screenshot composition.
+pub mod promo;
+
+fn main() -> Result<(), promo::PromoError> {
+    if let Some(command) =
+        promo::PromoCommand::parse(&std::env::args_os().skip(1).collect::<Vec<_>>())?
+    {
+        return command.run();
+    }
+
     let _logging_guard = utils::init_logging();
 
     // Ensure single instance on Windows
     #[cfg(target_os = "windows")]
     if !utils::ensure_single_instance() {
-        return;
+        return Ok(());
     }
 
     app::launch();
+    Ok(())
 }
