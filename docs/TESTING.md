@@ -7,7 +7,7 @@
 ## Precheck and CI
 
 Run `./scripts/precheck.sh` before committing. It formats locally, checks resources
-and script tests (including `.agents/skills/repo-coordination/tests`), checks
+and script tests, checks
 unused dependencies when cargo-machete is installed, then
 runs Clippy, all-target/all-feature tests, and documentation checks across the workspace. Clippy covers
 the compiler checks, so a separate `cargo check` is unnecessary.
