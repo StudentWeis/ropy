@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.7] - 2026-10-09
+
+### 🚀 Features
+- Decorate screenshots on a transparent canvas (#202) by @StudentWeis in [#202](https://github.com/StudentWeis/ropy/pull/202)
+- Add coordination and health skills (#192) by @StudentWeis in [#192](https://github.com/StudentWeis/ropy/pull/192)
+- Add staged updates and startup recovery (#190) by @StudentWeis in [#190](https://github.com/StudentWeis/ropy/pull/190)
+- Add reproducible promotional screenshots (#188) by @StudentWeis in [#188](https://github.com/StudentWeis/ropy/pull/188)
+
+### 🐛 Bug Fixes
+- Preserve settings and expose startup failures (#200) by @StudentWeis in [#200](https://github.com/StudentWeis/ropy/pull/200)
+- Position clipboard scrollbar in trailing gutter (#196) by @StudentWeis in [#196](https://github.com/StudentWeis/ropy/pull/196)
+- Preserve clipboard data and enforce health checks (#194) by @StudentWeis in [#194](https://github.com/StudentWeis/ropy/pull/194)
+
+### 🚜 Refactor
+- Split desktop and core into a cargo workspace (#204) by @StudentWeis in [#204](https://github.com/StudentWeis/ropy/pull/204)
+- Trim unused dependency features (#198) by @StudentWeis in [#198](https://github.com/StudentWeis/ropy/pull/198)
+
 ## [0.5.6] - 2026-10-08
 
 ### 🚀 Features
