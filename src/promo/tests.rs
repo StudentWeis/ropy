@@ -73,26 +73,30 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn test_compose_preserves_pixels_and_places_four_images_with_gap() {
+fn test_compose_preserves_opaque_pixels_and_adds_gray_margin() {
     let temp = tempfile::tempdir().unwrap();
     let inputs = std::array::from_fn(|ix| temp.path().join(format!("{ix}.png")));
     for (path, value) in inputs.iter().zip([40, 80, 120, 160]) {
         let mut image = RgbaImage::from_pixel(3, 4, Rgba([value, 0, 0, 255]));
         image.put_pixel(1, 1, Rgba([0, value, 0, 255]));
+        image.put_pixel(0, 0, Rgba([0, 0, 0, 0]));
         image.save(path).unwrap();
     }
     let output = temp.path().join("output.png");
     compose(&output, &inputs).unwrap();
     let result = image::open(output).unwrap().into_rgba8();
-    assert_eq!(result.dimensions(), (18, 20));
-    for (path, (x, y)) in inputs.iter().zip([(0, 0), (15, 0), (0, 16), (15, 16)]) {
-        let original = image::open(path).unwrap().into_rgba8();
+    assert_eq!(result.dimensions(), (42, 44));
+    for (path, (x, y)) in inputs.iter().zip([(12, 12), (27, 12), (12, 28), (27, 28)]) {
+        let mut original = image::open(path).unwrap().into_rgba8();
+        original.put_pixel(0, 0, Rgba([232, 234, 237, 255]));
         assert_eq!(
             image::imageops::crop_imm(&result, x, y, 3, 4).to_image(),
             original
         );
     }
-    assert_eq!(*result.get_pixel(5, 5), Rgba([0, 0, 0, 0]));
+    for (x, y) in [(0, 0), (20, 20), (41, 43)] {
+        assert_eq!(*result.get_pixel(x, y), Rgba([232, 234, 237, 255]));
+    }
 }
 
 #[test]

@@ -10,8 +10,9 @@ The command builds Ropy, captures its real production board in four bundled
 themes, and prints the path to `ropy-themes.png`. Each run has its own directory
 under `target/promo/`, containing the four original screenshots, a plain 2×2
 composite, and `capture.log`. The grid order is Ropy Light / Ropy Dark on the top
-row and Nord Light / Everforest Night on the bottom row. The gap is 12 output
-pixels with transparency. No labels, shadows, or other decoration are added.
+row and Nord Light / Everforest Night on the bottom row. The gap and outer margin are 12 output
+pixels on an opaque light gray background, so light windows remain visible on
+white pages. No labels, shadows, or other decoration are added.
 
 Requirements: an unlocked, awake macOS desktop, the repository's Rust toolchain,
 Python 3, and Xcode command-line tools (`swift`). macOS must allow Screen
@@ -46,7 +47,8 @@ cleans up its temporary data. A missing window, render failure, or unstable
 capture fails within a bounded timeout. Capture errors are retained in the run's
 `capture.log`; a failed run does not replace any previous output.
 
-The composite preserves the screenshot pixels. Blank or differently sized
+The composite preserves opaque screenshot pixels and blends transparent window
+corners onto the gray background. Blank or differently sized
 images are rejected. Fonts and rasterization may vary across macOS versions or
 display scales, so this is repeatable content and geometry, not a cross-machine
 pixel hash guarantee.

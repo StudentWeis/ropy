@@ -302,20 +302,20 @@ fn compose(output: &Path, inputs: &[PathBuf; 4]) -> Result<(), PromoError> {
     }
     let out_width = width
         .checked_mul(2)
-        .and_then(|v| v.checked_add(GAP))
+        .and_then(|v| v.checked_add(GAP * 3))
         .ok_or(PromoError::InvalidScreenshots)?;
     let out_height = height
         .checked_mul(2)
-        .and_then(|v| v.checked_add(GAP))
+        .and_then(|v| v.checked_add(GAP * 3))
         .ok_or(PromoError::InvalidScreenshots)?;
-    let mut composite = RgbaImage::from_pixel(out_width, out_height, Rgba([0, 0, 0, 0]));
+    let mut composite = RgbaImage::from_pixel(out_width, out_height, Rgba([232, 234, 237, 255]));
     for (image, (x, y)) in images.iter().zip([
-        (0, 0),
-        (width + GAP, 0),
-        (0, height + GAP),
-        (width + GAP, height + GAP),
+        (GAP, GAP),
+        (width + GAP * 2, GAP),
+        (GAP, height + GAP * 2),
+        (width + GAP * 2, height + GAP * 2),
     ]) {
-        image::imageops::replace(&mut composite, image, i64::from(x), i64::from(y));
+        image::imageops::overlay(&mut composite, image, i64::from(x), i64::from(y));
     }
     composite.save(output)?;
     Ok(())
