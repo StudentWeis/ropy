@@ -26,6 +26,9 @@ use crate::{
 };
 
 const GAP: u32 = 12;
+const DECORATION_PADDING: u32 = 16;
+const SHADOW_OFFSET: u32 = 4;
+const SHADOW_BLUR: f32 = 4.0;
 
 #[derive(Debug)]
 pub(crate) enum PromoCommand {
@@ -300,25 +303,62 @@ fn compose(output: &Path, inputs: &[PathBuf; 4]) -> Result<(), PromoError> {
     {
         return Err(PromoError::InvalidScreenshots);
     }
-    let out_width = width
+    let tile_width = width
+        .checked_add(DECORATION_PADDING * 2)
+        .ok_or(PromoError::InvalidScreenshots)?;
+    let tile_height = height
+        .checked_add(DECORATION_PADDING * 2)
+        .ok_or(PromoError::InvalidScreenshots)?;
+    let out_width = tile_width
         .checked_mul(2)
         .and_then(|v| v.checked_add(GAP * 3))
         .ok_or(PromoError::InvalidScreenshots)?;
-    let out_height = height
+    let out_height = tile_height
         .checked_mul(2)
         .and_then(|v| v.checked_add(GAP * 3))
         .ok_or(PromoError::InvalidScreenshots)?;
-    let mut composite = RgbaImage::from_pixel(out_width, out_height, Rgba([232, 234, 237, 255]));
+    let mut composite = RgbaImage::new(out_width, out_height);
     for (image, (x, y)) in images.iter().zip([
         (GAP, GAP),
-        (width + GAP * 2, GAP),
-        (GAP, height + GAP * 2),
-        (width + GAP * 2, height + GAP * 2),
+        (tile_width + GAP * 2, GAP),
+        (GAP, tile_height + GAP * 2),
+        (tile_width + GAP * 2, tile_height + GAP * 2),
     ]) {
-        image::imageops::overlay(&mut composite, image, i64::from(x), i64::from(y));
+        let decorated = decorate_screenshot(image, tile_width, tile_height);
+        image::imageops::overlay(&mut composite, &decorated, i64::from(x), i64::from(y));
     }
     composite.save(output)?;
     Ok(())
+}
+
+fn decorate_screenshot(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
+    let mut shadow = RgbaImage::new(width, height);
+    let mut border = RgbaImage::new(width, height);
+    for (x, y, pixel) in image.enumerate_pixels() {
+        let x = x + DECORATION_PADDING;
+        let y = y + DECORATION_PADDING;
+        shadow.put_pixel(x, y + SHADOW_OFFSET, Rgba([0, 0, 0, pixel[3] / 4]));
+        // Dilate the alpha silhouette by one pixel so the border follows
+        // rounded corners without painting a rectangle around transparent areas.
+        let alpha = pixel[3].min(180);
+        for by in y - 1..=y + 1 {
+            for bx in x - 1..=x + 1 {
+                let target = border.get_pixel_mut(bx, by);
+                if alpha > target[3] {
+                    *target = Rgba([110, 115, 125, alpha]);
+                }
+            }
+        }
+    }
+    let mut decorated = image::imageops::blur(&shadow, SHADOW_BLUR);
+    image::imageops::overlay(&mut decorated, &border, 0, 0);
+    image::imageops::overlay(
+        &mut decorated,
+        image,
+        i64::from(DECORATION_PADDING),
+        i64::from(DECORATION_PADDING),
+    );
+    decorated
 }
 
 #[cfg(test)]
