@@ -22,6 +22,19 @@ if [[ -z "$release_version" ]]; then
 	exit 1
 fi
 
+# Refuse before this hook mutates files. cargo-release may already have bumped
+# the package version; cancellation must report failure to stop its next steps.
+if ! read -p "Continue with release? [Y/n] " -n 1 -r confirm; then
+	echo -e "\nRelease cancelled."
+	exit 1
+fi
+confirm="${confirm:-y}"
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+	echo -e "\nRelease cancelled."
+	exit 1
+fi
+echo -e "\nRelease confirmed, continuing..."
+
 # Sync version to [package.metadata.bundle.bin.ropy]
 perl -i -0777 -pe "s/(\[package\.metadata\.bundle\.bin\.ropy\]\n(?:.*\n)*?version\s*=\s*\").*?\"/\${1}$release_version\"/m" Cargo.toml
 
@@ -43,12 +56,3 @@ perl -i -pe 's/<!-- \d+ -->//g' CHANGELOG.md
 
 # Verify dist plan
 dist plan
-
-# Ask for confirmation before proceeding with the release
-read -p "Continue with release? [Y/n] " -n 1 -r confirm
-confirm="${confirm:-y}"
-if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-	echo -e "\nRelease cancelled."
-	exit 0
-fi
-echo -e "\nRelease confirmed, continuing..."

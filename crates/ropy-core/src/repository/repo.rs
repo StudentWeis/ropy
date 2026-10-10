@@ -510,11 +510,15 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     /// Load records by id, dropping (with a warn log) any that fail to
     /// deserialize so a single corrupt entry can't break list rendering.
-    pub(super) fn load_records(&self, ids: &[u64]) -> Vec<ClipboardRecord> {
+    /// Storage read failures invalidate the snapshot instead of hiding records.
+    pub(super) fn load_records(
+        &self,
+        ids: &[u64],
+    ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
         let mut out = Vec::with_capacity(ids.len());
         for &id in ids {
             let key = id.to_be_bytes();
-            if let Ok(Some(value)) = self.get_raw(&key) {
+            if let Some(value) = self.get_raw(&key)? {
                 match postcard::from_bytes::<ClipboardRecord>(&value) {
                     Ok(record) => out.push(record),
                     Err(e) => {
@@ -523,7 +527,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
                 }
             }
         }
-        out
+        Ok(out)
     }
 
     pub(super) fn rich_text_root(&self) -> &Path {

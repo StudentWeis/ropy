@@ -32,18 +32,18 @@ fn decode_percent_encoded(input: &str) -> String {
 }
 
 fn normalize_file_path(path: &str) -> Option<String> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
+    if path.trim().is_empty() {
         return None;
     }
 
-    let uri_path = trimmed
+    let uri_path = path
         .strip_prefix("file://localhost")
-        .or_else(|| trimmed.strip_prefix("file://"));
+        .or_else(|| path.strip_prefix("file://"));
 
     // Percent escapes belong to URIs; decoding a filesystem path changes
     // literal filenames and makes repeated normalization destructive.
-    Some(uri_path.map_or_else(|| trimmed.to_string(), decode_percent_encoded))
+    // Whitespace in a nonempty filesystem path is part of its identity.
+    Some(uri_path.map_or_else(|| path.to_string(), decode_percent_encoded))
 }
 
 /// Normalize file URIs while preserving literal filesystem percent characters.
@@ -82,6 +82,23 @@ pub fn hash_file_paths(paths: &[String]) -> u64 {
 #[expect(clippy::panic)]
 mod tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case("/tmp/report ", "/tmp/report ")]
+    #[case("/tmp/report\t", "/tmp/report\t")]
+    #[case("file:///tmp/report%20", "/tmp/report ")]
+    #[case("file:///tmp/report%09", "/tmp/report\t")]
+    fn test_file_paths_significant_whitespace_survives_round_trip(
+        #[case] input: &str,
+        #[case] expected: &str,
+    ) {
+        let normalized = normalize_file_paths(&[input.into()]);
+        assert_eq!(normalized, vec![expected]);
+        assert_eq!(normalize_file_paths(&normalized), normalized);
+        let serialized =
+            serialize_file_paths(&normalized).unwrap_or_else(|error| panic!("serialize: {error}"));
+        assert_eq!(deserialize_file_paths(&serialized), normalized);
+    }
 
     #[rstest::rstest]
     #[case("/tmp/report%20final.txt")]

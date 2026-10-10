@@ -138,6 +138,7 @@ pub fn memory_backend_factory(_db_path: &PathBuf) -> Result<MemoryBackend, Repos
 #[derive(Debug, Default)]
 struct MemoryTree {
     entries: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
+    fail_next_get: AtomicBool,
 }
 
 /// Shared handle to a tree guarded by the backend transaction lock.
@@ -145,6 +146,13 @@ struct MemoryTree {
 pub struct MemoryTreeHandle {
     tree: Arc<MemoryTree>,
     transaction_lock: Arc<Mutex<()>>,
+}
+
+impl MemoryTreeHandle {
+    /// Make the next key read fail without changing stored data.
+    pub fn fail_next_get(&self) {
+        self.tree.fail_next_get.store(true, Ordering::SeqCst);
+    }
 }
 
 impl KvTree for MemoryTreeHandle {
@@ -157,6 +165,9 @@ impl KvTree for MemoryTreeHandle {
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
+        if self.tree.fail_next_get.swap(false, Ordering::SeqCst) {
+            return Err(RepositoryError::Query("injected key read failure".into()));
+        }
         let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         Ok(entries.get(key).cloned())

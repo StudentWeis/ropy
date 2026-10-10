@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import platform
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -71,6 +72,26 @@ def capture_theme(binary, helper, theme, language, work, timeout=30):
                 stop_child(child)
 
 
+def build_binary():
+    """Use Cargo's actual executable path, including configured target overrides."""
+    build = subprocess.run(
+        ["cargo", "build", "--locked", "-p", "ropy", "--bin", "ropy", "--message-format=json"],
+        cwd=ROOT, stdout=subprocess.PIPE, text=True,
+    )
+    binary = None
+    for line in build.stdout.splitlines():
+        message = json.loads(line)
+        if message["reason"] == "compiler-message":
+            print(message["message"].get("rendered", ""), file=sys.stderr, end="")
+        if (message["reason"] == "compiler-artifact" and message["target"]["name"] == "ropy"
+                and "bin" in message["target"]["kind"] and message.get("executable")):
+            binary = Path(message["executable"])
+    build.check_returncode()
+    if binary is None:
+        raise RuntimeError("Cargo did not report the capture executable")
+    return binary
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "target" / "promo")
@@ -87,11 +108,7 @@ def main():
     run = Path(tempfile.mkdtemp(prefix="capture-", dir=output))
     binary = args.binary
     if binary is None:
-        subprocess.run(["cargo", "build", "--locked"], cwd=ROOT, check=True)
-        metadata = json.loads(subprocess.check_output(
-            ["cargo", "metadata", "--format-version", "1", "--no-deps"], cwd=ROOT
-        ))
-        binary = Path(metadata["target_directory"]) / "debug" / "ropy"
+        binary = build_binary()
     binary = binary.resolve(strict=True)
     images = [capture_theme(binary, helper, theme, args.language, run) for theme in THEMES]
     composite = run / "ropy-themes.png"
