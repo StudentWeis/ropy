@@ -3,6 +3,9 @@
 // Configure the application to run without a console window on Windows in release mode
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// Isolated developer benchmark entry point.
+pub mod benchmark;
+
 /// Application lifecycle orchestration.
 pub mod app;
 /// Clipboard capture, normalization, and write-back.
@@ -26,6 +29,11 @@ pub mod utils;
 pub mod promo;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(ready) = benchmark::parse(&std::env::args_os().skip(1).collect::<Vec<_>>())? {
+        benchmark::run(ready)?;
+        return Ok(());
+    }
+
     if let Some(command) =
         promo::PromoCommand::parse(&std::env::args_os().skip(1).collect::<Vec<_>>())?
     {

@@ -2,7 +2,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean
+.PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean bench bench-compare bench-record
 
 help: ## Show available development commands
 	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -42,3 +42,16 @@ precheck: ## Run the full local pre-commit gate (including formatting)
 
 clean: ## Remove Cargo build artifacts
 	$(CARGO) clean
+
+BENCH_ARGS ?=
+BASELINE ?=
+CURRENT ?=
+
+bench: ## Collect release size, storage latency and isolated macOS RSS
+	python3 scripts/bench.py run $(BENCH_ARGS)
+
+bench-compare: ## Compare with the repository baseline (optional BASELINE=... CURRENT=...)
+	python3 scripts/bench.py compare $(if $(BASELINE),--baseline "$(BASELINE)",) $(if $(CURRENT),--current "$(CURRENT)",)
+
+bench-record: ## Save CURRENT (default latest version result) in docs/benchmarks for the PR
+	python3 scripts/bench.py record $(if $(CURRENT),--current "$(CURRENT)",)

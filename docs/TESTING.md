@@ -67,3 +67,8 @@ selection, changed history limits and clearing history with a request pending.
 The precheck uses explicit `--workspace` selection because the default member is
 still the root desktop application. Core CI deliberately installs no GTK/X11
 system libraries; its result participates in the required aggregate check.
+
+## Release benchmarks
+
+See [Release benchmark baseline](BENCHMARKS.md) for `make bench`, version
+comparison, measurement boundaries and release artifact size reports.

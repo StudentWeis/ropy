@@ -30,6 +30,7 @@ tempfile.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+criterion = { version = "0.8.2", default-features = false }
 rstest.workspace = true
 
 [lints]
@@ -40,3 +41,7 @@ release = false
 
 [package.metadata.dist]
 dist = false
+
+[[bench]]
+name = "repository"
+harness = false
