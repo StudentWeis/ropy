@@ -39,8 +39,17 @@ jobs:
             "$RELEASE_TAG" \
             "$RUNNER_TEMP/notes.txt" \
             artifacts/latest.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Record release package sizes
+        env:
+          RELEASE_TAG: ${{ fromJson(inputs.plan).announcement_tag }}
+        run: python3 scripts/bench.py sizes --directory artifacts --version "$RELEASE_TAG" --output artifacts/bench-sizes.json
       - uses: actions/upload-artifact@v7
         with:
           name: artifacts-update-manifest
-          path: artifacts/latest.json
+          path: |
+            artifacts/latest.json
+            artifacts/bench-sizes.json
           if-no-files-found: error
