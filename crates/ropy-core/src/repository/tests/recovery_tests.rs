@@ -4,6 +4,54 @@ use crate::repository::{
 };
 
 #[test]
+fn test_display_record_read_failure_returns_error_and_preserves_history() {
+    use crate::repository::backend::RECORDS_TREE;
+    let dir = tempfile::tempdir().expect("fixture directory");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), dir.path().join("images"))
+        .expect("repository");
+    let record = repo.save_text("retained".into()).expect("save");
+    repo.toggle_pin(record.id).expect("pin");
+    backend
+        .open_tree(RECORDS_TREE)
+        .expect("tree")
+        .fail_next_get();
+    assert!(repo.get_display_snapshot(10).is_err());
+    let (records, favorites) = repo
+        .get_display_snapshot(10)
+        .expect("recovery")
+        .into_parts();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].content, "retained");
+    assert_eq!(records[0].id, record.id);
+    assert!(records[0].pinned);
+    assert!(favorites.is_empty());
+    assert_eq!(repo.count(), 1);
+}
+
+#[test]
+fn test_display_corrupt_record_skips_only_bad_payload() {
+    use crate::repository::backend::RECORDS_TREE;
+    let dir = tempfile::tempdir().expect("fixture directory");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), dir.path().join("images"))
+        .expect("repository");
+    let good = repo.save_text("retained".into()).expect("save");
+    let bad = repo.save_text("corrupt".into()).expect("save");
+    backend
+        .open_tree(RECORDS_TREE)
+        .expect("tree")
+        .insert(&bad.id.to_be_bytes(), b"broken")
+        .expect("corrupt payload");
+    let records = repo
+        .get_display_records(10)
+        .expect("display readable records");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].id, good.id);
+    assert_eq!(repo.count(), 2);
+}
+
+#[test]
 fn test_save_failed_commit_preserves_record_and_index() {
     let dir = tempfile::tempdir().expect("fixture directory");
     let backend = MemoryBackend::new();

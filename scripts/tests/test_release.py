@@ -4,6 +4,7 @@ import hashlib
 import tarfile
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -39,6 +40,39 @@ class ReleaseTests(unittest.TestCase):
             ["bash", str(ROOT / "scripts/build_macos_dmg.sh"), target],
             cwd=self.work, env=self.env, capture_output=True, text=True,
         )
+
+    def test_release_preparation_confirmation_controls_mutations_and_exit(self):
+        scripts = self.work / "scripts"
+        scripts.mkdir()
+        shutil.copyfile(ROOT / "scripts/release_prepare.sh", scripts / "release_prepare.sh")
+        manifest = self.work / "Cargo.toml"
+        original = '[package]\nversion = "0.1.0"\n[package.metadata.bundle.bin.ropy]\nversion = "0.1.0"\n'
+        for name in ("precheck.sh", "record_build_size.sh"):
+            path = scripts / name
+            path.write_text('#!/bin/sh\nprintf "%s\\n" preparation >> steps\n')
+            path.chmod(0o755)
+        self.command("git", 'printf "%s\\n" changelog >> steps\n')
+        self.command("dist", 'printf "%s\\n" plan >> steps\n')
+        env = dict(self.env, NEW_VERSION="0.1.1", GITHUB_TOKEN="fixture", DRY_RUN="false")
+        for answer in ("n", "N", "", "y", "\n"):
+            with self.subTest(answer=answer):
+                manifest.write_text(original)
+                (self.work / "CHANGELOG.md").write_text("original changelog\n")
+                (self.work / "steps").unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["bash", str(scripts / "release_prepare.sh")], cwd=self.work,
+                    env=env, input=answer, capture_output=True, text=True,
+                )
+                if answer in ("y", "\n"):
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('version = "0.1.1"', manifest.read_text())
+                    self.assertEqual((self.work / "steps").read_text().splitlines(),
+                                     ["preparation", "preparation", "changelog", "plan"])
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(manifest.read_text(), original)
+                    self.assertEqual((self.work / "CHANGELOG.md").read_text(), "original changelog\n")
+                    self.assertFalse((self.work / "steps").exists())
 
     def test_version_dry_run_selects_only_the_desktop_package(self):
         self.command("cargo", "printf '%s\\n' \"$@\"\n")
