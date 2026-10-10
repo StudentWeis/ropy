@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{
+    borrow::Cow,
     fs,
     path::{Path, PathBuf},
 };
@@ -11,13 +12,13 @@ use crate::repository::RichTextMeta;
 
 const THUMBNAIL_MAX_DIMENSION: u32 = 180;
 
-fn create_thumbnail(image: &DynamicImage) -> DynamicImage {
+fn create_thumbnail(image: &DynamicImage) -> Cow<'_, DynamicImage> {
     let (width, height) = image.dimensions();
     if width <= THUMBNAIL_MAX_DIMENSION && height <= THUMBNAIL_MAX_DIMENSION {
-        return image.clone();
+        return Cow::Borrowed(image);
     }
 
-    image.thumbnail(THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION)
+    Cow::Owned(image.thumbnail(THUMBNAIL_MAX_DIMENSION, THUMBNAIL_MAX_DIMENSION))
 }
 
 pub(super) fn image_path_for_hash(images_dir: &Path, image_content_hash: u64) -> PathBuf {
@@ -317,6 +318,20 @@ mod tests {
         let thumbnail = create_thumbnail(&image);
 
         assert_eq!(thumbnail.dimensions(), (90, 60));
+    }
+
+    #[rstest::rstest]
+    #[case(90, 60)]
+    #[case(180, 180)]
+    fn test_create_thumbnail_within_limit_reuses_pixel_buffer(
+        #[case] width: u32,
+        #[case] height: u32,
+    ) {
+        let image = DynamicImage::new_rgba8(width, height);
+
+        let thumbnail = create_thumbnail(&image);
+
+        assert_eq!(thumbnail.as_bytes().as_ptr(), image.as_bytes().as_ptr());
     }
 
     #[test]
