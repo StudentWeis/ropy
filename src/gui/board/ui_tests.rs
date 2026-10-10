@@ -130,6 +130,113 @@ fn test_delete_dialog_typing_d_keeps_record_and_escape_restores_search_focus(
 }
 
 #[gpui_kit::test]
+fn test_refresh_notification_preserves_pending_storage_limit_trim(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    for value in 0..11 {
+        repo.save_text(value.to_string()).unwrap();
+    }
+    let (_, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        GlobalSettings::update(cx, |settings| {
+            settings.storage.max_history_records = 10;
+            settings.storage.max_storage_records = 10;
+        });
+        board.update(cx, |board, cx| {
+            board.refresh_history(cx, true);
+            board.refresh_records_from_repository(cx);
+        });
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        repo.count(),
+        10,
+        "notification must not downgrade a requested immediate trim to buffered cleanup"
+    );
+}
+
+#[gpui_kit::test]
+fn test_refresh_clear_while_pending_does_not_restore_deleted_history(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    repo.save_text("clear me".into()).unwrap();
+    let (_, board, _) = open_board(cx, repo.get_display_records(100).unwrap());
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| {
+            board.refresh_records_from_repository(cx);
+            board.clear_history(cx);
+        });
+    });
+    cx.run_until_parked();
+    cx.update(|cx| assert!(crate::utils::read_or_recover(&board.read(cx).records).is_empty()));
+    assert_eq!(repo.count(), 0);
+}
+
+#[gpui_kit::test]
+fn test_refresh_newer_history_limit_replaces_older_request(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    for value in ["one", "two", "three"] {
+        repo.save_text(value.into()).unwrap();
+    }
+    let (_, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| {
+            board.refresh_records_from_repository(cx);
+            GlobalSettings::update(cx, |settings| settings.storage.max_history_records = 1);
+            board.refresh_records_from_repository(cx);
+        });
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            crate::utils::read_or_recover(&board.read(cx).records).len(),
+            1
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn test_refresh_runs_in_background_and_uses_current_filter(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    repo.save_text("new text".into()).unwrap();
+    let (_, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| {
+            board.refresh_records_from_repository(cx);
+            assert!(
+                board.filtered_record_indices.is_empty(),
+                "refresh must return before database I/O"
+            );
+            board.toggle_content_filter(super::ContentFilter::Image);
+            board.sync_filtered_records(cx);
+        });
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let board = board.read(cx);
+        assert_eq!(crate::utils::read_or_recover(&board.records).len(), 1);
+        assert!(
+            board.filtered_record_indices.is_empty(),
+            "completion must preserve the current filter"
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn test_refresh_new_record_preserves_selected_identity(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().expect("tempdir");
     let repo = Arc::new(
@@ -153,6 +260,15 @@ fn test_refresh_new_record_preserves_selected_identity(cx: &mut TestAppContext) 
             );
         });
     });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let board = board.read(cx);
+        assert_eq!(crate::utils::read_or_recover(&board.records).len(), 2);
+        assert_eq!(
+            board.filtered_record_id_at(board.selected_index),
+            Some(original.id)
+        );
+    });
     // Deleting a different record must not move the surviving selection.
     cx.update_window(handle, |_, _, cx| {
         board.update(cx, |board, cx| {
@@ -166,6 +282,15 @@ fn test_refresh_new_record_preserves_selected_identity(cx: &mut TestAppContext) 
         });
     })
     .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let board = board.read(cx);
+        assert_eq!(crate::utils::read_or_recover(&board.records).len(), 1);
+        assert_eq!(
+            board.filtered_record_id_at(board.selected_index),
+            Some(original.id)
+        );
+    });
 }
 
 #[gpui_kit::test]

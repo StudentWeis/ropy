@@ -1,6 +1,9 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
-use gpui_kit::Context;
+use gpui_kit::{AppContext, Context, ReadGlobal};
 
 use super::{
     RopyBoard,
@@ -10,6 +13,50 @@ use super::{
     },
     search::ContentFilter,
 };
+
+/// Serialize cleanup/query work without holding request state during I/O.
+#[derive(Debug, Default)]
+pub(super) struct HistoryRefresh {
+    request: Mutex<HistoryRequest>,
+    operation: Mutex<()>,
+}
+
+#[derive(Debug, Default)]
+struct HistoryRequest {
+    revision: u64,
+    trim_to_limit: bool,
+}
+
+impl HistoryRefresh {
+    fn next_revision(&self) -> u64 {
+        self.request(false)
+    }
+
+    fn request(&self, trim_to_limit: bool) -> u64 {
+        // A coalesced notification must not downgrade a storage-settings trim.
+        let mut request = lock_or_recover(&self.request);
+        request.trim_to_limit |= trim_to_limit;
+        request.revision = request.revision.wrapping_add(1);
+        request.revision
+    }
+
+    fn is_current(&self, revision: u64) -> bool {
+        lock_or_recover(&self.request).revision == revision
+    }
+
+    fn run<T>(&self, revision: u64, operation: impl FnOnce(bool) -> T) -> Option<T> {
+        let _operation = lock_or_recover(&self.operation);
+        let trim_to_limit = {
+            let mut request = lock_or_recover(&self.request);
+            if request.revision != revision {
+                return None;
+            }
+            std::mem::take(&mut request.trim_to_limit)
+        };
+        Some(operation(trim_to_limit))
+    }
+}
+
 use crate::{
     clipboard::delete_tracked_record,
     gui::{repository::GlobalRepository, settings::GlobalSettings},
@@ -66,43 +113,66 @@ impl RopyBoard {
         }
     }
 
-    pub(super) fn load_favorite_ids(cx: &gpui_kit::App) -> HashSet<u64> {
-        GlobalRepository::read(cx, |repo| {
-            repo.and_then(|repo| repo.favorite_ids().ok())
-                .map(|ids| ids.into_iter().collect())
-                .unwrap_or_default()
-        })
+    pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<'_, Self>) {
+        self.refresh_history(cx, false);
     }
 
-    pub(crate) fn refresh_records_from_repository(&mut self, cx: &Context<'_, Self>) {
-        let selected_id = self.filtered_record_id_at(self.selected_index);
-        let scroll_position = self.list_state.logical_scroll_top();
-        let max_history_records = GlobalSettings::read(cx, |s| s.storage.max_history_records);
-
-        GlobalRepository::read(cx, |repo| {
-            let Some(repo) = repo else {
+    pub(super) fn refresh_history(&mut self, cx: &Context<'_, Self>, trim_to_limit: bool) {
+        let Some(repo) = GlobalRepository::global(cx).cloned() else {
+            return;
+        };
+        let revision = self.history_refresh.request(trim_to_limit);
+        let history_refresh = self.history_refresh.clone();
+        let (max_history, max_storage) = GlobalSettings::read(cx, |settings| {
+            (
+                settings.storage.max_history_records,
+                settings.storage.max_storage_records,
+            )
+        });
+        let query = cx.background_spawn(async move {
+            history_refresh.run(revision, |trim_to_limit| {
+                let cleanup = if trim_to_limit {
+                    repo.cleanup_old_records(max_storage)
+                } else {
+                    repo.cleanup_old_records_if_needed(max_storage)
+                };
+                if let Err(error) = cleanup {
+                    tracing::warn!(%error, "failed to cleanup old clipboard records");
+                }
+                repo.get_display_snapshot(max_history)
+            })
+        });
+        self.history_refresh_task = Some(cx.spawn(async move |board, cx| {
+            let Some(result) = query.await else {
                 return;
             };
+            let _ = board.update(cx, |board, cx| {
+                if !board.history_refresh.is_current(revision) {
+                    return;
+                }
+                match result {
+                    Ok(snapshot) => {
+                        board.apply_history_snapshot(snapshot, cx);
+                        cx.notify();
+                    }
+                    Err(error) => tracing::warn!(%error, "failed to reload display snapshot"),
+                }
+            });
+        }));
+    }
 
-            match repo.get_display_records(max_history_records) {
-                Ok(records) => {
-                    let mut guard = write_or_recover(&self.records);
-                    *guard = records;
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to reload display records");
-                }
-            }
-
-            match repo.favorite_ids() {
-                Ok(ids) => {
-                    self.favorite_ids = Arc::new(ids.into_iter().collect());
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to reload favorite ids");
-                }
-            }
-        });
+    fn apply_history_snapshot(
+        &mut self,
+        snapshot: crate::repository::DisplaySnapshot,
+        cx: &Context<'_, Self>,
+    ) {
+        // Selection, scrolling and filters are read at completion, so interaction
+        // during I/O is not undone by the request's earlier presentation state.
+        let selected_id = self.filtered_record_id_at(self.selected_index);
+        let scroll_position = self.list_state.logical_scroll_top();
+        let (records, favorite_ids) = snapshot.into_parts();
+        *write_or_recover(&self.records) = records;
+        self.favorite_ids = Arc::new(favorite_ids);
 
         self.sync_filtered_records(cx);
         if let Some(index) = selected_id.and_then(|id| {
@@ -128,6 +198,8 @@ impl RopyBoard {
                 if let Err(e) = repo.clear() {
                     tracing::warn!(error = %e, "failed to clear clipboard history");
                 } else {
+                    self.history_refresh.next_revision();
+                    self.history_refresh_task = None;
                     {
                         let mut guard = write_or_recover(&self.records);
                         guard.clear();
@@ -317,5 +389,38 @@ impl RopyBoard {
         let records = read_or_recover(&self.records);
         let record_index = self.filtered_record_index_at(index)?;
         records.get(record_index).map(|record| record.id)
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::HistoryRefresh;
+
+    #[test]
+    fn test_history_refresh_request_during_io_keeps_new_trim_pending() {
+        let refresh = HistoryRefresh::default();
+        let old = refresh.request(true);
+        let latest = refresh.run(old, |trim| {
+            assert!(trim);
+            refresh.request(true)
+        });
+        let latest = latest.unwrap_or_default();
+        assert_eq!(refresh.run(latest, |trim| trim), Some(true));
+        assert_eq!(
+            refresh.run(refresh.request(false), |trim| trim),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn test_history_refresh_superseded_cleanup_is_skipped_before_execution() {
+        let refresh = HistoryRefresh::default();
+        let old = refresh.next_revision();
+        let latest = refresh.next_revision();
+        let cleaned = std::cell::Cell::new(false);
+        assert!(refresh.run(old, |_| cleaned.set(true)).is_none());
+        assert!(!cleaned.get(), "obsolete limits must not delete history");
+        assert!(refresh.run(latest, |_| cleaned.set(true)).is_some());
+        assert!(cleaned.get());
     }
 }

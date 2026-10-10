@@ -47,6 +47,15 @@ for persistence, capture acknowledgement, settings recovery and UI interactions.
 
 ## Workspace commands
 
+Makefile check, test, Clippy and documentation targets explicitly select the
+whole workspace; formatting targets use `--all`. Build and run targets keep
+the desktop application as their default member.
+
+Image capture tests exercise abandoned staging, failed database commits,
+partial file installation and preservation of existing same-hash payloads.
+GPUI context tests cover background history refresh, current filters and
+selection, changed history limits and clearing history with a request pending.
+
 - `cargo test --locked -p ropy-core`: run core unit tests, public API integration
   tests and doctests without compiling GPUI or native clipboard integration.
 - `cargo test --workspace --all-targets --all-features`: run both packages,

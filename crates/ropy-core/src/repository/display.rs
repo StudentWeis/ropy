@@ -1,6 +1,6 @@
 //! Display ordering and query logic for the clipboard repository.
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashSet};
 
 use super::{
     backend::{StorageBackend, redb::RedbBackend},
@@ -8,6 +8,21 @@ use super::{
     models::ClipboardRecord,
     repo::ClipboardRepository,
 };
+
+/// Records and live favorites read together under the repository operation lock.
+#[derive(Debug)]
+pub struct DisplaySnapshot {
+    records: Vec<ClipboardRecord>,
+    favorite_ids: HashSet<u64>,
+}
+
+impl DisplaySnapshot {
+    /// Consume the snapshot into its ordered records and favorite identifiers.
+    #[must_use]
+    pub fn into_parts(self) -> (Vec<ClipboardRecord>, HashSet<u64>) {
+        (self.records, self.favorite_ids)
+    }
+}
 
 impl<B: StorageBackend> ClipboardRepository<B> {
     /// Get the records for the default board view.
@@ -22,12 +37,23 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         &self,
         limit: usize,
     ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
+        Ok(self.get_display_snapshot(limit)?.records)
+    }
+
+    /// Read display records and live favorites as one coherent snapshot.
+    ///
+    /// # Errors
+    /// Returns an error if favorites or the display index cannot be queried.
+    pub fn get_display_snapshot(&self, limit: usize) -> Result<DisplaySnapshot, RepositoryError> {
         let _operation = self.lock_operation();
         let favorite_ids = self.favorite_id_set()?;
         let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
         let mut records = self.load_records(&selected_ids);
         ClipboardRepository::<RedbBackend>::sort_for_display(&mut records);
-        Ok(records)
+        Ok(DisplaySnapshot {
+            records,
+            favorite_ids,
+        })
     }
 }
 
@@ -82,6 +108,22 @@ mod tests {
         let record = test_record("pinned", true, 10);
 
         assert_eq!(ClipboardRepository::display_priority(&record), 0);
+    }
+
+    #[test]
+    #[expect(clippy::expect_used)]
+    fn test_display_snapshot_limit_keeps_favorites_and_pins_with_membership() {
+        let repo = crate::repository::test_helpers::create_test_repo();
+        let favorite = repo.save_text("favorite".into()).expect("favorite");
+        repo.toggle_favorite(favorite.id).expect("mark favorite");
+        let pinned = repo.save_text("pinned".into()).expect("pinned");
+        repo.toggle_pin(pinned.id).expect("pin");
+        repo.save_text("ordinary".into()).expect("ordinary");
+        let (records, favorites) = repo.get_display_snapshot(0).expect("snapshot").into_parts();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].id, pinned.id);
+        assert_eq!(records[1].id, favorite.id);
+        assert_eq!(favorites, std::collections::HashSet::from([favorite.id]));
     }
 
     #[test]

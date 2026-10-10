@@ -3,8 +3,8 @@
 /// Failure to open, query or mutate clipboard history.
 #[derive(Debug, thiserror::Error)]
 pub enum RepositoryError {
-    /// A rich-text payload file could not be persisted.
-    #[error("Rich-text sidecar write failed: {0}")]
+    /// An image or rich-text payload file could not be persisted.
+    #[error("Payload sidecar write failed: {0}")]
     Sidecar(#[from] std::io::Error),
     /// The platform has no usable application data directory.
     #[error("Data directory not found")]

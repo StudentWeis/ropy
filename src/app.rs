@@ -33,7 +33,7 @@ use crate::{
         settings::GlobalSettings,
     },
     i18n::I18n,
-    repository::{ClipboardRecord, ClipboardRepository, backend::StorageBackend},
+    repository::ClipboardRepository,
 };
 
 #[cfg(target_os = "linux")]
@@ -108,16 +108,6 @@ fn start_clipboard_event_handler(
             drain_pending_notifications(&notify_rx);
 
             async_app.update(|cx| {
-                let max_storage = GlobalSettings::read(cx, |s| s.storage.max_storage_records);
-
-                GlobalRepository::read(cx, |repo| {
-                    if let Some(repo) = repo
-                        && let Err(e) = repo.cleanup_old_records_if_needed(max_storage)
-                    {
-                        tracing::warn!(error = %e, "failed to cleanup old clipboard records");
-                    }
-                });
-
                 window_handle
                     .update(cx, |root, _, cx| {
                         if let Ok(board) = root.view().clone().downcast::<RopyBoard>() {
@@ -145,15 +135,6 @@ fn initialize_repository() -> Option<Arc<ClipboardRepository>> {
             None
         }
     }
-}
-
-fn load_initial_records<B: StorageBackend>(
-    repository: Option<&Arc<ClipboardRepository<B>>>,
-    max_history_records: usize,
-) -> Vec<ClipboardRecord> {
-    repository
-        .and_then(|repo| repo.get_display_records(max_history_records).ok())
-        .unwrap_or_default()
 }
 
 /// Synchronize auto-start state with system on application launch
@@ -278,11 +259,9 @@ pub(crate) fn launch() {
 
             let repository = initialize_repository();
             let repository_ready = repository.is_some();
-            let initial_records =
-                load_initial_records(repository.as_ref(), settings.storage.max_history_records);
             cx.set_global(GlobalRepository::new(repository));
 
-            let shared_records = Arc::new(std::sync::RwLock::new(initial_records));
+            let shared_records = Arc::new(std::sync::RwLock::new(Vec::new()));
             let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
             let (copy_tx, copy_rx) = async_channel::unbounded();
             cx.background_spawn(crate::clipboard::writer::write_clipboard(copy_rx))
@@ -315,6 +294,7 @@ pub(crate) fn launch() {
                     board.set_hotkey_tx(hotkey_tx);
                 });
 
+                board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
                 board.update(cx, RopyBoard::start_update_checks);
                 cx.spawn(async move |cx| {
                     cx.background_executor()
@@ -348,55 +328,8 @@ pub(crate) fn launch() {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
-
     use super::*;
-    use crate::{
-        clipboard::ClipboardEvent,
-        repository::backend::memory::{MemoryBackend, memory_backend_factory},
-    };
-
-    fn create_test_repo() -> (tempfile::TempDir, ClipboardRepository<MemoryBackend>) {
-        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-        let db_path = temp_dir.path().join("test.db");
-        let repo = ClipboardRepository::init(
-            &db_path,
-            temp_dir.path().join("images"),
-            memory_backend_factory,
-        )
-        .expect("Failed to create test repository");
-
-        (temp_dir, repo)
-    }
-
-    #[test]
-    fn test_load_initial_records_when_repository_is_missing_returns_empty() {
-        let records =
-            load_initial_records::<crate::repository::backend::redb::RedbBackend>(None, 10);
-
-        assert_eq!(records, []);
-    }
-
-    #[test]
-    fn test_load_initial_records_when_repository_exists_respects_limit() {
-        let (_temp_dir, repo) = create_test_repo();
-
-        repo.save_text("first".to_string())
-            .expect("Failed to save first");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("second".to_string())
-            .expect("Failed to save second");
-        thread::sleep(Duration::from_millis(10));
-        repo.save_text("third".to_string())
-            .expect("Failed to save third");
-
-        let repo = Arc::new(repo);
-        let records = load_initial_records(Some(&repo), 2);
-
-        assert_eq!(records.len(), 2);
-        assert_eq!(records[0].content, "third");
-        assert_eq!(records[1].content, "second");
-    }
+    use crate::clipboard::ClipboardEvent;
 
     #[test]
     fn test_drain_pending_notifications_when_channel_has_queued_items_drains_all() {

@@ -5,12 +5,55 @@
 use std::{thread, time::Duration};
 
 use crate::repository::{
+    assets::{PendingImage, thumb_path_for},
     backend::{
         BackendFactory, StorageBackend, memory::memory_backend_factory, redb::redb_backend_factory,
     },
     models::{ClipboardRecord, ContentType},
     test_helpers::{create_test_repo, create_test_repo_with},
 };
+
+#[test]
+fn test_pending_image_failed_recopy_and_abandoned_capture_preserve_committed_payloads() {
+    let (dir, repo) = create_test_repo_with(memory_backend_factory);
+    let image = image::DynamicImage::new_rgba8(2, 3);
+    let initial = PendingImage::encode(&image, 42, repo.images_dir()).unwrap();
+    let record = repo.save_pending_image(initial).unwrap();
+    let original = std::fs::read(&record.content).unwrap();
+    let thumbnail = thumb_path_for(std::path::Path::new(&record.content));
+    let original_thumbnail = std::fs::read(&thumbnail).unwrap();
+    let abandoned = PendingImage::encode(&image, 42, repo.images_dir()).unwrap();
+    let recopy = PendingImage::encode(&image, 42, repo.images_dir()).unwrap();
+    repo.backend.fail_next_batch();
+    assert!(repo.save_pending_image(recopy).is_err());
+    drop(abandoned);
+    assert_eq!(std::fs::read(&record.content).unwrap(), original);
+    assert_eq!(std::fs::read(&thumbnail).unwrap(), original_thumbnail);
+    assert_eq!(
+        repo.get_by_id(42).unwrap().unwrap().created_at,
+        record.created_at
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("images"))
+            .unwrap()
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn test_pending_image_partial_install_failure_removes_new_payload() {
+    let (_dir, repo) = create_test_repo_with(memory_backend_factory);
+    let image =
+        PendingImage::encode(&image::DynamicImage::new_rgba8(2, 3), 42, repo.images_dir()).unwrap();
+    let thumbnail = repo.images_dir().join("42_thumb.png");
+    std::fs::create_dir(&thumbnail).unwrap();
+    assert!(repo.save_pending_image(image).is_err());
+    assert_eq!(repo.count(), 0);
+    assert!(!repo.images_dir().join("42.png").exists());
+    std::fs::remove_dir(thumbnail).unwrap();
+    assert_eq!(std::fs::read_dir(repo.images_dir()).unwrap().count(), 0);
+}
 
 #[rstest::rstest]
 #[case(false)]

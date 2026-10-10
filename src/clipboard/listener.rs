@@ -16,7 +16,7 @@ use image::DynamicImage;
 use super::{ClipboardCapture, ClipboardEvent, CopyTracker, LastCopyState, capture::CopyAttempt};
 use crate::repository::{
     ContentType,
-    assets::{ImageSaveError, save_image},
+    assets::{ImageSaveError, PendingImage},
     content_hash, hash_file_paths, normalize_file_paths, serialize_file_paths,
 };
 
@@ -212,11 +212,11 @@ struct ImageCapture {
 impl ImageCapture {
     fn encode(
         self,
-        save: impl FnOnce(&DynamicImage, u64) -> Result<String, ImageSaveError>,
+        save: impl FnOnce(&DynamicImage, u64) -> Result<PendingImage, ImageSaveError>,
     ) -> Result<ClipboardCapture, ImageSaveError> {
-        let path = save(&self.image, self.hash)?;
+        let image = save(&self.image, self.hash)?;
         Ok(ClipboardCapture {
-            event: ClipboardEvent::Image(path, self.hash),
+            event: ClipboardEvent::Image(image),
             attempt: self.attempt,
         })
     }
@@ -313,7 +313,7 @@ pub(crate) fn prepare_clipboard_monitor(
 
     let encode = async move {
         while let Ok(image) = image_rx.recv().await {
-            match image.encode(|image, hash| save_image(image, hash, &images_dir)) {
+            match image.encode(|image, hash| PendingImage::encode(image, hash, &images_dir)) {
                 Ok(capture) => {
                     if let Err(error) = tx.send(capture).await {
                         tracing::warn!(%error, "failed to send image capture");
@@ -544,6 +544,59 @@ mod tests {
     }
 
     #[test]
+    fn test_dispatch_image_database_failure_removes_uncommitted_payloads() {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        let capture = fixture
+            .image_rx
+            .try_recv()
+            .expect("image capture")
+            .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
+            .expect("encode image");
+        fixture.backend.fail_next_batch();
+        assert!(capture.persist(&fixture.repo).is_err());
+        assert_eq!(fixture.repo.count(), 0);
+        assert_eq!(
+            std::fs::read_dir(fixture.repo.images_dir())
+                .expect("read images directory")
+                .count(),
+            0
+        );
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        assert!(fixture.image_rx.try_recv().is_ok());
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_dispatch_abandoned_encoded_image_removes_uncommitted_payloads(
+        #[case] delivery_failed: bool,
+    ) {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
+        let capture = fixture
+            .image_rx
+            .try_recv()
+            .expect("image capture")
+            .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
+            .expect("encode image");
+        if delivery_failed {
+            fixture.rx.close();
+            let result = fixture.tx.try_send(capture);
+            assert!(result.is_err());
+            drop(result);
+        } else {
+            drop(capture);
+        }
+        assert_eq!(
+            std::fs::read_dir(fixture.repo.images_dir())
+                .expect("read images directory")
+                .count(),
+            0
+        );
+    }
+
+    #[test]
     fn test_dispatch_image_encoding_failure_then_delete_allows_retry() {
         let fixture = CaptureFixture::new();
         fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
@@ -556,7 +609,7 @@ mod tests {
         fixture.dispatch(fixture_payload(ClipboardPayloadKind::Image));
         let capture = fixture.image_rx.try_recv().expect("image retry");
         let record = capture
-            .encode(|image, hash| save_image(image, hash, fixture.repo.images_dir()))
+            .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
             .expect("encode")
             .persist(&fixture.repo)
             .expect("persist image");

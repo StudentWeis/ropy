@@ -23,7 +23,9 @@ use super::{
     time_index::TimeIndex,
 };
 use crate::repository::{
-    assets::{remove_rich_text_files, save_rich_text_files_to_dir},
+    assets::{
+        PendingImage, image_path_for_hash, remove_rich_text_files, save_rich_text_files_to_dir,
+    },
     content_hash, normalize_file_paths, serialize_file_paths,
 };
 
@@ -171,6 +173,55 @@ impl<B: StorageBackend> Drop for ClipboardRepository<B> {
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
+    /// Commit an encoded image capture and its record under the operation lock.
+    ///
+    /// New payloads are removed on failure; an existing record's files survive.
+    /// Preparation owns private files, so abandoned or concurrent captures cannot
+    /// delete or replace another capture's hash-named payload outside this lock.
+    ///
+    /// # Errors
+    /// Returns an error if payload installation or the record transaction fails.
+    pub fn save_pending_image(
+        &self,
+        image: PendingImage,
+    ) -> Result<ClipboardRecord, RepositoryError> {
+        let _operation = self.lock_operation();
+        let id = image.hash();
+        let key = id.to_be_bytes();
+        let existing = self
+            .get_raw(&key)?
+            .map(|bytes| {
+                postcard::from_bytes::<ClipboardRecord>(&bytes)
+                    .map_err(|error| RepositoryError::Deserialization(error.to_string()))
+            })
+            .transpose()?;
+        let destination = image_path_for_hash(&self.images_dir, id);
+        let path = destination.to_string_lossy().into_owned();
+        let is_new = existing.is_none();
+        let mut record = existing.unwrap_or_else(|| {
+            ClipboardRecord::new(id, path.clone(), Local::now(), ContentType::Image)
+        });
+        record.created_at = Local::now();
+        // Repair the canonical cache for an existing image as well. Other record
+        // paths remain authoritative (including repositories opened by consumers).
+        if (is_new || (record.content_type == ContentType::Image && record.content == path))
+            && let Err(error) = image.install(&destination)
+        {
+            if is_new {
+                remove_image_files(&path);
+            }
+            return Err(error.into());
+        }
+        if let Err(error) = self.put_indexed_record(&key, &record) {
+            if is_new {
+                remove_image_files(&path);
+            }
+            return Err(error);
+        }
+        drop(image);
+        Ok(record)
+    }
+
     /// Insert or refresh a record keyed by its content hash. A duplicate
     /// hash bumps `created_at` only — the existing payload is preserved so
     /// re-copies surface at the top of the board without churning storage.

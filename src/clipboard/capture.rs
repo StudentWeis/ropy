@@ -102,7 +102,7 @@ impl ClipboardCapture {
         let Self { event, mut attempt } = self;
         let record = match event {
             ClipboardEvent::Text(text) => repo.save_text(text),
-            ClipboardEvent::Image(path, hash) => repo.save_image_from_path(path, hash),
+            ClipboardEvent::Image(image) => repo.save_pending_image(image),
             ClipboardEvent::Files(paths) => repo.save_files(&paths),
             ClipboardEvent::RichText {
                 plain_text,
