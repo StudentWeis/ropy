@@ -20,6 +20,57 @@ class BenchmarkTests(unittest.TestCase):
                 "version": "0.5.7", "commit": "abc", "dirty": False,
                 "metrics": {"insert_ns": {"value": 100, "unit": "ns"}}}
 
+    def test_select_baseline_uses_latest_compatible_earlier_different_commit(self):
+        current = self.result() | {"commit": "current", "collected_at": "2026-10-10T10:00:00+00:00"}
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name, commit, date, cpu, dirty in [
+                ("old", "old", "01", "M1", False),
+                ("latest", "latest", "02", "M1", False),
+                ("other-machine", "other", "03", "M2", False),
+                ("same-commit", "current", "04", "M1", False),
+                ("dirty", "dirty", "05", "M1", True),
+                ("future", "future", "11", "M1", False),
+            ]:
+                result = self.result() | {"commit": commit, "collected_at": f"2026-10-{date}T10:00:00+00:00", "dirty": dirty}
+                result["environment"]["cpu"] = cpu
+                (directory / f"{name}.json").write_text(json.dumps(result))
+            self.assertEqual(bench.select_baseline(current, directory)["commit"], "latest")
+            self.assertIsNone(bench.select_baseline(current, directory / "missing"))
+
+    def test_record_preserves_samples_and_refuses_overwrite_or_dirty_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "result.json"
+            result = self.result() | {"collected_at": "2026-10-10T10:00:00+00:00"}
+            source.write_text(json.dumps(result))
+            for name in ("insert", "dedup", "read_100"):
+                sample = root / "criterion" / name / "new" / "sample.json"
+                sample.parent.mkdir(parents=True)
+                sample.write_text(json.dumps({"iters": [1, 2], "times": [100, 200]}))
+            saved = bench.record_result(source, root / "archive")
+            archived = json.loads(saved.read_text())
+            self.assertEqual(archived["criterion_samples"]["insert"]["times"], [100, 200])
+            self.assertEqual(archived["commit"], result["commit"])
+            self.assertTrue(saved.with_suffix(".md").exists())
+            original = saved.read_bytes()
+            with self.assertRaises(FileExistsError):
+                bench.record_result(source, root / "archive")
+            self.assertEqual(saved.read_bytes(), original)
+            result["dirty"] = True
+            source.write_text(json.dumps(result))
+            with self.assertRaisesRegex(ValueError, "clean"):
+                bench.record_result(source, root / "archive")
+
+    def test_record_missing_samples_does_not_create_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "result.json"
+            source.write_text(json.dumps(self.result()))
+            with self.assertRaises(FileNotFoundError):
+                bench.record_result(source, root / "archive")
+            self.assertFalse((root / "archive").exists())
+
     def test_report_same_environment_calculates_delta(self):
         old, new = self.result(), self.result()
         new["metrics"]["insert_ns"]["value"] = 90

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import statistics
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import tomllib
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+BASELINES = ROOT / "docs" / "benchmarks"
 TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu",
            "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc")
 
@@ -30,6 +32,50 @@ def sha256(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def compatible_environment(current, baseline):
+    return all(current.get(key) == baseline.get(key)
+               for key in ("schema_version", "suite_version", "fixture_version", "environment"))
+
+
+def select_baseline(current, directory=BASELINES):
+    """Select an older clean run from another commit in the same environment."""
+    candidates = []
+    for path in sorted(directory.glob("*.json")):
+        candidate = json.loads(path.read_text())
+        if (candidate.get("dirty") is False and candidate["commit"] != current["commit"]
+                and compatible_environment(current, candidate)
+                and datetime.fromisoformat(candidate["collected_at"]) < datetime.fromisoformat(current["collected_at"])):
+            candidates.append(candidate)
+    return max(candidates, key=lambda item: datetime.fromisoformat(item["collected_at"]), default=None)
+
+
+def record_result(source, directory=BASELINES):
+    """Archive measured provenance and raw samples without replacing prior results."""
+    current = json.loads(source.read_text())
+    if current.get("dirty") is not False:
+        raise ValueError("only measurements from a clean commit can be recorded")
+    current["criterion_samples"] = {
+        name: json.loads((source.parent / "criterion" / name / "new" / "sample.json").read_text())
+        for name in ("insert", "dedup", "read_100")
+    }
+    serialized = json.dumps(current, indent=2) + "\n"
+    digest = hashlib.sha256(serialized.encode()).hexdigest()[:8]
+    environment = current["environment"]
+    stem = "-".join(str(value) for value in (current["version"], environment["os"],
+                                           environment["arch"], current["commit"][:12], digest))
+    destination = directory / (re.sub(r"[^a-zA-Z0-9._-]", "_", stem) + ".json")
+    markdown = report(current, select_baseline(current, directory))
+    markdown += f"\n[Full result and raw samples]({destination.name})\n"
+    if destination.exists() or destination.with_suffix(".md").exists():
+        raise FileExistsError(f"baseline already recorded: {destination}")
+    directory.mkdir(parents=True, exist_ok=True)
+    with destination.open("x") as stream:
+        stream.write(serialized)
+    with destination.with_suffix(".md").open("x") as stream:
+        stream.write(markdown)
+    return destination
+
+
 def report(current, baseline=None):
     lines = [f"# Ropy {current['version']} benchmark", "",
              f"Commit: `{current['commit']}`; dirty: {current['dirty']}", "",
@@ -37,9 +83,10 @@ def report(current, baseline=None):
              "without clipboard monitoring, tray, hotkeys, updater or autostart.",
              f"Memory: {current.get('memory_status', 'not measured')}; package: {'measured' if 'package_bytes' in current['metrics'] else 'not measured'}.", "",
              "| Metric | Previous | Current | Change |", "|---|---:|---:|---:|"]
-    compatible = baseline is not None and all(
-        current.get(key) == baseline.get(key)
-        for key in ("schema_version", "suite_version", "fixture_version", "environment"))
+    provenance = (f"Baseline: {baseline['version']} at `{baseline['commit']}`."
+                  if baseline else "No earlier compatible baseline from another commit; this is a starting point.")
+    lines[4:4] = [provenance, ""]
+    compatible = baseline is not None and compatible_environment(current, baseline)
     before = baseline.get("metrics", {}) if baseline else {}
     for name in sorted(current["metrics"].keys() | before.keys()):
         old, new = before.get(name), current["metrics"].get(name)
@@ -194,7 +241,7 @@ def run(args):
                                                            "target": next((target for target in TARGETS if target in args.package.name), "unknown"),
                                                            "app_bundle": "-app." in args.package.name}}
     (destination / "result.json").write_text(json.dumps(result, indent=2) + "\n")
-    (destination / "report.md").write_text(report(result))
+    (destination / "report.md").write_text(report(result, select_baseline(result)))
     print(destination / "report.md")
 
 
@@ -206,8 +253,10 @@ def main():
     collect.add_argument("--skip-memory", action="store_true")
     collect.add_argument("--package", type=Path, help="optional matching release download")
     compare = commands.add_parser("compare")
-    compare.add_argument("--baseline", type=Path, required=True)
+    compare.add_argument("--baseline", type=Path)
     compare.add_argument("--current", type=Path)
+    record = commands.add_parser("record")
+    record.add_argument("--current", type=Path)
     sizes = commands.add_parser("sizes")
     sizes.add_argument("--directory", type=Path, required=True)
     sizes.add_argument("--version", required=True)
@@ -215,10 +264,15 @@ def main():
     args = parser.parse_args()
     if args.command == "run":
         run(args)
-    elif args.command == "compare":
+    elif args.command in ("compare", "record"):
         version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
         current = args.current or ROOT / "target" / "bench" / version / "result.json"
-        print(report(json.loads(current.read_text()), json.loads(args.baseline.read_text())))
+        if args.command == "record":
+            print(record_result(current))
+        else:
+            result = json.loads(current.read_text())
+            baseline = json.loads(args.baseline.read_text()) if args.baseline else select_baseline(result)
+            print(report(result, baseline))
     else:
         args.output.write_text(json.dumps(release_sizes(args.directory, args.version), indent=2) + "\n")
 

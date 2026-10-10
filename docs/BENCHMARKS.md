@@ -11,7 +11,7 @@ benchmark at a time, after compilation and other heavy work have stopped.
 
 ```sh
 make bench
-make bench-compare BASELINE=/path/to/previous/result.json
+make bench-compare
 ```
 
 Outputs go to `target/bench/<version>/`: `result.json`, `report.md`, and
@@ -94,9 +94,51 @@ SHA-256 and the main binary's uncompressed size for tar/ZIP archives. It never
 extracts archives. DMG files have download size only. Compare each target and
 archive kind separately; do not add packages together or mix architectures.
 
-Run the full suite manually once per candidate release on the reference Mac.
-Attach its `result.json`, `report.md` and archived `criterion/` directory to that
-release. No timing runner, dashboard or automatic upload from the local machine
-is introduced. The old `docs/data/build_sizes.csv` and `record_build_size.sh`
-remain historical measurements; their missing environment metadata prevents
-using them as comparable v1 baselines.
+## Keep baselines in the repository and PR
+
+Run the suite on a clean implementation commit, then record the result:
+
+```sh
+make bench
+make bench-compare
+make bench-record
+```
+
+For an existing or differently located run, use
+`make bench-record CURRENT=/path/to/result.json`. Recording does not rerun the
+benchmark or relabel its commit. It requires a clean measured commit and the
+three sibling `criterion/<scenario>/new/sample.json` files. RSS samples are
+already in `result.json`.
+
+`bench-record` creates a JSON and Markdown pair under `docs/benchmarks/`.
+The JSON preserves the measured commit, version, environment, hashes, statistics,
+RSS samples and raw Criterion iteration/time samples. File names include version,
+OS, architecture, commit and a content digest so different machines/runs do not
+overwrite each other. Re-recording identical results fails without modifying them.
+
+Commit both files to the same PR as the implementation. Put the generated report's
+metric table and links to the two files in the PR description. After pushing,
+results are available on GitHub; after merging, they remain in the main branch.
+The measurement commit normally precedes the commit adding its report; this is
+intentional and avoids claiming the benchmark measured an untested commit.
+Do not relabel an old measurement as a new release or edit measured numbers.
+
+Both `make bench` reports and `make bench-compare` automatically select the most
+recent earlier clean result from `docs/benchmarks/` with the same environment and
+schema/suite/fixture versions, excluding the current measured commit. No match
+means a clearly labeled starting point, not a zero-percent improvement. Use
+`BASELINE=/path/to/result.json` to select a baseline explicitly; incompatible
+results still display `not comparable`. Refresh the repository before comparing
+if you need recently merged baselines.
+
+The first tracked baseline is [0.5.7 on macOS arm64](benchmarks/0.5.7-Darwin-arm64-0845036d448e-408f9764.md),
+measured at commit `0845036` on the reference Mac. It establishes a starting
+point; it is not a measurement of the published 0.5.7 tag. No download package
+was supplied for that run. Published package sizes remain attached to releases
+as `bench-sizes.json` by the existing artifact workflow.
+
+No separate storage service, timing runner or automatic Git/PR mutation is
+introduced. The commands only produce local files; normal commit/push/PR review
+provides cloud retention. The old `docs/data/build_sizes.csv` and
+`record_build_size.sh` remain historical measurements; their missing environment
+metadata prevents using them as comparable v1 baselines.
