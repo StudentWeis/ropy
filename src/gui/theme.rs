@@ -138,29 +138,29 @@ impl ThemeDefinition {
             name: "Ropy Light".to_string(),
             mode: ThemeMode::Light,
             palette: ThemePalette {
-                background: 0x00ff_ffff,
-                foreground: 0x001a_1a1a,
-                secondary: 0x00f5_f5f5,
-                secondary_foreground: 0x001a_1a1a,
-                border: 0x00e0_e0e0,
-                accent: 0x00ad_d8e6,
-                accent_foreground: 0x001a_1a1a,
-                muted: 0x00f5_f5f5,
-                muted_foreground: 0x006b_6b6b,
-                input: 0x00f0_f0f0,
-                primary: 0x005b_7bd5,
+                background: 0x00fa_fbfc,
+                foreground: 0x0020_2631,
+                secondary: 0x00f1_f3f6,
+                secondary_foreground: 0x0020_2631,
+                border: 0x00d7_dce4,
+                accent: 0x00e6_edfb,
+                accent_foreground: 0x0026_3e70,
+                muted: 0x00f1_f3f6,
+                muted_foreground: 0x0060_6a7b,
+                input: 0x00d7_dce4,
+                primary: 0x0046_68bc,
                 primary_foreground: 0x00ff_ffff,
-                primary_hover: 0x004e_70c2,
-                primary_active: 0x0042_60ab,
-                danger: 0x00d9_5c5c,
+                primary_hover: 0x003c_5caa,
+                primary_active: 0x0032_4e94,
+                danger: 0x00bd_414b,
                 danger_foreground: 0x00ff_ffff,
                 popover: 0x00ff_ffff,
-                popover_foreground: 0x001a_1a1a,
-                selection: 0x00d9_e4f9,
-                ring: 0x005b_7bd5,
-                list_hover: 0x00f5_f5f5,
-                list_active: 0x00e8_edf8,
-                scrollbar_thumb: 0x00c8_d2e8,
+                popover_foreground: 0x0020_2631,
+                selection: 0x00d4_e0fa,
+                ring: 0x0046_68bc,
+                list_hover: 0x00ed_f0f5,
+                list_active: 0x00e6_edfb,
+                scrollbar_thumb: 0x00b4_bdcc,
             },
         }
     }
@@ -340,10 +340,10 @@ mod tests {
         assert_eq!(theme.id.code(), "ropy-dark");
         assert_eq!(theme.name, "Ropy Dark");
         assert_eq!(theme.mode(), ThemeMode::Dark);
-        assert_eq!(theme.palette().background, 0x002d_2d2d);
-        assert_eq!(theme.palette().foreground, 0x00ff_ffff);
-        assert_eq!(theme.palette().accent, 0x004d_4d4d);
-        assert_eq!(theme.palette().primary, 0x006b_8cff);
+        assert_eq!(theme.palette().background, 0x0023_262d);
+        assert_eq!(theme.palette().foreground, 0x00e8_ecf3);
+        assert_eq!(theme.palette().accent, 0x0030_3f59);
+        assert_eq!(theme.palette().primary, 0x008a_a8ff);
     }
 
     #[test]
@@ -353,9 +353,9 @@ mod tests {
         assert_eq!(theme.id.code(), "ropy-light");
         assert_eq!(theme.name, "Ropy Light");
         assert_eq!(theme.mode(), ThemeMode::Light);
-        assert_eq!(theme.palette().background, 0x00ff_ffff);
-        assert_eq!(theme.palette().accent, 0x00ad_d8e6);
-        assert_eq!(theme.palette().primary, 0x005b_7bd5);
+        assert_eq!(theme.palette().background, 0x00fa_fbfc);
+        assert_eq!(theme.palette().accent, 0x00e6_edfb);
+        assert_eq!(theme.palette().primary, 0x0046_68bc);
     }
 
     #[test]

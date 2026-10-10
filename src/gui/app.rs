@@ -9,7 +9,7 @@ use std::{
 use gpui_kit::{
     App, AppContext, AssetSource, Bounds, WindowBackgroundAppearance, WindowBounds, WindowHandle,
     WindowKind, WindowOptions,
-    component::{Root, ThemeMode as ComponentThemeMode, theme::Theme},
+    component::{Colorize, Root, ThemeMode as ComponentThemeMode, theme::Theme},
     rgb,
 };
 use rust_embed::RustEmbed;
@@ -130,6 +130,24 @@ pub(crate) fn set_app_theme(
         theme.primary_active = surface(rgb(palette.primary_active).into());
         theme.danger = surface(rgb(palette.danger).into());
         theme.danger_foreground = rgb(palette.danger_foreground).into();
+        // Button roles are independent of generic colors in gpui-component.
+        theme.button_primary = theme.primary;
+        theme.button_primary_foreground = theme.primary_foreground;
+        theme.button_primary_hover = theme.primary_hover;
+        theme.button_primary_active = theme.primary_active;
+        theme.button_danger = theme.danger;
+        theme.button_danger_foreground = theme.danger_foreground;
+        // Preserve label contrast while making destructive press states visible.
+        let danger_state = |amount| match app_theme.mode() {
+            ThemeMode::Light => theme.danger.darken(amount),
+            ThemeMode::Dark => theme.danger.lighten(amount),
+        };
+        let danger_hover = danger_state(0.05);
+        let danger_active = danger_state(0.10);
+        theme.danger_hover = danger_hover;
+        theme.danger_active = danger_active;
+        theme.button_danger_hover = danger_hover;
+        theme.button_danger_active = danger_active;
         theme.popover = surface(rgb(palette.popover).into());
         theme.popover_foreground = rgb(palette.popover_foreground).into();
         theme.selection = surface(rgb(palette.selection).into());
@@ -166,6 +184,22 @@ mod tests {
                 let expected = surface_with_opacity(rgb(palette.background).into(), opacity);
                 let component = gpui_kit::component::Theme::global(cx);
                 assert_eq!(component.background, expected);
+                assert_eq!(component.button_primary, component.primary);
+                assert_eq!(
+                    component.button_primary_foreground,
+                    component.primary_foreground
+                );
+                assert_eq!(component.button_primary_hover, component.primary_hover);
+                assert_eq!(component.button_primary_active, component.primary_active);
+                assert_eq!(component.button_danger, component.danger);
+                assert_eq!(
+                    component.button_danger_foreground,
+                    component.danger_foreground
+                );
+                assert_eq!(
+                    component.tokens.button_primary.background,
+                    solid_background(component.primary)
+                );
                 assert_eq!(
                     component.tokens.background.background,
                     solid_background(expected)

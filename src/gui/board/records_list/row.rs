@@ -251,6 +251,7 @@ impl PreviewData {
 struct ItemStyle {
     selected_background: gpui_kit::Hsla,
     normal_background: gpui_kit::Hsla,
+    hover_background: gpui_kit::Hsla,
     border: gpui_kit::Hsla,
     hover_border: gpui_kit::Hsla,
     meta_background: gpui_kit::Hsla,
@@ -262,8 +263,9 @@ impl ItemStyle {
         Self {
             selected_background: surface_with_opacity(cx.theme().accent, opacity_percent),
             normal_background: surface_with_opacity(cx.theme().secondary, opacity_percent),
+            hover_background: surface_with_opacity(cx.theme().list_hover, opacity_percent),
             border: surface_with_opacity(cx.theme().border, opacity_percent),
-            hover_border: cx.theme().foreground,
+            hover_border: cx.theme().ring,
             meta_background: surface_with_opacity(cx.theme().background, opacity_percent),
             badge_background: surface_with_opacity(cx.theme().accent, opacity_percent),
         }
@@ -649,43 +651,47 @@ fn decorate_record_card(
     let index = ctx.index;
     let overlay_visible = ctx.overlay_visible;
 
-    card.bg(styles.normal_background)
-        .rounded_md()
-        .border_color(if ctx.flags.is_selected() {
-            styles.hover_border
-        } else {
-            styles.border
+    card.bg(if ctx.flags.is_selected() {
+        styles.selected_background
+    } else {
+        styles.normal_background
+    })
+    .rounded_md()
+    .border_color(if ctx.flags.is_selected() {
+        styles.hover_border
+    } else {
+        styles.border
+    })
+    .border_1()
+    .when(!overlay_visible, |el| {
+        el.hover(move |style| {
+            if ctx.flags.is_selected() {
+                style
+            } else {
+                style
+                    .bg(styles.hover_background)
+                    .border_color(styles.hover_border)
+            }
         })
-        .border_1()
-        .when(!overlay_visible, |el| {
-            el.hover(move |style| {
-                if ctx.flags.is_selected() {
-                    style
+        .cursor_pointer()
+    })
+    .id(("record", ctx.record.id))
+    .on_click(move |event, window, cx| {
+        if overlay_visible {
+            return;
+        }
+        let confirm_as_plain_text = event.modifiers().shift;
+        view_click
+            .update(cx, |this, cx| {
+                if confirm_as_plain_text {
+                    this.confirm_record_as_plain_text(window, cx, index);
                 } else {
-                    style
-                        .bg(styles.selected_background)
-                        .border_color(styles.selected_background)
+                    this.confirm_record(window, cx, index);
                 }
             })
-            .cursor_pointer()
-        })
-        .id(("record", ctx.record.id))
-        .on_click(move |event, window, cx| {
-            if overlay_visible {
-                return;
-            }
-            let confirm_as_plain_text = event.modifiers().shift;
-            view_click
-                .update(cx, |this, cx| {
-                    if confirm_as_plain_text {
-                        this.confirm_record_as_plain_text(window, cx, index);
-                    } else {
-                        this.confirm_record(window, cx, index);
-                    }
-                })
-                .ok();
-        })
-        .into_any_element()
+            .ok();
+    })
+    .into_any_element()
 }
 
 fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> AnyElement {
