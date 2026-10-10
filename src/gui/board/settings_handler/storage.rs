@@ -3,10 +3,7 @@
 use gpui_kit::{Context, Window};
 
 use super::RopyBoard;
-use crate::{
-    gui::{repository::GlobalRepository, settings::GlobalSettings},
-    i18n::I18n,
-};
+use crate::{gui::settings::GlobalSettings, i18n::I18n};
 
 impl RopyBoard {
     pub(crate) fn has_pending_max_history(&self, cx: &Context<'_, Self>) -> bool {
@@ -163,16 +160,7 @@ impl RopyBoard {
                 input.set_value("", window, cx);
             });
 
-        GlobalRepository::read(cx, |repo| {
-            let Some(repo) = repo else {
-                return;
-            };
-
-            if let Err(error) = repo.cleanup_old_records(max_storage) {
-                tracing::warn!(error = %error, "failed to apply storage limit after saving settings");
-            }
-        });
-        self.refresh_records_from_repository(cx);
+        self.refresh_history(cx, true);
         Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
         cx.notify();
     }

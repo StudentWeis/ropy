@@ -49,6 +49,46 @@ pub enum ImageSaveError {
     Encode(#[from] image::ImageError),
 }
 
+/// Encoded capture payloads owned until the repository commits their record.
+///
+/// Dropping a pending image removes its private staging directory, including
+/// when encoding, queue delivery or database persistence fails.
+#[derive(Debug)]
+pub struct PendingImage {
+    directory: tempfile::TempDir,
+    hash: u64,
+}
+
+impl PendingImage {
+    /// Encode a capture in a private directory on the repository filesystem.
+    /// Existing hash-named cache files are never changed during preparation.
+    ///
+    /// # Errors
+    /// Returns an error if staging or image encoding fails.
+    pub fn encode(
+        image: &DynamicImage,
+        hash: u64,
+        images_dir: &Path,
+    ) -> Result<Self, ImageSaveError> {
+        fs::create_dir_all(images_dir)?;
+        let directory = tempfile::Builder::new()
+            .prefix(".capture-")
+            .tempdir_in(images_dir)?;
+        save_image_to_dir(image, hash, directory.path())?;
+        Ok(Self { directory, hash })
+    }
+
+    pub(super) const fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    pub(super) fn install(&self, destination: &Path) -> std::io::Result<()> {
+        let source = image_path_for_hash(self.directory.path(), self.hash);
+        fs::rename(&source, destination)?;
+        fs::rename(thumb_path_for(&source), thumb_path_for(destination))
+    }
+}
+
 fn write_image_atomically(
     path: &Path,
     encode: impl FnOnce(&mut fs::File) -> Result<(), ImageSaveError>,

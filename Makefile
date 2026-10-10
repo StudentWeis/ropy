@@ -20,22 +20,22 @@ run: ## Build and run the debug application
 	$(CARGO) run
 
 check: ## Check all targets and features
-	$(CARGO) check --all-targets --all-features
+	$(CARGO) check --workspace --all-targets --all-features
 
 test: ## Run the test suite
-	$(CARGO) test
+	$(CARGO) test --workspace --all-targets --all-features
 
 fmt: ## Format Rust code with nightly rustfmt
-	$(CARGO) +nightly fmt
+	$(CARGO) +nightly fmt --all
 
 fmt-check: ## Check Rust formatting without modifying files
-	$(CARGO) +nightly fmt --check
+	$(CARGO) +nightly fmt --all --check
 
 clippy: ## Lint all targets and features
-	$(CARGO) clippy --all-targets --all-features
+	$(CARGO) clippy --workspace --all-targets --all-features
 
 doc: ## Generate documentation with warnings treated as errors
-	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --no-deps
+	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --workspace --no-deps
 
 precheck: ## Run the full local pre-commit gate (including formatting)
 	./scripts/precheck.sh

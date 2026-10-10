@@ -61,6 +61,11 @@ storage seam; no additional repository abstraction is required.
 `repository/sidecar.rs` owns record-level removal and superseded-payload cleanup.
 Image capture receives the image directory from the initialized repository,
 rather than resolving a separate default path in the clipboard layer.
+Captures encode into a private `PendingImage` staging directory. Dropping a
+capture removes that directory after encoding, delivery or persistence failure.
+The repository installs the hash-named PNG and thumbnail under its operation
+lock before committing the record. A failed new-record commit removes those
+payloads; failed recopy commits preserve the existing record's referenced files.
 
 Content hashing and file-list normalization/serialization belong to the
 repository's data contract. Both native capture and rendering use the repository
@@ -101,6 +106,20 @@ The application retains the current application-lifetime detached tasks and
 watcher behavior. This refactor does not introduce a new shutdown protocol or
 change executor/thread placement. A shutdown redesign must account for the
 blocking native watcher and in-flight writes separately.
+
+History cleanup and display queries run on the background executor. The initial
+board starts empty and requests history through the same refresh path. The
+repository returns records and live favorites in one `DisplaySnapshot` under
+its operation lock. The board owns a request revision and accepts only the
+latest completion; clearing all history invalidates pending completions.
+Refresh jobs are serialized, and superseded jobs skip cleanup before starting.
+The board retains its task, cancels it when replaced or cleared, and releases
+it on teardown; in-flight synchronous database operations finish normally.
+Selection, scrolling and filters are read when applying the result, so
+interaction during I/O is preserved. Query failure preserves the previous
+coherent snapshot. Storage-limit edits request an immediate background trim;
+that requirement survives coalescing with ordinary refreshes. Other refreshes
+retain the existing buffered cleanup policy.
 
 The repository is authoritative for persisted history. The board's shared record
 list is a presentation snapshot; selection, filters, scroll position and focus
@@ -174,11 +193,9 @@ controlled before/after measurement.
 
 ## Separate runtime follow-ups
 
-- Move history cleanup and list queries off the GPUI foreground path. Return a
-  coherent snapshot with a request revision so stale results cannot overwrite
-  newer filters, settings or history changes.
 - Give long-lived native services explicit stop/completion ownership if restart
   or shutdown requirements need it.
 
-The workspace extraction preserves the current runtime scheduling and persisted
-formats; these runtime changes require their own behavioral validation.
+The remaining native-service lifecycle change requires its own behavioral
+validation. Database initialization and explicit record mutations still run
+synchronously; background refresh does not introduce a shutdown protocol.

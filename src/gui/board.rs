@@ -185,6 +185,10 @@ pub(crate) struct RopyBoard {
     pub(crate) selected_index: usize,
     pub(super) copy_in_progress: bool,
     pub(super) copy_generation: u64,
+    /// Only the latest background history request may replace the snapshot.
+    history_refresh: Arc<record_ops::HistoryRefresh>,
+    /// Replacing or closing the board cancels its previous refresh task.
+    history_refresh_task: Option<gpui_kit::Task<()>>,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
@@ -425,7 +429,7 @@ impl RopyBoard {
             .unwrap_or(0);
         let language_select = build_language_select(selected_language, window, cx);
 
-        let favorite_ids = Arc::new(Self::load_favorite_ids(cx));
+        let favorite_ids = Arc::new(HashSet::new());
         let search_input = cx.new(|cx| InputState::new(window, cx));
         let initial_filtered_record_indices = {
             let records = read_or_recover(&records);
@@ -502,6 +506,8 @@ impl RopyBoard {
             copy_tx,
             copy_in_progress: false,
             copy_generation: 0,
+            history_refresh: Arc::default(),
+            history_refresh_task: None,
             active_panel: ActivePanel::default(),
             settings_editor,
             confirm_mode,

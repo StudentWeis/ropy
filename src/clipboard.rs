@@ -13,8 +13,7 @@ pub mod writer;
 #[derive(Debug)]
 pub(crate) enum ClipboardEvent {
     Text(String),
-    /// Image(path, `content_hash`)
-    Image(String, u64),
+    Image(crate::repository::assets::PendingImage),
     Files(Vec<String>),
     RichText {
         plain_text: String,
