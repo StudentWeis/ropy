@@ -143,10 +143,10 @@ impl ThemeDefinition {
                 secondary: 0x00f5_f5f5,
                 secondary_foreground: 0x001a_1a1a,
                 border: 0x00e0_e0e0,
-                accent: 0x00e6_edfb,
-                accent_foreground: 0x0026_3e70,
+                accent: 0x00e9_e9e9,
+                accent_foreground: 0x001a_1a1a,
                 muted: 0x00f5_f5f5,
-                muted_foreground: 0x0060_6a7b,
+                muted_foreground: 0x0064_6464,
                 input: 0x00f0_f0f0,
                 primary: 0x0046_68bc,
                 primary_foreground: 0x00ff_ffff,
@@ -159,7 +159,7 @@ impl ThemeDefinition {
                 selection: 0x00d4_e0fa,
                 ring: 0x0046_68bc,
                 list_hover: 0x00f5_f5f5,
-                list_active: 0x00e6_edfb,
+                list_active: 0x00e9_e9e9,
                 scrollbar_thumb: 0x00c8_d2e8,
             },
         }
@@ -342,7 +342,7 @@ mod tests {
         assert_eq!(theme.mode(), ThemeMode::Dark);
         assert_eq!(theme.palette().background, 0x002d_2d2d);
         assert_eq!(theme.palette().foreground, 0x00ff_ffff);
-        assert_eq!(theme.palette().accent, 0x0030_3f59);
+        assert_eq!(theme.palette().accent, 0x0049_4949);
         assert_eq!(theme.palette().primary, 0x008a_a8ff);
     }
 
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(theme.name, "Ropy Light");
         assert_eq!(theme.mode(), ThemeMode::Light);
         assert_eq!(theme.palette().background, 0x00ff_ffff);
-        assert_eq!(theme.palette().accent, 0x00e6_edfb);
+        assert_eq!(theme.palette().accent, 0x00e9_e9e9);
         assert_eq!(theme.palette().primary, 0x0046_68bc);
     }
 

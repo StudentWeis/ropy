@@ -253,7 +253,7 @@ struct ItemStyle {
     normal_background: gpui_kit::Hsla,
     hover_background: gpui_kit::Hsla,
     border: gpui_kit::Hsla,
-    hover_border: gpui_kit::Hsla,
+    emphasis_border: gpui_kit::Hsla,
     meta_background: gpui_kit::Hsla,
     badge_background: gpui_kit::Hsla,
 }
@@ -261,11 +261,11 @@ struct ItemStyle {
 impl ItemStyle {
     fn from_app(cx: &App, opacity_percent: u8) -> Self {
         Self {
-            selected_background: surface_with_opacity(cx.theme().accent, opacity_percent),
+            selected_background: surface_with_opacity(cx.theme().list_active, opacity_percent),
             normal_background: surface_with_opacity(cx.theme().secondary, opacity_percent),
             hover_background: surface_with_opacity(cx.theme().list_hover, opacity_percent),
             border: surface_with_opacity(cx.theme().border, opacity_percent),
-            hover_border: cx.theme().ring,
+            emphasis_border: surface_with_opacity(cx.theme().muted_foreground, opacity_percent),
             meta_background: surface_with_opacity(cx.theme().background, opacity_percent),
             badge_background: surface_with_opacity(cx.theme().accent, opacity_percent),
         }
@@ -658,7 +658,7 @@ fn decorate_record_card(
     })
     .rounded_md()
     .border_color(if ctx.flags.is_selected() {
-        styles.hover_border
+        styles.emphasis_border
     } else {
         styles.border
     })
@@ -670,7 +670,7 @@ fn decorate_record_card(
             } else {
                 style
                     .bg(styles.hover_background)
-                    .border_color(styles.hover_border)
+                    .border_color(styles.emphasis_border)
             }
         })
         .cursor_pointer()
