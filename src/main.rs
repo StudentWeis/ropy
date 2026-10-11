@@ -47,6 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    #[cfg(target_os = "linux")]
+    linux::configure_xwayland_scale()?;
+
     let _logging_guard = utils::init_logging();
 
     // Ensure single instance on Windows

@@ -1,5 +1,7 @@
 //! Linux session detection and single-instance activation from compositor shortcuts.
 
+mod scaling;
+
 use std::{
     fs::{File, OpenOptions, TryLockError},
     io,
@@ -31,6 +33,10 @@ pub(crate) struct Instance {
 }
 
 impl gpui_kit::Global for Instance {}
+
+pub(crate) fn configure_xwayland_scale() -> io::Result<()> {
+    scaling::configure_xwayland_scale()
+}
 
 pub(crate) fn is_wayland() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some_and(|display| !display.is_empty())

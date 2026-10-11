@@ -40,6 +40,18 @@ activate from a native Wayland application. Configure the compositor shortcut
 for that workflow. Changing the shortcut in Ropy does not change the compositor
 binding.
 
+## Window scaling
+
+On Hyprland, Ropy reads the focused monitor's scale at startup. When
+`xwayland:force_zero_scaling` is enabled, Ropy renders at that scale; otherwise
+it leaves scaling to the compositor. This avoids GPUI's X11 physical-DPI estimate
+making the popup too large. An explicit `GPUI_X11_SCALE_FACTOR` takes precedence.
+No desktop configuration is changed.
+
+Restart Ropy after changing display scaling. Moving between monitors with
+different scales is not handled dynamically. If Hyprland's IPC is unavailable,
+or on other compositors, GPUI's existing X11 scale detection remains in use.
+
 ## Capabilities and limits
 
 - Clipboard support requires the data-control protocol used by
@@ -65,9 +77,12 @@ isolated Ropy configuration and a GTK 3 editor confirmed to use
 `GdkWaylandDisplay`. The scenario checks hidden startup, native clipboard
 capture, `--show`, Escape dismissal, reopening, clipboard write-back, and
 immediate paste of a unique marker exactly once into the native editor.
+At 160% display scaling, the default popup measures 400 × 550 logical pixels
+(640 × 880 physical pixels).
 
 Unit tests cover single-instance forwarding, stale socket recovery, independent
-session endpoints, and mutually exclusive paste backends. The dependency check
+session endpoints, mutually exclusive paste backends, and compositor scaling
+policy with malformed-response fallbacks. The dependency check
 protects the Linux Wayland feature flags.
 
 For manual verification, start with a plain-text editor focused, copy a unique
