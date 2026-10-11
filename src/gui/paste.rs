@@ -5,6 +5,25 @@ use thiserror::Error;
 
 const PASTE_DELAY_MS: u64 = 50;
 
+#[cfg(target_os = "linux")]
+fn input_settings(wayland: bool) -> Settings {
+    // Enigo 0.6 sends each key to every connected backend. It has no backend
+    // selector, so give the unused backend an explicitly invalid endpoint.
+    // "disabled" fails X11 display parsing before any connection attempt;
+    // /dev/null cannot be a Wayland socket. Do not change process environment.
+    if wayland {
+        Settings {
+            x11_display: Some("disabled".into()),
+            ..Settings::default()
+        }
+    } else {
+        Settings {
+            wayland_display: Some("/dev/null".into()),
+            ..Settings::default()
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub(super) enum PasteError {
     #[error("failed to initialize input simulator: {0}")]
@@ -17,8 +36,12 @@ pub(super) fn trigger_paste() -> Result<(), PasteError> {
     // Give the previous application a brief moment to regain focus after the popup hides.
     thread::sleep(paste_delay());
 
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|error| PasteError::Initialize(error.to_string()))?;
+    let settings = cfg_select! {
+        target_os = "linux" => input_settings(crate::linux::is_wayland()),
+        _ => Settings::default(),
+    };
+    let mut enigo =
+        Enigo::new(&settings).map_err(|error| PasteError::Initialize(error.to_string()))?;
     let modifier = paste_modifier_key();
 
     enigo
@@ -51,6 +74,24 @@ const fn paste_modifier_key() -> Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_input_settings_wayland_prevents_duplicate_x11_input() {
+        let settings = input_settings(true);
+        assert!(settings.x11_display.is_some_and(|display| {
+            x11rb::rust_connection::RustConnection::connect(Some(&display)).is_err()
+        }));
+        assert!(settings.wayland_display.is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_input_settings_x11_disables_wayland_connection() {
+        let settings = input_settings(false);
+        assert!(settings.x11_display.is_none());
+        assert_eq!(settings.wayland_display.as_deref(), Some("/dev/null"));
+    }
 
     #[test]
     fn test_paste_delay_when_called_returns_expected_duration() {

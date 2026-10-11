@@ -16,7 +16,8 @@ use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle, component:
 #[cfg(target_os = "linux")]
 use {
     crate::gui::x11::X11,
-    std::{env, sync::OnceLock},
+    raw_window_handle::{HasWindowHandle, RawWindowHandle},
+    std::sync::OnceLock,
 };
 
 use crate::{
@@ -236,94 +237,108 @@ fn load_settings() -> Settings {
 }
 
 /// Entry point: initialize all subsystems and launch the application.
-pub(crate) fn launch() {
-    gpui_kit::application()
-        .with_assets(crate::gui::Assets)
-        .run(move |cx| {
-            #[cfg(target_os = "macos")]
-            crate::gui::set_activation_policy_accessory();
+pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instance) {
+    // GPUI's Wayland backend cannot hide and remap the resident popup yet.
+    // Keep only the window on XWayland; clipboard and input retain WAYLAND_DISPLAY.
+    let application =
+        cfg_select! {
+            target_os = "linux" => gpui_kit::platform::linux(gpui_kit::WindowingModes::X11),
+            _ => gpui_kit::application(),
+        };
+    application.with_assets(crate::gui::Assets).run(move |cx| {
+        #[cfg(target_os = "macos")]
+        crate::gui::set_activation_policy_accessory();
 
-            gpui_kit::init(cx);
-            bind_application_keys(cx);
+        gpui_kit::init(cx);
+        bind_application_keys(cx);
 
-            // Settings must be installed before the I18n / repository
-            // globals because both read from it during their own init.
-            let settings = load_settings();
-            cx.set_global(GlobalSettings::new(settings.clone()));
-            cx.set_global(I18n::load_i18n(settings.language.clone()));
-            crate::gui::tray::TrayState::register(cx);
+        // Settings must be installed before the I18n / repository
+        // globals because both read from it during their own init.
+        let settings = load_settings();
+        cx.set_global(GlobalSettings::new(settings.clone()));
+        cx.set_global(I18n::load_i18n(settings.language.clone()));
+        crate::gui::tray::TrayState::register(cx);
 
-            if !settings.is_recovery_required() {
-                sync_autostart_on_launch(settings.autostart.enabled);
-            }
+        if !settings.is_recovery_required() {
+            sync_autostart_on_launch(settings.autostart.enabled);
+        }
 
-            let repository = initialize_repository();
-            let repository_ready = repository.is_some();
-            cx.set_global(GlobalRepository::new(repository));
+        let repository = initialize_repository();
+        let repository_ready = repository.is_some();
+        cx.set_global(GlobalRepository::new(repository));
 
-            let shared_records = Arc::new(std::sync::RwLock::new(Vec::new()));
-            let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
-            let (copy_tx, copy_rx) = async_channel::unbounded();
-            cx.background_spawn(crate::clipboard::writer::write_clipboard(copy_rx))
-                .detach();
+        let shared_records = Arc::new(std::sync::RwLock::new(Vec::new()));
+        let last_copy = Arc::new(Mutex::new(CopyTracker::default()));
+        let (copy_tx, copy_rx) = async_channel::unbounded();
+        cx.background_spawn(crate::clipboard::writer::write_clipboard(copy_rx))
+            .detach();
 
-            let window_handle =
-                crate::gui::create_window(cx, shared_records, last_copy.clone(), copy_tx);
-            if let Some(repo) = GlobalRepository::global(cx).cloned() {
-                let clipboard_rx =
-                    start_clipboard_monitor(cx, repo.images_dir().to_path_buf(), last_copy);
-                start_clipboard_event_handler(repo, clipboard_rx, window_handle, cx);
-            }
-            let hotkey_tx =
-                setup_hotkey_listener(window_handle, settings.hotkey.activation_key, cx);
-            // Tray initialization needs the loaded I18n; the resulting
-            // handle is stashed in the global so menu refreshes after a
-            // language change can reach it.
-            let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
-            crate::gui::tray::TrayState::install(cx, tray);
+        let window_handle =
+            crate::gui::create_window(cx, shared_records, last_copy.clone(), copy_tx);
+        if let Some(repo) = GlobalRepository::global(cx).cloned() {
+            let clipboard_rx =
+                start_clipboard_monitor(cx, repo.images_dir().to_path_buf(), last_copy);
+            start_clipboard_event_handler(repo, clipboard_rx, window_handle, cx);
+        }
+        let hotkey_tx = setup_hotkey_listener(window_handle, settings.hotkey.activation_key, cx);
+        // Tray initialization needs the loaded I18n; the resulting
+        // handle is stashed in the global so menu refreshes after a
+        // language change can reach it.
+        let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
+        crate::gui::tray::TrayState::install(cx, tray);
 
-            let board_view = window_handle
-                .update(cx, |root, _, _cx| {
-                    root.view().clone().downcast::<RopyBoard>().ok()
-                })
-                .ok()
-                .flatten();
+        let board_view = window_handle
+            .update(cx, |root, _, _cx| {
+                root.view().clone().downcast::<RopyBoard>().ok()
+            })
+            .ok()
+            .flatten();
 
-            if let Some(board) = &board_view {
-                board.update(cx, |board, _| {
-                    board.set_hotkey_tx(hotkey_tx);
-                });
+        if let Some(board) = &board_view {
+            board.update(cx, |board, _| {
+                board.set_hotkey_tx(hotkey_tx);
+            });
 
-                board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
-                board.update(cx, RopyBoard::start_update_checks);
-                cx.spawn(async move |cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_secs(2))
-                        .await;
-                    if repository_ready
-                        && let Err(error) = crate::updater::transaction::confirm_startup()
-                    {
-                        tracing::error!(%error, "failed to confirm updated application startup");
-                    }
-                })
-                .detach();
-            } else {
-                tracing::error!("failed to downcast root view to RopyBoard");
-            }
-
-            #[cfg(target_os = "linux")]
-            if env::var("DISPLAY").is_ok() {
-                match X11::new() {
-                    Ok(x11_new) => {
-                        let x11 = X11_INSTANCE.get_or_init(|| x11_new);
-                        let _ = x11.active_window();
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to connect x11rb; skipping X11 init");
-                    }
+            board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
+            board.update(cx, RopyBoard::start_update_checks);
+            cx.spawn(async move |cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(2))
+                    .await;
+                if repository_ready
+                    && let Err(error) = crate::updater::transaction::confirm_startup()
+                {
+                    tracing::error!(%error, "failed to confirm updated application startup");
                 }
-            }
-        });
+            })
+            .detach();
+        } else {
+            tracing::error!("failed to downcast root view to RopyBoard");
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let _ = window_handle
+                .update(cx, |_, window, _| {
+                    let handle = HasWindowHandle::window_handle(window)?;
+                    let id = match handle.as_raw() {
+                        RawWindowHandle::Xcb(handle) => handle.window.get(),
+                        RawWindowHandle::Xlib(handle) => u32::try_from(handle.window)?,
+                        _ => return Ok::<(), Box<dyn std::error::Error>>(()),
+                    };
+                    let x11 = X11::new(id)?;
+                    x11.hide_window()?;
+                    let _ = X11_INSTANCE.set(x11);
+                    Ok(())
+                })
+                .map(|result| {
+                    if let Err(error) = result {
+                        tracing::error!(%error, "failed to initialize X11 popup control");
+                    }
+                });
+            instance.install(window_handle, cx);
+        }
+    });
 }
 
 #[cfg(test)]

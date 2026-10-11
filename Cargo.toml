@@ -61,6 +61,8 @@ windows-sys = { version = "0.61.2", features = [
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+clipboard-rs = { version = "0.3.5", features = ["wayland"] }
+enigo = { version = "0.6.1", features = ["wayland"] }
 gtk = "0.18.2"
 x11rb = "0.14.0"
 
