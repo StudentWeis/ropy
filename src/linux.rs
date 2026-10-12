@@ -3,9 +3,13 @@
 mod scaling;
 
 use std::{
-    fs::{File, OpenOptions, TryLockError},
+    ffi::OsStr,
+    fs::{DirBuilder, File, OpenOptions, TryLockError},
     io,
-    os::unix::{fs::OpenOptionsExt, net::UnixDatagram},
+    os::unix::{
+        fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+        net::UnixDatagram,
+    },
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -16,8 +20,8 @@ use thiserror::Error;
 pub(crate) enum StartupError {
     #[error("Linux popup windows currently require X11 or XWayland (DISPLAY is missing)")]
     MissingDisplay,
-    #[error("XDG_RUNTIME_DIR is missing")]
-    MissingRuntimeDirectory,
+    #[error("activation directory must be owned by the current user with mode 0700: {0}")]
+    UnsafeActivationDirectory(PathBuf),
     #[error("failed to initialize Linux activation: {0}")]
     Activation(#[from] io::Error),
 }
@@ -47,17 +51,16 @@ impl Instance {
         if std::env::var_os("DISPLAY").is_none_or(|display| display.is_empty()) {
             return Err(StartupError::MissingDisplay);
         }
-        let runtime =
-            std::env::var_os("XDG_RUNTIME_DIR").ok_or(StartupError::MissingRuntimeDirectory)?;
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR");
         let display = std::env::var_os("WAYLAND_DISPLAY")
             .filter(|display| !display.is_empty())
             .or_else(|| std::env::var_os("DISPLAY"))
             .unwrap_or_default();
-        // Separate compositor sessions belonging to the same user. Hash the
-        // display name rather than allowing it to become a filesystem path.
-        let session = seahash::hash(display.as_encoded_bytes());
-        let directory = PathBuf::from(runtime).join(format!("ropy-{session:016x}"));
-        std::fs::create_dir_all(&directory)?;
+        let directory = activation_directory(
+            runtime.as_deref().map(Path::new),
+            &std::env::temp_dir(),
+            &display,
+        )?;
         let mut instance = Self::acquire(&directory)?;
         if let Some(instance) = &mut instance {
             instance.show_on_start = show_on_start;
@@ -140,6 +143,39 @@ impl Instance {
     }
 }
 
+fn activation_directory(
+    runtime: Option<&Path>,
+    temporary: &Path,
+    display: &OsStr,
+) -> Result<PathBuf, StartupError> {
+    // Preserve existing runtime endpoints, including those of a running instance.
+    // Hash display names so they cannot introduce path components.
+    let session = seahash::hash(display.as_encoded_bytes());
+    if let Some(runtime) = runtime.filter(|path| !path.as_os_str().is_empty()) {
+        let directory = runtime.join(format!("ropy-{session:016x}"));
+        std::fs::create_dir_all(&directory)?;
+        return Ok(directory);
+    }
+
+    // X11 does not require XDG_RUNTIME_DIR. A deterministic private directory
+    // in the temporary root keeps activation and stale-socket recovery available.
+    // SAFETY: geteuid has no preconditions and only reads the effective user ID.
+    let uid = unsafe { libc::geteuid() };
+    let directory = temporary.join(format!("ropy-{uid}-{session:016x}"));
+    match DirBuilder::new().mode(0o700).create(&directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.into()),
+    }
+    // Do not follow symlinks or repair an untrusted pre-existing path: no lock
+    // or socket inside it may be opened or removed before this check succeeds.
+    let metadata = std::fs::symlink_metadata(&directory)?;
+    if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o777 != 0o700 {
+        return Err(StartupError::UnsafeActivationDirectory(directory));
+    }
+    Ok(directory)
+}
+
 fn forward_activation(path: &Path) -> io::Result<()> {
     let socket = UnixDatagram::unbound()?;
     socket.set_write_timeout(Some(Duration::from_secs(1)))?;
@@ -165,7 +201,71 @@ fn forward_activation(path: &Path) -> io::Result<()> {
 #[cfg(test)]
 #[expect(clippy::unwrap_used)]
 mod tests {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    use rstest::rstest;
+
     use super::*;
+
+    #[rstest]
+    #[case(None)]
+    #[case(Some(Path::new("")))]
+    fn test_activation_directory_missing_runtime_supports_single_instance(
+        #[case] runtime: Option<&Path>,
+    ) {
+        let temporary = tempfile::tempdir().unwrap();
+        let directory = activation_directory(runtime, temporary.path(), OsStr::new(":0")).unwrap();
+        assert!(directory.starts_with(temporary.path()));
+        let metadata = std::fs::symlink_metadata(&directory).unwrap();
+        assert_eq!(metadata.mode() & 0o777, 0o700);
+        assert_eq!(metadata.uid(), temporary.path().metadata().unwrap().uid());
+        let first = Instance::acquire(&directory).unwrap().unwrap();
+        first
+            .socket
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        let same = activation_directory(runtime, temporary.path(), OsStr::new(":0")).unwrap();
+        assert!(Instance::acquire(&same).unwrap().is_none());
+        let mut message = [0; 16];
+        let size = first.socket.recv(&mut message).unwrap();
+        assert_eq!(&message[..size], b"show");
+        let other = activation_directory(runtime, temporary.path(), OsStr::new(":1")).unwrap();
+        assert!(Instance::acquire(&other).unwrap().is_some());
+        drop(first);
+        assert!(Instance::acquire(&directory).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_activation_directory_configured_runtime_preserves_endpoint() {
+        let runtime = tempfile::tempdir().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let display = OsStr::new("wayland-1");
+        let directory =
+            activation_directory(Some(runtime.path()), temporary.path(), display).unwrap();
+        assert_eq!(
+            directory,
+            runtime.path().join(format!(
+                "ropy-{:016x}",
+                seahash::hash(display.as_encoded_bytes())
+            ))
+        );
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_activation_directory_unsafe_existing_path_rejected(#[case] link: bool) {
+        let temporary = tempfile::tempdir().unwrap();
+        let display = OsStr::new(":0");
+        let directory = activation_directory(None, temporary.path(), display).unwrap();
+        if link {
+            std::fs::remove_dir(&directory).unwrap();
+            symlink(temporary.path(), &directory).unwrap();
+        } else {
+            std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o777)).unwrap();
+        }
+        assert!(activation_directory(None, temporary.path(), display).is_err());
+    }
 
     #[test]
     fn test_instance_second_launch_forwards_show_to_first() {

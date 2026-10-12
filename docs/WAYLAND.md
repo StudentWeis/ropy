@@ -11,6 +11,9 @@ On Linux, `ropy` starts in the tray. `ropy --show` opens the existing instance,
 or starts one and shows it if none is running. A subsequent plain `ropy`
 invocation also opens the existing instance. Instances are scoped to the display
 session, and a crashed process's activation socket is recovered on restart.
+For X11 sessions without `XDG_RUNTIME_DIR` (or with an empty value), activation
+uses a private directory under the system temporary directory, scoped to the
+current user and display. Existing runtime-directory endpoints are unchanged.
 
 Bind `ropy --show` in your compositor's shortcut settings. Use an absolute
 executable path if `ropy` is not on the compositor's `PATH`. For a source build,
