@@ -164,8 +164,14 @@ Do not declare `auto_updates true`; Homebrew is responsible for upgrades.
 Ordinary uninstall preserves clipboard history and configuration. No `zap` is
 provided to avoid accidental deletion of clipboard data.
 
-The current DMGs are unsigned. The tap does not bypass Gatekeeper or clear
-quarantine. Before introducing signed/notarized bundles, revisit the marker's
+The current DMGs are unsigned. At the user's request, the self-hosted Cask runs
+`/usr/bin/xattr -r -d com.apple.quarantine` against only the installed Ropy.app
+after adding the managed marker. The install-time `{{appdir}}` token respects a
+custom application directory. No sudo is used and other attributes are preserved.
+Recursive deletion tolerates an absent quarantine attribute. Other command
+errors stop installation and print the error. This does not sign or notarize the app and is specific to this
+self-hosted tap; it is not suitable for an official Homebrew Cask submission.
+Before introducing signed/notarized bundles, revisit the marker's
 placement and verify it does not invalidate the bundle signature.
 
 Validate syntax, style, download/unpacking and both architecture hashes. On a

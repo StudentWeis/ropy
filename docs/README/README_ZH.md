@@ -48,8 +48,10 @@ brew install --cask studentweis/tap/ropy
 ```
 
 使用 `brew upgrade --cask ropy` 升级。应用内仍可检查新版本，安装交由
-Homebrew 管理。当前发布尚未签名，Homebrew 不会移除 macOS Gatekeeper 限制；
-若系统阻止启动，请在确认来源后，通过系统设置 → 隐私与安全性允许 Ropy 运行。
+Homebrew 管理。当前发布尚未签名，自建 Cask 会在安装后自动移除 Ropy.app
+的 `com.apple.quarantine` 下载隔离属性，保留其他扩展属性；这不等于签名或公证。
+若清理失败，安装会停止并显示错误；如果系统仍阻止启动，请在确认来源后，通过系统设置
+→ 隐私与安全性允许 Ropy 运行。
 
 下载 `.dmg` 文件并将 Ropy.app 拖到应用程序文件夹后，您可能需要移除隔离属性才能正常运行应用程序。打开终端并运行以下命令：
 

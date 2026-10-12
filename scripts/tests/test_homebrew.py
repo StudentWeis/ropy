@@ -53,3 +53,15 @@ class HomebrewTests(unittest.TestCase):
         content = self.module.render_release(release)
         self.assertIn("a" * 64, content)
         self.assertIn("b" * 64, content)
+
+    def test_cask_removes_only_quarantine_from_custom_appdir_without_sudo(self):
+        release = {"tagName": "0.5.7", "isDraft": False, "isPrerelease": False,
+                   "assets": [{"name": f"ropy-{arch}-apple-darwin.dmg",
+                               "digest": "sha256:" + "a" * 64}
+                              for arch in ("aarch64", "x86_64")]}
+        content = self.module.render_release(release)
+        self.assertIn('run "/usr/bin/xattr",', content)
+        self.assertIn('args:         ["-r", "-d", "com.apple.quarantine", "{{appdir}}/Ropy.app"]', content)
+        self.assertIn('must_succeed: true', content)
+        self.assertNotIn('sudo:', content)
+        self.assertNotIn('"-c"', content)

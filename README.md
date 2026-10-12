@@ -46,9 +46,11 @@ brew install --cask studentweis/tap/ropy
 ```
 
 Upgrade with `brew upgrade --cask ropy`. In-app update checks remain available;
-installation is managed by Homebrew. The current release is unsigned; Homebrew
-does not remove macOS Gatekeeper restrictions. If macOS blocks launch, review
-and allow Ropy in System Settings → Privacy & Security.
+installation is managed by Homebrew. For the current unsigned release, this
+self-hosted Cask automatically removes `com.apple.quarantine` from the installed
+Ropy.app. It preserves other extended attributes and does not sign or notarize
+the app. A cleanup failure stops installation and prints an error. If macOS
+still blocks launch, review and allow Ropy in System Settings → Privacy & Security.
 
 After downloading the `.dmg` file and dragging Ropy.app to the Applications folder, you may need to remove the quarantine attribute to run the application without issues. Open Terminal and run the following commands:
 

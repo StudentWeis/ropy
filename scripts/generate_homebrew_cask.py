@@ -62,6 +62,11 @@ def render_hashes(version: str, hashes: dict[str, str]) -> str:
   # Use Ropy's existing publisher marker to leave upgrades to Homebrew.
   postflight_steps do
     touch "Ropy.app/Contents/.ropy-managed", base: :appdir
+    # Unsigned releases: clear only this installed bundle's download quarantine.
+    # A missing attribute is harmless; other failures remain visible on stderr.
+    run "/usr/bin/xattr",
+        args:         ["-r", "-d", "com.apple.quarantine", "{{{{appdir}}}}/Ropy.app"],
+        must_succeed: true
   end
 
   uninstall quit: "com.ropy.app"
