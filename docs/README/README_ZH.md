@@ -41,6 +41,16 @@
 
 ### macOS
 
+通过自建 [Homebrew tap](https://github.com/StudentWeis/homebrew-tap) 安装：
+
+```sh
+brew install --cask studentweis/tap/ropy
+```
+
+使用 `brew upgrade --cask ropy` 升级。应用内仍可检查新版本，安装交由
+Homebrew 管理。当前发布尚未签名，Homebrew 不会移除 macOS Gatekeeper 限制；
+若系统阻止启动，请在确认来源后，通过系统设置 → 隐私与安全性允许 Ropy 运行。
+
 下载 `.dmg` 文件并将 Ropy.app 拖到应用程序文件夹后，您可能需要移除隔离属性才能正常运行应用程序。打开终端并运行以下命令：
 
 ```sh

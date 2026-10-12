@@ -39,6 +39,17 @@ Download the latest binaries from the [Releases](https://github.com/StudentWeis/
 
 ### macOS
 
+Install from the self-hosted [Homebrew tap](https://github.com/StudentWeis/homebrew-tap):
+
+```sh
+brew install --cask studentweis/tap/ropy
+```
+
+Upgrade with `brew upgrade --cask ropy`. In-app update checks remain available;
+installation is managed by Homebrew. The current release is unsigned; Homebrew
+does not remove macOS Gatekeeper restrictions. If macOS blocks launch, review
+and allow Ropy in System Settings → Privacy & Security.
+
 After downloading the `.dmg` file and dragging Ropy.app to the Applications folder, you may need to remove the quarantine attribute to run the application without issues. Open Terminal and run the following commands:
 
 ```sh
