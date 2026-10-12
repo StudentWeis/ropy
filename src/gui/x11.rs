@@ -1,8 +1,10 @@
-use std::{error::Error, io};
+use std::error::Error;
 
 use x11rb::{
     connection::Connection,
-    protocol::xproto::{AtomEnum, ClientMessageEvent, ConnectionExt, EventMask},
+    protocol::xproto::{
+        AtomEnum, ChangeWindowAttributesAux, ClientMessageEvent, ConnectionExt, EventMask, PropMode,
+    },
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
@@ -27,38 +29,41 @@ impl std::fmt::Debug for X11 {
 }
 
 impl X11 {
-    /// Creates a new X11 instance by connecting to the X server and finding
-    /// the current process's window.
+    /// Connects to the X server for an existing GPUI window, including an
+    /// initially hidden window that is not in the window manager's client list.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - Cannot connect to the X server.
-    /// - Cannot find the window belonging to the current process.
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    /// Returns an error if the connection or atom lookup fails.
+    pub fn new(window_id: u32) -> Result<Self, Box<dyn Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
 
         let screen = &conn.setup().roots[screen_num];
         let root_id = screen.root;
-        let net_client_list = Self::get_atom(&conn, b"_NET_CLIENT_LIST")?;
-        let net_wm_pid = Self::get_atom(&conn, b"_NET_WM_PID")?;
         let net_wm_state_above = Self::get_atom(&conn, b"_NET_WM_STATE_ABOVE")?;
         let net_wm_state = Self::get_atom(&conn, b"_NET_WM_STATE")?;
         let net_active_window = Self::get_atom(&conn, b"_NET_ACTIVE_WINDOW")?;
 
-        let windows = Self::get_value32(&conn, root_id, net_client_list)?;
-
-        let mut window_id = None;
-
-        for window in windows {
-            let Ok(pids) = Self::get_value32(&conn, window, net_wm_pid) else {
-                continue;
-            };
-
-            if pids.contains(&std::process::id()) {
-                window_id = Some(window);
-                break;
-            }
+        if crate::linux::is_wayland() {
+            // GPUI's PopUp is an override-redirect notification. Hyprland can
+            // display it without routing pointer input to it. Let the compositor
+            // manage this interactive window, and retain floating placement with
+            // the utility type instead of a notification or a tiled normal window.
+            conn.change_window_attributes(
+                window_id,
+                &ChangeWindowAttributesAux::new().override_redirect(0),
+            )?
+            .check()?;
+            let window_type = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE")?;
+            let utility = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE_UTILITY")?;
+            conn.change_property32(
+                PropMode::REPLACE,
+                window_id,
+                window_type,
+                AtomEnum::ATOM,
+                &[utility],
+            )?
+            .check()?;
         }
 
         Ok(Self {
@@ -66,7 +71,7 @@ impl X11 {
             root_id,
             net_wm_state_above,
             net_wm_state,
-            window_id: window_id.ok_or_else(|| io::Error::other("Failed to get window id"))?,
+            window_id,
             net_active_window,
         })
     }
@@ -76,23 +81,6 @@ impl X11 {
         let atom = atom.reply()?.atom;
 
         Ok(atom)
-    }
-
-    fn get_value32(
-        conn: &RustConnection,
-        window: u32,
-        atom: u32,
-    ) -> Result<Vec<u32>, Box<dyn Error>> {
-        let reply = conn
-            .get_property(false, window, atom, AtomEnum::ANY, 0, u32::MAX)?
-            .reply()?;
-
-        let res = reply
-            .value32()
-            .ok_or_else(|| io::Error::other("Failed to get reply"))?
-            .collect();
-
-        Ok(res)
     }
 
     fn send_wm_state_and_sync(

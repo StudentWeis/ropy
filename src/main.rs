@@ -18,6 +18,8 @@ pub mod constants;
 pub mod gui;
 /// Internationalization data and runtime translation helpers.
 pub mod i18n;
+#[cfg(target_os = "linux")]
+pub mod linux;
 /// Persistent clipboard storage and query logic.
 pub use ropy_core::repository;
 /// Update checking and installation flows.
@@ -45,6 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    #[cfg(target_os = "linux")]
+    linux::configure_xwayland_scale()?;
+
     let _logging_guard = utils::init_logging();
 
     // Ensure single instance on Windows
@@ -53,6 +58,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    app::launch();
+    #[cfg(target_os = "linux")]
+    let Some(instance) = linux::Instance::start(std::env::args_os().any(|arg| arg == "--show"))?
+    else {
+        return Ok(());
+    };
+
+    app::launch(
+        #[cfg(target_os = "linux")]
+        instance,
+    );
     Ok(())
 }

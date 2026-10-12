@@ -24,7 +24,7 @@
 ## 特性
 
 - 使用 Zed 的 GPUI 构建的原生桌面应用。
-- 跨平台支持：Windows、macOS 和 Linux（X11）。
+- 跨平台支持：Windows、macOS 和 Linux（X11），并通过 XWayland 提供初步的 [Wayland 会话兼容](../WAYLAND.md)。
 - 追踪文本、富文本（HTML/RTF）、图片和文件路径剪贴板历史，并基于内容进行去重。
 - 支持列表和网格布局模式切换，灵活浏览历史记录。
 - 支持使用大小写敏感和整词匹配选项搜索已加载的历史记录。

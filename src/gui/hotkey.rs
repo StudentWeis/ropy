@@ -1,5 +1,8 @@
+#[cfg(target_os = "linux")]
+mod hyprland;
+
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
-use gpui_kit::{App, AsyncApp};
+use gpui_kit::{App, AsyncApp, BackgroundExecutor};
 use thiserror::Error;
 
 use crate::gui::settings::GlobalSettings;
@@ -8,6 +11,7 @@ use crate::gui::settings::GlobalSettings;
 enum ListenerMessage {
     UpdateHotkey(HotkeyUpdate),
     HotkeyEvent(GlobalHotKeyEvent),
+    Shutdown(async_channel::Sender<()>),
 }
 
 #[derive(Debug, Error)]
@@ -57,20 +61,58 @@ where
     let (tx, rx) = async_channel::unbounded::<HotkeyUpdate>();
     let (message_tx, message_rx) = async_channel::unbounded::<ListenerMessage>();
 
-    spawn_hotkey_event_forwarder(message_tx.clone());
-    spawn_hotkey_update_forwarder(rx, message_tx);
+    #[cfg(target_os = "linux")]
+    let native_events = !hyprland::is_session();
+    #[cfg(not(target_os = "linux"))]
+    let native_events = true;
+    if native_events {
+        spawn_hotkey_event_forwarder(message_tx.clone());
+    }
+    spawn_hotkey_update_forwarder(rx, message_tx.clone());
+    let quit_tx = message_tx.clone();
+    cx.on_app_quit(move |_| {
+        let (done, completion) = async_channel::bounded(1);
+        let _ = quit_tx.try_send(ListenerMessage::Shutdown(done));
+        async move {
+            let _ = completion.recv().await;
+        }
+    })
+    .detach();
 
     cx.spawn(async move |async_app| {
         let mut state = HotkeyListenerState {
-            manager: register_hotkey(&initial_hotkey),
+            manager: register_platform_hotkey(
+                initial_hotkey.clone(),
+                message_tx.clone(),
+                async_app.background_executor().clone(),
+            )
+            .await,
             current_hotkey: initial_hotkey,
         };
 
         while let Ok(message) = message_rx.recv().await {
+            if let ListenerMessage::Shutdown(done) = message {
+                drop(state.manager.take());
+                let _ = done.try_send(());
+                break;
+            }
+            let mut candidate = if let ListenerMessage::UpdateHotkey(request) = &message
+                && !request.hotkey.is_empty()
+                && (!same_hotkey(&request.hotkey, &state.current_hotkey) || state.manager.is_none())
+            {
+                register_platform_hotkey(
+                    request.hotkey.clone(),
+                    message_tx.clone(),
+                    async_app.background_executor().clone(),
+                )
+                .await
+            } else {
+                None
+            };
             process_listener_message(
                 &mut state,
                 message,
-                &mut register_hotkey,
+                &mut |_| candidate.take(),
                 &mut |hotkey| {
                     async_app.update(|cx| {
                         let mut settings = GlobalSettings::read(cx, Clone::clone);
@@ -82,13 +124,53 @@ where
                         Ok(())
                     })
                 },
-                &mut || on_hotkey(async_app),
+                &mut || {
+                    on_hotkey(async_app);
+                    #[cfg(target_os = "linux")]
+                    if hyprland::is_session() {
+                        async_app
+                            .background_executor()
+                            .spawn(async {
+                                hyprland::focus_popup();
+                            })
+                            .detach();
+                    }
+                },
             );
         }
     })
     .detach();
 
     tx
+}
+
+enum Registration {
+    Native {
+        _manager: GlobalHotKeyManager,
+    },
+    #[cfg(target_os = "linux")]
+    Hyprland {
+        _manager: hyprland::Registration,
+    },
+}
+
+async fn register_platform_hotkey(
+    hotkey: String,
+    sender: async_channel::Sender<ListenerMessage>,
+    executor: BackgroundExecutor,
+) -> Option<Registration> {
+    if hotkey.is_empty() {
+        return None;
+    }
+    #[cfg(target_os = "linux")]
+    if hyprland::is_session() {
+        return executor
+            .spawn(async move { hyprland::Registration::register(&hotkey, sender) })
+            .await
+            .map(|manager| Registration::Hyprland { _manager: manager });
+    }
+    let _ = (sender, executor);
+    register_hotkey(&hotkey).map(|manager| Registration::Native { _manager: manager })
 }
 
 fn process_listener_message<Manager, RegisterHotkey, PersistHotkey, OnHotkey>(
@@ -103,15 +185,32 @@ fn process_listener_message<Manager, RegisterHotkey, PersistHotkey, OnHotkey>(
     OnHotkey: FnMut(),
 {
     match message {
+        ListenerMessage::Shutdown(done) => {
+            drop(state.manager.take());
+            let _ = done.try_send(());
+        }
         ListenerMessage::UpdateHotkey(request) => {
             let result = update_hotkey(state, &request.hotkey, register_hotkey, persist_hotkey);
             let _ = request.completion.try_send(result);
         }
         ListenerMessage::HotkeyEvent(event) => {
-            if event.state() == HotKeyState::Pressed {
+            if event.state() == HotKeyState::Pressed
+                && state.manager.is_some()
+                && state
+                    .current_hotkey
+                    .parse::<HotKey>()
+                    .is_ok_and(|hotkey| hotkey.id == event.id)
+            {
                 on_hotkey();
             }
         }
+    }
+}
+
+fn same_hotkey(left: &str, right: &str) -> bool {
+    match (left.parse::<HotKey>(), right.parse::<HotKey>()) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
     }
 }
 
@@ -122,6 +221,11 @@ fn update_hotkey<Manager>(
     persist: &mut impl FnMut(&str) -> Result<(), HotkeyUpdateError>,
 ) -> Result<(), HotkeyUpdateError> {
     if new_hotkey == state.current_hotkey && (state.manager.is_some() || new_hotkey.is_empty()) {
+        return Ok(());
+    }
+    if state.manager.is_some() && same_hotkey(new_hotkey, &state.current_hotkey) {
+        persist(new_hotkey)?;
+        new_hotkey.clone_into(&mut state.current_hotkey);
         return Ok(());
     }
     // Retain the old registration until both the replacement and its settings
@@ -194,6 +298,23 @@ mod tests {
             hotkey: hotkey.to_string(),
             completion,
         })
+    }
+
+    #[test]
+    fn test_hotkey_alias_persistence_failure_keeps_existing_registration() {
+        let mut state = HotkeyListenerState {
+            current_hotkey: "ctrl+shift+a".into(),
+            manager: Some("old"),
+        };
+        let result = update_hotkey(
+            &mut state,
+            "Control+Shift+KeyA",
+            &mut |_| unreachable!("equivalent chord must not replace registration"),
+            &mut |_| Err(HotkeyUpdateError::Persistence("failure".into())),
+        );
+        assert!(result.is_err());
+        assert_eq!(state.manager, Some("old"));
+        assert_eq!(state.current_hotkey, "ctrl+shift+a");
     }
 
     #[test]
@@ -403,7 +524,10 @@ mod tests {
 
         process_listener_message(
             &mut listener_state,
-            ListenerMessage::HotkeyEvent(GlobalHotKeyEvent { id: 42, state }),
+            ListenerMessage::HotkeyEvent(GlobalHotKeyEvent {
+                id: "ctrl+shift+a".parse::<HotKey>().expect("hotkey").id,
+                state,
+            }),
             &mut |_| Some("updated-manager"),
             &mut |_| Ok(()),
             &mut || callback_count.set(callback_count.get() + 1),

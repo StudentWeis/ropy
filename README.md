@@ -22,7 +22,7 @@
 ## Features
 
 - Native desktop application built with Zed's GPUI.
-- Cross-platform support for Windows, macOS, and Linux (X11).
+- Cross-platform support for Windows, macOS, and Linux (X11), with initial [Wayland session compatibility](docs/WAYLAND.md) through XWayland.
 - Tracks text, rich text (HTML/RTF), image, and file path clipboard history with content-based deduplication.
 - Switchable list and grid layout modes for browsing history.
 - Search the loaded history with case-sensitive and whole-word options.
