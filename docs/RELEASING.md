@@ -131,3 +131,50 @@ and cargo-dist `dist = false`; its version is independent of the application.
 `scripts/update_version.sh` selects `--package ropy`, and macOS bundling selects
 the same package explicitly. Root application metadata, updater version lookup,
 resource paths and archive names remain unchanged.
+
+## Self-hosted Homebrew Cask
+
+`StudentWeis/homebrew-tap` distributes `Casks/ropy.rb`. The initial Cask snapshot
+is in `packaging/homebrew/ropy.rb`; the generator, not that snapshot, supplies
+future versions. The stable GitHub Release DMGs remain the download source.
+
+`.github/workflows/homebrew.yml` runs after the tag Release workflow succeeds, or
+manually to retry synchronization. It uses `workflow_run` because releases
+created with `GITHUB_TOKEN` do not trigger a second release-event workflow. It resolves the latest stable release,
+reads GitHub-published SHA-256 digests for both DMGs and pushes the generated
+Cask to the tap. Prereleases are excluded; missing artifacts or missing digests fail the job.
+Homebrew verifies each downloaded DMG against that digest during installation.
+The tap requires a write-enabled SSH deploy key; store its private key as the
+Ropy repository secret `HOMEBREW_TAP_DEPLOY_KEY`. The regular `GITHUB_TOKEN` only
+reads release assets. Do not use a personal access token for cross-repository
+writes. Synchronization failure does not undo a published release; retry the
+workflow after fixing the failure.
+
+To regenerate a Cask locally:
+
+```sh
+gh release download 0.5.7 --repo StudentWeis/ropy --pattern 'ropy-*-apple-darwin.dmg' --dir /tmp/ropy-dmgs
+python3 scripts/generate_homebrew_cask.py 0.5.7 /tmp/ropy-dmgs packaging/homebrew/ropy.rb
+```
+
+The Cask adds `Contents/.ropy-managed` after installing the app, including when
+using a custom `--appdir`. This uses the existing updater ownership contract:
+users can check releases in the app but install with `brew upgrade --cask ropy`.
+Do not declare `auto_updates true`; Homebrew is responsible for upgrades.
+Ordinary uninstall preserves clipboard history and configuration. No `zap` is
+provided to avoid accidental deletion of clipboard data.
+
+The current DMGs are unsigned. At the user's request, the self-hosted Cask runs
+`/usr/bin/xattr -r -d com.apple.quarantine` against only the installed Ropy.app
+after adding the managed marker. The install-time `{{appdir}}` token respects a
+custom application directory. No sudo is used and other attributes are preserved.
+Recursive deletion tolerates an absent quarantine attribute. Other command
+errors stop installation and print the error. This does not sign or notarize the app and is specific to this
+self-hosted tap; it is not suitable for an official Homebrew Cask submission.
+Before introducing signed/notarized bundles, revisit the marker's
+placement and verify it does not invalidate the bundle signature.
+
+Validate syntax, style, download/unpacking and both architecture hashes. On a
+machine without an existing Ropy installation, smoke-test installation, launch,
+managed update behavior, upgrade/reinstall and uninstall before publishing
+packaging changes. Never overwrite an existing app or clipboard data for tests.
