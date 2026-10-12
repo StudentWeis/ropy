@@ -63,6 +63,10 @@ or on other compositors, GPUI's existing X11 scale detection remains in use.
   cannot initialize, the clipboard remains available for manual paste; the
   failure is recorded in the application log.
 - Popup hiding, remapping, and always-on-top requests use X11 window operations.
+  In Wayland sessions, the popup is registered as a managed utility window so
+  Hyprland can route pointer input to it while keeping it floating. GPUI's
+  default override-redirect notification window displayed correctly but did
+  not receive mouse input in the tested Hyprland session.
   The compositor may decline activation or always-on-top requests. The current
   GPUI Wayland backend lacks the hide/remap operation needed by a resident popup.
 - GNOME, KDE, Sway, and other compositor combinations are not certified by the

@@ -2,7 +2,9 @@ use std::error::Error;
 
 use x11rb::{
     connection::Connection,
-    protocol::xproto::{ClientMessageEvent, ConnectionExt, EventMask},
+    protocol::xproto::{
+        AtomEnum, ChangeWindowAttributesAux, ClientMessageEvent, ConnectionExt, EventMask, PropMode,
+    },
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
@@ -41,6 +43,28 @@ impl X11 {
         let net_wm_state_above = Self::get_atom(&conn, b"_NET_WM_STATE_ABOVE")?;
         let net_wm_state = Self::get_atom(&conn, b"_NET_WM_STATE")?;
         let net_active_window = Self::get_atom(&conn, b"_NET_ACTIVE_WINDOW")?;
+
+        if crate::linux::is_wayland() {
+            // GPUI's PopUp is an override-redirect notification. Hyprland can
+            // display it without routing pointer input to it. Let the compositor
+            // manage this interactive window, and retain floating placement with
+            // the utility type instead of a notification or a tiled normal window.
+            conn.change_window_attributes(
+                window_id,
+                &ChangeWindowAttributesAux::new().override_redirect(0),
+            )?
+            .check()?;
+            let window_type = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE")?;
+            let utility = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE_UTILITY")?;
+            conn.change_property32(
+                PropMode::REPLACE,
+                window_id,
+                window_type,
+                AtomEnum::ATOM,
+                &[utility],
+            )?
+            .check()?;
+        }
 
         Ok(Self {
             connection: conn,
