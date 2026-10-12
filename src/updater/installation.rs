@@ -82,6 +82,18 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_installation_homebrew_bundle_marker_rejects_replacement() {
+        let dir = tempfile::tempdir().unwrap();
+        let contents = dir.path().join("Ropy.app/Contents");
+        std::fs::create_dir_all(contents.join("MacOS")).unwrap();
+        std::fs::write(contents.join(".ropy-managed"), b"").unwrap();
+        let installation = Installation::detect(&contents.join("MacOS/ropy"));
+        assert_eq!(installation, Installation::Managed);
+        assert!(installation.target().is_err());
+    }
+
+    #[test]
     fn test_installation_bundle_targets_whole_app() {
         assert_eq!(
             Installation::detect(Path::new("/Applications/Ropy.app/Contents/MacOS/ropy")),

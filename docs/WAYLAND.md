@@ -15,33 +15,48 @@ For X11 sessions without `XDG_RUNTIME_DIR` (or with an empty value), activation
 uses a private directory under the system temporary directory, scoped to the
 current user and display. Existing runtime-directory endpoints are unchanged.
 
-Bind `ropy --show` in your compositor's shortcut settings. Use an absolute
-executable path if `ropy` is not on the compositor's `PATH`. For a source build,
-use the absolute path to `target/debug/ropy`.
+### Hyprland 0.55+ with Lua configuration
 
-Hyprland 0.55+ (Lua configuration):
+Ropy automatically registers the shortcut from its settings with Hyprland at
+runtime. It receives activation through Hyprland's event socket, so the shortcut
+works while native Wayland applications are focused. After the popup maps, Ropy
+requests focus from Hyprland for its own process. No configuration-file edits
+or extra activation process are needed. Changing or clearing the shortcut updates
+the runtime binding; configuration reloads restore it while Ropy is running.
 
-```lua
-hl.bind("CTRL + SHIFT + D", hl.dsp.exec_cmd("ropy --show"))
-```
+The adapter refuses conflicting bindings instead of replacing them. Save failures
+retain the previous shortcut and use the existing settings error notification.
+Letters, digits, F1–F24, navigation keys and common punctuation are supported;
+unsupported keys fail registration. Physical-keycode bindings with the same
+modifiers are conservatively treated as conflicts. Remove any previously added
+manual Ropy binding before assigning the same chord in Ropy.
 
-Older Hyprland configurations:
+On shutdown, Ropy disables only its own Lua binding handle. Disabled handles are
+reused on later registration and removed by Hyprland's next configuration reload.
+This avoids Hyprland's chord-wide unbind operation removing another application's
+binding. A crash can leave the binding until restart or compositor reload.
+Registration and reload errors are recorded in Ropy's log. Other Wayland
+compositors and older Hyprland configurations still require a manual binding;
+this adapter does not implement the GlobalShortcuts portal.
+
+### Other compositor configurations
+
+Bind `ropy --show` in the compositor's shortcut settings. Use an absolute executable
+path if Ropy is not on its `PATH`. For older Hyprland configurations:
 
 ```ini
 bind = CTRL SHIFT, D, exec, ropy --show
 ```
 
-Sway's equivalent command is:
+For Sway:
 
 ```ini
 bindsym Ctrl+Shift+d exec ropy --show
 ```
 
-These are configuration examples, not changes made by Ropy. The shortcut in
-Ropy's settings still uses the X11 global-hotkey backend; it cannot reliably
-activate from a native Wayland application. Configure the compositor shortcut
-for that workflow. Changing the shortcut in Ropy does not change the compositor
-binding.
+These examples are manual configuration. Changing the shortcut in Ropy does not
+update them. On other Wayland desktops, the X11 global-hotkey backend cannot
+reliably activate from a native Wayland application.
 
 ## Window scaling
 
@@ -96,3 +111,19 @@ For manual verification, start with a plain-text editor focused, copy a unique
 marker, activate Ropy through the compositor binding, and confirm the selected
 entry. With immediate paste enabled, the editor must receive the marker once.
 Keep focus on the intended destination while the popup is being dismissed.
+
+## Hyprland shortcut regression
+
+Pure tests cover key translation, conflict rejection, activation filtering and
+transaction rollback. An opt-in live test requires a Lua Hyprland session with
+Wayland virtual-keyboard support; it temporarily uses Ctrl+Shift+F12, injects the shortcut through the
+Wayland virtual keyboard before and after a configuration reload, and verifies
+cleanup and reuse of the disabled handle:
+
+```sh
+cargo test --bin ropy test_live_hyprland_activation_reload_and_cleanup -- --ignored
+```
+
+Run it only in a test session where that chord is free. It fails rather than
+replacing an existing binding. This is compositor integration evidence, separate
+from the full clipboard and popup GUI scenario.

@@ -599,3 +599,23 @@ fn test_header_buttons_click_opens_corresponding_panel(cx: &mut TestAppContext) 
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn test_internal_focus_change_does_not_hide_active_popup(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, _| board.pinned = false);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let generation = cx.read(|cx| board.read(cx).copy_generation);
+    cx.update_window(handle, |_, window, cx| {
+        let another_control = cx.focus_handle();
+        window.focus(&another_control, cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(board.read(cx).copy_generation, generation));
+}

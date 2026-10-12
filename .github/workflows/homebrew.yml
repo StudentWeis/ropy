@@ -1,0 +1,52 @@
+name: Update Homebrew tap
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  update-tap:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Read latest stable release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Always resolve latest stable, so a delayed older event cannot downgrade the tap.
+          gh release view --repo StudentWeis/ropy --json tagName,isDraft,isPrerelease,assets > "$RUNNER_TEMP/homebrew-release.json"
+      - uses: actions/checkout@v6
+        with:
+          repository: StudentWeis/homebrew-tap
+          path: homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+      - name: Generate and push Cask
+        run: |
+          python3 scripts/generate_homebrew_cask.py --release-json "$RUNNER_TEMP/homebrew-release.json" homebrew-tap/Casks/ropy.rb
+          version="$(jq -r .tagName "$RUNNER_TEMP/homebrew-release.json")"
+          cd homebrew-tap
+          ruby -c Casks/ropy.rb
+          if git diff --quiet -- Casks/ropy.rb; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Casks/ropy.rb
+          git commit -m "chore(cask): update ropy to $version"
+          git push origin HEAD:main

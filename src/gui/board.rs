@@ -175,7 +175,7 @@ pub(crate) struct RopyBoard {
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
-    pub(crate) _focus_out_subscription: Subscription,
+    pub(crate) _window_activation_subscription: Subscription,
     pub(crate) _search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) last_search_query: String,
@@ -356,11 +356,14 @@ impl RopyBoard {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
-        // Subscribe to focus out events to hide the window
-        let focus_out_subscription =
-            cx.on_focus_out(&focus_handle, window, move |this, _event, window, cx| {
+        // Hide when the OS deactivates the window, not when an inner control
+        // changes focus while the popup is being restored.
+        let window_activation_subscription =
+            cx.observe_window_activation(window, move |this, window, cx| {
                 // When the window loses focus, hide the window (unless pinned).
-                if Self::should_auto_hide_on_focus_out(this.pinned) && !window.has_active_dialog(cx)
+                if !window.is_window_active()
+                    && Self::should_auto_hide_on_focus_out(this.pinned)
+                    && !window.has_active_dialog(cx)
                 {
                     this.copy_generation = this.copy_generation.wrapping_add(1);
                     // Clear search input when hiding the window
@@ -492,7 +495,7 @@ impl RopyBoard {
         Self {
             records,
             focus_handle,
-            _focus_out_subscription: focus_out_subscription,
+            _window_activation_subscription: window_activation_subscription,
             _search_input_subscription: search_input_subscription,
             search_input,
             last_search_query: String::new(),

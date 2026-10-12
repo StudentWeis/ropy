@@ -1,6 +1,8 @@
 # Linux AgentBay Run
 
-Use a fresh AgentBay Linux Computer Use virtual desktop. Ropy supports Linux through X11, so require a real desktop session; a successful shell command or headless build is not GUI evidence.
+Use this reference when AgentBay is the selected environment. For local regression on a Linux host, including a Wayland desktop, use [Local X11 run](linux-local.md) instead; AgentBay credentials are not needed for that path.
+
+Create a fresh AgentBay Linux Computer Use desktop with a reachable X server and window manager. A successful shell command or build is not GUI evidence.
 
 ## Match the image
 
