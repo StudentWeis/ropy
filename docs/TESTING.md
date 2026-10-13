@@ -72,3 +72,21 @@ system libraries; its result participates in the required aggregate check.
 
 See [Release benchmark baseline](BENCHMARKS.md) for `make bench`, version
 comparison, measurement boundaries and release artifact size reports.
+
+## Native Wayland integration
+
+For Linux window, shortcut or clipboard changes, follow the isolated VM procedure
+in [WAYLAND_VM.md](WAYLAND_VM.md) and the capability boundaries in
+[WAYLAND.md](WAYLAND.md). Use a native Wayland editor, disable XWayland and unset
+`DISPLAY`; an X11 clipboard test does not verify native Wayland behavior.
+
+Exercise hidden startup, repeated popup reconstruction, clipboard capture while
+hidden, search, both confirmation modes and focus restoration. Record the
+compositor version, source revision, binary digest and activation policy alongside
+the results. Test pinned-window reactivation separately from a newly mapped window.
+
+Run the portal fixture's accept, deny, pending and startup modes for changes to
+shortcut registration or activation-token handling. This fixture validates the
+client protocol contract; it does not replace testing a real desktop portal.
+Report untested desktops and infrastructure blockers explicitly. Passing CI alone
+does not certify GNOME, KDE, Niri or Hyprland GUI behavior.

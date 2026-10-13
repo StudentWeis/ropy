@@ -24,7 +24,7 @@
 ## 特性
 
 - 使用 Zed 的 GPUI 构建的原生桌面应用。
-- 跨平台支持：Windows、macOS 和 Linux（X11），并通过 XWayland 提供初步的 [Wayland 会话兼容](../WAYLAND.md)。
+- 跨平台支持：Windows、macOS 和 Linux（X11 与原生 [Wayland](../WAYLAND.md)）；剪贴板和快捷键能力取决于合成器支持。
 - 追踪文本、富文本（HTML/RTF）、图片和文件路径剪贴板历史，并基于内容进行去重。
 - 支持列表和网格布局模式切换，灵活浏览历史记录。
 - 支持使用大小写敏感和整词匹配选项搜索已加载的历史记录。
@@ -72,6 +72,20 @@ scoop install ropy
 > [!NOTE]
 > Ropy 会识别标准路径下的 Scoop 安装，并交由 Scoop 更新。请运行 `scoop update ropy`；应用内仍可检查新版本。
 
+### Linux（X11 与 Wayland）
+
+当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`。该支持由
+[PR #234](https://github.com/StudentWeis/ropy/pull/234) 引入；使用预编译二进制时，
+请确认对应版本的发布说明是否包含此变更。
+
+运行 `ropy --show` 可打开历史窗口。Wayland 下可使用桌面授权的 GlobalShortcuts
+Portal、已支持的 Hyprland 集成，或在合成器中为 `ropy --show` 配置快捷键。
+平铺合成器可能需要额外配置浮动窗口规则。
+
+剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。
+已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式
+和能力限制请参阅 [Wayland 指南](../WAYLAND.md)。
+
 ### 从源码构建
 
 确保您已安装 Rust（通过 `rustup`）。然后：
@@ -115,7 +129,7 @@ make precheck       # 格式化代码并执行完整的提交前检查
 - 系统剪贴板不会暴露复制条目的原始应用程序来源。
 - 插件/扩展系统：目前没有计划 —— Ropy 专注于简洁和小体积。
 - 云同步：目前不支持。
-- 命令行模式：Ropy 主要设计为 GUI 应用程序。
+- 完整的命令行历史管理：Ropy 主要提供 GUI；Linux 下的 `ropy --show` 用于打开图形窗口。
 
 ## 致谢
 
