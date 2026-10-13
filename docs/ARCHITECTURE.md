@@ -186,13 +186,6 @@ external consumer. Existing behavior tests moved with their owners. See
 
 ## Build and release ownership
 
-The desktop applies a temporary local `block` 0.1.6 patch for GPUI's macOS
-cocoa/metal dependencies. It fixes the opaque runtime class symbol declaration
-without changing the legacy Blocks API. The vendored crate is excluded from the
-workspace; a direct compiler check and macOS native callback/copy/release tests
-protect the patch. Provenance, exact changes and removal conditions are recorded
-in [`vendor/block/PATCH.md`](../vendor/block/PATCH.md).
-
 Both members inherit the same workspace lint policy and shared dependency
 versions. The private core library has its own internal version and disables
 cargo-release and cargo-dist participation. The version script explicitly selects

@@ -85,13 +85,6 @@ ropy-core = { path = "crates/ropy-core", features = ["test"] }
 gpui-kit = { version = "0.7.3", default-features = false, features = ["component", "test-support"] }
 rstest.workspace = true
 
-[target.'cfg(target_os = "macos")'.dev-dependencies]
-block = "0.1.6"
-
-[patch.crates-io]
-# GPUI's cocoa/metal dependencies still use this legacy API; see vendor/block/PATCH.md.
-block = { path = "vendor/block" }
-
 [lints]
 workspace = true
 
@@ -188,7 +181,6 @@ long_description = "A clipboard manager built with Rust and GPUI."
 
 [workspace]
 members = ["crates/ropy-core"]
-exclude = ["vendor/block"]
 default-members = ["."]
 resolver = "3"
 
