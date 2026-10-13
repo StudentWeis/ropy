@@ -154,6 +154,8 @@ enum Registration {
     },
 }
 
+// Only the Linux Hyprland registration path needs to await background work.
+#[cfg_attr(not(target_os = "linux"), expect(clippy::unused_async))]
 async fn register_platform_hotkey(
     hotkey: String,
     sender: async_channel::Sender<ListenerMessage>,
