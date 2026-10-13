@@ -10,6 +10,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_gui_does_not_reach_into_application_bootstrap(self):
+        # Window resources belong to the GUI/platform boundary. The application
+        # composes that boundary; lower layers must not borrow its static state.
+        for path in (ROOT / "src/gui").rglob("*.rs"):
+            with self.subTest(path=str(path.relative_to(ROOT))):
+                self.assertNotRegex(path.read_text(), r"\bcrate::app\b")
+
     def assert_dependencies_exclude(self, paths, forbidden):
         for path in paths:
             source = path.read_text()

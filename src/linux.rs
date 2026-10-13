@@ -1,5 +1,7 @@
 //! Linux session detection and single-instance activation from compositor shortcuts.
 
+/// Hyprland IPC and session integration.
+pub mod hyprland;
 mod scaling;
 
 use std::{

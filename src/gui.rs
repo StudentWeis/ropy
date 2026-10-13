@@ -19,6 +19,8 @@ pub mod theme;
 pub mod tray;
 /// Shared GUI-only platform utilities.
 pub mod utils;
+/// Native resident popup visibility and activation.
+pub mod window;
 
 #[cfg(target_os = "linux")]
 /// Linux X11 integration hooks.
@@ -29,9 +31,8 @@ pub(crate) use constants::default_window_size;
 pub(crate) use tray::start_tray_handler;
 #[cfg(target_os = "macos")]
 pub(crate) use utils::set_activation_policy_accessory;
-pub(crate) use utils::{
-    active_window, hide_window, reset_window_geometry_for_activation, surface_with_opacity,
-};
+pub(crate) use utils::{reset_window_geometry_for_activation, surface_with_opacity};
+pub(crate) use window::{active_window, hide_window};
 
 /// Shared board projection of persisted history.
 pub(crate) type SharedRecords =

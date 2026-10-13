@@ -12,9 +12,10 @@
 //! Per-block `// SAFETY:` notes only call out additional, block-specific
 //! invariants on top of the above.
 
-use std::cfg_select;
+use gpui_kit::{Hsla, Pixels, Size, Window, hsla};
 
-use gpui_kit::{Context, Hsla, Pixels, Size, Window, hsla};
+#[cfg(not(target_os = "macos"))]
+pub use super::window::set_always_on_top;
 
 pub(crate) fn surface_with_opacity(color: Hsla, opacity_percent: u8) -> Hsla {
     hsla(
@@ -69,8 +70,7 @@ use {
         UI::{
             HiDpi::{GetDpiForMonitor, GetDpiForWindow, MDT_EFFECTIVE_DPI},
             WindowsAndMessaging::{
-                GetClientRect, GetWindowRect, IsIconic, SW_HIDE, SW_RESTORE, SWP_NOACTIVATE,
-                SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
+                GetClientRect, GetWindowRect, IsIconic, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos,
                 USER_DEFAULT_SCREEN_DPI,
             },
         },
@@ -287,109 +287,6 @@ pub(crate) fn reset_window_geometry_for_activation(
     }
 
     window.resize(logical_size);
-}
-
-/// Hide (without destroying) the active window using the platform-native
-/// path so subsequent `active_window` calls can restore it.
-#[expect(unused_variables, clippy::needless_pass_by_ref_mut)]
-pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: bool) {
-    if pinned {
-        return;
-    }
-    cfg_select! {
-        target_os = "macos" => {
-            cx.hide();
-        }
-        target_os = "windows" => {
-            if let Ok(window_handle) = HasWindowHandle::window_handle(window)
-                && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
-            {
-                let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-                // SAFETY: see module-level note. `SW_HIDE` only toggles visibility.
-                unsafe {
-                    ShowWindow(hwnd, SW_HIDE);
-                }
-            }
-        }
-        target_os = "linux" => {
-            if let Some(x11) = crate::app::X11_INSTANCE.get()
-                && let Err(e) = x11.hide_window()
-            {
-                tracing::warn!(error = %e, "failed to hide window");
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Restore the window and pull it to the foreground, mirroring the user's
-/// expectation that activating from the tray / hotkey gives focus.
-///
-/// `window.activate_window()` is called unconditionally so that a window
-/// created hidden (`WindowOptions::show = false`) is also brought on-screen
-/// the first time the user triggers the hotkey or the tray "Show" entry —
-/// on macOS this maps to `[NSWindow makeKeyAndOrderFront]`, which both
-/// orders the window front and gives it key status.
-#[expect(clippy::needless_pass_by_ref_mut)]
-pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
-    window.activate_window();
-
-    cfg_select! {
-        target_os = "macos" => {
-            cx.activate(true);
-        }
-        target_os = "windows" => {
-            if let Ok(window_handle) = HasWindowHandle::window_handle(window)
-                && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
-            {
-                let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-                // SAFETY: see module-level note. Both calls only affect
-                // visibility / focus.
-                unsafe {
-                    ShowWindow(hwnd, SW_RESTORE);
-                    SetForegroundWindow(hwnd);
-                }
-            }
-        }
-        target_os = "linux" => {
-            if let Some(x11) = crate::app::X11_INSTANCE.get()
-                && let Err(e) = x11.display_and_activate_window()
-            {
-                tracing::warn!(error = %e, "failed to activate window");
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Toggle the always-on-top Z-order on platforms that expose it
-/// (macOS uses the `AppKit` equivalent at the GPUI level instead).
-#[cfg_attr(target_os = "linux", expect(unused_variables))]
-#[cfg(not(target_os = "macos"))]
-pub fn set_always_on_top(window: &Window, pinned: bool) {
-    #[cfg(target_os = "windows")]
-    if let Ok(window_handle) = HasWindowHandle::window_handle(window)
-        && let RawWindowHandle::Win32(win32_handle) = window_handle.as_raw()
-    {
-        let hwnd = win32_handle.hwnd.get() as *mut std::ffi::c_void;
-        // SAFETY: see module-level note. `SWP_NOMOVE | SWP_NOSIZE` keeps
-        // geometry untouched, so this only flips Z-order.
-        unsafe {
-            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
-            };
-            let hwnd_insert_after: *mut std::ffi::c_void =
-                if pinned { HWND_TOPMOST } else { HWND_NOTOPMOST };
-            SetWindowPos(hwnd, hwnd_insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    if let Some(x11) = crate::app::X11_INSTANCE.get()
-        && let Err(e) = x11.set_always_on_top(pinned)
-    {
-        tracing::warn!(error = %e, "failed to set always on top");
-    }
 }
 
 /// Start an OS-managed drag — the only way to move borderless windows on
