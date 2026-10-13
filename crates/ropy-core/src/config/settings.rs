@@ -252,7 +252,7 @@ impl ConfirmMode {
     /// Whether confirmation must await a successful native clipboard write.
     #[must_use]
     pub const fn requires_clipboard_completion(self) -> bool {
-        matches!(self, Self::PasteImmediately)
+        matches!(self, Self::CopyToClipboard | Self::PasteImmediately)
     }
 }
 
@@ -758,7 +758,7 @@ enabled = true
 
     #[test]
     fn test_confirm_mode_requires_clipboard_completion() {
-        assert!(!ConfirmMode::CopyToClipboard.requires_clipboard_completion());
+        assert!(ConfirmMode::CopyToClipboard.requires_clipboard_completion());
         assert!(ConfirmMode::PasteImmediately.requires_clipboard_completion());
     }
 

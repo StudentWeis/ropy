@@ -123,21 +123,25 @@ impl RopyBoard {
         };
         let revision = self.history_refresh.request(trim_to_limit);
         let history_refresh = self.history_refresh.clone();
-        let (max_history, max_storage) = GlobalSettings::read(cx, |settings| {
+        let (max_history, max_storage, recovery_required) = GlobalSettings::read(cx, |settings| {
             (
                 settings.storage.max_history_records,
                 settings.storage.max_storage_records,
+                settings.is_recovery_required(),
             )
         });
         let query = cx.background_spawn(async move {
             history_refresh.run(revision, |trim_to_limit| {
-                let cleanup = if trim_to_limit {
-                    repo.cleanup_old_records(max_storage)
-                } else {
-                    repo.cleanup_old_records_if_needed(max_storage)
-                };
-                if let Err(error) = cleanup {
-                    tracing::warn!(%error, "failed to cleanup old clipboard records");
+                // Recovery limits are display defaults, not the user's retention policy.
+                if !recovery_required {
+                    let cleanup = if trim_to_limit {
+                        repo.cleanup_old_records(max_storage)
+                    } else {
+                        repo.cleanup_old_records_if_needed(max_storage)
+                    };
+                    if let Err(error) = cleanup {
+                        tracing::warn!(%error, "failed to cleanup old clipboard records");
+                    }
                 }
                 repo.get_display_snapshot(max_history)
             })
