@@ -15,7 +15,7 @@ use super::{
     grid_reveal_offset,
     search::{ContentFilter, SearchOptions},
     search_query_changed, search_query_should_reveal_selection,
-    settings_editor::UpdateManager,
+    updater_ui::UpdateManager,
 };
 use crate::{
     clipboard::ClipboardWriteError,

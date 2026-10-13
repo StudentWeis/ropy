@@ -40,9 +40,10 @@ use gpui_kit::{
 };
 pub(crate) use search::{ContentFilter, SearchOptions};
 use settings_editor::{
-    SettingsEditor, UpdateManager, build_language_select, build_layout_select, build_theme_select,
+    SettingsEditor, build_language_select, build_layout_select, build_theme_select,
     build_window_opacity_slider,
 };
+use updater_ui::UpdateManager;
 
 use crate::{
     clipboard::CopyTracker,
@@ -372,51 +373,27 @@ impl RopyBoard {
                 }
             });
 
-        // Read initial values from GPUI Global settings
-        let (
-            max_history_records,
-            max_storage_records,
-            activation_key,
-            theme,
-            language,
-            window_opacity_percent,
-            layout_mode,
-            confirm_mode,
-            autostart_enabled,
-            auto_check_enabled,
-            include_prerelease_enabled,
-            hover_preview_enabled,
-            space_preview_enabled,
-        ) = GlobalSettings::read(cx, |s| {
-            (
-                s.storage.max_history_records,
-                s.storage.max_storage_records,
-                s.hotkey.activation_key.clone(),
-                s.theme.clone(),
-                s.language.clone(),
-                s.window.opacity_percent,
-                s.layout.mode,
-                s.confirm.mode,
-                s.autostart.enabled,
-                s.update.auto_check,
-                s.update.include_prerelease,
-                s.preview.hover_preview_enabled,
-                s.preview.space_preview_enabled,
-            )
-        });
-        let activation_key_placeholder = Self::hotkey_placeholder_text(&activation_key, cx);
+        let settings = GlobalSettings::read(cx, Clone::clone);
+        let activation_key = &settings.hotkey.activation_key;
+        let layout_mode = settings.layout.mode;
+        let confirm_mode = settings.confirm.mode;
+        let activation_key_placeholder = Self::hotkey_placeholder_text(activation_key, cx);
         let settings_activation_key_input = cx
             .new(|cx| InputState::new(window, cx).placeholder(activation_key_placeholder.clone()));
-        let settings_max_history_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(max_history_records.to_string()));
-        let settings_max_storage_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder(max_storage_records.to_string()));
+        let settings_max_history_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(settings.storage.max_history_records.to_string())
+        });
+        let settings_max_storage_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(settings.storage.max_storage_records.to_string())
+        });
         let settings_window_opacity_slider =
-            build_window_opacity_slider(window_opacity_percent, window, cx);
+            build_window_opacity_slider(settings.window.opacity_percent, window, cx);
 
         let selected_theme = crate::gui::theme::available_themes()
             .iter()
-            .position(|theme_id| theme_id == &theme)
+            .position(|theme_id| theme_id == &settings.theme)
             .unwrap_or_default();
         let theme_select = build_theme_select(selected_theme, window, cx);
 
@@ -428,7 +405,7 @@ impl RopyBoard {
 
         let selected_language = crate::i18n::language::available_languages()
             .iter()
-            .position(|lang| lang == &language)
+            .position(|lang| lang == &settings.language)
             .unwrap_or(0);
         let language_select = build_language_select(selected_language, window, cx);
 
@@ -471,9 +448,10 @@ impl RopyBoard {
             cx.notify();
         });
 
-        let settings_editor = SettingsEditor::new(
-            activation_key.clone(),
-            activation_key,
+        let settings_editor = SettingsEditor {
+            hotkey: settings_editor::HotkeyEditorState::default(),
+            pending_hotkey: activation_key.clone(),
+            hotkey_before_recording: activation_key.clone(),
             settings_activation_key_input,
             settings_max_history_input,
             settings_max_storage_input,
@@ -482,15 +460,22 @@ impl RopyBoard {
             theme_select,
             selected_layout,
             layout_select,
-            window_opacity_percent,
+            window_opacity_percent: settings.window.opacity_percent,
             selected_language,
             language_select,
-            autostart_enabled,
-            auto_check_enabled,
-            include_prerelease_enabled,
-            hover_preview_enabled,
-            space_preview_enabled,
-        );
+            autostart: settings_editor::AutostartSettingsState {
+                enabled: settings.autostart.enabled,
+            },
+            update_settings: settings_editor::UpdateSettingsState {
+                auto_check_enabled: settings.update.auto_check,
+                include_prerelease_enabled: settings.update.include_prerelease,
+            },
+            panel_state: settings_editor::SettingsPanelState {
+                window_opacity_slider_visible: false,
+                hover_preview_enabled: settings.preview.hover_preview_enabled,
+                space_preview_enabled: settings.preview.space_preview_enabled,
+            },
+        };
 
         Self {
             records,

@@ -66,7 +66,12 @@ pub(crate) fn download_and_stage(
         binary_path
     };
     let _ = progress_tx.send_blocking(UpdateStatus::Staging);
-    super::transaction::Transaction::stage(target, &payload, installation.is_bundle())?;
+    super::transaction::Transaction::stage(
+        target,
+        &payload,
+        installation.is_bundle(),
+        &release.version,
+    )?;
     tracing::info!("update staged; restart required");
     Ok(())
 }
@@ -190,7 +195,7 @@ fn parse_checksum(checksum_body: &str) -> Result<String, UpdateError> {
     Ok(checksum.to_ascii_lowercase())
 }
 
-fn compute_sha256_hex(asset_path: &Path) -> Result<String, UpdateError> {
+pub(super) fn compute_sha256_hex(asset_path: &Path) -> Result<String, UpdateError> {
     let mut hasher = Sha256::new();
     let mut file = std::fs::File::open(asset_path)?;
     let mut buffer = [0_u8; 8 * 1024];

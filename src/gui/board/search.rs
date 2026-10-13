@@ -101,12 +101,15 @@ pub(super) fn text_matches_query(content: &str, query: &str, options: SearchOpti
     let normalized_query = normalized_text(query, options.case_sensitive);
 
     if options.whole_word {
-        normalized_content
-            .match_indices(normalized_query.as_ref())
-            .any(|(start, matched)| {
-                let end = start + matched.len();
-                has_word_boundaries(normalized_content.as_ref(), start, end)
-            })
+        // Non-overlapping matches can skip a valid word after an invalid prefix.
+        normalized_content.char_indices().any(|(start, _)| {
+            normalized_content[start..].starts_with(normalized_query.as_ref())
+                && has_word_boundaries(
+                    normalized_content.as_ref(),
+                    start,
+                    start + normalized_query.len(),
+                )
+        })
     } else {
         normalized_content.contains(normalized_query.as_ref())
     }
@@ -427,6 +430,28 @@ mod tests {
 
     fn empty_favorites() -> HashSet<u64> {
         HashSet::new()
+    }
+
+    #[rstest::rstest]
+    #[case("xa-a-a", "a-a", true)]
+    #[case("xé-é-é", "é-é", true)]
+    #[case("xa-a-ax", "a-a", false)]
+    fn test_whole_word_overlapping_matches_check_every_start(
+        #[case] content: &str,
+        #[case] query: &str,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(
+            text_matches_query(
+                content,
+                query,
+                SearchOptions {
+                    case_sensitive: true,
+                    whole_word: true,
+                }
+            ),
+            expected
+        );
     }
 
     #[test]

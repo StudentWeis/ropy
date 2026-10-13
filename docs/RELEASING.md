@@ -76,7 +76,14 @@ and symbolic links are rejected. The macOS payload must contain a complete
 `Ropy.app`, including `Contents/Info.plist` and `Contents/MacOS/ropy`.
 
 A verified payload is staged beside the installation in `.<filename>-update`
-(for example `/Applications/.Ropy.app-update`). No installed file is changed
+(for example `/Applications/.Ropy.app-update`). The metadata records the
+installed version, downloaded version and original
+executable SHA-256. A normal launch offers only a payload staged by the current
+version for a newer release. Restart handoff and replacement also verify the
+original executable fingerprint, rejecting a payload left behind by a manual
+installation. Rejected payloads must be downloaded again. Legacy metadata can
+still restore a backup from an interrupted transaction, but cannot install a
+staged payload without provenance. No installed file is changed
 until the user chooses to restart. The directory must be writable without
 privilege escalation. A helper copied outside the target confirms readiness;
 only then does the old application quit. The helper waits for the parent's

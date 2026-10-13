@@ -94,10 +94,13 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::unwrap_used)]
     fn test_installation_bundle_targets_whole_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundle = dir.path().join("Ropy.app");
         assert_eq!(
-            Installation::detect(Path::new("/Applications/Ropy.app/Contents/MacOS/ropy")),
-            Installation::Bundle(PathBuf::from("/Applications/Ropy.app"))
+            Installation::detect(&bundle.join("Contents/MacOS/ropy")),
+            Installation::Bundle(bundle)
         );
     }
 }

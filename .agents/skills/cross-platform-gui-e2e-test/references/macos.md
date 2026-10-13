@@ -2,12 +2,33 @@
 
 Use the local Mac for macOS GUI validation. Inspect `uname -m` first and select the matching DMG; do not run an Intel artifact on Apple Silicon through Rosetta without explicitly labeling that separate compatibility run.
 
-## Protect Local State
+## Isolate the test session before launch
 
-- Check for an existing Ropy process. Do not terminate or replace a user-owned running instance without explicit permission.
-- Warn that the smoke test temporarily changes the system clipboard and can add the unique marker to the user's Ropy history.
-- Never run clear-history or bulk-delete checks locally by default. Remove only the unique test marker when that can be done unambiguously.
-- Do not inspect or report pre-existing clipboard history.
+Use a dedicated macOS test account and its own logged-in graphical session. Use
+an existing disposable account, or obtain authorization before creating one.
+A temporary download directory or mounted DMG does not isolate application data.
+Do not launch a test artifact in the everyday account, even when Ropy is closed:
+startup can migrate and clear an incompatible history schema, trim history, and
+synchronize Login Items before any smoke-test interaction.
+
+Before launching:
+
+- Confirm the graphical session and automation belong to the test account.
+  A shell switched with `sudo -u`, a changed `HOME`, or XDG overrides alone do
+  not isolate macOS GUI services, clipboard, Keychain or Login Items.
+- Resolve the test account's configuration, database, image, rich-text and log
+  paths from the tested revision. Current macOS builds use
+  `~/Library/Application Support/ropy`. Confirm these paths belong to the test
+  account and contain no valuable data. Use a fresh test account when validating
+  default settings; do not silently delete a reused account's data.
+- Inspect processes in that session. Do not terminate a user-owned process or
+  reuse an already-running Ropy instance as the test artifact.
+- Keep clipboard markers, screenshots, logs and autostart checks inside that
+  session. Do not inspect the everyday account's history or clipboard.
+
+If an isolated graphical session is unavailable, report the GUI run as
+infrastructure blocked. In-process tests and promotional renders remain useful
+but do not substitute for native clipboard/hotkey E2E evidence.
 
 ## Verify and launch
 
@@ -28,7 +49,7 @@ Use a plain-text editor such as TextEdit in plain-text mode for the marker copy/
 
 ## Collect and clean up
 
-- Collect JSONL logs from `~/Library/Application Support/ropy/logs` on failure.
+- Collect JSONL logs from the verified test account data directory on failure.
 - Quit only the Ropy instance launched for this test.
 - Eject the mounted DMG with `hdiutil detach` and remove the temporary download.
-- Restore the prior plain-text clipboard value when it was captured without exposing it; otherwise state that clipboard restoration was not lossless.
+- Confirm all test processes and mounts are gone; leave the everyday account's clipboard, history and Login Items untouched. Retain evidence separately before disposing of the test account through the authorized account-management workflow.
