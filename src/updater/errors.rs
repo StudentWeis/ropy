@@ -37,6 +37,9 @@ pub(crate) enum UpdateError {
     #[error("failed to replace binary: {0}")]
     Replace(String),
 
+    #[error("staged update no longer matches the installed application; download it again")]
+    StaleUpdate,
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -60,9 +63,10 @@ impl From<&UpdateError> for UpdateFailure {
             UpdateError::ChecksumMismatch { .. }
             | UpdateError::InvalidChecksum(_)
             | UpdateError::MissingChecksumAsset(_) => Self::Verification,
-            UpdateError::Extract(_) | UpdateError::Replace(_) | UpdateError::Io(_) => {
-                Self::Installation
-            }
+            UpdateError::Extract(_)
+            | UpdateError::Replace(_)
+            | UpdateError::Io(_)
+            | UpdateError::StaleUpdate => Self::Installation,
             UpdateError::Restart(_) => Self::Restart,
             UpdateError::ManagedInstallation => Self::Managed,
             UpdateError::Parse(_) | UpdateError::NoCompatibleAsset(_) => Self::Release,

@@ -21,6 +21,16 @@ const CONFIRM_ARG: &str = "--ropy-update-confirm";
 pub(crate) struct Transaction {
     target: PathBuf,
     bundle: bool,
+    // Legacy metadata remains readable for interrupted-update rollback only.
+    #[serde(default)]
+    origin: Option<UpdateOrigin>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UpdateOrigin {
+    installed_version: String,
+    release_version: String,
+    executable_sha256: String,
 }
 
 impl Transaction {
@@ -41,10 +51,16 @@ impl Transaction {
         }
     }
 
-    pub(crate) fn stage(target: &Path, source: &Path, bundle: bool) -> Result<Self, UpdateError> {
-        let transaction = Self {
+    pub(crate) fn stage(
+        target: &Path,
+        source: &Path,
+        bundle: bool,
+        release_version: &str,
+    ) -> Result<Self, UpdateError> {
+        let mut transaction = Self {
             target: target.to_path_buf(),
             bundle,
+            origin: None,
         };
         fs::create_dir_all(transaction.root())?;
         let _lock = transaction.lock()?;
@@ -53,6 +69,12 @@ impl Transaction {
                 "a previous update requires recovery".into(),
             ));
         }
+        transaction.origin = Some(UpdateOrigin {
+            installed_version: env!("CARGO_PKG_VERSION").into(),
+            release_version: release_version.into(),
+            executable_sha256: super::downloader::compute_sha256_hex(&transaction.executable())?,
+        });
+        transaction.validate_origin()?;
         let pending = tempfile::tempdir_in(transaction.root())?;
         let payload = pending.path().join("payload");
         copy_tree(source, &payload)?;
@@ -92,12 +114,38 @@ impl Transaction {
         Ok(lock)
     }
 
+    fn matches_version(&self, current: &str) -> bool {
+        self.origin.as_ref().is_some_and(|origin| {
+            origin.installed_version == current
+                && semver::Version::parse(&origin.release_version)
+                    .ok()
+                    .zip(semver::Version::parse(current).ok())
+                    .is_some_and(|(release, installed)| release > installed)
+        })
+    }
+
+    fn validate_origin(&self) -> Result<(), UpdateError> {
+        if !self.matches_version(env!("CARGO_PKG_VERSION")) {
+            return Err(UpdateError::StaleUpdate);
+        }
+        let hash = super::downloader::compute_sha256_hex(&self.executable())?;
+        if self
+            .origin
+            .as_ref()
+            .is_none_or(|origin| origin.executable_sha256 != hash)
+        {
+            return Err(UpdateError::StaleUpdate);
+        }
+        Ok(())
+    }
+
     fn install(&self) -> Result<(), UpdateError> {
         if self.backup().exists() || !self.staged().exists() {
             return Err(UpdateError::Replace(
                 "update is not ready for replacement".into(),
             ));
         }
+        self.validate_origin()?;
         // Both renames stay on the installation filesystem. Never delete the old
         // installation until the replacement has acknowledged successful startup.
         fs::rename(&self.target, self.backup())?;
@@ -158,7 +206,10 @@ pub(crate) fn is_staged() -> bool {
     Installation::current()
         .ok()
         .and_then(|install| install.target().ok().map(transaction_root))
-        .is_some_and(|root| root.join("staged").exists() && root.join("transaction.json").exists())
+        .and_then(|root| Transaction::load(&root).ok())
+        .is_some_and(|transaction| {
+            transaction.staged().exists() && transaction.matches_version(env!("CARGO_PKG_VERSION"))
+        })
 }
 
 pub(crate) fn start_restart() -> Result<Child, UpdateError> {
@@ -169,6 +220,9 @@ pub(crate) fn start_restart() -> Result<Child, UpdateError> {
 fn start_helper(root: &Path) -> Result<Child, UpdateError> {
     let transaction = Transaction::load(root)?;
     let lock = transaction.lock()?;
+    if !transaction.backup().exists() {
+        transaction.validate_origin()?;
+    }
     let helper = root.join(if cfg!(windows) {
         "helper.exe"
     } else {
@@ -266,7 +320,11 @@ fn run_helper(root: &Path, pid: u32) -> Result<(), UpdateError> {
     loop {
         match transaction.install() {
             Ok(()) => break,
-            Err(error) if Instant::now() >= deadline || transaction.backup().exists() => {
+            Err(error)
+                if matches!(error, UpdateError::StaleUpdate)
+                    || Instant::now() >= deadline
+                    || transaction.backup().exists() =>
+            {
                 tracing::error!(%error, "could not install staged update");
                 return restore_and_launch(&transaction);
             }
@@ -334,14 +392,60 @@ mod tests {
 
     #[test]
     #[expect(clippy::unwrap_used)]
+    fn test_transaction_version_change_and_legacy_metadata_require_redownload() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("ropy");
+        let source = dir.path().join("new");
+        fs::write(&target, "original").unwrap();
+        fs::write(&source, "new").unwrap();
+        let transaction = Transaction::stage(&target, &source, false, "999.0.0").unwrap();
+        assert!(transaction.matches_version(env!("CARGO_PKG_VERSION")));
+        assert!(!transaction.matches_version("998.0.0"));
+        assert!(Transaction::stage(&target, &source, false, env!("CARGO_PKG_VERSION")).is_err());
+        assert_eq!(fs::read_to_string(transaction.staged()).unwrap(), "new");
+
+        fs::write(
+            transaction.root().join("transaction.json"),
+            serde_json::to_vec(&serde_json::json!({"target": target, "bundle": false})).unwrap(),
+        )
+        .unwrap();
+        let legacy = Transaction::load(&transaction.root()).unwrap();
+        assert!(legacy.install().is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+        // Origin-less transactions still recover an interrupted replacement.
+        fs::rename(&target, legacy.backup()).unwrap();
+        fs::write(&target, "failed update").unwrap();
+        legacy.rollback().unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_transaction_manual_replacement_rejects_stale_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("ropy");
+        let source = dir.path().join("new");
+        fs::write(&target, "original").unwrap();
+        fs::write(&source, "downloaded").unwrap();
+        let transaction = Transaction::stage(&target, &source, false, "999.0.0").unwrap();
+        fs::write(&target, "manual replacement").unwrap();
+        assert!(transaction.install().is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "manual replacement");
+        assert!(!transaction.backup().exists());
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
     fn test_transaction_failed_staging_preserves_previous_complete_payload() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("ropy");
         let source = dir.path().join("new");
         fs::write(&target, "old").unwrap();
         fs::write(&source, "complete").unwrap();
-        let transaction = Transaction::stage(&target, &source, false).unwrap();
-        assert!(Transaction::stage(&target, &dir.path().join("missing"), false).is_err());
+        let transaction = Transaction::stage(&target, &source, false, "999.0.0").unwrap();
+        assert!(
+            Transaction::stage(&target, &dir.path().join("missing"), false, "999.0.0").is_err()
+        );
         assert_eq!(
             fs::read_to_string(transaction.staged()).unwrap(),
             "complete"
@@ -357,6 +461,7 @@ mod tests {
         let transaction = Transaction {
             target: target.clone(),
             bundle: false,
+            origin: None,
         };
         fs::create_dir_all(transaction.root()).unwrap();
         assert!(transaction.install().is_err());
@@ -372,7 +477,7 @@ mod tests {
         let new = dir.path().join("new");
         fs::write(&target, "old").unwrap();
         fs::write(&new, "new").unwrap();
-        let transaction = Transaction::stage(&target, &new, false).unwrap();
+        let transaction = Transaction::stage(&target, &new, false, "999.0.0").unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "old");
         transaction.install().unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "new");
@@ -391,7 +496,7 @@ mod tests {
             fs::write(path.join("Contents/MacOS/ropy"), text).unwrap();
             fs::write(path.join("Contents/Info.plist"), text).unwrap();
         }
-        let transaction = Transaction::stage(&target, &new, true).unwrap();
+        let transaction = Transaction::stage(&target, &new, true, "999.0.0").unwrap();
         transaction.install().unwrap();
         assert_eq!(
             fs::read_to_string(target.join("Contents/Info.plist")).unwrap(),

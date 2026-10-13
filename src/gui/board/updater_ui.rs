@@ -6,6 +6,50 @@ use crate::{
     updater::{errors::UpdateError, models::UpdateStatus},
 };
 
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct UpdateManager {
+    pub(crate) status: UpdateStatus,
+    pub(crate) managed: bool,
+    pub(crate) release: Option<crate::updater::models::ReleaseInfo>,
+    pub(crate) schedule: crate::updater::schedule::CheckSchedule,
+    pub(crate) restart_child: Option<std::process::Child>,
+}
+
+impl UpdateManager {
+    pub(super) fn new() -> Self {
+        Self {
+            status: UpdateStatus::Idle,
+            managed: matches!(
+                crate::updater::installation::Installation::current(),
+                Ok(crate::updater::installation::Installation::Managed)
+            ),
+            release: None,
+            schedule: crate::updater::schedule::CheckSchedule::load(),
+            restart_child: None,
+        }
+    }
+
+    pub(super) fn begin_check(&mut self) -> bool {
+        if matches!(
+            self.status,
+            UpdateStatus::Checking
+                | UpdateStatus::Downloading(_)
+                | UpdateStatus::Verifying
+                | UpdateStatus::Extracting
+                | UpdateStatus::Staging
+                | UpdateStatus::Restarting
+                | UpdateStatus::ReadyToRestart
+                | UpdateStatus::Error(crate::updater::errors::UpdateFailure::Restart)
+        ) {
+            return false;
+        }
+
+        self.release = None;
+        self.status = UpdateStatus::Checking;
+        true
+    }
+}
+
 impl RopyBoard {
     pub(crate) fn start_update_checks(&mut self, cx: &mut Context<'_, Self>) {
         if crate::updater::transaction::take_rollback_notice() {
@@ -65,7 +109,11 @@ impl RopyBoard {
                 Err(error) => {
                     tracing::error!(%error, "restart handoff failed");
                     board.update_manager.status =
-                        UpdateStatus::Error(crate::updater::errors::UpdateFailure::Restart);
+                        UpdateStatus::Error(if matches!(error, UpdateError::StaleUpdate) {
+                            crate::updater::errors::UpdateFailure::Installation
+                        } else {
+                            crate::updater::errors::UpdateFailure::Restart
+                        });
                     cx.notify();
                 }
             });

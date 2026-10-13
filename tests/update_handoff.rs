@@ -8,6 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sha2::{Digest as _, Sha256};
+
 struct ParentGuard(Child);
 
 impl Drop for ParentGuard {
@@ -67,10 +69,23 @@ fn run_handoff(fail_startup: bool) {
     fs::create_dir(&root).expect("transaction directory");
     fs::copy(&binary, &target).expect("original executable");
     fs::copy(&binary, root.join("staged")).expect("staged executable");
+    let mut executable_sha256 = String::new();
+    for byte in Sha256::digest(fs::read(&target).expect("read fixture")) {
+        use std::fmt::Write as _;
+        write!(executable_sha256, "{byte:02x}").expect("format digest");
+    }
     fs::write(
         root.join("transaction.json"),
-        serde_json::to_vec(&serde_json::json!({"target": target, "bundle": false}))
-            .expect("serialize transaction"),
+        serde_json::to_vec(&serde_json::json!({
+            "target": target,
+            "bundle": false,
+            "origin": {
+                "installed_version": env!("CARGO_PKG_VERSION"),
+                "release_version": "999.0.0",
+                "executable_sha256": executable_sha256,
+            },
+        }))
+        .expect("serialize transaction"),
     )
     .expect("persist transaction");
     if fail_startup {

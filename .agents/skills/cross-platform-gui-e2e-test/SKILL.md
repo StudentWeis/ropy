@@ -18,7 +18,7 @@ Validate release artifacts across supported operating systems or run focused reg
 | Linux ARM64 | Matching AgentBay custom image or local ARM64 X11 desktop | `ropy-aarch64-unknown-linux-gnu.tar.xz` |
 
 - Inspect the host or guest architecture before selecting an artifact. Never use emulation silently.
-- Run macOS on the local Mac. Do not spend AgentBay resources for macOS unless the user explicitly changes this policy.
+- Run macOS on the local Mac in an isolated test account and graphical session, as required by the macOS reference. Isolate before launching any artifact. Do not spend AgentBay resources for macOS unless the user explicitly changes this policy.
 - Run Windows in a fresh AgentBay desktop. For Linux, honor the requested environment: local X11 regression is supported on both X11 and Wayland hosts. Prefer a fresh AgentBay desktop for packaged distribution compatibility; a local nested desktop proves only its tested host/server/window-manager combination.
 - A Wayland host does not prevent X11 testing: Xephyr plus a window manager provides an isolated X11 session, displayed through the host XWayland connection. Xvfb plus a window manager is an alternative for unattended X11 tests. A shell, bare display variable, or compile-only job is not GUI evidence.
 - Require a reachable X server and window manager for Linux X11 tests. Test the nested X11 application path separately from native Wayland clipboard/input or host-compositor integration.
@@ -74,7 +74,7 @@ Prefer semantic window, text, and accessibility queries. Use coordinates only af
 ## Add Focused Checks Deliberately
 
 - Test favorite, delete, clear, plain-text paste, grid navigation, pinning, settings, theme, language, opacity, autostart, or update behavior only when relevant to the requested change.
-- Avoid destructive history operations on local macOS by default because they can touch the user's real Ropy data.
+- Run local macOS history operations only against the isolated test account's disposable data. Normal startup can modify history too; skipping delete/clear buttons is not isolation.
 - Keep the common smoke scenario identical across platforms; isolate platform-specific assertions in the relevant run.
 - Verify Linux tray behavior only when the image has a working desktop panel and session bus. Do not classify a missing tray host as a Ropy regression.
 
