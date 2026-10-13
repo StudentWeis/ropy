@@ -2,7 +2,9 @@
 mod hyprland;
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
-use gpui_kit::{App, AsyncApp, BackgroundExecutor};
+#[cfg(target_os = "linux")]
+use gpui_kit::BackgroundExecutor;
+use gpui_kit::{App, AsyncApp};
 use thiserror::Error;
 
 use crate::gui::settings::GlobalSettings;
@@ -69,7 +71,10 @@ where
         spawn_hotkey_event_forwarder(message_tx.clone());
     }
     spawn_hotkey_update_forwarder(rx, message_tx.clone());
+    #[cfg(target_os = "linux")]
     let quit_tx = message_tx.clone();
+    #[cfg(not(target_os = "linux"))]
+    let quit_tx = message_tx;
     cx.on_app_quit(move |_| {
         let (done, completion) = async_channel::bounded(1);
         let _ = quit_tx.try_send(ListenerMessage::Shutdown(done));
@@ -80,13 +85,17 @@ where
     .detach();
 
     cx.spawn(async move |async_app| {
+        #[cfg(target_os = "linux")]
+        let manager = register_linux_hotkey(
+            initial_hotkey.clone(),
+            message_tx.clone(),
+            async_app.background_executor().clone(),
+        )
+        .await;
+        #[cfg(not(target_os = "linux"))]
+        let manager = register_native_hotkey(&initial_hotkey);
         let mut state = HotkeyListenerState {
-            manager: register_platform_hotkey(
-                initial_hotkey.clone(),
-                message_tx.clone(),
-                async_app.background_executor().clone(),
-            )
-            .await,
+            manager,
             current_hotkey: initial_hotkey,
         };
 
@@ -100,12 +109,16 @@ where
                 && !request.hotkey.is_empty()
                 && (!same_hotkey(&request.hotkey, &state.current_hotkey) || state.manager.is_none())
             {
-                register_platform_hotkey(
+                #[cfg(target_os = "linux")]
+                let registration = register_linux_hotkey(
                     request.hotkey.clone(),
                     message_tx.clone(),
                     async_app.background_executor().clone(),
                 )
-                .await
+                .await;
+                #[cfg(not(target_os = "linux"))]
+                let registration = register_native_hotkey(&request.hotkey);
+                registration
             } else {
                 None
             };
@@ -154,9 +167,8 @@ enum Registration {
     },
 }
 
-// Only the Linux Hyprland registration path needs to await background work.
-#[cfg_attr(not(target_os = "linux"), expect(clippy::unused_async))]
-async fn register_platform_hotkey(
+#[cfg(target_os = "linux")]
+async fn register_linux_hotkey(
     hotkey: String,
     sender: async_channel::Sender<ListenerMessage>,
     executor: BackgroundExecutor,
@@ -164,15 +176,17 @@ async fn register_platform_hotkey(
     if hotkey.is_empty() {
         return None;
     }
-    #[cfg(target_os = "linux")]
     if hyprland::is_session() {
         return executor
             .spawn(async move { hyprland::Registration::register(&hotkey, sender) })
             .await
             .map(|manager| Registration::Hyprland { _manager: manager });
     }
-    let _ = (sender, executor);
-    register_hotkey(&hotkey).map(|manager| Registration::Native { _manager: manager })
+    register_native_hotkey(&hotkey)
+}
+
+fn register_native_hotkey(hotkey: &str) -> Option<Registration> {
+    register_hotkey(hotkey).map(|manager| Registration::Native { _manager: manager })
 }
 
 fn process_listener_message<Manager, RegisterHotkey, PersistHotkey, OnHotkey>(
