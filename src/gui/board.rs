@@ -39,10 +39,7 @@ use gpui_kit::{
     component::{WindowExt, input::InputState},
 };
 pub(crate) use search::{ContentFilter, SearchOptions};
-use settings_editor::{
-    SettingsEditor, build_language_select, build_layout_select, build_theme_select,
-    build_window_opacity_slider,
-};
+use settings_editor::SettingsEditor;
 use updater_ui::UpdateManager;
 
 use crate::{
@@ -176,8 +173,8 @@ pub(crate) struct RopyBoard {
     pub(crate) filtered_record_indices: Arc<Vec<usize>>, // The final shown record indices
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
-    pub(crate) _window_activation_subscription: Subscription,
-    pub(crate) _search_input_subscription: Subscription,
+    pub(crate) window_activation_subscription: Subscription,
+    pub(crate) search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) last_search_query: String,
     pub(crate) list_state: ListState,
@@ -346,7 +343,62 @@ impl RopyBoard {
         crate::gui::tray::TrayState::refresh_menu(cx);
     }
 
-    #[expect(clippy::too_many_lines)]
+    // Input and selection controls retain window-bound subscriptions. Rebuild them
+    // when a Wayland surface is reopened; keep history, tasks and update state alive.
+    pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        self.window_activation_subscription = Self::observe_activation(window, cx);
+        self.search_input = cx.new(|cx| InputState::new(window, cx));
+        self.search_input_subscription = Self::observe_search(&self.search_input, cx);
+        self.settings_editor = SettingsEditor::new(window, cx);
+        self.last_search_query.clear();
+        self.copy_generation = self.copy_generation.wrapping_add(1);
+        self.copy_in_progress = false;
+        self.active_panel = ActivePanel::ClipboardList;
+        self.ui_state = UiState::default();
+        self.pending_delete_id = None;
+        self.sync_filtered_records(cx);
+        window.focus(&self.focus_handle, cx);
+    }
+
+    fn observe_activation(window: &mut Window, cx: &Context<'_, Self>) -> Subscription {
+        // Hide when the OS deactivates the window, not when an inner control
+        // changes focus while the popup is being restored.
+        cx.observe_window_activation(window, move |this, window, cx| {
+            // When the window loses focus, hide the window (unless pinned).
+            if !window.is_window_active()
+                && Self::should_auto_hide_on_focus_out(this.pinned)
+                && !window.has_active_dialog(cx)
+            {
+                this.copy_generation = this.copy_generation.wrapping_add(1);
+                // Clear search input when hiding the window
+                this.clear_search(window, cx);
+                hide_window(window, cx, this.pinned);
+            }
+        })
+    }
+
+    fn observe_search(
+        search_input: &Entity<InputState>,
+        cx: &mut Context<'_, Self>,
+    ) -> Subscription {
+        cx.observe(search_input, |this, _, cx| {
+            let next_query = this.search_input.read(cx).value().to_string();
+            if !search_query_changed(&this.last_search_query, &next_query) {
+                return;
+            }
+            let reveal_selection =
+                search_query_should_reveal_selection(&this.last_search_query, &next_query);
+            this.last_search_query = next_query;
+
+            if reveal_selection {
+                this.sync_filtered_records_and_reveal(cx);
+            } else {
+                this.sync_filtered_records(cx);
+            }
+            cx.notify();
+        })
+    }
+
     pub(crate) fn new(
         records: SharedRecords,
         last_copy: Arc<Mutex<CopyTracker>>,
@@ -357,57 +409,12 @@ impl RopyBoard {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
-        // Hide when the OS deactivates the window, not when an inner control
-        // changes focus while the popup is being restored.
-        let window_activation_subscription =
-            cx.observe_window_activation(window, move |this, window, cx| {
-                // When the window loses focus, hide the window (unless pinned).
-                if !window.is_window_active()
-                    && Self::should_auto_hide_on_focus_out(this.pinned)
-                    && !window.has_active_dialog(cx)
-                {
-                    this.copy_generation = this.copy_generation.wrapping_add(1);
-                    // Clear search input when hiding the window
-                    this.clear_search(window, cx);
-                    hide_window(window, cx, this.pinned);
-                }
-            });
+        let window_activation_subscription = Self::observe_activation(window, cx);
 
         let settings = GlobalSettings::read(cx, Clone::clone);
-        let activation_key = &settings.hotkey.activation_key;
         let layout_mode = settings.layout.mode;
         let confirm_mode = settings.confirm.mode;
-        let activation_key_placeholder = Self::hotkey_placeholder_text(activation_key, cx);
-        let settings_activation_key_input = cx
-            .new(|cx| InputState::new(window, cx).placeholder(activation_key_placeholder.clone()));
-        let settings_max_history_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(settings.storage.max_history_records.to_string())
-        });
-        let settings_max_storage_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(settings.storage.max_storage_records.to_string())
-        });
-        let settings_window_opacity_slider =
-            build_window_opacity_slider(settings.window.opacity_percent, window, cx);
-
-        let selected_theme = crate::gui::theme::available_themes()
-            .iter()
-            .position(|theme_id| theme_id == &settings.theme)
-            .unwrap_or_default();
-        let theme_select = build_theme_select(selected_theme, window, cx);
-
-        let selected_layout = LayoutMode::all()
-            .iter()
-            .position(|mode| mode == &layout_mode)
-            .unwrap_or_default();
-        let layout_select = build_layout_select(selected_layout, window, cx);
-
-        let selected_language = crate::i18n::language::available_languages()
-            .iter()
-            .position(|lang| lang == &settings.language)
-            .unwrap_or(0);
-        let language_select = build_language_select(selected_language, window, cx);
+        let settings_editor = SettingsEditor::new(window, cx);
 
         let favorite_ids = Arc::new(HashSet::new());
         let search_input = cx.new(|cx| InputState::new(window, cx));
@@ -430,58 +437,13 @@ impl RopyBoard {
             ListAlignment::Top,
             gpui_kit::px(160.),
         );
-        let search_input_subscription = cx.observe(&search_input, |this, _, cx| {
-            let next_query = this.search_input.read(cx).value().to_string();
-            if !search_query_changed(&this.last_search_query, &next_query) {
-                return;
-            }
-
-            let reveal_selection =
-                search_query_should_reveal_selection(&this.last_search_query, &next_query);
-            this.last_search_query = next_query;
-
-            if reveal_selection {
-                this.sync_filtered_records_and_reveal(cx);
-            } else {
-                this.sync_filtered_records(cx);
-            }
-            cx.notify();
-        });
-
-        let settings_editor = SettingsEditor {
-            hotkey: settings_editor::HotkeyEditorState::default(),
-            pending_hotkey: activation_key.clone(),
-            hotkey_before_recording: activation_key.clone(),
-            settings_activation_key_input,
-            settings_max_history_input,
-            settings_max_storage_input,
-            settings_window_opacity_slider,
-            selected_theme,
-            theme_select,
-            selected_layout,
-            layout_select,
-            window_opacity_percent: settings.window.opacity_percent,
-            selected_language,
-            language_select,
-            autostart: settings_editor::AutostartSettingsState {
-                enabled: settings.autostart.enabled,
-            },
-            update_settings: settings_editor::UpdateSettingsState {
-                auto_check_enabled: settings.update.auto_check,
-                include_prerelease_enabled: settings.update.include_prerelease,
-            },
-            panel_state: settings_editor::SettingsPanelState {
-                window_opacity_slider_visible: false,
-                hover_preview_enabled: settings.preview.hover_preview_enabled,
-                space_preview_enabled: settings.preview.space_preview_enabled,
-            },
-        };
+        let search_input_subscription = Self::observe_search(&search_input, cx);
 
         Self {
             records,
             focus_handle,
-            _window_activation_subscription: window_activation_subscription,
-            _search_input_subscription: search_input_subscription,
+            window_activation_subscription,
+            search_input_subscription,
             search_input,
             last_search_query: String::new(),
             grid_scroll_handle: ScrollHandle::new(),

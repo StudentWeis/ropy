@@ -1,8 +1,9 @@
 //! Linux session detection and single-instance activation from compositor shortcuts.
 
+/// Compositor-issued focus tokens for native Wayland surfaces.
+pub mod activation;
 /// Hyprland IPC and session integration.
 pub mod hyprland;
-mod scaling;
 
 use std::{
     ffi::OsStr,
@@ -20,7 +21,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub(crate) enum StartupError {
-    #[error("Linux popup windows currently require X11 or XWayland (DISPLAY is missing)")]
+    #[error("Linux popup windows require WAYLAND_DISPLAY or DISPLAY")]
     MissingDisplay,
     #[error("activation directory must be owned by the current user with mode 0700: {0}")]
     UnsafeActivationDirectory(PathBuf),
@@ -40,17 +41,13 @@ pub(crate) struct Instance {
 
 impl gpui_kit::Global for Instance {}
 
-pub(crate) fn configure_xwayland_scale() -> io::Result<()> {
-    scaling::configure_xwayland_scale()
-}
-
 pub(crate) fn is_wayland() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some_and(|display| !display.is_empty())
 }
 
 impl Instance {
     pub(crate) fn start(show_on_start: bool) -> Result<Option<Self>, StartupError> {
-        if std::env::var_os("DISPLAY").is_none_or(|display| display.is_empty()) {
+        if !is_wayland() && std::env::var_os("DISPLAY").is_none_or(|display| display.is_empty()) {
             return Err(StartupError::MissingDisplay);
         }
         let runtime = std::env::var_os("XDG_RUNTIME_DIR");
@@ -63,14 +60,17 @@ impl Instance {
             &std::env::temp_dir(),
             &display,
         )?;
-        let mut instance = Self::acquire(&directory)?;
+        let token = std::env::var("XDG_ACTIVATION_TOKEN")
+            .ok()
+            .filter(|token| !token.is_empty());
+        let mut instance = Self::acquire(&directory, token.as_deref())?;
         if let Some(instance) = &mut instance {
             instance.show_on_start = show_on_start;
         }
         Ok(instance)
     }
 
-    fn acquire(directory: &Path) -> io::Result<Option<Self>> {
+    fn acquire(directory: &Path, activation_token: Option<&str>) -> io::Result<Option<Self>> {
         let lock = OpenOptions::new()
             .read(true)
             .write(true)
@@ -82,7 +82,7 @@ impl Instance {
         match lock.try_lock() {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
-                forward_activation(&socket_path)?;
+                forward_activation(&socket_path, activation_token)?;
                 return Ok(None);
             }
             Err(TryLockError::Error(error)) => return Err(error),
@@ -100,11 +100,11 @@ impl Instance {
         }))
     }
 
-    pub(crate) fn install(
-        self,
-        window: gpui_kit::WindowHandle<gpui_kit::component::Root>,
-        cx: &mut gpui_kit::App,
-    ) {
+    pub(crate) const fn show_on_start(&self) -> bool {
+        self.show_on_start
+    }
+
+    pub(crate) fn install(self, cx: &mut gpui_kit::App) {
         let socket = match self.socket.try_clone() {
             Ok(socket) => socket,
             Err(error) => {
@@ -113,19 +113,20 @@ impl Instance {
                 return;
             }
         };
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, rx) = async_channel::bounded::<Option<String>>(1);
         if self.show_on_start {
-            let _ = tx.try_send(());
+            // GPUI already applies the startup token to the first surface.
+            let _ = tx.try_send(None);
         }
         let result = std::thread::Builder::new()
             .name("linux-activation".into())
             .spawn(move || {
-                let mut message = [0; 16];
+                let mut message = [0; MAX_ACTIVATION_BYTES + 1];
                 while let Ok(size) = socket.recv(&mut message) {
-                    if &message[..size] == b"show" {
-                        match tx.try_send(()) {
-                            Ok(()) | Err(async_channel::TrySendError::Full(())) => {}
-                            Err(async_channel::TrySendError::Closed(())) => break,
+                    if let Ok(token) = decode_activation(&message[..size]) {
+                        match tx.try_send(token) {
+                            Ok(()) | Err(async_channel::TrySendError::Full(_)) => {}
+                            Err(async_channel::TrySendError::Closed(_)) => break,
                         }
                     }
                 }
@@ -135,10 +136,8 @@ impl Instance {
         }
         cx.set_global(self);
         cx.spawn(async move |cx| {
-            while rx.recv().await.is_ok() {
-                let _ = window.update(cx, |_, window, cx| {
-                    window.dispatch_action(Box::new(crate::gui::board::Active), cx);
-                });
+            while let Ok(token) = rx.recv().await {
+                cx.update(|cx| crate::gui::window::show_with_token(token.as_deref(), cx));
             }
         })
         .detach();
@@ -178,12 +177,38 @@ fn activation_directory(
     Ok(directory)
 }
 
-fn forward_activation(path: &Path) -> io::Result<()> {
+const MAX_ACTIVATION_BYTES: usize = 4096;
+
+fn encode_activation(token: Option<&str>) -> io::Result<Vec<u8>> {
+    let message = token.map_or_else(
+        || b"show".to_vec(),
+        |token| format!("show\n{token}").into_bytes(),
+    );
+    decode_activation(&message)?;
+    Ok(message)
+}
+
+fn decode_activation(message: &[u8]) -> io::Result<Option<String>> {
+    if message == b"show" {
+        return Ok(None);
+    }
+    let token = message
+        .strip_prefix(b"show\n")
+        .filter(|token| {
+            !token.is_empty() && !token.contains(&0) && message.len() <= MAX_ACTIVATION_BYTES
+        })
+        .and_then(|token| std::str::from_utf8(token).ok())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid activation request"))?;
+    Ok(Some(token.to_owned()))
+}
+
+fn forward_activation(path: &Path, token: Option<&str>) -> io::Result<()> {
+    let message = encode_activation(token)?;
     let socket = UnixDatagram::unbound()?;
     socket.set_write_timeout(Some(Duration::from_secs(1)))?;
     // A concurrent first launch may hold the lock before binding its socket.
     for attempt in 0..20 {
-        match socket.send_to(b"show", path) {
+        match socket.send_to(&message, path) {
             Ok(_) => return Ok(()),
             Err(error)
                 if attempt < 19
@@ -209,6 +234,24 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn test_activation_message_preserves_token_and_legacy_show() {
+        assert_eq!(decode_activation(b"show").unwrap(), None);
+        assert_eq!(
+            decode_activation(&encode_activation(Some("compositor-token")).unwrap()).unwrap(),
+            Some("compositor-token".into())
+        );
+        for invalid in [
+            b"unknown".as_slice(),
+            b"show\n",
+            b"show\n\xff",
+            b"show\na\0b",
+        ] {
+            assert!(decode_activation(invalid).is_err());
+        }
+        assert!(encode_activation(Some(&"x".repeat(MAX_ACTIVATION_BYTES))).is_err());
+    }
+
     #[rstest]
     #[case(None)]
     #[case(Some(Path::new("")))]
@@ -221,20 +264,23 @@ mod tests {
         let metadata = std::fs::symlink_metadata(&directory).unwrap();
         assert_eq!(metadata.mode() & 0o777, 0o700);
         assert_eq!(metadata.uid(), temporary.path().metadata().unwrap().uid());
-        let first = Instance::acquire(&directory).unwrap().unwrap();
+        let first = Instance::acquire(&directory, None).unwrap().unwrap();
         first
             .socket
             .set_read_timeout(Some(Duration::from_secs(1)))
             .unwrap();
         let same = activation_directory(runtime, temporary.path(), OsStr::new(":0")).unwrap();
-        assert!(Instance::acquire(&same).unwrap().is_none());
+        assert!(Instance::acquire(&same, None).unwrap().is_none());
         let mut message = [0; 16];
         let size = first.socket.recv(&mut message).unwrap();
-        assert_eq!(&message[..size], b"show");
+        assert_eq!(
+            decode_activation(&message[..size]).unwrap().as_deref(),
+            None
+        );
         let other = activation_directory(runtime, temporary.path(), OsStr::new(":1")).unwrap();
-        assert!(Instance::acquire(&other).unwrap().is_some());
+        assert!(Instance::acquire(&other, None).unwrap().is_some());
         drop(first);
-        assert!(Instance::acquire(&directory).unwrap().is_some());
+        assert!(Instance::acquire(&directory, None).unwrap().is_some());
     }
 
     #[test]
@@ -269,32 +315,41 @@ mod tests {
         assert!(activation_directory(None, temporary.path(), display).is_err());
     }
 
-    #[test]
-    fn test_instance_second_launch_forwards_show_to_first() {
+    #[rstest]
+    #[case(None)]
+    #[case(Some("compositor-issued-token"))]
+    fn test_instance_second_launch_forwards_show_to_first(#[case] token: Option<&str>) {
         let directory = tempfile::tempdir().unwrap();
-        let first = Instance::acquire(directory.path()).unwrap().unwrap();
+        let first = Instance::acquire(directory.path(), None).unwrap().unwrap();
         first
             .socket
             .set_read_timeout(Some(Duration::from_secs(1)))
             .unwrap();
-        assert!(Instance::acquire(directory.path()).unwrap().is_none());
-        let mut message = [0; 16];
+        assert!(
+            Instance::acquire(directory.path(), token)
+                .unwrap()
+                .is_none()
+        );
+        let mut message = [0; MAX_ACTIVATION_BYTES];
         let size = first.socket.recv(&mut message).unwrap();
-        assert_eq!(&message[..size], b"show");
+        assert_eq!(
+            decode_activation(&message[..size]).unwrap().as_deref(),
+            token
+        );
     }
 
     #[test]
     fn test_instance_after_exit_reclaims_stale_socket() {
         let directory = tempfile::tempdir().unwrap();
-        drop(Instance::acquire(directory.path()).unwrap().unwrap());
-        assert!(Instance::acquire(directory.path()).unwrap().is_some());
+        drop(Instance::acquire(directory.path(), None).unwrap().unwrap());
+        assert!(Instance::acquire(directory.path(), None).unwrap().is_some());
     }
 
     #[test]
     fn test_instance_independent_sessions_do_not_forward() {
         let first = tempfile::tempdir().unwrap();
         let second = tempfile::tempdir().unwrap();
-        let _first = Instance::acquire(first.path()).unwrap().unwrap();
-        assert!(Instance::acquire(second.path()).unwrap().is_some());
+        let _first = Instance::acquire(first.path(), None).unwrap().unwrap();
+        assert!(Instance::acquire(second.path(), None).unwrap().is_some());
     }
 }

@@ -6519,12 +6519,14 @@ dependencies = [
 name = "ropy"
 version = "0.5.7"
 dependencies = [
+ "ashpd",
  "async-channel",
  "auto-launch",
  "chrono",
  "clipboard-rs",
  "dirs 7.0.0",
  "enigo",
+ "futures-lite",
  "global-hotkey",
  "gpui-kit",
  "gtk",
@@ -6549,10 +6551,13 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "tray-icon",
+ "wayland-client",
+ "wayland-protocols",
  "windows-sys 0.61.2",
  "winres",
  "x11rb 0.14.0",
  "xz2",
+ "zbus",
  "zip",
 ]
 
