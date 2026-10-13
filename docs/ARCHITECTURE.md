@@ -100,7 +100,9 @@ This preserves the existing pipeline and channel policies:
    prevents an older failure from clearing a newer attempt.
 5. Successful persistence sends a coalescible UI refresh notification.
 6. Clipboard write completion is reported through the existing completion
-   channel before the paste workflow continues.
+   channel before either confirmation mode hides the popup or synthesizes paste.
+   Failure, disconnection or timeout keeps the popup open and shows a localized
+   notification; stale completions cannot affect a dismissed or reopened board.
 
 The application retains the current application-lifetime detached tasks and
 watcher behavior. This refactor does not introduce a new shutdown protocol or
@@ -131,6 +133,10 @@ store.
 `Settings` is a plain serializable value. `GlobalSettings` is the GPUI-owned live
 snapshot; UI callers read it through a closure and mutate it through the adapter.
 The existing settings workflow still restores the previous value if saving fails.
+Recovery defaults also pause automatic history cleanup: their storage limits
+control display only and must not replace an unreadable user retention policy.
+The persistent recovery alert explains that saving and automatic cleanup are
+paused until the configuration is repaired and the application is restarted.
 Core validates storage limits and opacity. After loading, the desktop
 adapter validates shortcut syntax with `global-hotkey` and restores the default
 for invalid values before native registration. The parser and its tests remain

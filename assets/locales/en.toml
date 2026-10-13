@@ -131,5 +131,6 @@ promo_description = "Cross-platform, lightweight clipboard manager built with Ru
 promo_code = 'fn main() { println!("Hello, Ropy!"); }'
 
 # Startup recovery
-settings_recovery_required = "Settings could not be loaded. To protect your configuration, changes cannot be saved and startup preferences are unchanged. Repair config.toml, then restart Ropy."
+settings_recovery_required = "Settings could not be loaded. Saving settings and automatic history cleanup are paused; startup preferences are unchanged. Repair config.toml, then restart Ropy."
+clipboard_write_unconfirmed = "Could not confirm the clipboard write. Try copying again."
 repository_unavailable = "Clipboard history is unavailable. New copies cannot be saved. Check the data folder permissions and close other Ropy instances, then restart Ropy."

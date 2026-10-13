@@ -159,6 +159,96 @@ fn test_refresh_notification_preserves_pending_storage_limit_trim(cx: &TestAppCo
 }
 
 #[gpui_kit::test]
+fn test_refresh_settings_recovery_preserves_history_until_repaired(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    for value in 0..231 {
+        repo.save_text(value.to_string()).unwrap();
+    }
+    let (_, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        cx.set_global(GlobalSettings::new(Settings::recovery_defaults()));
+        board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        repo.count(),
+        231,
+        "recovery defaults must not delete history"
+    );
+    cx.update(|cx| {
+        assert!(!crate::utils::read_or_recover(&board.read(cx).records).is_empty());
+        board.update(cx, |board, cx| board.refresh_history(cx, true));
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        repo.count(),
+        231,
+        "explicit trims must also respect recovery"
+    );
+    cx.update(|cx| {
+        cx.set_global(GlobalSettings::new(Settings::default()));
+        board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
+    });
+    cx.run_until_parked();
+    assert_eq!(repo.count(), 200, "valid settings restore normal retention");
+}
+
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI test contexts stay on the UI thread"
+)]
+async fn test_copy_confirmation_waits_for_writer_and_reports_failure(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("enter", cx);
+    })
+    .unwrap();
+    let CopyRequest::Text {
+        completion: Some(completion),
+        ..
+    } = rx.recv().await.unwrap()
+    else {
+        unreachable!("copy confirmation must request native write completion")
+    };
+    cx.run_until_parked();
+    cx.update(|cx| assert!(board.read(cx).copy_in_progress));
+    completion
+        .try_send(Err(ClipboardWriteError::Clipboard(
+            "injected failure".into(),
+        )))
+        .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        assert!(!board.read(cx).copy_in_progress);
+        assert_eq!(
+            window.notifications(cx).len(),
+            1,
+            "write failure must be visible"
+        );
+        window.render_frame(cx);
+        assert!(window.find("settings-button").visible());
+        window.press("enter", cx);
+    })
+    .unwrap();
+    let CopyRequest::Text {
+        completion: Some(completion),
+        ..
+    } = rx.recv().await.unwrap()
+    else {
+        unreachable!()
+    };
+    completion.try_send(Ok(())).unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| assert!(!board.read(cx).copy_in_progress));
+}
+
+#[gpui_kit::test]
 fn test_refresh_clear_while_pending_does_not_restore_deleted_history(cx: &TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let repo = Arc::new(

@@ -1,12 +1,16 @@
 use std::{future::poll_fn, pin::pin, task::Poll, time::Duration};
 
-use gpui_kit::{AppContext, BackgroundExecutor, Context, Window};
+use gpui_kit::{
+    AppContext, BackgroundExecutor, Context, Window,
+    component::{WindowExt, notification::Notification},
+};
 
 use super::RopyBoard;
 use crate::{
     clipboard::{ClipboardWriteResult, CopyRequest},
     config::ConfirmMode,
     gui::{hide_window, paste},
+    i18n::I18n,
     repository::{
         ClipboardRecord, ContentType,
         assets::{load_rich_text_html, load_rich_text_rtf},
@@ -194,11 +198,17 @@ impl RopyBoard {
                 this.copy_in_progress = false;
                 cx.notify();
                 // A dismissed/reopened board must not hide or paste on a stale completion.
-                if !success
-                    || this.copy_generation != generation
+                if this.copy_generation != generation
                     || this.active_panel != super::ActivePanel::ClipboardList
                     || this.ui_state.any_overlay_visible()
                 {
+                    return;
+                }
+                if !success {
+                    window.push_notification(
+                        Notification::error(I18n::translate(cx, "clipboard_write_unconfirmed")),
+                        cx,
+                    );
                     return;
                 }
                 match mode {
