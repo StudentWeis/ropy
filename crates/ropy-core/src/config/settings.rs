@@ -52,8 +52,10 @@ pub struct Settings {
     pub hotkey: HotkeySettings,
     /// History visibility and retention limits.
     pub storage: StorageSettings,
-    /// Selected bundled theme code.
+    /// Bundled theme used when system appearance following is disabled.
     pub theme: ThemeId,
+    /// Independent light/dark theme choices and system appearance following.
+    pub appearance: AppearanceSettings,
     /// Window opacity preferences.
     pub window: WindowSettings,
     /// History presentation mode.
@@ -293,6 +295,29 @@ pub struct ConfirmSettings {
     pub mode: ConfirmMode,
 }
 
+/// Theme choices used when following the operating system's appearance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[non_exhaustive]
+pub struct AppearanceSettings {
+    /// Follow the operating system's light/dark appearance; opt-in for old configurations.
+    pub follow_system: bool,
+    /// Bundled theme used for light appearance.
+    pub light_theme: ThemeId,
+    /// Bundled theme used for dark appearance.
+    pub dark_theme: ThemeId,
+}
+
+impl Default for AppearanceSettings {
+    fn default() -> Self {
+        Self {
+            follow_system: false,
+            light_theme: ThemeId::default(),
+            dark_theme: ThemeId::new("ropy-dark"),
+        }
+    }
+}
+
 /// Persisted window appearance preferences.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -422,9 +447,53 @@ impl Default for PreviewSettings {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
     use tempfile::TempDir;
 
     use super::*;
+
+    #[rstest]
+    #[case("ropy-light")]
+    #[case("everforest-night")]
+    fn test_settings_legacy_theme_keeps_fixed_appearance(#[case] code: &str) {
+        let settings = Settings::from_config_content(&format!("theme = {code:?}")).unwrap();
+
+        assert_eq!(settings.theme.code(), code);
+        assert!(!settings.appearance.follow_system);
+        assert_eq!(settings.appearance.light_theme.code(), "ropy-light");
+        assert_eq!(settings.appearance.dark_theme.code(), "ropy-dark");
+    }
+
+    #[test]
+    fn test_settings_appearance_save_load_preserves_independent_choices() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut settings = Settings {
+            theme: ThemeId::new("ropy-dark"),
+            ..Settings::default()
+        };
+        settings.appearance.follow_system = true;
+        settings.appearance.light_theme = ThemeId::new("nord-light");
+        settings.appearance.dark_theme = ThemeId::new("everforest-night");
+        settings
+            .save_to_file(&directory.path().join("config.toml"))
+            .unwrap();
+
+        let loaded = Settings::load_from_dir(directory.path()).unwrap();
+        assert_eq!(loaded.appearance, settings.appearance);
+        assert_eq!(loaded.theme, settings.theme);
+    }
+
+    #[test]
+    fn test_settings_partial_appearance_fills_missing_theme_defaults() {
+        let settings = Settings::from_config_content(
+            "[appearance]\nfollow_system = true\nlight_theme = \"nord-light\"",
+        )
+        .unwrap();
+
+        assert!(settings.appearance.follow_system);
+        assert_eq!(settings.appearance.light_theme.code(), "nord-light");
+        assert_eq!(settings.appearance.dark_theme.code(), "ropy-dark");
+    }
 
     #[test]
     fn test_settings_recovery_after_invalid_load_blocks_save_and_preserves_file() {

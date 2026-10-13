@@ -25,6 +25,8 @@ use crate::{
     i18n::I18n,
 };
 
+mod theme;
+
 fn settings_row<C: IntoElement>(
     label: impl Into<gpui_kit::SharedString>,
     control: C,
@@ -93,8 +95,8 @@ pub(crate) fn render_settings_content(
     let appearance_card = section_card(
         I18n::translate(cx, "settings_section_appearance"),
         vec![
+            theme::render_theme_settings(board, cx).into_any_element(),
             render_language_row(board, cx).into_any_element(),
-            render_theme_row(board, cx).into_any_element(),
             render_layout_row(board, cx).into_any_element(),
             render_window_opacity_row(board, cx).into_any_element(),
         ],
@@ -169,18 +171,6 @@ fn render_language_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
             div()
                 .w(px(148.0))
                 .child(Select::new(&board.settings_editor.language_select).small()),
-        ),
-        cx,
-    )
-}
-
-fn render_theme_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    settings_row(
-        I18n::translate(cx, "settings_theme"),
-        h_flex().flex_1().justify_end().child(
-            div()
-                .w(px(148.0))
-                .child(Select::new(&board.settings_editor.theme_select).small()),
         ),
         cx,
     )
@@ -592,7 +582,6 @@ pub(crate) fn reset_settings_dialog(
     // Reset selections to persisted values from GPUI Global
     let (
         lang_idx,
-        theme_idx,
         layout_idx,
         layout_mode,
         autostart_enabled,
@@ -608,17 +597,12 @@ pub(crate) fn reset_settings_dialog(
             .iter()
             .position(|lang| lang == &s.language)
             .unwrap_or(0);
-        let theme = crate::gui::theme::available_themes()
-            .iter()
-            .position(|theme_id| theme_id == &s.theme)
-            .unwrap_or_default();
         let layout = crate::config::LayoutMode::all()
             .iter()
             .position(|layout_mode| layout_mode == &s.layout.mode)
             .unwrap_or_default();
         (
             lang,
-            theme,
             layout,
             s.layout.mode,
             s.autostart.enabled,
@@ -632,7 +616,6 @@ pub(crate) fn reset_settings_dialog(
         )
     });
     board.settings_editor.selected_language = lang_idx;
-    board.settings_editor.selected_theme = theme_idx;
     board.settings_editor.selected_layout = layout_idx;
     board.settings_editor.autostart.enabled = autostart_enabled;
     board.settings_editor.update_settings.auto_check_enabled = auto_check_enabled;
@@ -659,9 +642,7 @@ pub(crate) fn reset_settings_dialog(
         .update(cx, |state, cx| {
             state.set_selected_index(Some(IndexPath::default().row(lang_idx)), window, cx);
         });
-    board.settings_editor.theme_select.update(cx, |state, cx| {
-        state.set_selected_index(Some(IndexPath::default().row(theme_idx)), window, cx);
-    });
+    board.settings_editor.theme.sync(window, cx);
     board.sync_layout_select_items(window, cx);
 
     // Clear input fields
@@ -682,11 +663,7 @@ pub(crate) fn reset_settings_dialog(
         .panel_state
         .window_opacity_slider_visible = false;
     board.sync_window_opacity_slider(window_opacity, window, cx);
-    let theme = crate::gui::theme::available_themes()
-        .get(theme_idx)
-        .cloned()
-        .unwrap_or_default();
-    crate::gui::app::set_app_theme(window, cx, &theme, window_opacity);
+    crate::gui::app::apply_current_theme(window, cx, window_opacity);
     crate::gui::app::apply_window_opacity(window, window_opacity);
     let current_hotkey = board.settings_editor.pending_hotkey.clone();
     board.sync_activation_key_input("", &current_hotkey, window, cx);

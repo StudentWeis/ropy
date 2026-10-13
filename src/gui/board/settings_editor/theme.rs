@@ -1,0 +1,194 @@
+//! Theme selectors keep stable theme IDs; settings remain the source of truth.
+
+use gpui_kit::{
+    AnyElement, App, AppContext, Context, Entity, IntoElement, ParentElement, SharedString, Styled,
+    Window,
+    component::{
+        IndexPath, h_flex,
+        select::{SelectEvent, SelectItem, SelectState},
+    },
+    div, rgb,
+};
+
+use super::RopyBoard;
+use crate::{
+    config::Settings,
+    gui::{
+        settings::GlobalSettings,
+        theme::{self, ThemeDefinition, ThemeId, ThemeMode},
+    },
+};
+
+#[derive(Clone, Copy)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) enum ThemeTarget {
+    Fixed,
+    Light,
+    Dark,
+}
+
+impl ThemeTarget {
+    const fn mode(self) -> Option<ThemeMode> {
+        match self {
+            Self::Fixed => None,
+            Self::Light => Some(ThemeMode::Light),
+            Self::Dark => Some(ThemeMode::Dark),
+        }
+    }
+
+    fn selected(self, settings: &Settings) -> ThemeId {
+        match self {
+            Self::Fixed => ThemeDefinition::load_or_default(&settings.theme)
+                .id()
+                .clone(),
+            Self::Light => {
+                theme::theme_for_mode(&settings.appearance.light_theme, ThemeMode::Light)
+            }
+            Self::Dark => theme::theme_for_mode(&settings.appearance.dark_theme, ThemeMode::Dark),
+        }
+    }
+
+    pub(crate) fn set(self, settings: &mut Settings, id: ThemeId) {
+        match self {
+            Self::Fixed => settings.theme = id,
+            Self::Light => settings.appearance.light_theme = id,
+            Self::Dark => settings.appearance.dark_theme = id,
+        }
+    }
+}
+
+#[derive(Clone)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct ThemeOption {
+    id: ThemeId,
+    title: SharedString,
+    swatch: [u32; 3],
+}
+
+impl ThemeOption {
+    fn content(&self) -> impl IntoElement {
+        // These are palette samples (data colors), not colors of the surrounding control.
+        h_flex()
+            .gap_2()
+            .min_w_0()
+            .child(
+                h_flex()
+                    .size_4()
+                    .flex_shrink_0()
+                    .rounded_full()
+                    .overflow_hidden()
+                    .children(
+                        self.swatch
+                            .map(|color| div().h_full().flex_1().bg(rgb(color))),
+                    ),
+            )
+            .child(div().min_w_0().text_ellipsis().child(self.title.clone()))
+    }
+}
+
+impl SelectItem for ThemeOption {
+    type Value = ThemeId;
+
+    fn title(&self) -> SharedString {
+        self.title.clone()
+    }
+
+    fn value(&self) -> &ThemeId {
+        &self.id
+    }
+
+    fn display_title(&self) -> Option<AnyElement> {
+        Some(self.content().into_any_element())
+    }
+
+    fn render(&self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        self.content()
+    }
+}
+
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct ThemeEditor {
+    fixed: Entity<SelectState<Vec<ThemeOption>>>,
+    light: Entity<SelectState<Vec<ThemeOption>>>,
+    dark: Entity<SelectState<Vec<ThemeOption>>>,
+    system_mode: ThemeMode,
+}
+
+impl ThemeEditor {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<'_, RopyBoard>) -> Self {
+        Self {
+            fixed: build_select(ThemeTarget::Fixed, window, cx),
+            light: build_select(ThemeTarget::Light, window, cx),
+            dark: build_select(ThemeTarget::Dark, window, cx),
+            system_mode: window.appearance().into(),
+        }
+    }
+
+    pub(crate) const fn select(
+        &self,
+        target: ThemeTarget,
+    ) -> &Entity<SelectState<Vec<ThemeOption>>> {
+        match target {
+            ThemeTarget::Fixed => &self.fixed,
+            ThemeTarget::Light => &self.light,
+            ThemeTarget::Dark => &self.dark,
+        }
+    }
+
+    pub(crate) const fn system_mode(&self) -> ThemeMode {
+        self.system_mode
+    }
+
+    pub(crate) fn update_system_mode(&mut self, mode: ThemeMode) -> bool {
+        let changed = self.system_mode != mode;
+        self.system_mode = mode;
+        changed
+    }
+
+    pub(crate) fn sync(&self, window: &mut Window, cx: &mut Context<'_, RopyBoard>) {
+        for target in [ThemeTarget::Fixed, ThemeTarget::Light, ThemeTarget::Dark] {
+            let id = GlobalSettings::read(cx, |settings| target.selected(settings));
+            self.select(target)
+                .update(cx, |state, cx| state.set_selected_value(&id, window, cx));
+        }
+    }
+}
+
+fn build_select(
+    target: ThemeTarget,
+    window: &mut Window,
+    cx: &mut Context<'_, RopyBoard>,
+) -> Entity<SelectState<Vec<ThemeOption>>> {
+    let items: Vec<_> = theme::available_themes()
+        .into_iter()
+        .filter_map(|id| {
+            let definition = ThemeDefinition::load(&id).ok()?;
+            if target.mode().is_some_and(|mode| definition.mode() != mode) {
+                return None;
+            }
+            let palette = definition.palette();
+            Some(ThemeOption {
+                title: theme::theme_display_name(&id).into(),
+                id,
+                swatch: [palette.background, palette.selection, palette.primary],
+            })
+        })
+        .collect();
+    let selected = GlobalSettings::read(cx, |settings| target.selected(settings));
+    let index = items
+        .iter()
+        .position(|item| item.id == selected)
+        .map(|ix| IndexPath::default().row(ix));
+    let select = cx.new(|cx| SelectState::new(items, index, window, cx));
+    cx.subscribe_in(
+        &select,
+        window,
+        move |board, _, event: &SelectEvent<Vec<ThemeOption>>, window, cx| {
+            if let SelectEvent::Confirm(Some(id)) = event {
+                board.save_selected_theme(target, id, window, cx);
+            }
+        },
+    )
+    .detach();
+    select
+}

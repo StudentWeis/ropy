@@ -92,9 +92,7 @@ fn open_window(
         },
         |window, cx| {
             window.set_window_title(MAIN_WINDOW_TITLE);
-            // Apply the application theme based on settings
-            let theme_id = GlobalSettings::read(cx, |s| s.theme.clone());
-            set_app_theme(window, cx, &theme_id, window_opacity_percent);
+            apply_current_theme(window, cx, window_opacity_percent);
             apply_window_opacity(window, window_opacity_percent);
 
             let view = build_board(window, cx);
@@ -113,6 +111,13 @@ const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgro
 
 pub(crate) fn apply_window_opacity(window: &Window, opacity_percent: u8) {
     window.set_background_appearance(background_appearance_for_opacity(opacity_percent));
+}
+
+/// Apply the saved appearance strategy using this window's OS appearance.
+pub(crate) fn apply_current_theme(window: &mut Window, cx: &mut App, opacity_percent: u8) {
+    let mode = window.appearance().into();
+    let id = GlobalSettings::read(cx, |settings| super::theme::resolve_theme(settings, mode));
+    set_app_theme(window, cx, &id, opacity_percent);
 }
 
 /// Set the application theme from a bundled theme definition.

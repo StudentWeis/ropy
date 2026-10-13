@@ -34,10 +34,14 @@ fn open_board(
         cx.set_global(I18n::default());
         cx.set_global(GlobalRepository::new(None));
         cx.bind_keys([
-            KeyBinding::new("enter", super::ConfirmSelection, None),
-            KeyBinding::new("shift-enter", super::ConfirmSelectionPlainText, None),
-            KeyBinding::new("escape", super::Hide, None),
-            KeyBinding::new("down", super::SelectNext, None),
+            KeyBinding::new("enter", super::ConfirmSelection, Some("!Select && !List")),
+            KeyBinding::new(
+                "shift-enter",
+                super::ConfirmSelectionPlainText,
+                Some("!Select && !List"),
+            ),
+            KeyBinding::new("escape", super::Hide, Some("!Select && !List")),
+            KeyBinding::new("down", super::SelectNext, Some("!Select && !List")),
         ]);
     });
     let (window, board) = cx.update(|cx| {
@@ -68,6 +72,119 @@ fn record(id: u64) -> ClipboardRecord {
         crate::repository::ContentType::Text,
     )
     .pinned(true)
+}
+
+#[gpui_kit::test]
+fn test_appearance_settings_show_only_choices_for_current_mode(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.open_settings_panel(window, cx);
+        });
+        window.render_frame(cx);
+        assert!(window.find("follow-system-toggle").visible());
+        assert!(window.find("theme-select").visible());
+        assert!(window.try_find("light-theme-select").is_none());
+        GlobalSettings::update(cx, |settings| settings.appearance.follow_system = true);
+        board.update(cx, |_, cx| cx.notify());
+        window.render_frame(cx);
+        assert!(window.try_find("theme-select").is_none());
+        assert!(window.find("light-theme-select").visible());
+        assert!(window.find("dark-theme-select").visible());
+        window.click("light-theme-select", cx);
+        window.render_frame(cx);
+        assert!(
+            board
+                .read(cx)
+                .settings_editor
+                .theme
+                .select(super::ThemeTarget::Light)
+                .focus_handle(cx)
+                .contains_focused(window, cx)
+        );
+        window.press("down", cx);
+        window.render_frame(cx);
+        window.press("escape", cx);
+        assert_eq!(board.read(cx).active_panel, ActivePanel::Settings);
+        assert_eq!(
+            GlobalSettings::read(cx, |s| s.appearance.light_theme.clone()),
+            crate::gui::theme::ThemeId::new("ropy-light")
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_appearance_refresh_restores_selected_palette_and_opacity(cx: &mut TestAppContext) {
+    use crate::gui::{
+        app,
+        theme::{ThemeId, ThemeMode},
+        utils::surface_with_opacity,
+    };
+
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        for following in [false, true] {
+            GlobalSettings::update(cx, |settings| {
+                settings.appearance.follow_system = following;
+                settings.appearance.light_theme = ThemeId::new("nord-light");
+                settings.theme = ThemeId::new("everforest-night");
+            });
+            app::set_app_theme(window, cx, &ThemeId::new("everforest-night"), 65);
+            board.update(cx, |board, cx| {
+                board.settings_editor.window_opacity_percent = 65;
+                board
+                    .settings_editor
+                    .theme
+                    .update_system_mode(ThemeMode::Dark);
+                board.refresh_system_appearance(window, cx);
+            });
+            let expected_color = if following { 0x00e3_e7ee } else { 0x0023_2a2e };
+            let expected = surface_with_opacity(gpui_kit::rgb(expected_color).into(), 65);
+            assert_eq!(gpui_kit::component::Theme::global(cx).background, expected);
+            assert_eq!(
+                gpui_kit::base::Theme::global(cx).tokens.colors.background,
+                expected
+            );
+            assert_eq!(
+                GlobalSettings::read(cx, |s| s.theme.code().to_owned()),
+                "everforest-night"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_appearance_recovery_rejects_switch_and_theme_without_changing_palette(
+    cx: &mut TestAppContext,
+) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| cx.set_global(GlobalSettings::new(Settings::recovery_defaults())));
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.open_settings_panel(window, cx));
+        window.render_frame(cx);
+        let background = gpui_kit::component::Theme::global(cx).background;
+        window.click("follow-system-toggle", cx);
+        board.update(cx, |board, cx| {
+            board.save_selected_theme(
+                super::ThemeTarget::Fixed,
+                &crate::gui::theme::ThemeId::new("ropy-dark"),
+                window,
+                cx,
+            );
+        });
+        assert!(!GlobalSettings::read(cx, |s| s.appearance.follow_system));
+        assert_eq!(
+            GlobalSettings::read(cx, |s| s.theme.clone()),
+            crate::gui::theme::ThemeId::new("ropy-light")
+        );
+        assert_eq!(
+            gpui_kit::component::Theme::global(cx).background,
+            background
+        );
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
