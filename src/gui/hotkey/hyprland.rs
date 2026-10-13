@@ -1,9 +1,8 @@
 //! Runtime shortcuts for Hyprland's Lua configuration (0.55 and newer).
 
 use std::{
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{self, BufRead, BufReader},
     os::unix::net::UnixStream,
-    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -20,8 +19,8 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::ListenerMessage;
+use crate::linux::hyprland::Connection;
 
-const TIMEOUT: Duration = Duration::from_millis(500);
 static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Error)]
@@ -34,8 +33,8 @@ enum Error {
     Io(#[from] io::Error),
     #[error("invalid Hyprland bindings response: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("Hyprland rejected shortcut: {0}")]
-    Rejected(String),
+    #[error(transparent)]
+    Ipc(#[from] crate::linux::hyprland::Error),
 }
 
 struct Chord {
@@ -153,73 +152,36 @@ fn keysym(code: &str) -> Option<String> {
     )
 }
 
-#[derive(Clone)]
-struct Connection {
-    directory: PathBuf,
-}
-
-impl Connection {
-    fn current() -> Option<Self> {
-        let signature = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
-        if signature.is_empty() {
-            return None;
-        }
-        Some(Self {
-            directory: PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?)
-                .join("hypr")
-                .join(signature),
-        })
+fn install(connection: &Connection, chord: &Chord, token: &str) -> Result<(), Error> {
+    let slot = format!("_ropy_hotkeys[{}]", chord.id);
+    let own_arg = connection.request(&format!(
+        "/repl (_ropy_hotkeys and {slot} and {slot}.bind.arg) or ''"
+    ))?;
+    let binds = connection.request("j/binds")?;
+    if own_arg.trim().is_empty() {
+        chord.check_available(&binds)?;
+    } else {
+        chord.check_available_except(&binds, own_arg.trim())?;
     }
-
-    fn request(&self, request: &str) -> Result<String, Error> {
-        let mut socket = UnixStream::connect(self.directory.join(".socket.sock"))?;
-        socket.set_read_timeout(Some(TIMEOUT))?;
-        socket.set_write_timeout(Some(TIMEOUT))?;
-        socket.write_all(request.as_bytes())?;
-        let mut response = String::new();
-        socket.take(1024 * 1024).read_to_string(&mut response)?;
-        Ok(response)
-    }
-
-    fn eval(&self, lua: &str) -> Result<(), Error> {
-        let response = self.request(&format!("/eval {lua}"))?;
-        if response.trim() == "ok" {
-            Ok(())
-        } else {
-            Err(Error::Rejected(response))
-        }
-    }
-
-    fn install(&self, chord: &Chord, token: &str) -> Result<(), Error> {
-        let slot = format!("_ropy_hotkeys[{}]", chord.id);
-        let own_arg = self.request(&format!(
-            "/repl (_ropy_hotkeys and {slot} and {slot}.bind.arg) or ''"
-        ))?;
-        let binds = self.request("j/binds")?;
-        if own_arg.trim().is_empty() {
-            chord.check_available(&binds)?;
-        } else {
-            chord.check_available_except(&binds, own_arg.trim())?;
-        }
-        // Only generated ASCII keysyms and numeric IDs enter this Lua program.
-        // Keep the handle: unbind/remove also removes OTHER bindings on the same chord.
-        self.eval(&format!(
+    // Only generated ASCII keysyms and numeric IDs enter this Lua program.
+    // Keep the handle: unbind/remove also removes OTHER bindings on the same chord.
+    connection.eval(&format!(
             "assert(hl.get_current_submap() == '', 'active submap'); _ropy_hotkeys = _ropy_hotkeys or {{}}; \
              local e = {slot}; if e and e.bind:is_enabled() ~= nil then \
              e.token = '{token}'; e.bind:set_enabled(true); else \
              e = {{token = '{token}'}}; {slot} = e; \
              e.bind = hl.bind('{}', function() hl.dispatch(hl.dsp.event(e.token)) end); end",
             chord.lua_keys
-        ))
-    }
+        ))?;
+    Ok(())
+}
 
-    fn disable(&self, id: u32, token: &str) {
-        if let Err(error) = self.eval(&format!(
-            "local e = _ropy_hotkeys and _ropy_hotkeys[{id}]; \
+fn disable(connection: &Connection, id: u32, token: &str) {
+    if let Err(error) = connection.eval(&format!(
+        "local e = _ropy_hotkeys and _ropy_hotkeys[{id}]; \
              if e and e.token == '{token}' then e.bind:set_enabled(false) end"
-        )) {
-            tracing::warn!(%error, "failed to disable Hyprland shortcut");
-        }
+    )) {
+        tracing::warn!(%error, "failed to disable Hyprland shortcut");
     }
 }
 
@@ -238,53 +200,6 @@ fn event(line: &str, token: &str) -> Option<Event> {
     } else {
         None
     }
-}
-
-/// `XWayland` map requests are asynchronous, and Hyprland may ignore X11's
-/// activation hint. Wait briefly for our mapped window, then explicitly focus
-/// only this process in response to the user's activation shortcut.
-pub(super) fn focus_popup() {
-    let Some(connection) = Connection::current() else {
-        return;
-    };
-    let pid = std::process::id();
-    for _ in 0..10 {
-        match connection
-            .request("j/clients")
-            .and_then(|json| has_mapped_popup(&json, pid))
-        {
-            Ok(true) => {
-                if let Err(error) = connection.eval(&format!(
-                    "hl.dispatch(hl.dsp.focus({{window = 'pid:{pid}'}}))"
-                )) {
-                    tracing::warn!(%error, "failed to focus Hyprland popup");
-                }
-                return;
-            }
-            Ok(false) => thread::sleep(Duration::from_millis(20)),
-            Err(error) => {
-                tracing::warn!(%error, "failed to locate Hyprland popup");
-                return;
-            }
-        }
-    }
-}
-
-fn has_mapped_popup(json: &str, pid: u32) -> Result<bool, Error> {
-    #[derive(Deserialize)]
-    struct Client {
-        pid: i64,
-        mapped: bool,
-    }
-    let clients: Vec<Client> = serde_json::from_str(json)?;
-    Ok(clients
-        .iter()
-        .any(|client| client.pid == i64::from(pid) && client.mapped))
-}
-
-pub(super) fn is_session() -> bool {
-    crate::linux::is_wayland()
-        && std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some_and(|value| !value.is_empty())
 }
 
 pub(super) struct Registration {
@@ -311,14 +226,14 @@ impl Registration {
         let chord = Chord::parse(input)?;
         let connection = Connection::current().ok_or(Error::Unsupported)?;
         // Subscribe before installing, so activation/reload cannot be lost between them.
-        let socket = UnixStream::connect(connection.directory.join(".socket2.sock"))?;
+        let socket = connection.events()?;
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
         let token = format!(
             "ropy:{}:{}",
             std::process::id(),
             NEXT_TOKEN.fetch_add(1, Ordering::Relaxed)
         );
-        connection.install(&chord, &token)?;
+        install(&connection, &chord, &token)?;
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = stop.clone();
         let cleanup = connection.clone();
@@ -328,7 +243,7 @@ impl Registration {
             .name("hyprland-hotkey".into())
             .spawn(move || {
                 listen(socket, &connection, &chord, &token, &sender, &worker_stop);
-                connection.disable(chord.id, &token);
+                disable(&connection, chord.id, &token);
             });
         match worker {
             Ok(worker) => Ok(Self {
@@ -336,7 +251,7 @@ impl Registration {
                 worker: Some(worker),
             }),
             Err(error) => {
-                cleanup.disable(id, &cleanup_token);
+                disable(&cleanup, id, &cleanup_token);
                 Err(error.into())
             }
         }
@@ -381,7 +296,7 @@ fn listen(
                     }
                     Some(Event::Reload) => {
                         tracing::debug!(id = chord.id, "restoring Hyprland shortcut after reload");
-                        if let Err(error) = connection.install(chord, token) {
+                        if let Err(error) = install(connection, chord, token) {
                             tracing::warn!(%error, "failed to restore Hyprland shortcut after reload");
                         }
                     }
@@ -508,15 +423,6 @@ mod tests {
         assert!(chord.check_available(binds).is_err());
         assert!(chord.check_available("[]").is_ok());
         assert!(chord.check_available("invalid json").is_err());
-    }
-
-    #[test]
-    fn test_focus_only_targets_mapped_window_of_current_process() {
-        let clients = r#"[{"pid":10,"mapped":false},{"pid":20,"mapped":true}]"#;
-        assert!(!has_mapped_popup(clients, 10).expect("clients"));
-        assert!(has_mapped_popup(clients, 20).expect("clients"));
-        assert!(!has_mapped_popup(clients, 30).expect("clients"));
-        assert!(has_mapped_popup("bad response", 20).is_err());
     }
 
     #[test]

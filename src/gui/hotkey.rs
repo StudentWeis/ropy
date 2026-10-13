@@ -64,7 +64,7 @@ where
     let (message_tx, message_rx) = async_channel::unbounded::<ListenerMessage>();
 
     #[cfg(target_os = "linux")]
-    let native_events = !hyprland::is_session();
+    let native_events = !crate::linux::hyprland::is_session();
     #[cfg(not(target_os = "linux"))]
     let native_events = true;
     if native_events {
@@ -137,18 +137,7 @@ where
                         Ok(())
                     })
                 },
-                &mut || {
-                    on_hotkey(async_app);
-                    #[cfg(target_os = "linux")]
-                    if hyprland::is_session() {
-                        async_app
-                            .background_executor()
-                            .spawn(async {
-                                hyprland::focus_popup();
-                            })
-                            .detach();
-                    }
-                },
+                &mut || on_hotkey(async_app),
             );
         }
     })
@@ -176,7 +165,7 @@ async fn register_linux_hotkey(
     if hotkey.is_empty() {
         return None;
     }
-    if hyprland::is_session() {
+    if crate::linux::hyprland::is_session() {
         return executor
             .spawn(async move { hyprland::Registration::register(&hotkey, sender) })
             .await

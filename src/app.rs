@@ -3,8 +3,8 @@
 //!
 //! This module is the top-level coordinator that wires together the clipboard
 //! monitor, repository, GUI, hotkey listener, tray icon, and auto-start
-//! subsystems.  It intentionally lives outside `gui` so that the GUI module
-//! can focus solely on rendering.
+//! subsystems. The GUI owns presentation and native window control; this
+//! module composes those services without exposing platform resources.
 
 use std::{
     cfg_select,
@@ -13,12 +13,6 @@ use std::{
 };
 
 use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle, component::Root};
-#[cfg(target_os = "linux")]
-use {
-    crate::gui::x11::X11,
-    raw_window_handle::{HasWindowHandle, RawWindowHandle},
-    std::sync::OnceLock,
-};
 
 use crate::{
     clipboard::{ClipboardCapture, CopyTracker},
@@ -26,8 +20,8 @@ use crate::{
     constants::APP_NAME,
     gui::{
         board::{
-            Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev,
-            Hide, Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
+            ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev, Hide,
+            Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
             ToggleFavoritesFilter,
         },
         repository::GlobalRepository,
@@ -36,10 +30,6 @@ use crate::{
     i18n::I18n,
     repository::ClipboardRepository,
 };
-
-#[cfg(target_os = "linux")]
-/// Shared X11 connection used for native window mapping and activation.
-pub static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
 /// Capacity for the clipboard event channel between the OS clipboard listener
 /// and the persistence task. Large enough to absorb bursts from apps that copy
@@ -191,13 +181,7 @@ fn setup_hotkey_listener(
     cx: &App,
 ) -> async_channel::Sender<crate::gui::hotkey::HotkeyUpdate> {
     crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app| {
-        async_app.update(|cx| {
-            window_handle
-                .update(cx, |_, window, cx| {
-                    window.dispatch_action(Box::new(Active), cx);
-                })
-                .ok();
-        });
+        crate::gui::window::activate_from_hotkey(window_handle, async_app);
     })
 }
 
@@ -319,18 +303,7 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
         #[cfg(target_os = "linux")]
         {
             let _ = window_handle
-                .update(cx, |_, window, _| {
-                    let handle = HasWindowHandle::window_handle(window)?;
-                    let id = match handle.as_raw() {
-                        RawWindowHandle::Xcb(handle) => handle.window.get(),
-                        RawWindowHandle::Xlib(handle) => u32::try_from(handle.window)?,
-                        _ => return Ok::<(), Box<dyn std::error::Error>>(()),
-                    };
-                    let x11 = X11::new(id)?;
-                    x11.hide_window()?;
-                    let _ = X11_INSTANCE.set(x11);
-                    Ok(())
-                })
+                .update(cx, |_, window, _| crate::gui::window::initialize(window))
                 .map(|result| {
                     if let Err(error) = result {
                         tracing::error!(%error, "failed to initialize X11 popup control");
