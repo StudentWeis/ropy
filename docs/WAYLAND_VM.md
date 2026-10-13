@@ -4,6 +4,10 @@ Use a disposable Linux VM to test the native Wayland popup against a **native
 Wayland editor**, with XWayland disabled. A successful X11-only clipboard test does not cover this boundary.
 See [WAYLAND.md](WAYLAND.md) for the supported application behavior.
 
+The native results below correspond to [PR #234](https://github.com/StudentWeis/ropy/pull/234)
+(source commit `424c718`, merged as `6328331`). They establish the Sway regression
+baseline, not certification of every Wayland desktop.
+
 ## Tested environment
 
 The October 2026 regression used Lima 2.2.1 with Apple's Virtualization.framework:
@@ -14,9 +18,11 @@ resident-window refactor was tested with XWayland; native popup tests use
 `xwayland disable` and remove `DISPLAY` from the application environment.
 
 Install the normal Linux build dependencies from `.github/dist-build-setup.yml`,
-plus `sway`, `xwayland`, `wl-clipboard`, `grim`, `python3-gi`, `gir1.2-gtk-3.0`,
+plus `sway`, `wl-clipboard`, `grim`, `python3-gi`, `gir1.2-gtk-3.0`,
 `python3-evdev`, `seatd`, `fonts-dejavu-core`, `libayatana-appindicator3-1` and
-`at-spi2-core`. Use the Rust toolchain specified by the repository.
+`at-spi2-core`. Use the Rust toolchain specified by the repository. Install
+`xwayland` only when reproducing the historical XWayland comparison; it is not
+required for the native scenario.
 
 Build the baseline and candidate in separate source directories with a shared
 guest target directory. Record each source revision, dirty diff and binary SHA-256.

@@ -22,7 +22,7 @@
 ## Features
 
 - Native desktop application built with Zed's GPUI.
-- Cross-platform support for Windows, macOS, and Linux (X11), with initial [Wayland session compatibility](docs/WAYLAND.md) through XWayland.
+- Cross-platform support for Windows, macOS, and Linux (X11 and native [Wayland](docs/WAYLAND.md)), with compositor-dependent clipboard and shortcut capabilities.
 - Tracks text, rich text (HTML/RTF), image, and file path clipboard history with content-based deduplication.
 - Switchable list and grid layout modes for browsing history.
 - Search the loaded history with case-sensitive and whole-word options.
@@ -71,6 +71,21 @@ scoop install ropy
 > [!NOTE]
 > Ropy detects standard Scoop installations and leaves installation to Scoop. Use `scoop update ropy`; in-app update checks remain available.
 
+### Linux (X11 and Wayland)
+
+The current source supports native Wayland windows without XWayland or `DISPLAY`.
+This support was added in [PR #234](https://github.com/StudentWeis/ropy/pull/234);
+check your release's notes when using a pre-built binary.
+
+Run `ropy --show` to open the history window. On Wayland, use the desktop-approved
+GlobalShortcuts portal, the supported Hyprland integration, or bind `ropy --show`
+in your compositor. Tiling compositors may need a floating rule.
+
+Clipboard capture requires data-control support; automatic paste additionally
+requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and
+Niri have not been individually validated. See the [Wayland guide](docs/WAYLAND.md)
+for setup, fallback activation and capability limits.
+
 ### Build from source
 
 Ensure you have Rust installed (via `rustup`). Then:
@@ -114,7 +129,7 @@ Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` 
 - The system clipboard does not expose the original application source for copied items.
 - Plugin/extension system: no current plans — Ropy focuses on simplicity and small footprint.
 - Cloud sync: not supported at this time.
-- Command-line mode: Ropy is designed primarily as a GUI application.
+- Full command-line history management: Ropy is primarily a GUI application; Linux `ropy --show` opens that GUI.
 
 ## Acknowledgements
 

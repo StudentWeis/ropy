@@ -1,9 +1,31 @@
-# Wayland session compatibility
+# Native Wayland support
 
 Ropy uses a native Wayland window when `WAYLAND_DISPLAY` is set. XWayland and
 `DISPLAY` are not required. Native X11 sessions continue to use the X11 backend.
 Clipboard capture and immediate paste have separate compositor requirements;
 see the capability limits below.
+
+## Version and quick start
+
+This guide describes the implementation merged in [PR #234](https://github.com/StudentWeis/ropy/pull/234),
+which addresses [Issue #142](https://github.com/StudentWeis/ropy/issues/142).
+Use a build containing that change; older releases may still use XWayland.
+No separate Wayland build or feature flag is needed for the standard build.
+
+1. Start Ropy inside your Wayland session with `ropy --show`.
+2. Configure activation using the portal, Hyprland integration or a manual
+   `ropy --show` binding described below. A tray icon is not required for this path.
+3. On tiling desktops, configure a floating rule if you want a popup-sized window.
+4. Copy text in another native Wayland application, search for it in Ropy and
+   confirm it. Verify clipboard capture and paste separately from window activation.
+
+| Capability | Requirement / validation boundary |
+| --- | --- |
+| Native window and repeated activation | Tested in Sway with XWayland disabled and `DISPLAY` unset |
+| Global shortcut | Supported Hyprland integration, GlobalShortcuts portal, or manual compositor binding |
+| Background clipboard capture | Compositor must expose the supported data-control protocol |
+| Immediate paste | Compositor must expose the supported virtual-keyboard protocol |
+| GNOME, KDE and Niri | Not individually validated; a working window does not establish clipboard or paste support |
 
 ## Popup lifetime
 
@@ -112,7 +134,7 @@ be tested separately.
   available for manual paste and the failure is logged.
 - Activation tokens require `xdg_activation_v1`; without it the window can still
   open, but focus follows the compositor's normal policy.
-- GNOME, KDE and other compositor combinations need separate validation of
+- GNOME, KDE, Niri and other compositor combinations need separate validation of
   shortcuts, clipboard capture, paste and focus. The Sway test does not certify
   these desktops. A portal implementation alone does not supply data-control or
   virtual-keyboard support.
