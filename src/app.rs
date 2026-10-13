@@ -7,12 +7,11 @@
 //! module composes those services without exposing platform resources.
 
 use std::{
-    cfg_select,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
-use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal, WindowHandle, component::Root};
+use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal};
 
 use crate::{
     clipboard::{ClipboardCapture, CopyTracker},
@@ -57,7 +56,6 @@ const UI_NOTIFY_CHANNEL_CAPACITY: usize = 256;
 fn start_clipboard_event_handler(
     bg_repository: Arc<ClipboardRepository>,
     clipboard_rx: async_channel::Receiver<ClipboardCapture>,
-    window_handle: WindowHandle<Root>,
     cx: &App,
 ) {
     let (notify_tx, notify_rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
@@ -99,16 +97,12 @@ fn start_clipboard_event_handler(
             drain_pending_notifications(&notify_rx);
 
             async_app.update(|cx| {
-                window_handle
-                    .update(cx, |root, _, cx| {
-                        if let Ok(board) = root.view().clone().downcast::<RopyBoard>() {
-                            board.update(cx, |board, cx| {
-                                board.refresh_records_from_repository(cx);
-                                cx.notify();
-                            });
-                        }
-                    })
-                    .ok();
+                if let Some(board) = crate::gui::window::board(cx) {
+                    board.update(cx, |board, cx| {
+                        board.refresh_records_from_repository(cx);
+                        cx.notify();
+                    });
+                }
             });
         }
     })
@@ -176,12 +170,11 @@ fn drain_pending_notifications(notify_rx: &async_channel::Receiver<()>) -> usize
 }
 
 fn setup_hotkey_listener(
-    window_handle: WindowHandle<Root>,
     hotkey_str: String,
     cx: &App,
 ) -> async_channel::Sender<crate::gui::hotkey::HotkeyUpdate> {
-    crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app| {
-        crate::gui::window::activate_from_hotkey(window_handle, async_app);
+    crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app, token| {
+        crate::gui::window::activate_from_hotkey(async_app, token);
     })
 }
 
@@ -222,13 +215,8 @@ fn load_settings() -> Settings {
 
 /// Entry point: initialize all subsystems and launch the application.
 pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instance) {
-    // GPUI's Wayland backend cannot hide and remap the resident popup yet.
-    // Keep only the window on XWayland; clipboard and input retain WAYLAND_DISPLAY.
-    let application =
-        cfg_select! {
-            target_os = "linux" => gpui_kit::platform::linux(gpui_kit::WindowingModes::X11),
-            _ => gpui_kit::application(),
-        };
+    let platform = gpui_kit::platform::current_platform(false);
+    let application = gpui_kit::Application::with_platform(platform.clone());
     application.with_assets(crate::gui::Assets).run(move |cx| {
         #[cfg(target_os = "macos")]
         crate::gui::set_activation_policy_accessory();
@@ -262,13 +250,13 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
         if let Some(repo) = GlobalRepository::global(cx).cloned() {
             let clipboard_rx =
                 start_clipboard_monitor(cx, repo.images_dir().to_path_buf(), last_copy);
-            start_clipboard_event_handler(repo, clipboard_rx, window_handle, cx);
+            start_clipboard_event_handler(repo, clipboard_rx, cx);
         }
-        let hotkey_tx = setup_hotkey_listener(window_handle, settings.hotkey.activation_key, cx);
+        let hotkey_tx = setup_hotkey_listener(settings.hotkey.activation_key, cx);
         // Tray initialization needs the loaded I18n; the resulting
         // handle is stashed in the global so menu refreshes after a
         // language change can reach it.
-        let tray = crate::gui::start_tray_handler(I18n::global(cx), cx, window_handle);
+        let tray = crate::gui::start_tray_handler(I18n::global(cx), cx);
         crate::gui::tray::TrayState::install(cx, tray);
 
         let board_view = window_handle
@@ -309,8 +297,14 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
                         tracing::error!(%error, "failed to initialize X11 popup control");
                     }
                 });
-            instance.install(window_handle, cx);
         }
+        #[cfg(target_os = "linux")]
+        let show_on_start = instance.show_on_start();
+        #[cfg(not(target_os = "linux"))]
+        let show_on_start = false;
+        crate::gui::window::install(window_handle, &platform, show_on_start, cx);
+        #[cfg(target_os = "linux")]
+        instance.install(cx);
     });
 }
 

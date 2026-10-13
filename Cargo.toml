@@ -61,10 +61,15 @@ windows-sys = { version = "0.61.2", features = [
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13.13", default-features = false, features = ["async-io", "global_shortcuts"] }
+futures-lite = "2.6.1"
+zbus = { version = "5.18.0", default-features = false, features = ["async-io"] }
 clipboard-rs = { version = "0.3.5", features = ["wayland"] }
 enigo = { version = "0.6.1", features = ["wayland"] }
 gtk = "0.18.2"
 x11rb = "0.14.0"
+wayland-client = { version = "0.31.15", features = ["system"] }
+wayland-protocols = { version = "0.32.13", features = ["client", "staging"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -1,129 +1,143 @@
 # Wayland session compatibility
 
-Ropy supports an initial hybrid mode for Wayland sessions: the history window
-uses XWayland, while clipboard capture/write-back and simulated paste use
-Wayland. This is not a native Wayland window implementation. XWayland and a
-valid `DISPLAY` are still required, along with `XDG_RUNTIME_DIR`.
+Ropy uses a native Wayland window when `WAYLAND_DISPLAY` is set. XWayland and
+`DISPLAY` are not required. Native X11 sessions continue to use the X11 backend.
+Clipboard capture and immediate paste have separate compositor requirements;
+see the capability limits below.
 
-## Open history from the compositor
+## Popup lifetime
 
-On Linux, `ropy` starts in the tray. `ropy --show` opens the existing instance,
-or starts one and shows it if none is running. A subsequent plain `ropy`
-invocation also opens the existing instance. Instances are scoped to the display
-session, and a crashed process's activation socket is recovered on restart.
-For X11 sessions without `XDG_RUNTIME_DIR` (or with an empty value), activation
-uses a private directory under the system temporary directory, scoped to the
-current user and display. Existing runtime-directory endpoints are unchanged.
+Ropy starts hidden and keeps its history, clipboard services, settings and updater
+alive between activations. Dismissing a Wayland popup destroys its native window;
+activation creates a new window over the retained application state. Window-bound
+search and settings controls are recreated. This avoids depending on GPUI's
+unsupported Wayland hide/remap operation.
+
+On Linux, `ropy --show` opens the existing instance, or starts one and shows it if
+none is running. A subsequent plain `ropy` invocation also opens the existing
+instance. Instances are scoped to the display session, and a stale activation
+socket is recovered after a crash. X11 sessions without `XDG_RUNTIME_DIR` use a
+private temporary directory scoped to the current user and display.
+
+A launcher-provided `XDG_ACTIVATION_TOKEN` is forwarded to the existing instance
+and applied through `xdg_activation_v1`. Portal activation tokens use the same
+path. The compositor decides whether to grant focus; an untrusted, expired or
+missing token does not bypass its focus policy.
+
+## Global shortcuts
 
 ### Hyprland 0.55+ with Lua configuration
 
 Ropy automatically registers the shortcut from its settings with Hyprland at
-runtime. It receives activation through Hyprland's event socket, so the shortcut
-works while native Wayland applications are focused. After the popup maps, Ropy
-requests focus from Hyprland for its own process. No configuration-file edits
-or extra activation process are needed. Changing or clearing the shortcut updates
+runtime. It receives activation through Hyprland's event socket and requests
+focus for its own process after the popup maps. No configuration-file edits or
+extra activation process are needed. Changing or clearing the shortcut updates
 the runtime binding; configuration reloads restore it while Ropy is running.
 
 The adapter refuses conflicting bindings instead of replacing them. Save failures
-retain the previous shortcut and use the existing settings error notification.
-Letters, digits, F1–F24, navigation keys and common punctuation are supported;
-unsupported keys fail registration. Physical-keycode bindings with the same
-modifiers are conservatively treated as conflicts. Remove any previously added
-manual Ropy binding before assigning the same chord in Ropy.
+retain the previous shortcut. Letters, digits, F1–F24, navigation keys and common
+punctuation are supported; unsupported keys fail registration. Physical-keycode
+bindings with the same modifiers are conservatively treated as conflicts. Remove
+previous manual Ropy bindings before assigning the same chord in Ropy.
 
 On shutdown, Ropy disables only its own Lua binding handle. Disabled handles are
 reused on later registration and removed by Hyprland's next configuration reload.
-This avoids Hyprland's chord-wide unbind operation removing another application's
-binding. A crash can leave the binding until restart or compositor reload.
-Registration and reload errors are recorded in Ropy's log. Other Wayland
-compositors and older Hyprland configurations still require a manual binding;
-this adapter does not implement the GlobalShortcuts portal.
+A crash can leave the binding until restart or compositor reload.
 
-### Other compositor configurations
+### GlobalShortcuts portal
 
-Bind `ropy --show` in the compositor's shortcut settings. Use an absolute executable
-path if Ropy is not on its `PATH`. For older Hyprland configurations:
+Other Wayland sessions use the desktop's
+[GlobalShortcuts portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html).
+The desktop may ask the user to approve or choose a shortcut. Ropy's setting is
+the **preferred** chord; the portal can assign a different trigger, which is
+managed by the desktop. Ropy currently displays the preferred chord in its settings.
 
-```ini
-bind = CTRL SHIFT, D, exec, ropy --show
-```
+A replacement registration must succeed before the saved preference and old
+registration are replaced. Rejection or a save failure preserves the previous
+registration. Clearing the preference closes the session. Exiting cancels an
+unfinished request and closes the active session. Portal events are filtered by
+session and shortcut ID, and their activation token is forwarded to the compositor.
+Registration errors are recorded in Ropy's log.
 
+### Manual compositor binding
+
+If the desktop does not provide GlobalShortcuts, bind `ropy --show` in its shortcut
+settings. Use an absolute executable path if Ropy is not on the compositor's `PATH`.
 For Sway:
 
 ```ini
 bindsym Ctrl+Shift+d exec ropy --show
 ```
 
-These examples are manual configuration. Changing the shortcut in Ropy does not
-update them. On other Wayland desktops, the X11 global-hotkey backend cannot
-reliably activate from a native Wayland application.
+For older Hyprland configurations:
 
-## Window scaling
+```ini
+bind = CTRL SHIFT, D, exec, ropy --show
+```
 
-On Hyprland, Ropy reads the focused monitor's scale at startup. When
-`xwayland:force_zero_scaling` is enabled, Ropy renders at that scale; otherwise
-it leaves scaling to the compositor. This avoids GPUI's X11 physical-DPI estimate
-making the popup too large. An explicit `GPUI_X11_SCALE_FACTOR` takes precedence.
-No desktop configuration is changed.
+These are manual bindings; changing Ropy's setting does not update them. Ropy does
+not attempt X11 global-key grabs in a Wayland session.
 
-Restart Ropy after changing display scaling. Moving between monitors with
-different scales is not handled dynamically. If Hyprland's IPC is unavailable,
-or on other compositors, GPUI's existing X11 scale detection remains in use.
+## Window placement and scaling
+
+The native window uses `xdg_toplevel` with application ID `com.ropy.app`. Wayland
+leaves placement, floating and stacking to the compositor. A tiling compositor
+may tile the window unless configured otherwise. For a floating Sway popup:
+
+```ini
+for_window [app_id="^com\\.ropy\\.app$"] floating enable
+```
+
+The initial requested size is 400 × 550 logical pixels. GPUI's Wayland backend
+handles output scaling; Ropy no longer applies the former Hyprland/XWayland
+scale override or restarts itself to set `GPUI_X11_SCALE_FACTOR`.
+
+Pinning prevents automatic dismissal. It does not force a native Wayland window
+above other applications; configure compositor stacking rules if desired.
+Sway's default `focus_on_window_activation urgent` marks an already-visible pinned
+window urgent rather than focusing it, even with a valid launcher token. If you
+want valid activation requests on the visible workspace to receive focus, Sway
+provides `focus_on_window_activation smart`. This is a desktop-wide preference;
+Ropy does not change it. A newly mapped popup and a pinned existing window must
+be tested separately.
 
 ## Capabilities and limits
 
-- Clipboard support requires the data-control protocol used by
-  `clipboard-rs` / `wl-clipboard-rs`. Enabling the feature does not guarantee
-  background capture on every compositor. The Wayland watcher polls for changes.
-- Immediate paste uses Enigo's Wayland virtual-keyboard support. Compositors must
-  expose the required protocol. Only one input backend is connected so XWayland
-  applications do not receive a duplicate paste. If the Wayland input backend
-  cannot initialize, the clipboard remains available for manual paste; the
-  failure is recorded in the application log.
-- Popup hiding, remapping, and always-on-top requests use X11 window operations.
-  In Wayland sessions, the popup is registered as a managed utility window so
-  Hyprland can route pointer input to it while keeping it floating. GPUI's
-  default override-redirect notification window displayed correctly but did
-  not receive mouse input in the tested Hyprland session.
-  The compositor may decline activation or always-on-top requests. The current
-  GPUI Wayland backend lacks the hide/remap operation needed by a resident popup.
-- GNOME, KDE, Sway, and other compositor combinations are not certified by the
-  Hyprland test. In particular, shortcut, clipboard, input, and focus capabilities
-  need separate validation. Sessions without XWayland are unsupported.
-- Native Windows and macOS paths are unchanged.
+- Clipboard capture requires the data-control protocol used by
+  `clipboard-rs` / `wl-clipboard-rs`. The watcher polls for changes. A working
+  window or shortcut portal does not establish background clipboard support.
+- Immediate paste uses Enigo's Wayland virtual-keyboard support. The compositor
+  must expose that protocol. Only one input backend is connected to avoid
+  duplicate pastes. If initialization fails, clipboard write-back remains
+  available for manual paste and the failure is logged.
+- Activation tokens require `xdg_activation_v1`; without it the window can still
+  open, but focus follows the compositor's normal policy.
+- GNOME, KDE and other compositor combinations need separate validation of
+  shortcuts, clipboard capture, paste and focus. The Sway test does not certify
+  these desktops. A portal implementation alone does not supply data-control or
+  virtual-keyboard support.
+- macOS and Windows retain their resident native window behavior.
 
 ## Validation
 
-The development build was exercised on Hyprland 0.56.2, Linux x86-64, using an
-isolated Ropy configuration and a GTK 3 editor confirmed to use
-`GdkWaylandDisplay`. The scenario checks hidden startup, native clipboard
-capture, `--show`, Escape dismissal, reopening, clipboard write-back, and
-immediate paste of a unique marker exactly once into the native editor.
-At 160% display scaling, the default popup measures 400 × 550 logical pixels
-(640 × 880 physical pixels).
+See [WAYLAND_VM.md](WAYLAND_VM.md) for the isolated native Sway scenario and the
+D-Bus portal fixture. The fixture verifies Ropy's protocol contract; it is not a
+GNOME or KDE portal integration test.
 
-Unit tests cover single-instance forwarding, stale socket recovery, independent
-session endpoints, mutually exclusive paste backends, and compositor scaling
-policy with malformed-response fallbacks. The dependency check
-protects the Linux Wayland feature flags.
+For manual verification, focus a plain-text editor, copy a unique marker, activate
+Ropy, search for the marker and confirm it. The popup must disappear and return
+focus to the editor. With immediate paste enabled, the editor must receive the
+marker exactly once. Repeat after the popup has been closed and after copying a
+new marker while Ropy is hidden.
 
-For manual verification, start with a plain-text editor focused, copy a unique
-marker, activate Ropy through the compositor binding, and confirm the selected
-entry. With immediate paste enabled, the editor must receive the marker once.
-Keep focus on the intended destination while the popup is being dismissed.
-
-## Hyprland shortcut regression
-
-Pure tests cover key translation, conflict rejection, activation filtering and
-transaction rollback. An opt-in live test requires a Lua Hyprland session with
-Wayland virtual-keyboard support; it temporarily uses Ctrl+Shift+F12, injects the shortcut through the
-Wayland virtual keyboard before and after a configuration reload, and verifies
-cleanup and reuse of the disabled handle:
+Pure tests cover popup state retention and fresh input subscriptions, token
+forwarding and validation, shortcut translation and transactional rollback. An
+opt-in live test requires a working Hyprland Lua session with virtual-keyboard
+support and a free Ctrl+Shift+F12 chord:
 
 ```sh
 cargo test --bin ropy test_live_hyprland_activation_reload_and_cleanup -- --ignored
 ```
 
-Run it only in a test session where that chord is free. It fails rather than
-replacing an existing binding. This is compositor integration evidence, separate
-from the full clipboard and popup GUI scenario.
+It injects the shortcut before and after a configuration reload and verifies
+cleanup and reuse. Run it only in an isolated test session.

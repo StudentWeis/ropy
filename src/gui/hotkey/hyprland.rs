@@ -18,7 +18,7 @@ use global_hotkey::{
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::ListenerMessage;
+use super::{ListenerMessage, keysym::keysym};
 use crate::linux::hyprland::Connection;
 
 static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
@@ -103,53 +103,6 @@ struct Binding {
     catch_all: bool,
     #[serde(default)]
     ignore_mods: bool,
-}
-
-fn keysym(code: &str) -> Option<String> {
-    if let Some(key) = code
-        .strip_prefix("Key")
-        .or_else(|| code.strip_prefix("Digit"))
-    {
-        return Some(key.to_owned());
-    }
-    if code
-        .strip_prefix('F')
-        .is_some_and(|n| n.parse::<u8>().is_ok_and(|n| (1..=24).contains(&n)))
-    {
-        return Some(code.to_owned());
-    }
-    Some(
-        match code {
-            "Enter" => "Return",
-            "Space" => "space",
-            "Tab" => "Tab",
-            "Escape" => "Escape",
-            "Backspace" => "BackSpace",
-            "Delete" => "Delete",
-            "Insert" => "Insert",
-            "Home" => "Home",
-            "End" => "End",
-            "PageUp" => "Prior",
-            "PageDown" => "Next",
-            "ArrowUp" => "Up",
-            "ArrowDown" => "Down",
-            "ArrowLeft" => "Left",
-            "ArrowRight" => "Right",
-            "Minus" => "minus",
-            "Equal" => "equal",
-            "Comma" => "comma",
-            "Period" => "period",
-            "Slash" => "slash",
-            "Backslash" => "backslash",
-            "Semicolon" => "semicolon",
-            "Quote" => "apostrophe",
-            "Backquote" => "grave",
-            "BracketLeft" => "bracketleft",
-            "BracketRight" => "bracketright",
-            _ => return None,
-        }
-        .to_owned(),
-    )
 }
 
 fn install(connection: &Connection, chord: &Chord, token: &str) -> Result<(), Error> {

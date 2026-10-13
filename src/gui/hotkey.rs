@@ -1,5 +1,11 @@
 #[cfg(target_os = "linux")]
 mod hyprland;
+#[cfg(target_os = "linux")]
+mod keysym;
+#[cfg(target_os = "linux")]
+mod portal;
+
+use std::{cell::RefCell, rc::Rc};
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 #[cfg(target_os = "linux")]
@@ -13,7 +19,11 @@ use crate::gui::settings::GlobalSettings;
 enum ListenerMessage {
     UpdateHotkey(HotkeyUpdate),
     HotkeyEvent(GlobalHotKeyEvent),
-    Shutdown(async_channel::Sender<()>),
+    #[cfg(target_os = "linux")]
+    PortalActivation {
+        id: u32,
+        token: Option<String>,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -58,60 +68,77 @@ pub(crate) fn start_hotkey_listener<F>(
     on_hotkey: F,
 ) -> async_channel::Sender<HotkeyUpdate>
 where
-    F: Fn(&AsyncApp) + 'static,
+    F: Fn(&AsyncApp, Option<&str>) + 'static,
 {
     let (tx, rx) = async_channel::unbounded::<HotkeyUpdate>();
     let (message_tx, message_rx) = async_channel::unbounded::<ListenerMessage>();
 
     #[cfg(target_os = "linux")]
-    let native_events = !crate::linux::hyprland::is_session();
+    let native_events = !crate::linux::is_wayland();
     #[cfg(not(target_os = "linux"))]
     let native_events = true;
     if native_events {
         spawn_hotkey_event_forwarder(message_tx.clone());
     }
-    spawn_hotkey_update_forwarder(rx, message_tx.clone());
     #[cfg(target_os = "linux")]
-    let quit_tx = message_tx.clone();
+    spawn_hotkey_update_forwarder(rx, message_tx.clone());
     #[cfg(not(target_os = "linux"))]
-    let quit_tx = message_tx;
-    cx.on_app_quit(move |_| {
-        let (done, completion) = async_channel::bounded(1);
-        let _ = quit_tx.try_send(ListenerMessage::Shutdown(done));
-        async move {
-            let _ = completion.recv().await;
-        }
-    })
-    .detach();
+    spawn_hotkey_update_forwarder(rx, message_tx);
+    let state = Rc::new(RefCell::new(HotkeyListenerState {
+        manager: None,
+        current_hotkey: initial_hotkey.clone(),
+    }));
+    #[cfg(target_os = "linux")]
+    let (cancel_tx, cancelled) = async_channel::bounded::<()>(1);
+    #[cfg(target_os = "linux")]
+    let cleanups = Rc::new(RefCell::new(Vec::<async_channel::Receiver<()>>::new()));
+    install_hotkey_shutdown(
+        state.clone(),
+        message_rx.clone(),
+        #[cfg(target_os = "linux")]
+        cancel_tx,
+        #[cfg(target_os = "linux")]
+        cleanups.clone(),
+        cx,
+    );
 
     cx.spawn(async move |async_app| {
         #[cfg(target_os = "linux")]
         let manager = register_linux_hotkey(
             initial_hotkey.clone(),
+            async_app.update(|cx| crate::i18n::I18n::translate(cx, "settings_activation_key")),
+            cancelled.clone(),
+            &cleanups,
             message_tx.clone(),
             async_app.background_executor().clone(),
         )
         .await;
         #[cfg(not(target_os = "linux"))]
         let manager = register_native_hotkey(&initial_hotkey);
-        let mut state = HotkeyListenerState {
-            manager,
-            current_hotkey: initial_hotkey,
-        };
+        state.borrow_mut().manager = manager;
 
         while let Ok(message) = message_rx.recv().await {
-            if let ListenerMessage::Shutdown(done) = message {
-                drop(state.manager.take());
-                let _ = done.try_send(());
+            if message_rx.is_closed() {
                 break;
             }
+            let needs_registration = if let ListenerMessage::UpdateHotkey(request) = &message {
+                let state = state.borrow();
+                !request.hotkey.is_empty()
+                    && (!same_hotkey(&request.hotkey, &state.current_hotkey)
+                        || state.manager.is_none())
+            } else {
+                false
+            };
             let mut candidate = if let ListenerMessage::UpdateHotkey(request) = &message
-                && !request.hotkey.is_empty()
-                && (!same_hotkey(&request.hotkey, &state.current_hotkey) || state.manager.is_none())
+                && needs_registration
             {
                 #[cfg(target_os = "linux")]
                 let registration = register_linux_hotkey(
                     request.hotkey.clone(),
+                    async_app
+                        .update(|cx| crate::i18n::I18n::translate(cx, "settings_activation_key")),
+                    cancelled.clone(),
+                    &cleanups,
                     message_tx.clone(),
                     async_app.background_executor().clone(),
                 )
@@ -122,8 +149,11 @@ where
             } else {
                 None
             };
+            if message_rx.is_closed() {
+                break;
+            }
             process_listener_message(
-                &mut state,
+                &mut state.borrow_mut(),
                 message,
                 &mut |_| candidate.take(),
                 &mut |hotkey| {
@@ -137,7 +167,7 @@ where
                         Ok(())
                     })
                 },
-                &mut || on_hotkey(async_app),
+                &mut |token| on_hotkey(async_app, token),
             );
         }
     })
@@ -146,7 +176,38 @@ where
     tx
 }
 
+fn install_hotkey_shutdown(
+    state: Rc<RefCell<HotkeyListenerState<Registration>>>,
+    messages: async_channel::Receiver<ListenerMessage>,
+    #[cfg(target_os = "linux")] cancel_tx: async_channel::Sender<()>,
+    #[cfg(target_os = "linux")] cleanups: Rc<RefCell<Vec<async_channel::Receiver<()>>>>,
+    cx: &App,
+) {
+    cx.on_app_quit(move |_| {
+        // GPUI has stopped its event loop: take ownership here instead of
+        // asking a foreground task to process a shutdown message.
+        messages.close();
+        let manager = state.borrow_mut().manager.take();
+        #[cfg(target_os = "linux")]
+        cancel_tx.close();
+        #[cfg(target_os = "linux")]
+        let pending = std::mem::take(&mut *cleanups.borrow_mut());
+        async move {
+            drop(manager);
+            #[cfg(target_os = "linux")]
+            for completion in pending {
+                let _ = completion.recv().await;
+            }
+        }
+    })
+    .detach();
+}
+
 enum Registration {
+    #[cfg(target_os = "linux")]
+    Portal {
+        _manager: portal::Registration,
+    },
     Native {
         _manager: GlobalHotKeyManager,
     },
@@ -157,8 +218,15 @@ enum Registration {
 }
 
 #[cfg(target_os = "linux")]
+#[expect(
+    clippy::future_not_send,
+    reason = "the foreground listener owns the cleanup registry; portal I/O runs in background tasks"
+)]
 async fn register_linux_hotkey(
     hotkey: String,
+    description: String,
+    cancelled: async_channel::Receiver<()>,
+    cleanups: &RefCell<Vec<async_channel::Receiver<()>>>,
     sender: async_channel::Sender<ListenerMessage>,
     executor: BackgroundExecutor,
 ) -> Option<Registration> {
@@ -170,6 +238,29 @@ async fn register_linux_hotkey(
             .spawn(async move { hyprland::Registration::register(&hotkey, sender) })
             .await
             .map(|manager| Registration::Hyprland { _manager: manager });
+    }
+    if crate::linux::is_wayland() {
+        let (completion, completed) = async_channel::bounded(1);
+        {
+            let mut cleanups = cleanups.borrow_mut();
+            cleanups.retain(|cleanup| !cleanup.is_closed());
+            cleanups.push(completed);
+        }
+        let worker_executor = executor.clone();
+        return executor
+            .spawn(async move {
+                portal::Registration::register(
+                    hotkey,
+                    description,
+                    sender,
+                    cancelled,
+                    completion,
+                    worker_executor,
+                )
+                .await
+            })
+            .await
+            .map(|manager| Registration::Portal { _manager: manager });
     }
     register_native_hotkey(&hotkey)
 }
@@ -187,12 +278,19 @@ fn process_listener_message<Manager, RegisterHotkey, PersistHotkey, OnHotkey>(
 ) where
     RegisterHotkey: FnMut(&str) -> Option<Manager>,
     PersistHotkey: FnMut(&str) -> Result<(), HotkeyUpdateError>,
-    OnHotkey: FnMut(),
+    OnHotkey: FnMut(Option<&str>),
 {
     match message {
-        ListenerMessage::Shutdown(done) => {
-            drop(state.manager.take());
-            let _ = done.try_send(());
+        #[cfg(target_os = "linux")]
+        ListenerMessage::PortalActivation { id, token } => {
+            if state.manager.is_some()
+                && state
+                    .current_hotkey
+                    .parse::<HotKey>()
+                    .is_ok_and(|hotkey| hotkey.id == id)
+            {
+                on_hotkey(token.as_deref());
+            }
         }
         ListenerMessage::UpdateHotkey(request) => {
             let result = update_hotkey(state, &request.hotkey, register_hotkey, persist_hotkey);
@@ -206,7 +304,7 @@ fn process_listener_message<Manager, RegisterHotkey, PersistHotkey, OnHotkey>(
                     .parse::<HotKey>()
                     .is_ok_and(|hotkey| hotkey.id == event.id)
             {
-                on_hotkey();
+                on_hotkey(None);
             }
         }
     }
@@ -305,6 +403,30 @@ mod tests {
         })
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_portal_activation_for_current_shortcut_preserves_token_and_ignores_old_id() {
+        let hotkey = "ctrl+shift+a".parse::<HotKey>().expect("hotkey");
+        let mut state = HotkeyListenerState {
+            current_hotkey: "ctrl+shift+a".into(),
+            manager: Some(()),
+        };
+        let mut tokens = Vec::new();
+        for id in [hotkey.id.wrapping_add(1), hotkey.id] {
+            process_listener_message(
+                &mut state,
+                ListenerMessage::PortalActivation {
+                    id,
+                    token: Some("compositor-token".into()),
+                },
+                &mut |_| None,
+                &mut |_| Ok(()),
+                &mut |token| tokens.push(token.map(str::to_owned)),
+            );
+        }
+        assert_eq!(tokens, vec![Some("compositor-token".to_owned())]);
+    }
+
     #[test]
     fn test_hotkey_alias_persistence_failure_keeps_existing_registration() {
         let mut state = HotkeyListenerState {
@@ -339,7 +461,7 @@ mod tests {
                 persisted = true;
                 Ok(())
             },
-            &mut || {},
+            &mut |_| {},
         );
         assert!(matches!(
             response.try_recv(),
@@ -435,7 +557,7 @@ mod tests {
             update_message("ctrl+shift+b"),
             &mut |_| None,
             &mut |_| Ok(()),
-            &mut || {},
+            &mut |_| {},
         );
         assert_eq!(state.current_hotkey, "ctrl+shift+a");
         assert_eq!(state.manager, Some("old-manager"));
@@ -452,7 +574,7 @@ mod tests {
             update_message("ctrl+shift+a"),
             &mut |_| Some("recovered-manager"),
             &mut |_| Ok(()),
-            &mut || {},
+            &mut |_| {},
         );
         assert_eq!(state.manager, Some("recovered-manager"));
     }
@@ -481,7 +603,7 @@ mod tests {
                 Some("updated-manager")
             },
             &mut |_| Ok(()),
-            &mut || callback_count.set(callback_count.get() + 1),
+            &mut |_| callback_count.set(callback_count.get() + 1),
         );
 
         assert_eq!(state.current_hotkey, "ctrl+shift+b");
@@ -506,7 +628,7 @@ mod tests {
                 Some("updated-manager")
             },
             &mut |_| Ok(()),
-            &mut || {},
+            &mut |_| {},
         );
 
         assert_eq!(state.current_hotkey, "ctrl+shift+a");
@@ -535,7 +657,7 @@ mod tests {
             }),
             &mut |_| Some("updated-manager"),
             &mut |_| Ok(()),
-            &mut || callback_count.set(callback_count.get() + 1),
+            &mut |_| callback_count.set(callback_count.get() + 1),
         );
 
         assert_eq!(callback_count.get(), expected_callback_count);

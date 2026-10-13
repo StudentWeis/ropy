@@ -7,8 +7,8 @@ use std::{
 };
 
 use gpui_kit::{
-    App, AppContext, AssetSource, Bounds, WindowBackgroundAppearance, WindowBounds, WindowHandle,
-    WindowKind, WindowOptions,
+    App, AppContext, AssetSource, Bounds, Entity, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions,
     component::{Root, ThemeMode as ComponentThemeMode, theme::Theme},
     rgb,
 };
@@ -55,12 +55,36 @@ pub(crate) fn create_window(
     last_copy: Arc<Mutex<CopyTracker>>,
     copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
 ) -> WindowHandle<Root> {
+    open_window(cx, |window, cx| {
+        cx.new(|cx| RopyBoard::new(shared_records, last_copy, copy_tx, window, cx))
+    })
+    .unwrap_or_else(|e| {
+        tracing::error!(error = %e, "fatal: failed to create window");
+        std::process::exit(1);
+    })
+}
+
+pub(crate) fn reopen_window(
+    cx: &mut App,
+    board: Entity<RopyBoard>,
+) -> gpui_kit::Result<WindowHandle<Root>> {
+    open_window(cx, |window, cx| {
+        board.update(cx, |board, cx| board.attach_window(window, cx));
+        board
+    })
+}
+
+fn open_window(
+    cx: &mut App,
+    build_board: impl FnOnce(&mut Window, &mut App) -> Entity<RopyBoard>,
+) -> gpui_kit::Result<WindowHandle<Root>> {
     let bounds = Bounds::centered(None, default_window_size(), cx);
     let window_opacity_percent = GlobalSettings::read(cx, |s| s.window.opacity_percent);
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             kind: WindowKind::PopUp,
+            app_id: Some("com.ropy.app".into()),
             titlebar: None,
             show: false,
             window_background: background_appearance_for_opacity(window_opacity_percent),
@@ -73,14 +97,10 @@ pub(crate) fn create_window(
             set_app_theme(window, cx, &theme_id, window_opacity_percent);
             apply_window_opacity(window, window_opacity_percent);
 
-            let view = cx.new(|cx| RopyBoard::new(shared_records, last_copy, copy_tx, window, cx));
+            let view = build_board(window, cx);
             cx.new(|cx| Root::new(view, window, cx))
         },
     )
-    .unwrap_or_else(|e| {
-        tracing::error!(error = %e, "fatal: failed to create window");
-        std::process::exit(1);
-    })
 }
 
 const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgroundAppearance {
@@ -91,13 +111,13 @@ const fn background_appearance_for_opacity(opacity_percent: u8) -> WindowBackgro
     }
 }
 
-pub(crate) fn apply_window_opacity(window: &gpui_kit::Window, opacity_percent: u8) {
+pub(crate) fn apply_window_opacity(window: &Window, opacity_percent: u8) {
     window.set_background_appearance(background_appearance_for_opacity(opacity_percent));
 }
 
 /// Set the application theme from a bundled theme definition.
 pub(crate) fn set_app_theme(
-    window: &mut gpui_kit::Window,
+    window: &mut Window,
     cx: &mut App,
     theme_id: &ThemeId,
     opacity_percent: u8,

@@ -1,6 +1,6 @@
 #[cfg(target_os = "linux")]
 use gpui_kit::AppContext;
-use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal, WindowHandle, component::Root};
+use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal};
 #[cfg(not(target_os = "linux"))]
 use tray_icon::TrayIconEvent;
 use tray_icon::{
@@ -131,14 +131,10 @@ pub(crate) enum TrayEvent {
     Quit,
 }
 
-pub(crate) fn start_tray_handler(
-    i18n: &I18n,
-    cx: &App,
-    window_handle: WindowHandle<Root>,
-) -> Option<TrayIcon> {
+pub(crate) fn start_tray_handler(i18n: &I18n, cx: &App) -> Option<TrayIcon> {
     let (tx, rx) = async_channel::unbounded();
     let tray = spawn_tray_platform(i18n, cx, tx);
-    spawn_tray_event_loop(cx, rx, window_handle);
+    spawn_tray_event_loop(cx, rx);
     tray
 }
 
@@ -175,22 +171,18 @@ fn spawn_tray_platform(
     None
 }
 
-fn spawn_tray_event_loop(
-    cx: &App,
-    rx: async_channel::Receiver<TrayEvent>,
-    window_handle: WindowHandle<Root>,
-) {
+fn spawn_tray_event_loop(cx: &App, rx: async_channel::Receiver<TrayEvent>) {
     cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
                 TrayEvent::Show => {
-                    async_app.update(|cx| send_active_action(window_handle, cx));
+                    async_app.update(super::window::show);
                 }
                 TrayEvent::Settings => {
-                    async_app.update(|cx| send_open_settings(window_handle, cx));
+                    async_app.update(send_open_settings);
                 }
                 TrayEvent::About => {
-                    async_app.update(|cx| send_open_about(window_handle, cx));
+                    async_app.update(send_open_about);
                 }
                 TrayEvent::Quit => {
                     async_app.update(|cx| cx.quit());
@@ -222,15 +214,10 @@ pub(crate) fn start_tray_handler_inner(
     }
 }
 
-fn send_active_action(window_handle: WindowHandle<Root>, cx: &mut App) {
-    window_handle
-        .update(cx, |_, window: &mut gpui_kit::Window, cx| {
-            window.dispatch_action(Box::new(crate::gui::board::Active), cx);
-        })
-        .ok();
-}
-
-pub(crate) fn send_open_settings(window_handle: WindowHandle<Root>, cx: &mut App) {
+pub(crate) fn send_open_settings(cx: &mut App) {
+    let Some(window_handle) = super::window::ensure_window(cx) else {
+        return;
+    };
     window_handle
         .update(cx, |root, window: &mut gpui_kit::Window, cx| {
             if let Ok(board) = root
@@ -254,7 +241,10 @@ pub(crate) fn send_open_settings(window_handle: WindowHandle<Root>, cx: &mut App
         .ok();
 }
 
-pub(crate) fn send_open_about(window_handle: WindowHandle<Root>, cx: &mut App) {
+pub(crate) fn send_open_about(cx: &mut App) {
+    let Some(window_handle) = super::window::ensure_window(cx) else {
+        return;
+    };
     window_handle
         .update(cx, |root, window: &mut gpui_kit::Window, cx| {
             if let Ok(board) = root
