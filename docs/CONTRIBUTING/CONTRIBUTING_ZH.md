@@ -46,6 +46,25 @@ Ropy 支持多语言国际化（i18n）。语言文件同样使用 TOML 格式�
 
    语言文件的第一行应包含 `language_name` 字段（用该语言本身书写），用于在设置中显示。完整的结构和所有翻译键请参考 [`assets/locales/en.toml`](../../assets/locales/en.toml)。
 
+### 开发约定
+
+应用直接使用 `rust_i18n::t!`，资源在编译期嵌入，缺失翻译回退到英语。
+添加语言文件后重新编译即可出现在语言选择器中，无需维护语言列表。
+
+```rust
+use rust_i18n::t;
+
+t!("tray_settings");
+t!("record_file_count", count = files.len());
+t!("language_name", locale = "ja");
+```
+
+命名参数在 TOML 中写作 `%{count}`，各语言必须保留相同的参数名。
+运行 `python3 scripts/check/check_i18n.py` 检查 TOML 格式、翻译键及占位符一致性。
+动态翻译键使用以 `_key` 结尾的字段保存字面量，供检查脚本识别。
+业务代码不维护额外的翻译映射或语言全局变量；仅启动入口及语言设置保存成功后
+调用 `rust_i18n::set_locale`。测试和离线内容生成使用显式 `locale` 参数。
+
 ### 翻译技巧
 
 1. **保持简洁**：UI 空间有限，尽量使用简洁的表达

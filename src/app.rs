@@ -26,7 +26,6 @@ use crate::{
         repository::GlobalRepository,
         settings::GlobalSettings,
     },
-    i18n::I18n,
     repository::ClipboardRepository,
 };
 
@@ -224,11 +223,10 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
         gpui_kit::init(cx);
         bind_application_keys(cx);
 
-        // Settings must be installed before the I18n / repository
-        // globals because both read from it during their own init.
+        // Activate the persisted locale before constructing application or component UI.
         let settings = load_settings();
         cx.set_global(GlobalSettings::new(settings.clone()));
-        cx.set_global(I18n::load_i18n(settings.language.clone()));
+        rust_i18n::set_locale(settings.language.code());
         crate::gui::tray::TrayState::register(cx);
 
         if !settings.is_recovery_required() {
@@ -253,10 +251,10 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
             start_clipboard_event_handler(repo, clipboard_rx, cx);
         }
         let hotkey_tx = setup_hotkey_listener(settings.hotkey.activation_key, cx);
-        // Tray initialization needs the loaded I18n; the resulting
+        // Tray initialization needs the active locale; the resulting
         // handle is stashed in the global so menu refreshes after a
         // language change can reach it.
-        let tray = crate::gui::start_tray_handler(I18n::global(cx), cx);
+        let tray = crate::gui::start_tray_handler(cx);
         crate::gui::tray::TrayState::install(cx, tray);
 
         let board_view = window_handle

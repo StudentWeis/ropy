@@ -16,8 +16,7 @@ pub mod config;
 pub mod constants;
 /// GPUI windowing, rendering, and interaction.
 pub mod gui;
-/// Internationalization data and runtime translation helpers.
-pub mod i18n;
+rust_i18n::i18n!("assets/locales", fallback = "en");
 #[cfg(target_os = "linux")]
 pub mod linux;
 /// Persistent clipboard storage and query logic.

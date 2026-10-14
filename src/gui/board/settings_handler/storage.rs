@@ -1,9 +1,10 @@
 //! Storage limit handlers (`max_history_records`, `max_storage_records`).
 
 use gpui_kit::{Context, Window};
+use rust_i18n::t;
 
 use super::RopyBoard;
-use crate::{gui::settings::GlobalSettings, i18n::I18n};
+use crate::gui::settings::GlobalSettings;
 
 impl RopyBoard {
     pub(crate) fn has_pending_max_history(&self, cx: &Context<'_, Self>) -> bool {
@@ -46,11 +47,7 @@ impl RopyBoard {
                 .update(cx, |input, cx| {
                     input.set_value("", window, cx);
                 });
-            Self::notify_settings_warning(
-                window,
-                cx,
-                I18n::translate(cx, "settings_max_history_invalid_warning"),
-            );
+            Self::notify_settings_warning(window, cx, t!("settings_max_history_invalid_warning"));
             return;
         };
 
@@ -63,7 +60,7 @@ impl RopyBoard {
             Self::notify_settings_warning(
                 window,
                 cx,
-                I18n::translate(cx, "settings_max_storage_lt_history_warning"),
+                t!("settings_max_storage_lt_history_warning"),
             );
             return;
         }
@@ -92,7 +89,7 @@ impl RopyBoard {
                 input.set_value("", window, cx);
             });
         self.refresh_records_from_repository(cx);
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 
@@ -114,11 +111,7 @@ impl RopyBoard {
                 .update(cx, |input, cx| {
                     input.set_value("", window, cx);
                 });
-            Self::notify_settings_warning(
-                window,
-                cx,
-                I18n::translate(cx, "settings_max_storage_invalid_warning"),
-            );
+            Self::notify_settings_warning(window, cx, t!("settings_max_storage_invalid_warning"));
             return;
         };
 
@@ -131,7 +124,7 @@ impl RopyBoard {
             Self::notify_settings_warning(
                 window,
                 cx,
-                I18n::translate(cx, "settings_max_storage_lt_history_warning"),
+                t!("settings_max_storage_lt_history_warning"),
             );
             return;
         }
@@ -161,7 +154,7 @@ impl RopyBoard {
             });
 
         self.refresh_history(cx, true);
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 }

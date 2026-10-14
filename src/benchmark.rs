@@ -11,7 +11,6 @@ use thiserror::Error;
 use crate::{
     config::Settings,
     gui::{repository::GlobalRepository, settings::GlobalSettings},
-    i18n::I18n,
     repository::ClipboardRepository,
 };
 
@@ -67,7 +66,7 @@ pub(crate) fn run(ready: PathBuf) -> Result<(), BenchmarkError> {
             settings.update.auto_check = false;
             settings.storage.max_history_records = 100;
             settings.storage.max_storage_records = 200;
-            cx.set_global(I18n::load_i18n(settings.language.clone()));
+            rust_i18n::set_locale(settings.language.code());
             cx.set_global(GlobalSettings::new(settings));
             cx.set_global(GlobalRepository::new(Some(repository)));
             let (copy_tx, _copy_rx) = async_channel::unbounded();

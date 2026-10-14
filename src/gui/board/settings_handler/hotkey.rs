@@ -5,6 +5,7 @@
 //! in the parent module.
 
 use gpui_kit::{Context, Window};
+use rust_i18n::t;
 
 use super::RopyBoard;
 use crate::{
@@ -13,16 +14,12 @@ use crate::{
         hotkey::{HotkeyUpdateError, request_hotkey_update},
         settings::GlobalSettings,
     },
-    i18n::I18n,
 };
 
 impl RopyBoard {
-    pub(crate) fn hotkey_placeholder_text(
-        hotkey: &str,
-        cx: &Context<'_, Self>,
-    ) -> gpui_kit::SharedString {
+    pub(crate) fn hotkey_placeholder_text(hotkey: &str) -> gpui_kit::SharedString {
         if hotkey.trim().is_empty() {
-            I18n::translate(cx, "settings_hotkey_empty").into()
+            t!("settings_hotkey_empty").into()
         } else {
             hotkey.trim().to_owned().into()
         }
@@ -68,7 +65,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         let current_hotkey = GlobalSettings::read(cx, |s| s.hotkey.activation_key.clone());
-        let placeholder = Self::hotkey_placeholder_text(&current_hotkey, cx);
+        let placeholder = Self::hotkey_placeholder_text(&current_hotkey);
 
         self.settings_editor
             .settings_activation_key_input
@@ -85,7 +82,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         let next_value = value.to_string();
-        let placeholder = Self::hotkey_placeholder_text(placeholder_hotkey, cx);
+        let placeholder = Self::hotkey_placeholder_text(placeholder_hotkey);
 
         self.settings_editor
             .settings_activation_key_input
@@ -136,11 +133,7 @@ impl RopyBoard {
 
     pub(crate) fn save_hotkey(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
         if GlobalSettings::read(cx, Settings::is_recovery_required) {
-            Self::notify_settings_warning(
-                window,
-                cx,
-                I18n::translate(cx, "settings_recovery_required"),
-            );
+            Self::notify_settings_warning(window, cx, t!("settings_recovery_required"));
             return;
         }
         let current_hotkey = GlobalSettings::read(cx, |s| s.hotkey.activation_key.clone());
@@ -150,11 +143,7 @@ impl RopyBoard {
         );
 
         if !activation_key.is_empty() && !Self::is_valid_hotkey_input(&activation_key) {
-            Self::notify_settings_warning(
-                window,
-                cx,
-                I18n::translate(cx, "settings_hotkey_invalid_warning"),
-            );
+            Self::notify_settings_warning(window, cx, t!("settings_hotkey_invalid_warning"));
             return;
         }
 
@@ -194,11 +183,7 @@ impl RopyBoard {
                             .hotkey_before_recording
                             .clone_from(&activation_key);
                         board.sync_activation_key_input("", &activation_key, window, cx);
-                        Self::notify_settings_success(
-                            window,
-                            cx,
-                            I18n::translate(cx, "settings_save_success"),
-                        );
+                        Self::notify_settings_success(window, cx, t!("settings_save_success"));
                     }
                     Err(error) => Self::notify_hotkey_update_failed(&error, window, cx),
                 }
@@ -214,10 +199,6 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         tracing::warn!(%error, "hotkey update failed");
-        Self::notify_settings_warning(
-            window,
-            cx,
-            I18n::translate(cx, "settings_hotkey_update_failed"),
-        );
+        Self::notify_settings_warning(window, cx, t!("settings_hotkey_update_failed"));
     }
 }

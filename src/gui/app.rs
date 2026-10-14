@@ -30,6 +30,7 @@ pub(crate) const MAIN_WINDOW_TITLE: &str = "Ropy";
 
 #[derive(RustEmbed)]
 #[folder = "assets"]
+#[exclude = "locales/*"]
 pub(crate) struct Assets;
 
 impl AssetSource for Assets {

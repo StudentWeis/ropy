@@ -6537,6 +6537,7 @@ dependencies = [
  "ropy-core",
  "rstest",
  "rust-embed",
+ "rust-i18n",
  "seahash",
  "semver",
  "serde",

@@ -24,7 +24,7 @@ fn test_promo_arguments_normal_launch_unchanged() {
 #[test]
 fn test_demo_records_repeatable_and_localized() {
     let logo = Path::new("demo-logo.png");
-    let english = I18n::load_i18n(Language::new("en"));
+    let english = Language::new("en");
     let records = demo_records(logo, &english).unwrap();
     assert_eq!(records, demo_records(logo, &english).unwrap());
     assert_eq!(
@@ -39,7 +39,7 @@ fn test_demo_records_repeatable_and_localized() {
         "2026-04-02 13:23:14"
     );
     assert_eq!(records[3].content_type, ContentType::Image);
-    let chinese = demo_records(logo, &I18n::load_i18n(Language::new("zh-CN"))).unwrap();
+    let chinese = demo_records(logo, &Language::new("zh-CN")).unwrap();
     assert_ne!(records[1].content, chinese[1].content);
 }
 
@@ -51,10 +51,9 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
             ThemeId::default(),
             Language::new("en"),
         )));
-        cx.set_global(I18n::default());
         cx.set_global(GlobalRepository::new(None));
     });
-    let records = demo_records(Path::new("missing-logo.png"), &I18n::default()).unwrap();
+    let records = demo_records(Path::new("missing-logo.png"), &Language::default()).unwrap();
     let (handle, view) = cx.update(|cx| open_promo_window(records, cx).unwrap());
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);

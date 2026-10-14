@@ -4,13 +4,13 @@ use gpui_kit::{
     AppContext, BackgroundExecutor, Context, Window,
     component::{WindowExt, notification::Notification},
 };
+use rust_i18n::t;
 
 use super::RopyBoard;
 use crate::{
     clipboard::{ClipboardWriteResult, CopyRequest},
     config::ConfirmMode,
     gui::{hide_window, paste},
-    i18n::I18n,
     repository::{
         ClipboardRecord, ContentType,
         assets::{load_rich_text_html, load_rich_text_rtf},
@@ -206,7 +206,7 @@ impl RopyBoard {
                 }
                 if !success {
                     window.push_notification(
-                        Notification::error(I18n::translate(cx, "clipboard_write_unconfirmed")),
+                        Notification::error(t!("clipboard_write_unconfirmed")),
                         cx,
                     );
                     return;

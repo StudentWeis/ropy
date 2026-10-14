@@ -15,14 +15,12 @@ use gpui_kit::{
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
+use rust_i18n::t;
 
-use crate::{
-    gui::{
-        board::{RopyBoard, filtering::ClearConfirmAction},
-        panel::common::{panel_back_button, panel_header_with_back},
-        settings::GlobalSettings,
-    },
-    i18n::I18n,
+use crate::gui::{
+    board::{RopyBoard, filtering::ClearConfirmAction},
+    panel::common::{panel_back_button, panel_header_with_back},
+    settings::GlobalSettings,
 };
 
 fn settings_row<C: IntoElement>(
@@ -91,7 +89,7 @@ pub(crate) fn render_settings_content(
     let header = render_settings_header(cx);
 
     let appearance_card = section_card(
-        I18n::translate(cx, "settings_section_appearance"),
+        t!("settings_section_appearance"),
         vec![
             render_language_row(board, cx).into_any_element(),
             render_theme_row(board, cx).into_any_element(),
@@ -102,7 +100,7 @@ pub(crate) fn render_settings_content(
     );
 
     let behavior_card = section_card(
-        I18n::translate(cx, "settings_section_behavior"),
+        t!("settings_section_behavior"),
         vec![
             render_activation_key_row(board, cx).into_any_element(),
             render_confirm_mode_row(board, cx).into_any_element(),
@@ -114,7 +112,7 @@ pub(crate) fn render_settings_content(
     );
 
     let storage_card = section_card(
-        I18n::translate(cx, "settings_section_storage"),
+        t!("settings_section_storage"),
         vec![
             render_max_history_row(board, cx).into_any_element(),
             render_max_storage_row(board, cx).into_any_element(),
@@ -124,7 +122,7 @@ pub(crate) fn render_settings_content(
     );
 
     let about_card = section_card(
-        I18n::translate(cx, "settings_section_about"),
+        t!("settings_section_about"),
         vec![
             render_auto_check_row(board, cx).into_any_element(),
             render_include_prerelease_row(board, cx).into_any_element(),
@@ -150,7 +148,7 @@ pub(crate) fn render_settings_content(
 
 fn render_settings_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     panel_header_with_back(
-        I18n::translate(cx, "settings_title"),
+        t!("settings_title"),
         panel_back_button("cancel-button")
             .on_click(cx.listener(|board, _click_event, window, cx| {
                 reset_settings_dialog(board, window, cx);
@@ -164,7 +162,7 @@ fn render_settings_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
 
 fn render_language_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_language"),
+        t!("settings_language"),
         h_flex().flex_1().justify_end().child(
             div()
                 .w(px(148.0))
@@ -176,7 +174,7 @@ fn render_language_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
 
 fn render_theme_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_theme"),
+        t!("settings_theme"),
         h_flex().flex_1().justify_end().child(
             div()
                 .w(px(148.0))
@@ -188,7 +186,7 @@ fn render_theme_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Into
 
 fn render_layout_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_layout"),
+        t!("settings_layout"),
         h_flex().flex_1().justify_end().child(
             div()
                 .w(px(148.0))
@@ -200,7 +198,7 @@ fn render_layout_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl Int
 
 fn render_activation_key_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_activation_key"),
+        t!("settings_activation_key"),
         render_hotkey_controls(board, cx),
         cx,
     )
@@ -208,7 +206,7 @@ fn render_activation_key_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
 
 fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_window_opacity"),
+        t!("settings_window_opacity"),
         h_flex()
             .w(px(160.0))
             .items_center()
@@ -264,9 +262,9 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
     };
 
     let record_tooltip = if board.settings_editor.hotkey.recording {
-        I18n::translate(cx, "settings_hotkey_record_hint")
+        t!("settings_hotkey_record_hint")
     } else {
-        I18n::translate(cx, "settings_hotkey_record")
+        t!("settings_hotkey_record")
     };
 
     let record_button = if board.settings_editor.hotkey.recording {
@@ -343,7 +341,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
     };
 
     settings_row(
-        I18n::translate(cx, "settings_max_history"),
+        t!("settings_max_history"),
         h_flex()
             .w(px(100.0))
             .items_center()
@@ -388,7 +386,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
     };
 
     settings_row(
-        I18n::translate(cx, "settings_max_storage"),
+        t!("settings_max_storage"),
         h_flex()
             .w(px(100.0))
             .items_center()
@@ -428,7 +426,7 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl 
         .on_click(cx.listener(|board, _, window, cx| {
             board.toggle_autostart(window, cx);
         }));
-    settings_row(I18n::translate(cx, "settings_autostart"), toggle, cx)
+    settings_row(t!("settings_autostart"), toggle, cx)
 }
 
 fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
@@ -448,11 +446,7 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
             };
             board.save_confirm_mode(new_mode, window, cx);
         }));
-    settings_row(
-        I18n::translate(cx, "settings_paste_immediately"),
-        toggle,
-        cx,
-    )
+    settings_row(t!("settings_paste_immediately"), toggle, cx)
 }
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
@@ -465,7 +459,7 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                 cx,
             );
         }));
-    settings_row(I18n::translate(cx, "settings_hover_preview"), toggle, cx)
+    settings_row(t!("settings_hover_preview"), toggle, cx)
 }
 
 fn render_space_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
@@ -478,12 +472,12 @@ fn render_space_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                 cx,
             );
         }));
-    settings_row(I18n::translate(cx, "settings_space_preview"), toggle, cx)
+    settings_row(t!("settings_space_preview"), toggle, cx)
 }
 
 fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
-        I18n::translate(cx, "settings_clear_history"),
+        t!("settings_clear_history"),
         h_flex()
             .items_center()
             .gap_2()
@@ -493,8 +487,8 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                     .ghost()
                     .border_1()
                     .border_color(cx.theme().border)
-                    .label(I18n::translate(cx, "clear_ordinary"))
-                    .tooltip(I18n::translate(cx, "clear_ordinary_tooltip"))
+                    .label(t!("clear_ordinary"))
+                    .tooltip(t!("clear_ordinary_tooltip"))
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.open_clear_confirm(ClearConfirmAction::OrdinaryRecords, window, cx);
                     })),
@@ -503,8 +497,8 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                 Button::new("clear-history-button")
                     .small()
                     .danger()
-                    .label(I18n::translate(cx, "clear_all"))
-                    .tooltip(I18n::translate(cx, "clear_all_tooltip"))
+                    .label(t!("clear_all"))
+                    .tooltip(t!("clear_all_tooltip"))
                     .on_click(cx.listener(|board, _, window, cx| {
                         board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
                     })),
@@ -519,7 +513,7 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
         .ghost()
         .border_1()
         .border_color(cx.theme().border)
-        .label(I18n::translate(cx, "settings_open_log"))
+        .label(t!("settings_open_log"))
         .on_click(cx.listener(|_, _, _, _| {
             let log_dir = crate::utils::logging::log_dir();
             crate::utils::open_in_file_manager(&log_dir);
@@ -530,7 +524,7 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
         .ghost()
         .border_1()
         .border_color(cx.theme().border)
-        .label(I18n::translate(cx, "settings_open_config"))
+        .label(t!("settings_open_config"))
         .on_click(cx.listener(|_, _, _, _| {
             if let Ok(config_dir) = crate::config::Settings::config_dir() {
                 crate::utils::open_in_file_manager(&config_dir);
@@ -557,7 +551,7 @@ fn render_auto_check_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 cx,
             );
         }));
-    settings_row(I18n::translate(cx, "update_auto_check"), toggle, cx)
+    settings_row(t!("update_auto_check"), toggle, cx)
 }
 
 fn render_include_prerelease_row(
@@ -581,7 +575,7 @@ fn render_include_prerelease_row(
                 cx,
             );
         }));
-    settings_row(I18n::translate(cx, "update_include_prerelease"), toggle, cx)
+    settings_row(t!("update_include_prerelease"), toggle, cx)
 }
 
 pub(crate) fn reset_settings_dialog(
@@ -604,7 +598,7 @@ pub(crate) fn reset_settings_dialog(
         activation_key,
         window_opacity,
     ) = GlobalSettings::read(cx, |s| {
-        let lang = crate::i18n::language::available_languages()
+        let lang = crate::gui::settings::available_languages()
             .iter()
             .position(|lang| lang == &s.language)
             .unwrap_or(0);

@@ -1,5 +1,5 @@
 use gpui_kit::{
-    App, AppContext, Context, Entity, SharedString, Window,
+    AppContext, Context, Entity, SharedString, Window,
     component::{
         IndexPath,
         input::InputState,
@@ -105,10 +105,10 @@ pub(super) fn build_window_opacity_slider(
     slider
 }
 
-fn layout_mode_items(cx: &App) -> Vec<SharedString> {
+fn layout_mode_items() -> Vec<SharedString> {
     LayoutMode::all()
         .iter()
-        .map(|mode| crate::gui::settings::layout_label(*mode, cx))
+        .map(|mode| crate::gui::settings::layout_label(*mode))
         .collect()
 }
 
@@ -118,7 +118,7 @@ pub(super) fn sync_layout_select_items(
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) {
-    let items = layout_mode_items(cx);
+    let items = layout_mode_items();
     layout_select.update(cx, |state, cx| {
         state.set_items(items.clone(), window, cx);
         state.set_selected_index(Some(IndexPath::default().row(selected_layout)), window, cx);
@@ -132,7 +132,7 @@ pub(super) fn build_layout_select(
 ) -> Entity<SelectState<Vec<SharedString>>> {
     let layout_select = cx.new(|cx| {
         SelectState::new(
-            layout_mode_items(cx),
+            layout_mode_items(),
             Some(IndexPath::default().row(selected_layout)),
             window,
             cx,
@@ -143,7 +143,7 @@ pub(super) fn build_layout_select(
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
             if let SelectEvent::Confirm(Some(val)) = event {
-                let options = layout_mode_items(cx);
+                let options = layout_mode_items();
                 if let Some(idx) = options
                     .iter()
                     .position(|item| item.as_ref() == val.as_ref())
@@ -202,9 +202,9 @@ pub(super) fn build_language_select(
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<SharedString>>> {
-    let language_items: Vec<SharedString> = crate::i18n::language::available_languages()
+    let language_items: Vec<SharedString> = crate::gui::settings::available_languages()
         .iter()
-        .map(|l| SharedString::from(crate::i18n::language::language_display_name(l)))
+        .map(crate::gui::settings::language_display_name)
         .collect();
     let language_select = cx.new(|cx| {
         SelectState::new(
@@ -219,10 +219,10 @@ pub(super) fn build_language_select(
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
             if let SelectEvent::Confirm(Some(val)) = event {
-                let langs = crate::i18n::language::available_languages();
+                let langs = crate::gui::settings::available_languages();
                 if let Some(idx) = langs
                     .iter()
-                    .position(|l| crate::i18n::language::language_display_name(l) == val.as_ref())
+                    .position(|l| crate::gui::settings::language_display_name(l) == val.as_ref())
                 {
                     this.settings_editor.selected_language = idx;
                     this.save_selected_language(window, cx);
@@ -240,7 +240,7 @@ impl SettingsEditor {
         let settings = crate::gui::settings::GlobalSettings::read(cx, Clone::clone);
         let activation_key = &settings.hotkey.activation_key;
         let layout_mode = settings.layout.mode;
-        let activation_key_placeholder = RopyBoard::hotkey_placeholder_text(activation_key, cx);
+        let activation_key_placeholder = RopyBoard::hotkey_placeholder_text(activation_key);
         let settings_activation_key_input = cx
             .new(|cx| InputState::new(window, cx).placeholder(activation_key_placeholder.clone()));
         let settings_max_history_input = cx.new(|cx| {
@@ -266,7 +266,7 @@ impl SettingsEditor {
             .unwrap_or_default();
         let layout_select = build_layout_select(selected_layout, window, cx);
 
-        let selected_language = crate::i18n::language::available_languages()
+        let selected_language = crate::gui::settings::available_languages()
             .iter()
             .position(|lang| lang == &settings.language)
             .unwrap_or(0);

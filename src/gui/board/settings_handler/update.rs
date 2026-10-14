@@ -1,9 +1,10 @@
 //! Update-check settings handlers (`auto_check`, `include_prerelease`).
 
 use gpui_kit::{Context, Window};
+use rust_i18n::t;
 
 use super::RopyBoard;
-use crate::{gui::settings::GlobalSettings, i18n::I18n};
+use crate::gui::settings::GlobalSettings;
 
 impl RopyBoard {
     pub(crate) fn save_auto_check_enabled(
@@ -25,7 +26,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.update_settings.auto_check_enabled = enabled;
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 
@@ -58,7 +59,7 @@ impl RopyBoard {
             self.update_manager.status = crate::updater::models::UpdateStatus::Idle;
             self.update_manager.release = None;
         }
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 }

@@ -27,7 +27,8 @@ tray-icon = "0.26.1"
 auto-launch = "0.6.0"
 raw-window-handle = "0.6.2"
 async-channel = "2.5.0"
-rust-embed = "8.13.0"
+rust-i18n = "4.2.4"
+rust-embed = { version = "8.13.0", features = ["include-exclude"] }
 seahash.workspace = true
 sha2 = { version = "0.11.0", default-features = false }
 semver = "1.0.28"

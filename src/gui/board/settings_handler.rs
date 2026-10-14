@@ -6,12 +6,12 @@ use gpui_kit::{
     prelude::Styled,
     px,
 };
+use rust_i18n::t;
 
 use super::{RopyBoard, settings_editor};
 use crate::{
     config::{ConfirmMode, Settings},
     gui::settings::GlobalSettings,
-    i18n::I18n,
 };
 
 mod hotkey;
@@ -57,11 +57,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
         error_message: &str,
     ) {
-        let message = format!(
-            "{}: {}",
-            I18n::translate(cx, "settings_save_failed"),
-            error_message
-        );
+        let message = t!("settings_save_failed", error = error_message);
         Self::push_settings_notification(window, Notification::error(message), cx);
     }
 
@@ -70,7 +66,7 @@ impl RopyBoard {
         updater: impl FnOnce(&mut Settings),
     ) -> Result<(), String> {
         if GlobalSettings::read(cx, Settings::is_recovery_required) {
-            return Err(I18n::translate(cx, "settings_recovery_required"));
+            return Err(t!("settings_recovery_required").into_owned());
         }
         let mut result = Ok(());
         let mut updater = Some(updater);
@@ -165,17 +161,13 @@ impl RopyBoard {
             }
             self.settings_editor.autostart.enabled =
                 GlobalSettings::read(cx, |s| s.autostart.enabled);
-            Self::notify_settings_warning(
-                window,
-                cx,
-                I18n::translate(cx, "settings_autostart_failed"),
-            );
+            Self::notify_settings_warning(window, cx, t!("settings_autostart_failed"));
             cx.notify();
             return;
         }
 
         self.settings_editor.autostart.enabled = next_value;
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 
@@ -198,7 +190,7 @@ impl RopyBoard {
         }
 
         self.set_confirm_mode(confirm_mode, window);
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 
@@ -221,7 +213,7 @@ impl RopyBoard {
         }
 
         self.settings_editor.panel_state.hover_preview_enabled = enabled;
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 
@@ -247,7 +239,7 @@ impl RopyBoard {
         if !enabled {
             self.ui_state.hide_preview();
         }
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 

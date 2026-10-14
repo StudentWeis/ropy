@@ -5,6 +5,7 @@ use gpui_kit::{
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
+use rust_i18n::t;
 
 use crate::{
     config::LayoutMode,
@@ -12,7 +13,6 @@ use crate::{
         board::RopyBoard,
         panel::common::{panel_back_button, panel_header_with_back},
     },
-    i18n::I18n,
 };
 
 struct ShortcutRow {
@@ -31,12 +31,12 @@ const SHORTCUTS: &[ShortcutRow] = &[
     },
     ShortcutRow {
         key: "↑ / ↓",
-        label_key: "help_nav_up",
+        label_key: "help_nav_vertical",
         grid_only: false,
     },
     ShortcutRow {
         key: "K / J",
-        label_key: "help_nav_up",
+        label_key: "help_nav_vertical",
         grid_only: false,
     },
     ShortcutRow {
@@ -106,7 +106,7 @@ pub(crate) fn render_help_content(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let header = panel_header_with_back(
-        I18n::translate(cx, "help_title"),
+        t!("help_title"),
         panel_back_button("help-back-button")
             .on_click(cx.listener(|board, _, window, cx| {
                 board.active_panel = crate::gui::board::ActivePanel::ClipboardList;
@@ -134,7 +134,7 @@ pub(crate) fn render_help_content(
                 .text_sm()
                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
-                .child(I18n::translate(cx, "help_key")),
+                .child(t!("help_key")),
         )
         .child(
             div()
@@ -142,7 +142,7 @@ pub(crate) fn render_help_content(
                 .text_sm()
                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
-                .child(I18n::translate(cx, "help_action")),
+                .child(t!("help_action")),
         );
 
     // Build shortcut rows
@@ -152,18 +152,7 @@ pub(crate) fn render_help_content(
         .filter(|row| board.can_toggle_window_pin() || row.label_key != "help_pin")
         .enumerate()
         .map(|(i, row)| {
-            // The "up / down" entry has no single translation key — compose
-            // it from the per-direction strings so each language can phrase
-            // them independently.
-            let label = if row.label_key == "help_nav_up" {
-                format!(
-                    "{} / {}",
-                    I18n::translate(cx, "help_nav_up"),
-                    I18n::translate(cx, "help_nav_down")
-                )
-            } else {
-                I18n::translate(cx, row.label_key)
-            };
+            let label = t!(row.label_key);
 
             let row_bg = if i % 2 == 0 {
                 cx.theme().background

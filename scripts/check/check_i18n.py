@@ -2,11 +2,12 @@
 """
 i18n locale file checker.
 
-Checks three things:
+Checks:
   1. Whether every key in en.toml is actually referenced in the Rust source.
   2. Whether every non-template locale file has exactly the same keys as en.toml
      (no missing keys, no extra keys).
   3. Whether source translation references exist in en.toml.
+  4. Valid TOML string catalogues and matching named placeholders across locales.
 
 Usage:
     python3 scripts/check/check_i18n.py [--root <project-root>]
@@ -17,6 +18,7 @@ Exit code is non-zero when any issue is found.
 import argparse
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -24,41 +26,18 @@ from pathlib import Path
 # Helpers
 # ---------------------------------------------------------------------------
 
-def load_toml_keys(path: Path) -> list[str]:
-    """Return an ordered list of top-level string keys from a TOML file.
-
-    This is intentionally kept dependency-free: it only parses simple
-    ``key = "value"`` lines.  Section headers ([table]) are ignored because
-    the project's locale files are flat key-value files.
-    """
-    keys: list[str] = []
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            # Skip comments and blank lines
-            if not line or line.startswith("#"):
-                continue
-            # Skip TOML section headers
-            if line.startswith("["):
-                continue
-            m = re.match(r'^([A-Za-z0-9_\-]+)\s*=', line)
-            if m:
-                keys.append(m.group(1))
-    return keys
+def load_translations(path: Path) -> dict[str, str]:
+    """Parse the flat TOML catalogue, rejecting malformed or non-string entries."""
+    with path.open("rb") as source:
+        translations = tomllib.load(source)
+    if any(not isinstance(value, str) for value in translations.values()):
+        raise ValueError(f"{path}: translation values must be strings")
+    return translations
 
 
 def collect_used_keys(src_root: Path) -> set[str]:
-    """Return the set of i18n keys referenced anywhere under *src_root*.
-
-    Recognises these call patterns:
-      * I18n::translate(cx, "key")
-      * I18n::translate_count(cx, "key", count)
-      * i18n.t("key")
-      * any_field_key: "key"  (struct field ending with ``_key``, used for
-                               indirect i18n lookups like ``i18n.t(row.label_key)``)
-    """
-    # Generic .get() calls are map lookups, not translation references.
-    direct_pattern = re.compile(r'I18n::translate(?:_count)?\(\s*\w+\s*,\s*"([^"]+)"|\.t\(\s*"([^"]+)"\s*\)')
+    """Find literal t! keys and explicitly named dynamic translation key fields."""
+    direct_pattern = re.compile(r'\bt!\s*[(\[{]\s*"([^"]+)"')
     # Struct field whose name ends with ``_key`` assigned a string literal,
     # e.g. ``label_key: "help_search"``
     field_key_pattern = re.compile(r'\b\w+_key\s*:\s*"([^"]+)"')
@@ -66,7 +45,7 @@ def collect_used_keys(src_root: Path) -> set[str]:
     for rs_file in src_root.rglob("*.rs"):
         text = rs_file.read_text(encoding="utf-8")
         for m in direct_pattern.finditer(text):
-            key = m.group(1) or m.group(2)
+            key = m.group(1)
             used.add(key)
         for m in field_key_pattern.finditer(text):
             used.add(m.group(1))
@@ -79,17 +58,16 @@ def collect_used_keys(src_root: Path) -> set[str]:
 
 def check_unused_keys(template_keys: list[str], used_keys: set[str]) -> list[str]:
     """Return keys that exist in the template but are never used in source."""
-    # Locale discovery reads language_name as metadata, not through I18n.
-    return [k for k in template_keys if k != "language_name" and k not in used_keys]
+    return [k for k in template_keys if k not in used_keys]
 
 
 def check_locale_consistency(
     template_keys: list[str],
-    locale_path: Path,
+    translations: dict[str, str],
 ) -> tuple[list[str], list[str]]:
     """Return (missing_keys, extra_keys) for a non-template locale file."""
     template_set = set(template_keys)
-    locale_keys = load_toml_keys(locale_path)
+    locale_keys = list(translations)
     locale_set = set(locale_keys)
 
     missing = [k for k in template_keys if k not in locale_set]
@@ -143,14 +121,17 @@ def main() -> int:
         print(_color(f"ERROR: source directory not found: {src_dir}", _RED))
         return 1
 
-    template_keys = load_toml_keys(template_path)
+    try:
+        catalogues = {path: load_translations(path) for path in locales_dir.glob("*.toml")}
+    except (tomllib.TOMLDecodeError, ValueError) as error:
+        print(_color(f"ERROR: {error}", _RED))
+        return 1
+    template = catalogues[template_path]
+    template_keys = list(template)
     used_keys = collect_used_keys(src_dir)
 
     issues = 0  # count of problem categories
     verbose = False  # only print details when issues found
-
-    # Collect all check results first
-    check_results = []
 
     missing_references = sorted(used_keys - set(template_keys))
     if missing_references:
@@ -164,7 +145,6 @@ def main() -> int:
     if unused:
         issues += 1
         verbose = True
-        check_results.append(("Check 1 · Keys in en.toml not referenced in source code", "unused", unused))
 
     # ------------------------------------------------------------------
     # Check 2 – key parity across locales
@@ -176,17 +156,32 @@ def main() -> int:
     locale_issues_list = []
     if other_locales:
         for locale_path in other_locales:
-            missing, extra = check_locale_consistency(template_keys, locale_path)
+            missing, extra = check_locale_consistency(template_keys, catalogues[locale_path])
             if missing or extra:
                 issues += 1
                 verbose = True
                 rel = locale_path.relative_to(root)
                 locale_issues_list.append((rel, missing, extra))
 
+    placeholder_issues = []
+    for path in other_locales:
+        for key in sorted(template.keys() & catalogues[path].keys()):
+            expected = set(re.findall(r"%\{(\w+)\}", template[key]))
+            actual = set(re.findall(r"%\{(\w+)\}", catalogues[path][key]))
+            if expected != actual:
+                placeholder_issues.append(f"{path.name}: {key}: expected {sorted(expected)}, got {sorted(actual)}")
+    if placeholder_issues:
+        issues += 1
+        verbose = True
+
     # ------------------------------------------------------------------
     # Output (verbose only when issues found)
     # ------------------------------------------------------------------
     if verbose:
+        if placeholder_issues:
+            print_section("Placeholder mismatch between locales")
+            for issue in placeholder_issues:
+                print(f"  {issue}")
         if missing_references:
             print_section("Source translation keys missing from en.toml")
             for key in missing_references:
