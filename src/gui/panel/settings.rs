@@ -13,7 +13,7 @@ use gpui_kit::{
     },
     div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
-    px,
+    px, rems,
 };
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
 mod theme;
 
 fn settings_row<C: IntoElement>(
-    label: impl Into<gpui_kit::SharedString>,
+    label: impl IntoElement,
     control: C,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
@@ -36,15 +36,21 @@ fn settings_row<C: IntoElement>(
         .justify_between()
         .items_center()
         .w_full()
-        .py_3()
+        .gap_3()
+        .py_2()
         .child(
             div()
                 .flex_1()
+                .min_w_0()
                 .text_sm()
                 .text_color(cx.theme().foreground)
-                .child(label.into()),
+                .child(label),
         )
         .child(control)
+}
+
+fn settings_control(control: impl IntoElement) -> gpui_kit::Div {
+    div().w(rems(11.)).flex_shrink_0().child(control)
 }
 
 fn settings_section_header(
@@ -167,10 +173,9 @@ fn render_settings_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
 fn render_language_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
         I18n::translate(cx, "settings_language"),
-        h_flex().flex_1().justify_end().child(
-            div()
-                .w(px(148.0))
-                .child(Select::new(&board.settings_editor.language_select).small()),
+        settings_control(
+            Select::new(&board.settings_editor.language_select)
+                .accessibility_label(I18n::translate(cx, "settings_language")),
         ),
         cx,
     )
@@ -179,10 +184,9 @@ fn render_language_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
 fn render_layout_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
         I18n::translate(cx, "settings_layout"),
-        h_flex().flex_1().justify_end().child(
-            div()
-                .w(px(148.0))
-                .child(Select::new(&board.settings_editor.layout_select).small()),
+        settings_control(
+            Select::new(&board.settings_editor.layout_select)
+                .accessibility_label(I18n::translate(cx, "settings_layout")),
         ),
         cx,
     )
@@ -200,7 +204,8 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
     settings_row(
         I18n::translate(cx, "settings_window_opacity"),
         h_flex()
-            .w(px(160.0))
+            .w(rems(11.))
+            .flex_shrink_0()
             .items_center()
             .gap_2()
             .child(
@@ -248,9 +253,9 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
     let is_dirty = board.has_pending_hotkey(cx);
 
     let border_color = if board.settings_editor.hotkey.recording {
-        cx.theme().accent
+        cx.theme().ring
     } else {
-        cx.theme().border
+        cx.theme().input
     };
 
     let record_tooltip = if board.settings_editor.hotkey.recording {
@@ -273,28 +278,14 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
         Button::new("hotkey-save-button").ghost().opacity(0.55_f32)
     };
 
-    h_flex()
-        .w(px(185.0))
-        .items_center()
-        .border_1()
-        .border_color(border_color)
-        .rounded_md()
-        .px_2()
-        .py_1()
-        .child(
-            div().flex_1().min_w_0().child(
-                Input::new(&board.settings_editor.settings_activation_key_input)
-                    .appearance(false)
-                    .px_2()
-                    .py_1(),
-            ),
-        )
+    let actions = h_flex()
+        .gap_1()
         .child(
             record_button
                 .xsmall()
                 .compact()
-                .rounded(px(4.0))
-                .icon(Icon::empty().path("icons/hotkey-record.svg").size(px(14.0)))
+                .icon(Icon::empty().path("icons/hotkey-record.svg"))
+                .accessibility_label(record_tooltip.clone())
                 .tooltip(record_tooltip)
                 .on_click(cx.listener(|board, _, window, cx| {
                     if board.settings_editor.hotkey.recording {
@@ -311,15 +302,22 @@ fn render_hotkey_controls(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
             save_button
                 .xsmall()
                 .compact()
-                .rounded(px(4.0))
-                .icon(Icon::empty().path("icons/check.svg").size(px(14.0)))
+                .icon(Icon::empty().path("icons/check.svg"))
+                .accessibility_label(I18n::translate(cx, "settings_hotkey_save"))
+                .tooltip(I18n::translate(cx, "settings_hotkey_save"))
                 .on_click(cx.listener(|board, _, window, cx| {
                     board.save_hotkey(cx, window);
                 }))
                 .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                     cx.stop_propagation();
                 }),
-        )
+        );
+    settings_control(
+        Input::new(&board.settings_editor.settings_activation_key_input)
+            .aria_label(I18n::translate(cx, "settings_activation_key"))
+            .border_color(border_color)
+            .suffix(actions),
+    )
 }
 
 fn render_max_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {

@@ -75,6 +75,57 @@ fn record(id: u64) -> ClipboardRecord {
 }
 
 #[gpui_kit::test]
+fn test_settings_controls_share_aligned_frames(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    let directory = tempfile::tempdir().unwrap();
+    let repository = ClipboardRepository::open(
+        &directory.path().join("db.redb"),
+        directory.path().join("images"),
+    )
+    .unwrap();
+    cx.update(|cx| cx.set_global(GlobalRepository::new(Some(Arc::new(repository)))));
+    cx.simulate_window_resize(
+        handle,
+        gpui_kit::size(gpui_kit::px(400.), gpui_kit::px(550.)),
+    );
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.open_settings_panel(window, cx));
+        window.render_frame(cx);
+        let editor = &board.read(cx).settings_editor;
+        let theme = window.within("theme-select").find("input").bounds();
+        for entity_id in [
+            editor.language_select.entity_id(),
+            editor.layout_select.entity_id(),
+        ] {
+            let control = window.within(("select", entity_id)).find("input").bounds();
+            assert_eq!(control.size, theme.size);
+            assert_eq!(control.right(), theme.right());
+        }
+        let hotkey = window
+            .find(("input", editor.settings_activation_key_input.entity_id()))
+            .bounds();
+        assert_eq!(hotkey.size, theme.size);
+        assert_eq!(hotkey.right(), theme.right());
+        assert!(theme.right() <= window.viewport_size().width);
+        assert_eq!(
+            window.find("follow-system-toggle").bounds().size,
+            window.find("confirm-mode-toggle").bounds().size
+        );
+        let language_id = ("select", editor.language_select.entity_id());
+        window.click(language_id, cx);
+        assert_eq!(window.find(language_id).expanded(), Some(true));
+        window.press("escape", cx);
+        assert_eq!(window.find(language_id).expanded(), Some(false));
+        window.click("hotkey-record-button", cx);
+        assert!(board.read(cx).settings_editor.hotkey.recording);
+        window.press("escape", cx);
+        assert!(!board.read(cx).settings_editor.hotkey.recording);
+        assert_eq!(board.read(cx).active_panel, ActivePanel::Settings);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn test_appearance_settings_show_only_choices_for_current_mode(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![]);
     cx.update_window(handle, |_, window, cx| {

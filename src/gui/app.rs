@@ -34,13 +34,19 @@ pub(crate) struct Assets;
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui_kit::Result<Option<Cow<'static, [u8]>>> {
-        Ok(Self::get(path).map(|data| data.data))
+        Ok(Self::get(path)
+            .or_else(|| gpui_kit::assets::Assets::get(path))
+            .map(|data| data.data))
     }
 
     fn list(&self, path: &str) -> gpui_kit::Result<Vec<gpui_kit::SharedString>> {
-        Ok(Self::iter()
+        let mut paths: Vec<_> = Self::iter()
+            .chain(gpui_kit::assets::Assets::iter())
             .filter_map(|p| p.starts_with(path).then(|| p.into()))
-            .collect())
+            .collect();
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
     }
 }
 
@@ -169,11 +175,24 @@ pub(crate) fn set_app_theme(
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{Anchor, TestAppContext, rgb, solid_background};
+    use gpui_kit::{Anchor, AssetSource, TestAppContext, rgb, solid_background};
     use rstest::rstest;
 
-    use super::set_app_theme;
+    use super::{Assets, set_app_theme};
     use crate::gui::{theme::ThemeDefinition, utils::surface_with_opacity};
+
+    #[rstest]
+    #[case("icons/chevron-down.svg")]
+    #[case("icons/sun.svg")]
+    #[case("icons/moon.svg")]
+    fn test_settings_icons_load_from_application_assets(#[case] path: &str) {
+        assert!(matches!(Assets.load(path), Ok(Some(_))), "missing {path}");
+        assert!(
+            Assets
+                .list("icons/")
+                .is_ok_and(|paths| paths.iter().any(|p| p == path))
+        );
+    }
 
     #[rstest]
     #[case(0)]

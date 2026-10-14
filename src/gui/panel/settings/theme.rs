@@ -8,6 +8,7 @@ use gpui_kit::{
     div,
 };
 
+use super::{settings_control, settings_row};
 use crate::{
     gui::{
         board::{RopyBoard, ThemeTarget},
@@ -50,7 +51,6 @@ pub(super) fn render_theme_settings(
         )
         .child(
             Switch::new("follow-system-toggle")
-                .small()
                 .checked(follows_system)
                 .accessibility_label(label)
                 .on_change(cx.listener(|board, enabled, window, cx| {
@@ -98,34 +98,20 @@ fn theme_row(
         ThemeTarget::Light => "light-theme-select",
         ThemeTarget::Dark => "dark-theme-select",
     };
-    h_flex()
-        .w_full()
-        .gap_2()
-        .py_2()
-        .child(
-            h_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_2()
-                .text_sm()
-                .children(icon.map(|icon| {
-                    Icon::new(icon)
-                        .small()
-                        .text_color(cx.theme().muted_foreground)
-                }))
-                .child(label.clone()),
-        )
-        .child(
-            div().w_40().flex_shrink_0().child(
-                Select::new(board.settings_editor.theme.select(target))
-                    .id(id)
+    settings_row(
+        h_flex()
+            .gap_2()
+            .children(icon.map(|icon| {
+                Icon::new(icon)
                     .small()
-                    .w_full()
-                    .accessibility_label(label)
-                    // Blend the resting trigger into the settings surface while retaining
-                    // the Select's native open/focused border and focus ring.
-                    .bg(cx.theme().secondary)
-                    .border_color(cx.theme().transparent),
-            ),
-        )
+                    .text_color(cx.theme().muted_foreground)
+            }))
+            .child(label.clone()),
+        settings_control(
+            Select::new(board.settings_editor.theme.select(target))
+                .id(id)
+                .accessibility_label(label),
+        ),
+        cx,
+    )
 }
