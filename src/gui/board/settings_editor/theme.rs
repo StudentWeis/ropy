@@ -135,10 +135,6 @@ impl ThemeEditor {
         }
     }
 
-    pub(crate) const fn system_mode(&self) -> ThemeMode {
-        self.system_mode
-    }
-
     pub(crate) fn update_system_mode(&mut self, mode: ThemeMode) -> bool {
         let changed = self.system_mode != mode;
         self.system_mode = mode;

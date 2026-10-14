@@ -5,7 +5,6 @@ use gpui_kit::{
     component::{
         ActiveTheme, Icon, IconName, Sizable, h_flex, select::Select, switch::Switch, v_flex,
     },
-    div,
 };
 
 use super::{settings_control, settings_row};
@@ -13,7 +12,6 @@ use crate::{
     gui::{
         board::{RopyBoard, ThemeTarget},
         settings::GlobalSettings,
-        theme::ThemeMode,
     },
     i18n::I18n,
 };
@@ -23,40 +21,17 @@ pub(super) fn render_theme_settings(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let follows_system = GlobalSettings::read(cx, |settings| settings.appearance.follow_system);
-    let hint = if follows_system {
-        match board.settings_editor.theme.system_mode() {
-            ThemeMode::Light => I18n::translate(cx, "settings_system_appearance_light"),
-            ThemeMode::Dark => I18n::translate(cx, "settings_system_appearance_dark"),
-        }
-    } else {
-        I18n::translate(cx, "settings_fixed_theme_hint")
-    };
     let label = I18n::translate(cx, "settings_follow_system");
-    let follow_row = h_flex()
-        .w_full()
-        .gap_3()
-        .py_3()
-        .child(
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_1()
-                .child(div().text_sm().child(label.clone()))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(hint),
-                ),
-        )
-        .child(
-            Switch::new("follow-system-toggle")
-                .checked(follows_system)
-                .accessibility_label(label)
-                .on_change(cx.listener(|board, enabled, window, cx| {
-                    board.save_follow_system(*enabled, window, cx);
-                })),
-        );
+    let follow_row = settings_row(
+        label.clone(),
+        Switch::new("follow-system-toggle")
+            .checked(follows_system)
+            .accessibility_label(label)
+            .on_change(cx.listener(|board, enabled, window, cx| {
+                board.save_follow_system(*enabled, window, cx);
+            })),
+        cx,
+    );
 
     let choices = if follows_system {
         v_flex()
