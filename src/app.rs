@@ -221,11 +221,10 @@ fn load_settings() -> Settings {
 /// Entry point: initialize all subsystems and launch the application.
 pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instance) {
     let platform = gpui_kit::platform::current_platform(false);
+    #[cfg(target_os = "macos")]
+    crate::gui::set_activation_policy_accessory(platform.as_ref());
     let application = gpui_kit::Application::with_platform(platform.clone());
     application.with_assets(crate::gui::Assets).run(move |cx| {
-        #[cfg(target_os = "macos")]
-        crate::gui::set_activation_policy_accessory();
-
         gpui_kit::init(cx);
         bind_application_keys(cx);
 

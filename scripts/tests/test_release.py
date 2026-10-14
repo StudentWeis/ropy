@@ -4,6 +4,7 @@ import hashlib
 import tarfile
 import json
 import os
+import plistlib
 import shutil
 from pathlib import Path
 import subprocess
@@ -16,6 +17,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_macos_bundle_declares_accessory_application(self):
+        with (ROOT / "Cargo.toml").open("rb") as manifest:
+            macos = tomllib.load(manifest)["package"]["metadata"]["bundle"]["macos"]
+        fragments = macos.get("info_plist_exts", [])
+        contents = "".join((ROOT / path).read_text() for path in fragments)
+        metadata = plistlib.loads(
+            f'<plist version="1.0"><dict>{contents}</dict></plist>'.encode()
+        )
+        self.assertIs(metadata.get("LSUIElement"), True)
+
     def test_bundle_macos_settings_use_supported_schema(self):
         with (ROOT / "Cargo.toml").open("rb") as manifest:
             bundle = tomllib.load(manifest)["package"]["metadata"]["bundle"]
