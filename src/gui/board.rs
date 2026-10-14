@@ -40,6 +40,7 @@ use gpui_kit::{
 };
 pub(crate) use search::{ContentFilter, SearchOptions};
 use settings_editor::SettingsEditor;
+pub(crate) use settings_editor::theme::ThemeTarget;
 use updater_ui::UpdateManager;
 
 use crate::{
@@ -174,6 +175,7 @@ pub(crate) struct RopyBoard {
     pub(crate) favorite_ids: Arc<HashSet<u64>>,
     pub(crate) focus_handle: FocusHandle,
     pub(crate) window_activation_subscription: Subscription,
+    window_appearance_subscription: Subscription,
     pub(crate) search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) last_search_query: String,
@@ -347,6 +349,7 @@ impl RopyBoard {
     // when a Wayland surface is reopened; keep history, tasks and update state alive.
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.window_activation_subscription = Self::observe_activation(window, cx);
+        self.window_appearance_subscription = Self::observe_appearance(window, cx);
         self.search_input = cx.new(|cx| InputState::new(window, cx));
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
         self.settings_editor = SettingsEditor::new(window, cx);
@@ -364,6 +367,9 @@ impl RopyBoard {
         // Hide when the OS deactivates the window, not when an inner control
         // changes focus while the popup is being restored.
         cx.observe_window_activation(window, move |this, window, cx| {
+            if window.is_window_active() {
+                this.refresh_system_appearance(window, cx);
+            }
             // When the window loses focus, hide the window (unless pinned).
             if !window.is_window_active()
                 && Self::should_auto_hide_on_focus_out(this.pinned)
@@ -375,6 +381,10 @@ impl RopyBoard {
                 hide_window(window, cx, this.pinned);
             }
         })
+    }
+
+    fn observe_appearance(window: &mut Window, cx: &Context<'_, Self>) -> Subscription {
+        cx.observe_window_appearance(window, Self::refresh_system_appearance)
     }
 
     fn observe_search(
@@ -410,6 +420,7 @@ impl RopyBoard {
         window.focus(&focus_handle, cx);
 
         let window_activation_subscription = Self::observe_activation(window, cx);
+        let window_appearance_subscription = Self::observe_appearance(window, cx);
 
         let settings = GlobalSettings::read(cx, Clone::clone);
         let layout_mode = settings.layout.mode;
@@ -443,6 +454,7 @@ impl RopyBoard {
             records,
             focus_handle,
             window_activation_subscription,
+            window_appearance_subscription,
             search_input_subscription,
             search_input,
             last_search_query: String::new(),

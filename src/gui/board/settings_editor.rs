@@ -11,6 +11,9 @@ use gpui_kit::{
 use super::RopyBoard;
 use crate::config::LayoutMode;
 
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) mod theme;
+
 #[derive(Debug, Clone, Copy, Default)]
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) struct HotkeyEditorState {
@@ -49,8 +52,7 @@ pub(crate) struct SettingsEditor {
     pub(crate) settings_max_storage_input: Entity<InputState>,
     pub(crate) settings_window_opacity_slider: Entity<SliderState>,
     pub(crate) panel_state: SettingsPanelState,
-    pub(crate) selected_theme: usize,
-    pub(crate) theme_select: Entity<SelectState<Vec<SharedString>>>,
+    pub(crate) theme: theme::ThemeEditor,
     pub(crate) selected_layout: usize,
     pub(crate) layout_select: Entity<SelectState<Vec<SharedString>>>,
     pub(crate) window_opacity_percent: u8,
@@ -91,11 +93,7 @@ pub(super) fn build_window_opacity_slider(
             )]
             let opacity_percent = value.start().round() as u8;
             this.settings_editor.window_opacity_percent = opacity_percent;
-            let theme = crate::gui::theme::available_themes()
-                .get(this.settings_editor.selected_theme)
-                .cloned()
-                .unwrap_or_default();
-            crate::gui::app::set_app_theme(window, cx, &theme, opacity_percent);
+            crate::gui::app::apply_current_theme(window, cx, opacity_percent);
             crate::gui::app::apply_window_opacity(window, opacity_percent);
             cx.notify();
         },
@@ -159,44 +157,6 @@ pub(super) fn build_layout_select(
     layout_select
 }
 
-pub(super) fn build_theme_select(
-    selected_theme: usize,
-    window: &mut Window,
-    cx: &mut Context<'_, RopyBoard>,
-) -> Entity<SelectState<Vec<SharedString>>> {
-    let theme_items: Vec<SharedString> = crate::gui::theme::available_themes()
-        .iter()
-        .map(|theme_id| SharedString::from(crate::gui::theme::theme_display_name(theme_id)))
-        .collect();
-    let theme_select = cx.new(|cx| {
-        SelectState::new(
-            theme_items,
-            Some(IndexPath::default().row(selected_theme)),
-            window,
-            cx,
-        )
-    });
-    cx.subscribe_in(
-        &theme_select,
-        window,
-        |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
-            if let SelectEvent::Confirm(Some(val)) = event {
-                let themes = crate::gui::theme::available_themes();
-                if let Some(idx) = themes
-                    .iter()
-                    .position(|theme| crate::gui::theme::theme_display_name(theme) == val.as_ref())
-                {
-                    this.settings_editor.selected_theme = idx;
-                    this.save_selected_theme(window, cx);
-                }
-            }
-        },
-    )
-    .detach();
-
-    theme_select
-}
-
 pub(super) fn build_language_select(
     selected_language: usize,
     window: &mut Window,
@@ -254,11 +214,7 @@ impl SettingsEditor {
         let settings_window_opacity_slider =
             build_window_opacity_slider(settings.window.opacity_percent, window, cx);
 
-        let selected_theme = crate::gui::theme::available_themes()
-            .iter()
-            .position(|theme_id| theme_id == &settings.theme)
-            .unwrap_or_default();
-        let theme_select = build_theme_select(selected_theme, window, cx);
+        let theme = theme::ThemeEditor::new(window, cx);
 
         let selected_layout = LayoutMode::all()
             .iter()
@@ -280,8 +236,7 @@ impl SettingsEditor {
             settings_max_history_input,
             settings_max_storage_input,
             settings_window_opacity_slider,
-            selected_theme,
-            theme_select,
+            theme,
             selected_layout,
             layout_select,
             window_opacity_percent: settings.window.opacity_percent,

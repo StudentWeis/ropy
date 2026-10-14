@@ -6,48 +6,83 @@ use super::RopyBoard;
 use crate::{gui::settings::GlobalSettings, i18n::I18n};
 
 impl RopyBoard {
-    pub(crate) fn save_selected_theme(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        let previous_theme = GlobalSettings::read(cx, |s| s.theme.clone());
-        let next_theme = crate::gui::theme::available_themes()
-            .get(self.settings_editor.selected_theme)
-            .cloned()
-            .unwrap_or_default();
-
-        if next_theme == previous_theme {
-            return;
-        }
-
-        let theme_to_save = next_theme.clone();
-        if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
-            settings.theme = theme_to_save;
-        }) {
-            let previous_theme_idx = crate::gui::theme::available_themes()
-                .iter()
-                .position(|theme_id| theme_id == &previous_theme)
-                .unwrap_or_default();
-            self.set_theme_selection(previous_theme_idx, window, cx);
-            crate::gui::app::set_app_theme(
-                window,
-                cx,
-                &previous_theme,
-                self.settings_editor.window_opacity_percent,
-            );
-            crate::gui::app::apply_window_opacity(
-                window,
-                self.settings_editor.window_opacity_percent,
-            );
-            Self::notify_settings_save_failed(window, cx, &error_message);
+    pub(crate) fn save_selected_theme(
+        &self,
+        target: super::settings_editor::theme::ThemeTarget,
+        id: &crate::gui::theme::ThemeId,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        let previous = GlobalSettings::read(cx, |settings| {
+            crate::gui::theme::resolve_theme(settings, window.appearance().into())
+        });
+        let id = id.clone();
+        if let Err(message) = Self::persist_settings_update(cx, |settings| target.set(settings, id))
+        {
+            self.settings_editor.theme.sync(window, cx);
+            Self::notify_settings_save_failed(window, cx, &message);
             cx.notify();
             return;
         }
+        let next = GlobalSettings::read(cx, |settings| {
+            crate::gui::theme::resolve_theme(settings, window.appearance().into())
+        });
+        if next != previous {
+            crate::gui::app::apply_current_theme(
+                window,
+                cx,
+                self.settings_editor.window_opacity_percent,
+            );
+        }
+        cx.notify();
+    }
 
-        crate::gui::app::set_app_theme(
+    pub(crate) fn save_follow_system(
+        &mut self,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if GlobalSettings::read(cx, |settings| settings.appearance.follow_system) == enabled {
+            return;
+        }
+        let mode = window.appearance().into();
+        if let Err(message) = Self::persist_settings_update(cx, |settings| {
+            crate::gui::theme::set_follow_system(settings, enabled, mode);
+        }) {
+            Self::notify_settings_save_failed(window, cx, &message);
+            cx.notify();
+            return;
+        }
+        self.settings_editor.theme.update_system_mode(mode);
+        self.settings_editor.theme.sync(window, cx);
+        crate::gui::app::apply_current_theme(
             window,
             cx,
-            &next_theme,
             self.settings_editor.window_opacity_percent,
         );
-        crate::gui::app::apply_window_opacity(window, self.settings_editor.window_opacity_percent);
+        cx.notify();
+    }
+
+    pub(crate) fn refresh_system_appearance(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if !self
+            .settings_editor
+            .theme
+            .update_system_mode(window.appearance().into())
+        {
+            return;
+        }
+        if GlobalSettings::read(cx, |settings| settings.appearance.follow_system) {
+            crate::gui::app::apply_current_theme(
+                window,
+                cx,
+                self.settings_editor.window_opacity_percent,
+            );
+        }
         cx.notify();
     }
 
@@ -105,11 +140,7 @@ impl RopyBoard {
         }) {
             self.settings_editor.window_opacity_percent = previous_opacity;
             self.sync_window_opacity_slider(previous_opacity, window, cx);
-            let theme = crate::gui::theme::available_themes()
-                .get(self.settings_editor.selected_theme)
-                .cloned()
-                .unwrap_or_default();
-            crate::gui::app::set_app_theme(window, cx, &theme, previous_opacity);
+            crate::gui::app::apply_current_theme(window, cx, previous_opacity);
             crate::gui::app::apply_window_opacity(window, previous_opacity);
             Self::notify_settings_save_failed(window, cx, &error_message);
             cx.notify();

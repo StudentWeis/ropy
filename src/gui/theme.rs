@@ -4,6 +4,8 @@ use rust_embed::RustEmbed;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::config::Settings;
+
 /// Bundled theme TOML files. Adding a `<id>.toml` under `assets/themes/`
 /// is enough to make the theme selectable — no Rust code change required.
 #[derive(RustEmbed)]
@@ -38,6 +40,50 @@ pub(crate) enum ThemeMode {
     Dark,
 }
 
+impl From<gpui_kit::WindowAppearance> for ThemeMode {
+    fn from(appearance: gpui_kit::WindowAppearance) -> Self {
+        match appearance {
+            gpui_kit::WindowAppearance::Light | gpui_kit::WindowAppearance::VibrantLight => {
+                Self::Light
+            }
+            gpui_kit::WindowAppearance::Dark | gpui_kit::WindowAppearance::VibrantDark => {
+                Self::Dark
+            }
+        }
+    }
+}
+
+/// Resolve the displayed theme without changing the user's saved choices.
+pub(crate) fn resolve_theme(settings: &Settings, system_mode: ThemeMode) -> ThemeId {
+    if !settings.appearance.follow_system {
+        return ThemeDefinition::load_or_default(&settings.theme).id;
+    }
+    let selected = match system_mode {
+        ThemeMode::Light => &settings.appearance.light_theme,
+        ThemeMode::Dark => &settings.appearance.dark_theme,
+    };
+    theme_for_mode(selected, system_mode)
+}
+
+/// Reject missing themes and themes assigned to the wrong appearance slot.
+pub(crate) fn theme_for_mode(selected: &ThemeId, mode: ThemeMode) -> ThemeId {
+    if ThemeDefinition::load(selected).is_ok_and(|definition| definition.mode() == mode) {
+        selected.clone()
+    } else {
+        ThemeId::new(match mode {
+            ThemeMode::Light => "ropy-light",
+            ThemeMode::Dark => "ropy-dark",
+        })
+    }
+}
+
+pub(crate) fn set_follow_system(settings: &mut Settings, enabled: bool, system_mode: ThemeMode) {
+    if settings.appearance.follow_system && !enabled {
+        settings.theme = resolve_theme(settings, system_mode);
+    }
+    settings.appearance.follow_system = enabled;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThemeDefinition {
     id: ThemeId,
@@ -47,6 +93,10 @@ pub(crate) struct ThemeDefinition {
 }
 
 impl ThemeDefinition {
+    pub(crate) const fn id(&self) -> &ThemeId {
+        &self.id
+    }
+
     pub(crate) fn load(theme_id: &ThemeId) -> Result<Self, ThemeError> {
         let file_name = format!("{}.toml", theme_id.code());
         let file = ThemeAssets::get(&file_name)
@@ -286,7 +336,71 @@ fn cached_display_names() -> &'static HashMap<String, String> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use rstest::rstest;
+
     use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode, cached_display_names};
+    use crate::config::Settings;
+
+    #[rstest]
+    #[case(false, ThemeMode::Light, "ropy-dark")]
+    #[case(false, ThemeMode::Dark, "ropy-dark")]
+    #[case(true, ThemeMode::Light, "nord-light")]
+    #[case(true, ThemeMode::Dark, "everforest-night")]
+    fn test_resolve_theme_appearance_uses_selected_strategy(
+        #[case] follow_system: bool,
+        #[case] mode: ThemeMode,
+        #[case] expected: &str,
+    ) {
+        let mut settings = Settings::default();
+        settings.theme = ThemeId::new("ropy-dark");
+        settings.appearance.follow_system = follow_system;
+        settings.appearance.light_theme = ThemeId::new("nord-light");
+        settings.appearance.dark_theme = ThemeId::new("everforest-night");
+
+        assert_eq!(super::resolve_theme(&settings, mode).code(), expected);
+        assert_eq!(settings.theme.code(), "ropy-dark");
+    }
+
+    #[rstest]
+    #[case(ThemeMode::Light, "missing", "ropy-light")]
+    #[case(ThemeMode::Dark, "missing", "ropy-dark")]
+    #[case(ThemeMode::Light, "ropy-dark", "ropy-light")]
+    #[case(ThemeMode::Dark, "nord-light", "ropy-dark")]
+    fn test_theme_for_mode_invalid_choice_falls_back_to_matching_mode(
+        #[case] mode: ThemeMode,
+        #[case] code: &str,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            super::theme_for_mode(&ThemeId::new(code), mode).code(),
+            expected
+        );
+    }
+
+    #[test]
+    fn test_follow_system_disable_freezes_current_theme_and_reenable_restores_pair() {
+        let mut settings = Settings::default();
+        settings.appearance.follow_system = true;
+        settings.appearance.light_theme = ThemeId::new("nord-light");
+        settings.appearance.dark_theme = ThemeId::new("everforest-night");
+
+        super::set_follow_system(&mut settings, false, ThemeMode::Dark);
+        assert_eq!(
+            super::resolve_theme(&settings, ThemeMode::Light).code(),
+            "everforest-night"
+        );
+        assert_eq!(settings.appearance.light_theme.code(), "nord-light");
+
+        super::set_follow_system(&mut settings, true, ThemeMode::Light);
+        assert_eq!(
+            super::resolve_theme(&settings, ThemeMode::Light).code(),
+            "nord-light"
+        );
+        assert_eq!(
+            super::resolve_theme(&settings, ThemeMode::Dark).code(),
+            "everforest-night"
+        );
+    }
 
     #[test]
     fn test_theme_id_all_discovers_bundled_themes() {
