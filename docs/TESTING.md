@@ -31,6 +31,28 @@ dependencies may need to rebuild them on each run until it merges; compare cache
 restore/save durations and end-to-end workflow duration in Actions when evaluating
 this tradeoff. Runner queue time can still dominate even with parallel jobs.
 
+## Packaged desktop test builds
+
+Use **Actions → Desktop test artifacts → Run workflow** to package an untagged
+branch before GUI validation. Select the workflow branch and optionally enter a
+branch, tag or full commit SHA in `ref`; leaving it blank packages the selected
+workflow revision. The workflow must first exist on the default branch for the
+manual dispatch entry to be available.
+
+```bash
+gh workflow run desktop-test.yml --ref main -f ref=<commit-sha>
+gh run list --workflow desktop-test.yml
+gh run download <run-id> --dir /tmp/ropy-desktop-test
+```
+
+The workflow resolves the source to one commit before starting the native Linux
+and Windows builds. Each `desktop-test-<target>-<commit>` artifact contains the
+platform archive, its `.sha256` checksum, `dist-manifest.json` and
+`source-revision.txt`. Artifacts expire after seven days. Verify the checksum and
+record the source revision before transferring the package to a clean GUI test
+environment. These builds use the selected source's cargo-dist version, native
+runners and system dependencies; they do not create tags or GitHub Releases.
+
 ## Promotional captures
 
 See [Promotional screenshots](PROMO_SCREENSHOTS.md) for the isolated macOS capture

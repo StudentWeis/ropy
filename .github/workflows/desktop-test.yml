@@ -1,0 +1,106 @@
+name: Desktop test artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to package (blank uses the selected workflow ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      revision: ${{ steps.plan.outputs.revision }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Read cargo-dist version from the selected source
+        id: version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          with open("dist-workspace.toml", "rb") as source:
+              print("dist=" + tomllib.load(source)["dist"]["cargo-dist-version"])
+          PY
+      - name: Install dist
+        env:
+          DIST_VERSION: ${{ steps.version.outputs.dist }}
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+      - name: Resolve source and plan native builds
+        id: plan
+        run: |
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          dist plan --output-format=json > plan-dist-manifest.json
+          matrix=$(jq -ce '
+            {include: [.ci.github.artifacts_matrix.include[] |
+              select(.targets == ["x86_64-unknown-linux-gnu"] or
+                     .targets == ["x86_64-pc-windows-msvc"]) |
+              . + {archive: (if .targets[0] == "x86_64-pc-windows-msvc"
+                then "ropy-x86_64-pc-windows-msvc.zip"
+                else "ropy-x86_64-unknown-linux-gnu.tar.xz" end)}]} |
+            select(.include | length == 2)
+          ' plan-dist-manifest.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Package ${{ matrix.targets[0] }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Enable Windows long paths
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.plan.outputs.revision }}
+          persist-credentials: false
+          submodules: recursive
+      - name: Install dist
+        run: ${{ matrix.install_dist.run }}
+      - name: Install system dependencies
+        if: matrix.packages_install != ''
+        run: ${{ matrix.packages_install }}
+      - name: Build local artifacts
+        shell: bash
+        run: dist build --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
+      - name: Verify outputs and record source revision
+        shell: bash
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          test -s "target/distrib/$ARCHIVE"
+          test -s "target/distrib/$ARCHIVE.sha256"
+          test -s dist-manifest.json
+          git rev-parse HEAD > source-revision.txt
+          cat source-revision.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-test-${{ matrix.targets[0] }}-${{ needs.plan.outputs.revision }}
+          path: |
+            target/distrib/${{ matrix.archive }}
+            target/distrib/${{ matrix.archive }}.sha256
+            dist-manifest.json
+            source-revision.txt
+          if-no-files-found: error
+          retention-days: 7
