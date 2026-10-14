@@ -1,8 +1,37 @@
-/target
+# 操作系统生成的临时文件。
 .DS_Store
+._*
+.Trash-*/
+.nfs*
 
-# Local Codex configuration can contain MCP credentials.
-/.codex/config.toml
-/scripts/tests/__pycache__
+# 编辑器的交换文件和备份文件。
+*.swp
+*.swo
+*~
 
-/scripts/__pycache__
+# 仓库根目录下的本地 Git worktree。
+/.worktrees/
+
+# 本地环境变量；示例文件保留在版本管理中。
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python 环境和缓存。
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node.js 依赖和测试覆盖率产物。
+node_modules/
+coverage/
+
+# 按项目实际情况补充构建产物目录，保留依赖锁文件。
+/target
