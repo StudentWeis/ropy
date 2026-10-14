@@ -371,7 +371,7 @@ impl RopyBoard {
                 this.refresh_system_appearance(window, cx);
             }
             // When the window loses focus, hide the window (unless pinned).
-            if !window.is_window_active()
+            if !crate::gui::window::has_native_focus(window)
                 && Self::should_auto_hide_on_focus_out(this.pinned)
                 && !window.has_active_dialog(cx)
             {

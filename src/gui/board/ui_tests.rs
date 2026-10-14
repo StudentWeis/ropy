@@ -840,10 +840,10 @@ fn test_startup_ready_hides_recovery_alerts(cx: &mut TestAppContext) {
 fn test_header_buttons_click_opens_corresponding_panel(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {
-        for (button, panel) in [
-            ("help-button", ActivePanel::Help),
-            ("about-button", ActivePanel::About),
-            ("settings-button", ActivePanel::Settings),
+        for (button, panel, back_button) in [
+            ("help-button", ActivePanel::Help, "help-back-button"),
+            ("about-button", ActivePanel::About, "back-button"),
+            ("settings-button", ActivePanel::Settings, "cancel-button"),
         ] {
             board.update(cx, |board, cx| {
                 board.active_panel = ActivePanel::ClipboardList;
@@ -852,6 +852,8 @@ fn test_header_buttons_click_opens_corresponding_panel(cx: &mut TestAppContext) 
             window.render_frame(cx);
             window.click(button, cx);
             assert_eq!(board.read(cx).active_panel, panel);
+            window.click(back_button, cx);
+            assert_eq!(board.read(cx).active_panel, ActivePanel::ClipboardList);
         }
     })
     .unwrap();
