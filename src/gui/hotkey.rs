@@ -11,6 +11,8 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey:
 #[cfg(target_os = "linux")]
 use gpui_kit::BackgroundExecutor;
 use gpui_kit::{App, AsyncApp};
+#[cfg(target_os = "linux")]
+use rust_i18n::t;
 use thiserror::Error;
 
 use crate::gui::settings::GlobalSettings;
@@ -106,7 +108,7 @@ where
         #[cfg(target_os = "linux")]
         let manager = register_linux_hotkey(
             initial_hotkey.clone(),
-            async_app.update(|cx| crate::i18n::I18n::translate(cx, "settings_activation_key")),
+            t!("settings_activation_key").into_owned(),
             cancelled.clone(),
             &cleanups,
             message_tx.clone(),
@@ -135,8 +137,7 @@ where
                 #[cfg(target_os = "linux")]
                 let registration = register_linux_hotkey(
                     request.hotkey.clone(),
-                    async_app
-                        .update(|cx| crate::i18n::I18n::translate(cx, "settings_activation_key")),
+                    t!("settings_activation_key").into_owned(),
                     cancelled.clone(),
                     &cleanups,
                     message_tx.clone(),

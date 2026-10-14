@@ -4,6 +4,7 @@ use gpui_kit::{
     component::{ActiveTheme, alert::Alert, v_flex},
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
 };
+use rust_i18n::t;
 
 use super::{ActivePanel, RopyBoard, header::render_header, search::render_search_input};
 use crate::{
@@ -16,7 +17,6 @@ use crate::{
         repository::GlobalRepository,
         settings::GlobalSettings,
     },
-    i18n::I18n,
 };
 
 impl Render for RopyBoard {
@@ -39,7 +39,7 @@ impl Render for RopyBoard {
         }
 
         if GlobalSettings::read(cx, Settings::is_recovery_required) {
-            let message = I18n::translate(cx, "settings_recovery_required");
+            let message = gpui_kit::SharedString::from(t!("settings_recovery_required"));
             base = base.child(
                 gpui_kit::div()
                     .id("settings-recovery")
@@ -50,7 +50,7 @@ impl Render for RopyBoard {
             );
         }
         if GlobalRepository::read(cx, |repository| repository.is_none()) {
-            let message = I18n::translate(cx, "repository_unavailable");
+            let message = gpui_kit::SharedString::from(t!("repository_unavailable"));
             base = base.child(
                 gpui_kit::div()
                     .id("repository-unavailable")

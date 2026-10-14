@@ -1,6 +1,9 @@
 #[cfg(target_os = "linux")]
 use gpui_kit::AppContext;
-use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal};
+#[cfg(not(target_os = "linux"))]
+use gpui_kit::ReadGlobal;
+use gpui_kit::{App, BorrowAppContext, Global};
+use rust_i18n::t;
 #[cfg(not(target_os = "linux"))]
 use tray_icon::TrayIconEvent;
 use tray_icon::{
@@ -8,7 +11,7 @@ use tray_icon::{
     menu::{Menu, MenuId, MenuItem},
 };
 
-use crate::{constants::APP_NAME, i18n::I18n};
+use crate::constants::APP_NAME;
 
 /// Fixed menu IDs so event handlers remain valid after menu rebuilds.
 const TRAY_SETTINGS_ID: &str = "tray_settings";
@@ -19,6 +22,14 @@ const TRAY_ICON_SIZE: u32 = 32;
 #[derive(Default)]
 pub(crate) struct TrayState {
     tray_icon: Option<TrayIcon>,
+}
+
+// GTK owns its tray on the thread running the default GLib main loop.
+#[cfg(target_os = "linux")]
+thread_local! {
+    static GTK_TRAY: std::cell::RefCell<TrayState> = const {
+        std::cell::RefCell::new(TrayState { tray_icon: None })
+    };
 }
 
 impl Global for TrayState {}
@@ -32,12 +43,12 @@ impl TrayState {
         self.tray_icon = tray_icon;
     }
 
-    fn rebuild_menu(&self, i18n: &I18n) -> Result<bool, Box<dyn std::error::Error>> {
+    fn rebuild_menu(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let Some(tray) = self.tray_icon.as_ref() else {
             return Ok(false);
         };
 
-        let menu = build_tray_menu(i18n)?;
+        let menu = build_tray_menu()?;
         tray.set_menu(Some(Box::new(menu)));
         Ok(true)
     }
@@ -45,8 +56,7 @@ impl TrayState {
     /// Install the platform tray handle into the global state.
     ///
     /// On Linux, tray initialization happens on the GTK thread and the icon is
-    /// intentionally leaked there, so this remains `None` and menu refreshes are
-    /// a no-op.
+    /// retained in `GTK_TRAY`; menu refreshes are dispatched to that thread.
     pub(crate) fn install(cx: &mut App, tray_icon: Option<TrayIcon>) {
         cx.update_global::<Self, _>(|state: &mut Self, _cx| {
             state.replace(tray_icon);
@@ -54,17 +64,26 @@ impl TrayState {
     }
 
     pub(crate) fn refresh_menu(cx: &App) {
-        let i18n = I18n::global(cx);
-        if let Err(e) = Self::global(cx).rebuild_menu(i18n) {
-            tracing::warn!(error = %e, "failed to rebuild tray menu");
+        #[cfg(not(target_os = "linux"))]
+        Self::global(cx).refresh();
+        #[cfg(target_os = "linux")]
+        {
+            let _ = cx;
+            gtk::glib::idle_add_once(|| GTK_TRAY.with(|state| state.borrow().refresh()));
+        }
+    }
+
+    fn refresh(&self) {
+        if let Err(error) = self.rebuild_menu() {
+            tracing::warn!(%error, "failed to rebuild tray menu");
         }
     }
 }
 
-pub(crate) fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::Error>> {
-    let settings_item = MenuItem::with_id(TRAY_SETTINGS_ID, i18n.t("tray_settings"), true, None);
-    let about_item = MenuItem::with_id(TRAY_ABOUT_ID, i18n.t("tray_about"), true, None);
-    let quit_item = MenuItem::with_id(TRAY_QUIT_ID, i18n.t("tray_quit"), true, None);
+pub(crate) fn build_tray_menu() -> Result<Menu, Box<dyn std::error::Error>> {
+    let settings_item = MenuItem::with_id(TRAY_SETTINGS_ID, t!("tray_settings"), true, None);
+    let about_item = MenuItem::with_id(TRAY_ABOUT_ID, t!("tray_about"), true, None);
+    let quit_item = MenuItem::with_id(TRAY_QUIT_ID, t!("tray_quit"), true, None);
 
     let tray_menu = Menu::new();
     tray_menu.append(&settings_item)?;
@@ -73,10 +92,9 @@ pub(crate) fn build_tray_menu(i18n: &I18n) -> Result<Menu, Box<dyn std::error::E
     Ok(tray_menu)
 }
 
-pub(crate) fn init_tray(
-    i18n: &I18n,
-) -> Result<(TrayIcon, MenuId, MenuId, MenuId), Box<dyn std::error::Error>> {
-    let tray_menu = build_tray_menu(i18n)?;
+pub(crate) fn init_tray() -> Result<(TrayIcon, MenuId, MenuId, MenuId), Box<dyn std::error::Error>>
+{
+    let tray_menu = build_tray_menu()?;
     let settings_id = MenuId::new(TRAY_SETTINGS_ID);
     let about_id = MenuId::new(TRAY_ABOUT_ID);
     let quit_id = MenuId::new(TRAY_QUIT_ID);
@@ -131,41 +149,31 @@ pub(crate) enum TrayEvent {
     Quit,
 }
 
-pub(crate) fn start_tray_handler(i18n: &I18n, cx: &App) -> Option<TrayIcon> {
+pub(crate) fn start_tray_handler(cx: &App) -> Option<TrayIcon> {
     let (tx, rx) = async_channel::unbounded();
-    let tray = spawn_tray_platform(i18n, cx, tx);
+    let tray = spawn_tray_platform(cx, tx);
     spawn_tray_event_loop(cx, rx);
     tray
 }
 
 #[cfg(not(target_os = "linux"))]
-fn spawn_tray_platform(
-    i18n: &I18n,
-    _cx: &App,
-    tx: async_channel::Sender<TrayEvent>,
-) -> Option<TrayIcon> {
-    start_tray_handler_inner(i18n, tx)
+fn spawn_tray_platform(_cx: &App, tx: async_channel::Sender<TrayEvent>) -> Option<TrayIcon> {
+    start_tray_handler_inner(tx)
 }
 
 #[cfg(target_os = "linux")]
-fn spawn_tray_platform(
-    i18n: &I18n,
-    cx: &App,
-    tx: async_channel::Sender<TrayEvent>,
-) -> Option<TrayIcon> {
+fn spawn_tray_platform(cx: &App, tx: async_channel::Sender<TrayEvent>) -> Option<TrayIcon> {
     // On Linux the tray must be initialized on the GTK thread. We cannot
-    // return the TrayIcon out of the spawned task, so we leak it there and
-    // report `None` back to the caller.
-    let i18n = i18n.clone();
+    // return the TrayIcon out of the spawned task, so GTK_TRAY owns it and
+    // the GPUI-side state holds no native handle.
     cx.background_spawn(async move {
         if let Err(e) = gtk::init() {
             tracing::error!(error = %e, "failed to init gtk modules; tray disabled");
             return;
         }
-        if let Some(tray) = start_tray_handler_inner(&i18n, tx) {
-            Box::leak(Box::new(tray));
-        }
+        GTK_TRAY.with(|state| state.borrow_mut().replace(start_tray_handler_inner(tx)));
         gtk::main();
+        GTK_TRAY.with(|state| state.borrow_mut().replace(None));
     })
     .detach();
     None
@@ -193,11 +201,8 @@ fn spawn_tray_event_loop(cx: &App, rx: async_channel::Receiver<TrayEvent>) {
     .detach();
 }
 
-pub(crate) fn start_tray_handler_inner(
-    i18n: &I18n,
-    tx: async_channel::Sender<TrayEvent>,
-) -> Option<TrayIcon> {
-    match init_tray(i18n) {
+pub(crate) fn start_tray_handler_inner(tx: async_channel::Sender<TrayEvent>) -> Option<TrayIcon> {
+    match init_tray() {
         Ok((tray, settings_id, about_id, quit_id)) => {
             tracing::info!("tray icon initialized successfully");
 
@@ -341,9 +346,8 @@ mod tests {
     #[test]
     fn test_tray_state_rebuild_menu_without_icon_is_noop() {
         let tray_state = TrayState::default();
-        let i18n = I18n::default();
 
-        let result = tray_state.rebuild_menu(&i18n);
+        let result = tray_state.rebuild_menu();
 
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(false));

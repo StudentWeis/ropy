@@ -5,6 +5,8 @@
 //! - Converting the logo PNG to ICO format on Windows
 
 fn main() {
+    // Procedural macros read catalogues at compile time; track edits and added locales.
+    println!("cargo:rerun-if-changed=assets");
     // Inject the build target triple for auto-update platform detection
     println!(
         "cargo:rustc-env=TARGET={}",
@@ -23,7 +25,6 @@ fn main() {
         let icon_path = std::path::Path::new(&out_dir).join("logo.ico");
 
         // Convert png to ico if it doesn't exist or if png is newer.
-        println!("cargo:rerun-if-changed=assets/logo.png");
 
         if let Ok(img) = image::open("assets/logo.png") {
             let img = if img.width() > 256 || img.height() > 256 {

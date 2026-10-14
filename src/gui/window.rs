@@ -315,7 +315,6 @@ mod tests {
         clipboard::CopyTracker,
         config::Settings,
         gui::{board::Hide, repository::GlobalRepository, settings::GlobalSettings},
-        i18n::I18n,
         repository::ClipboardRecord,
         updater::models::UpdateStatus,
     };
@@ -338,7 +337,6 @@ mod tests {
         cx.update(|cx| {
             gpui_kit::init(cx);
             cx.set_global(GlobalSettings::new(Settings::default()));
-            cx.set_global(I18n::default());
             cx.set_global(GlobalRepository::new(None));
             cx.bind_keys([KeyBinding::new("escape", Hide, None)]);
             let handle = crate::gui::create_window(

@@ -9,13 +9,13 @@ use gpui_kit::{
     AnyWindowHandle, AppContext, Entity, Focusable, KeyBinding, TestAppContext,
     component::WindowExt, test::TestWindowExt,
 };
+use rust_i18n::t;
 
 use super::{ActivePanel, RopyBoard, filtering::ClearConfirmAction};
 use crate::{
     clipboard::{ClipboardWriteError, CopyRequest, CopyTracker},
     config::{ConfirmMode, Settings},
     gui::{repository::GlobalRepository, settings::GlobalSettings},
-    i18n::I18n,
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
@@ -31,7 +31,6 @@ fn open_board(
     cx.update(|cx| {
         gpui_kit::init(cx);
         cx.set_global(GlobalSettings::new(Settings::default()));
-        cx.set_global(I18n::default());
         cx.set_global(GlobalRepository::new(None));
         cx.bind_keys([
             KeyBinding::new("enter", super::ConfirmSelection, Some("!Select && !List")),
@@ -784,7 +783,7 @@ fn test_startup_repository_failure_remains_visible_across_panels(cx: &mut TestAp
         assert!(window.find("repository-unavailable").visible());
         assert_eq!(
             window.find("repository-unavailable").label(),
-            Some(I18n::translate(cx, "repository_unavailable").as_str())
+            Some(t!("repository_unavailable").as_ref())
         );
         board.update(cx, |board, cx| {
             board.active_panel = ActivePanel::Settings;

@@ -1,9 +1,10 @@
 //! Visual / locale settings handlers: theme, language, and window opacity.
 
-use gpui_kit::{BorrowAppContext, Context, Window};
+use gpui_kit::{Context, Window};
+use rust_i18n::t;
 
 use super::RopyBoard;
-use crate::{gui::settings::GlobalSettings, i18n::I18n};
+use crate::gui::settings::GlobalSettings;
 
 impl RopyBoard {
     pub(crate) fn save_selected_theme(
@@ -92,7 +93,7 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         let previous_language = GlobalSettings::read(cx, |s| s.language.clone());
-        let next_language = crate::i18n::language::available_languages()
+        let next_language = crate::gui::settings::available_languages()
             .get(self.settings_editor.selected_language)
             .cloned()
             .unwrap_or_default();
@@ -105,7 +106,7 @@ impl RopyBoard {
         if let Err(error_message) = Self::persist_settings_update(cx, move |settings| {
             settings.language = language_to_save;
         }) {
-            let previous_language_idx = crate::i18n::language::available_languages()
+            let previous_language_idx = crate::gui::settings::available_languages()
                 .iter()
                 .position(|language| language == &previous_language)
                 .unwrap_or_default();
@@ -115,11 +116,7 @@ impl RopyBoard {
             return;
         }
 
-        cx.update_global::<I18n, _>(|i18n: &mut I18n, _cx| {
-            if let Err(error) = i18n.set_language(next_language) {
-                tracing::warn!(error = ?error, "failed to set language");
-            }
-        });
+        rust_i18n::set_locale(next_language.code());
         Self::update_tray_menu(cx);
         self.refresh_activation_key_placeholder(window, cx);
         self.sync_layout_select_items(window, cx);
@@ -147,7 +144,7 @@ impl RopyBoard {
             return;
         }
 
-        Self::notify_settings_success(window, cx, I18n::translate(cx, "settings_save_success"));
+        Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
 }

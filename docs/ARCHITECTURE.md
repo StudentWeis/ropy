@@ -25,9 +25,7 @@ flowchart TD
     GUI --> Repository
     GUI --> Config
     GUI --> Clipboard
-    GUI --> I18n[i18n: bundled locale presentation]
     Clipboard --> Repository
-    I18n --> Config
 ```
 
 The diagram shows application dependencies, not every third-party dependency.
@@ -40,9 +38,17 @@ serialization. Being independent of GPUI does not imply being free of I/O.
 | `config/settings.rs`, `config/*_id.rs` | TOML format, defaults, validation, recovery protection, theme and locale identifiers | No GUI context, bundled resource discovery, or translated labels |
 | `clipboard` | OS clipboard reads/writes, format preference, capture deduplication and persistence acknowledgement | No GPUI context or executor; application schedules its work |
 | `gui/repository.rs` | Optional shared repository exposed as a GPUI global | Wraps `Arc<ClipboardRepository>`; storage initialization failure remains representable |
-| `gui/settings.rs` | GPUI global for live settings and localized layout labels | `GlobalSettings` wraps the serializable `Settings` value |
-| `gui/theme.rs`, `i18n/language.rs` | Discover bundled resources and resolve display names | Consume core identifiers through free functions |
+| `gui/settings.rs` | GPUI global for live settings, localized labels and bundled language discovery | `GlobalSettings` wraps the serializable `Settings` value |
+| `gui/theme.rs` | Discover bundled resources and resolve display names | Consume core identifiers through free functions |
 | `app.rs` | Bootstrap, channels, task scheduling and UI notification wiring | Connects native I/O, persistence and GPUI |
+
+Localization uses `rust-i18n` directly: `main.rs` embeds `assets/locales/*.toml`
+with English fallback; UI code calls `t!`. Startup and successful language changes
+set the shared rust-i18n locale used by both Ropy and GPUI Component. Language
+changes also refresh retained selector labels, input placeholders and native tray
+menus (on the GTK thread on Linux). Promo fixtures and translation tests pass an
+explicit locale so they do not change process-wide language state. Core retains
+only the serializable `Language` identifier and has no translation dependency.
 
 `config/autostart.rs` remains a desktop adapter. The settings and identifier
 modules live in core; the desktop `config` module re-exports their types alongside

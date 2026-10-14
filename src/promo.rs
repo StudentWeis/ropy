@@ -15,16 +15,16 @@ use gpui_kit::{
     prelude::{InteractiveElement, ParentElement, Styled},
 };
 use image::{Rgba, RgbaImage};
+use rust_i18n::t;
 use thiserror::Error;
 
 use crate::{
     clipboard::CopyTracker,
-    config::{LayoutMode, Settings},
+    config::{LayoutMode, Settings, language_id::Language},
     gui::{
         Assets, app::set_app_theme, board::RopyBoard, repository::GlobalRepository,
         settings::GlobalSettings, theme::ThemeId,
     },
-    i18n::{I18n, Language},
     repository::{ClipboardRecord, ContentType},
 };
 
@@ -76,7 +76,7 @@ impl PromoCommand {
                 let theme = ThemeId::new(theme.to_str().ok_or(PromoError::Arguments)?);
                 let language = Language::new(language.to_str().ok_or(PromoError::Arguments)?);
                 if !crate::gui::theme::available_themes().contains(&theme)
-                    || !crate::i18n::language::available_languages().contains(&language)
+                    || !crate::gui::settings::available_languages().contains(&language)
                 {
                     return Err(PromoError::UnknownPreset);
                 }
@@ -124,16 +124,25 @@ fn demo_settings(theme: ThemeId, language: Language) -> Settings {
     settings
 }
 
-fn demo_records(logo: &Path, i18n: &I18n) -> Result<Vec<ClipboardRecord>, PromoError> {
+fn demo_records(logo: &Path, language: &Language) -> Result<Vec<ClipboardRecord>, PromoError> {
     // A local wall-clock value keeps the displayed date identical in every timezone.
     let created_at = Local
         .with_ymd_and_hms(2026, 4, 2, 13, 23, 14)
         .earliest()
         .ok_or(PromoError::Timestamp)?;
     Ok([
-        (i18n.t("promo_name"), ContentType::Text),
-        (i18n.t("promo_description"), ContentType::Text),
-        (i18n.t("promo_code"), ContentType::Text),
+        (
+            t!("promo_name", locale = language.code()).into_owned(),
+            ContentType::Text,
+        ),
+        (
+            t!("promo_description", locale = language.code()).into_owned(),
+            ContentType::Text,
+        ),
+        (
+            t!("promo_code", locale = language.code()).into_owned(),
+            ContentType::Text,
+        ),
         (logo.to_string_lossy().into_owned(), ContentType::Image),
     ]
     .into_iter()
@@ -257,16 +266,15 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
         .ok_or_else(|| PromoError::Logo("bundled logo is missing".into()))?;
     std::fs::write(&logo, asset.data)?;
     let settings = demo_settings(theme, language);
-    let i18n = I18n::load_i18n(settings.language.clone());
-    let records = demo_records(&logo, &i18n)?;
+    let records = demo_records(&logo, &settings.language)?;
     let failure = CaptureFailure::default();
     let failure_for_app = failure.clone();
     gpui_kit::application().with_assets(Assets).run(move |cx| {
         #[cfg(target_os = "macos")]
         crate::gui::set_activation_policy_accessory();
         gpui_kit::init(cx);
+        rust_i18n::set_locale(settings.language.code());
         cx.set_global(GlobalSettings::new(settings));
-        cx.set_global(i18n);
         cx.set_global(GlobalRepository::new(None));
         match open_promo_window(records, cx) {
             Ok((handle, _)) => {

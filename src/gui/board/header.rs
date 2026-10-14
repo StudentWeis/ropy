@@ -8,19 +8,20 @@ use gpui_kit::{
     },
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
+use rust_i18n::t;
 
 use super::RopyBoard;
-use crate::{constants::APP_NAME, i18n::I18n};
+use crate::constants::APP_NAME;
 
 pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let is_pinned = board.pinned;
     let can_toggle_window_pin = board.can_toggle_window_pin();
     let pin_tooltip = if !can_toggle_window_pin {
-        I18n::translate(cx, "pin_unavailable")
+        t!("pin_unavailable")
     } else if is_pinned {
-        I18n::translate(cx, "unpin")
+        t!("unpin")
     } else {
-        I18n::translate(cx, "pin")
+        t!("pin")
     };
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
@@ -68,7 +69,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("help-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/help.svg"))
-                        .tooltip(I18n::translate(cx, "help_title"))
+                        .tooltip(t!("help_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::Help;
                             cx.notify();
@@ -81,7 +82,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("about-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/info.svg"))
-                        .tooltip(I18n::translate(cx, "about_title"))
+                        .tooltip(t!("about_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::About;
                             cx.notify();
@@ -94,7 +95,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("settings-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/settings.svg"))
-                        .tooltip(I18n::translate(cx, "settings_button"))
+                        .tooltip(t!("settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.open_settings_panel(window, cx);
                             cx.notify();

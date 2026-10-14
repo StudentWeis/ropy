@@ -6,14 +6,12 @@ use gpui_kit::{
         ActiveTheme, Icon, IconName, Sizable, h_flex, select::Select, switch::Switch, v_flex,
     },
 };
+use rust_i18n::t;
 
 use super::{settings_control, settings_row};
-use crate::{
-    gui::{
-        board::{RopyBoard, ThemeTarget},
-        settings::GlobalSettings,
-    },
-    i18n::I18n,
+use crate::gui::{
+    board::{RopyBoard, ThemeTarget},
+    settings::GlobalSettings,
 };
 
 pub(super) fn render_theme_settings(
@@ -21,7 +19,7 @@ pub(super) fn render_theme_settings(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let follows_system = GlobalSettings::read(cx, |settings| settings.appearance.follow_system);
-    let label = I18n::translate(cx, "settings_follow_system");
+    let label = t!("settings_follow_system");
     let follow_row = settings_row(
         label.clone(),
         Switch::new("follow-system-toggle")
@@ -38,14 +36,14 @@ pub(super) fn render_theme_settings(
             .child(theme_row(
                 board,
                 ThemeTarget::Light,
-                I18n::translate(cx, "settings_light_theme"),
+                t!("settings_light_theme"),
                 Some(IconName::Sun),
                 cx,
             ))
             .child(theme_row(
                 board,
                 ThemeTarget::Dark,
-                I18n::translate(cx, "settings_dark_theme"),
+                t!("settings_dark_theme"),
                 Some(IconName::Moon),
                 cx,
             ))
@@ -53,7 +51,7 @@ pub(super) fn render_theme_settings(
         v_flex().child(theme_row(
             board,
             ThemeTarget::Fixed,
-            I18n::translate(cx, "settings_theme"),
+            t!("settings_theme"),
             None,
             cx,
         ))
@@ -64,10 +62,11 @@ pub(super) fn render_theme_settings(
 fn theme_row(
     board: &RopyBoard,
     target: ThemeTarget,
-    label: String,
+    label: impl Into<gpui_kit::SharedString>,
     icon: Option<IconName>,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
+    let label = label.into();
     let id = match target {
         ThemeTarget::Fixed => "theme-select",
         ThemeTarget::Light => "light-theme-select",

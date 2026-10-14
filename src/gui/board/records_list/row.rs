@@ -14,6 +14,7 @@ use gpui_kit::{
     },
     px,
 };
+use rust_i18n::t;
 
 use super::{
     super::{
@@ -33,7 +34,6 @@ use super::{
 use crate::{
     config::LayoutMode,
     gui::{SharedRecords, surface_with_opacity},
-    i18n::I18n,
     repository::{ClipboardRecord, ContentType, assets::thumb_path_for},
     utils::read_or_recover,
 };
@@ -127,14 +127,14 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         return div()
             .text_sm()
             .text_color(cx.theme().secondary_foreground)
-            .child(I18n::translate(cx, "record_file_empty"))
+            .child(t!("record_file_empty"))
             .into_any_element();
     }
 
     let title = if files.len() == 1 {
         file_display_name(&files[0])
     } else {
-        I18n::translate_count(cx, "record_file_count", files.len())
+        t!("record_file_count", count = files.len()).into_owned()
     };
     let detail = if files.len() == 1 {
         files[0].clone()

@@ -12,11 +12,11 @@ use gpui_kit::{
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
     px,
 };
+use rust_i18n::t;
 
 use super::RopyBoard;
 use crate::{
     gui::surface_with_opacity,
-    i18n::I18n,
     repository::{ClipboardRecord, ContentType, deserialize_file_paths},
 };
 
@@ -217,7 +217,7 @@ fn create_case_sensitive_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) 
         "search-case-sensitive-btn",
         "Aa",
         board.filter_state.search_options.case_sensitive,
-        I18n::translate(cx, "search_case_sensitive"),
+        t!("search_case_sensitive"),
         cx,
     )
     .on_click(cx.listener(|this, _, _, cx| {
@@ -236,7 +236,7 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
         "search-whole-word-btn",
         "W",
         board.filter_state.search_options.whole_word,
-        I18n::translate(cx, "search_match_whole_word"),
+        t!("search_match_whole_word"),
         cx,
     )
     .on_click(cx.listener(|this, _, _, cx| {
@@ -301,9 +301,9 @@ fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
 
 /// Render content type filter buttons (text, image, files only)
 fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let text_filter_tooltip = I18n::translate(cx, "filter_text");
-    let image_filter_tooltip = I18n::translate(cx, "filter_image");
-    let files_filter_tooltip = I18n::translate(cx, "filter_files");
+    let text_filter_tooltip = t!("filter_text");
+    let image_filter_tooltip = t!("filter_image");
+    let files_filter_tooltip = t!("filter_files");
     let opacity_percent = board.settings_editor.window_opacity_percent;
 
     let text_button = if board.filter_state.content_filter == ContentFilter::Text {
@@ -378,7 +378,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
 
 /// Render favorites filter button (separate from other filter buttons, with capsule wrapper)
 fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let favorites_filter_tooltip = I18n::translate(cx, "filter_favorites");
+    let favorites_filter_tooltip = t!("filter_favorites");
     let opacity_percent = board.settings_editor.window_opacity_percent;
 
     let favorites_button = if board.filter_state.favorites_only {
