@@ -25,7 +25,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
     };
     let header = h_flex().justify_between().items_center().mb_4().pt_4();
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     let header = header.on_mouse_down(gpui_kit::MouseButton::Left, |_, window, _cx| {
         crate::gui::utils::start_window_drag(window);
     });

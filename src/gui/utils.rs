@@ -289,6 +289,12 @@ pub(crate) fn reset_window_geometry_for_activation(
     window.resize(logical_size);
 }
 
+/// Let the X11 window manager or Wayland compositor own the move gesture.
+#[cfg(target_os = "linux")]
+pub fn start_window_drag(window: &Window) {
+    window.start_window_move();
+}
+
 /// Start an OS-managed drag — the only way to move borderless windows on
 /// Windows without re-implementing the entire DWM hit-test loop.
 #[cfg(target_os = "windows")]

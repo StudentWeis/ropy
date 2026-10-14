@@ -44,27 +44,33 @@ impl X11 {
         let net_wm_state = Self::get_atom(&conn, b"_NET_WM_STATE")?;
         let net_active_window = Self::get_atom(&conn, b"_NET_ACTIVE_WINDOW")?;
 
-        if crate::linux::is_wayland() {
-            // GPUI's PopUp is an override-redirect notification. Hyprland can
-            // display it without routing pointer input to it. Let the compositor
-            // manage this interactive window, and retain floating placement with
-            // the utility type instead of a notification or a tiled normal window.
-            conn.change_window_attributes(
-                window_id,
-                &ChangeWindowAttributesAux::new().override_redirect(0),
-            )?
-            .check()?;
-            let window_type = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE")?;
-            let utility = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE_UTILITY")?;
-            conn.change_property32(
-                PropMode::REPLACE,
-                window_id,
-                window_type,
-                AtomEnum::ATOM,
-                &[utility],
-            )?
-            .check()?;
-        }
+        // GPUI's PopUp bypasses the WM. Native move requests require a
+        // managed window; utility preserves the floating tool-window role.
+        conn.change_window_attributes(
+            window_id,
+            &ChangeWindowAttributesAux::new().override_redirect(0),
+        )?
+        .check()?;
+        let window_type = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE")?;
+        let utility = Self::get_atom(&conn, b"_NET_WM_WINDOW_TYPE_UTILITY")?;
+        conn.change_property32(
+            PropMode::REPLACE,
+            window_id,
+            window_type,
+            AtomEnum::ATOM,
+            &[utility],
+        )?
+        .check()?;
+        // Ropy draws its own header, including without an X11 compositor.
+        let motif_hints = Self::get_atom(&conn, b"_MOTIF_WM_HINTS")?;
+        conn.change_property32(
+            PropMode::REPLACE,
+            window_id,
+            motif_hints,
+            motif_hints,
+            &[2, 0, 0, 0, 0],
+        )?
+        .check()?;
 
         Ok(Self {
             connection: conn,
@@ -81,6 +87,14 @@ impl X11 {
         let atom = atom.reply()?.atom;
 
         Ok(atom)
+    }
+
+    /// Query actual focus: WM keyboard grabs emit `FocusOut` without changing it.
+    ///
+    /// # Errors
+    /// Returns an error if the X server cannot report the input focus.
+    pub fn has_input_focus(&self) -> Result<bool, Box<dyn Error>> {
+        Ok(self.connection.get_input_focus()?.reply()?.focus == self.window_id)
     }
 
     fn send_wm_state_and_sync(

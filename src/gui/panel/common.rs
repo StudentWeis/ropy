@@ -1,4 +1,4 @@
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use gpui_kit::InteractiveElement;
 use gpui_kit::{
     Context, SharedString,
@@ -53,7 +53,7 @@ where
         )
         .child(trailing);
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     let header = header.on_mouse_down(gpui_kit::MouseButton::Left, |_, window, _cx| {
         crate::gui::utils::start_window_drag(window);
     });
