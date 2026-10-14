@@ -178,20 +178,26 @@ fn setup_hotkey_listener(
 }
 
 fn bind_application_keys(cx: &mut App) {
+    // Native selectors and their popup lists own navigation, confirmation and dismissal.
+    // Unscoped application bindings otherwise take precedence over component bindings.
     let quit_key_binding = cfg_select! {
         target_os = "macos" => KeyBinding::new("cmd-q", Quit, None),
         _ => KeyBinding::new("alt-f4", Quit, None),
     };
 
     cx.bind_keys([
-        KeyBinding::new("escape", Hide, None),
+        KeyBinding::new("escape", Hide, Some("!Select && !List")),
         quit_key_binding,
-        KeyBinding::new("left", SelectLeft, None),
-        KeyBinding::new("right", SelectRight, None),
-        KeyBinding::new("up", SelectPrev, None),
-        KeyBinding::new("down", SelectNext, None),
-        KeyBinding::new("enter", ConfirmSelection, None),
-        KeyBinding::new("shift-enter", ConfirmSelectionPlainText, None),
+        KeyBinding::new("left", SelectLeft, Some("!Select && !List")),
+        KeyBinding::new("right", SelectRight, Some("!Select && !List")),
+        KeyBinding::new("up", SelectPrev, Some("!Select && !List")),
+        KeyBinding::new("down", SelectNext, Some("!Select && !List")),
+        KeyBinding::new("enter", ConfirmSelection, Some("!Select && !List")),
+        KeyBinding::new(
+            "shift-enter",
+            ConfirmSelectionPlainText,
+            Some("!Select && !List"),
+        ),
         KeyBinding::new("alt-right", CycleFilterNext, None),
         KeyBinding::new("alt-left", CycleFilterPrev, None),
         KeyBinding::new("alt-f", ToggleFavoritesFilter, None),

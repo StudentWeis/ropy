@@ -88,22 +88,6 @@ impl RopyBoard {
         result
     }
 
-    fn set_theme_selection(
-        &mut self,
-        theme_idx: usize,
-        window: &mut Window,
-        cx: &mut Context<'_, Self>,
-    ) {
-        self.settings_editor.selected_theme = theme_idx;
-        self.settings_editor.theme_select.update(cx, |state, cx| {
-            state.set_selected_index(
-                Some(gpui_kit::component::IndexPath::default().row(theme_idx)),
-                window,
-                cx,
-            );
-        });
-    }
-
     fn set_language_selection(
         &mut self,
         language_idx: usize,
