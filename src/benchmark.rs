@@ -55,36 +55,36 @@ pub(crate) fn run(ready: PathBuf) -> Result<(), BenchmarkError> {
         records.len()
     );
     let repository = Arc::new(repository);
-    gpui_kit::application()
-        .with_assets(crate::gui::Assets)
-        .run(move |cx| {
-            #[cfg(target_os = "macos")]
-            crate::gui::set_activation_policy_accessory();
-            gpui_kit::init(cx);
-            let mut settings = Settings::default();
-            settings.autostart.enabled = false;
-            settings.update.auto_check = false;
-            settings.storage.max_history_records = 100;
-            settings.storage.max_storage_records = 200;
-            rust_i18n::set_locale(settings.language.code());
-            cx.set_global(GlobalSettings::new(settings));
-            cx.set_global(GlobalRepository::new(Some(repository)));
-            let (copy_tx, _copy_rx) = async_channel::unbounded();
-            crate::gui::create_window(
-                cx,
-                Arc::new(RwLock::new(records)),
-                Arc::new(Mutex::default()),
-                copy_tx,
-            );
-            // Publish atomically only after the real hidden board has been created.
-            let pending = ready.with_extension("pending");
-            if std::fs::write(&pending, readiness)
-                .and_then(|()| std::fs::rename(pending, &ready))
-                .is_err()
-            {
-                cx.quit();
-            }
-        });
+    let platform = gpui_kit::platform::current_platform(false);
+    #[cfg(target_os = "macos")]
+    crate::gui::set_activation_policy_accessory(platform.as_ref());
+    let application = gpui_kit::Application::with_platform(platform);
+    application.with_assets(crate::gui::Assets).run(move |cx| {
+        gpui_kit::init(cx);
+        let mut settings = Settings::default();
+        settings.autostart.enabled = false;
+        settings.update.auto_check = false;
+        settings.storage.max_history_records = 100;
+        settings.storage.max_storage_records = 200;
+        rust_i18n::set_locale(settings.language.code());
+        cx.set_global(GlobalSettings::new(settings));
+        cx.set_global(GlobalRepository::new(Some(repository)));
+        let (copy_tx, _copy_rx) = async_channel::unbounded();
+        crate::gui::create_window(
+            cx,
+            Arc::new(RwLock::new(records)),
+            Arc::new(Mutex::default()),
+            copy_tx,
+        );
+        // Publish atomically only after the real hidden board has been created.
+        let pending = ready.with_extension("pending");
+        if std::fs::write(&pending, readiness)
+            .and_then(|()| std::fs::rename(pending, &ready))
+            .is_err()
+        {
+            cx.quit();
+        }
+    });
     Ok(())
 }
 

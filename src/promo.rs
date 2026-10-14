@@ -269,9 +269,11 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
     let records = demo_records(&logo, &settings.language)?;
     let failure = CaptureFailure::default();
     let failure_for_app = failure.clone();
-    gpui_kit::application().with_assets(Assets).run(move |cx| {
-        #[cfg(target_os = "macos")]
-        crate::gui::set_activation_policy_accessory();
+    let platform = gpui_kit::platform::current_platform(false);
+    #[cfg(target_os = "macos")]
+    crate::gui::set_activation_policy_accessory(platform.as_ref());
+    let application = gpui_kit::Application::with_platform(platform);
+    application.with_assets(Assets).run(move |cx| {
         gpui_kit::init(cx);
         rust_i18n::set_locale(settings.language.code());
         cx.set_global(GlobalSettings::new(settings));

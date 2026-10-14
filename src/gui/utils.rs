@@ -310,18 +310,11 @@ pub fn start_window_drag(window: &Window) {
     }
 }
 
-/// Promote the macOS process to "accessory" so we live in the menu bar
-/// only — no Dock tile and no Cmd-Tab entry, matching the tray-app UX.
+/// Configure the menu-bar application before `run`, avoiding a Dock tile at launch.
+/// GPUI must own the policy so its launch lifecycle preserves the same value.
 #[cfg(target_os = "macos")]
-pub(crate) fn set_activation_policy_accessory() {
-    use objc2::{class, msg_send, runtime::AnyObject};
-    // SAFETY: `+[NSApplication sharedApplication]` is the canonical
-    // singleton accessor and lives for the whole process; the only
-    // mutation here is the activation-policy flag (1 = Accessory).
-    unsafe {
-        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
-        let _succeeded: bool = msg_send![app, setActivationPolicy: 1isize];
-    }
+pub(crate) fn set_activation_policy_accessory(platform: &dyn gpui_kit::Platform) {
+    platform.set_activation_policy(gpui_kit::ActivationPolicy::Accessory);
 }
 
 #[cfg(test)]
