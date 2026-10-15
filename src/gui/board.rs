@@ -354,8 +354,7 @@ impl RopyBoard {
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
         self.settings_editor = SettingsEditor::new(window, cx);
         self.last_search_query.clear();
-        self.copy_generation = self.copy_generation.wrapping_add(1);
-        self.copy_in_progress = false;
+        self.invalidate_copy_confirmation();
         self.active_panel = ActivePanel::ClipboardList;
         self.ui_state = UiState::default();
         self.pending_delete_id = None;
@@ -369,13 +368,18 @@ impl RopyBoard {
         cx.observe_window_activation(window, move |this, window, cx| {
             if window.is_window_active() {
                 this.refresh_system_appearance(window, cx);
+                // Windows can restore this window from a second process before
+                // a tray or hotkey action has ever initialized the board.
+                if !this.activated {
+                    this.on_active_action(&Active, window, cx);
+                }
             }
             // When the window loses focus, hide the window (unless pinned).
             if !crate::gui::window::has_native_focus(window)
                 && Self::should_auto_hide_on_focus_out(this.pinned)
                 && !window.has_active_dialog(cx)
             {
-                this.copy_generation = this.copy_generation.wrapping_add(1);
+                this.invalidate_copy_confirmation();
                 // Clear search input when hiding the window
                 this.clear_search(window, cx);
                 hide_window(window, cx, this.pinned);

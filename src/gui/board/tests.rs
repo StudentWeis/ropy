@@ -385,16 +385,17 @@ fn test_filter_and_sort_record_indices_files_filter_matches_file_records() {
 
 #[test]
 fn test_build_copy_request_when_file_payload_is_json_returns_files_request() {
+    let (completion_tx, _completion_rx) = async_channel::bounded(1);
     let request = build_copy_request(
         "[\"/tmp/alpha.txt\",\"/tmp/beta.txt\"]",
         &ContentType::FilePath,
-        None,
+        completion_tx,
     );
 
     match request {
         Some(crate::clipboard::CopyRequest::Files { paths, completion }) => {
             assert_eq!(paths, vec!["/tmp/alpha.txt", "/tmp/beta.txt"]);
-            assert!(completion.is_none());
+            assert!(completion.is_some());
         }
         _ => panic!("expected files copy request"),
     }
@@ -402,12 +403,13 @@ fn test_build_copy_request_when_file_payload_is_json_returns_files_request() {
 
 #[test]
 fn test_build_copy_request_when_file_payload_is_legacy_string_returns_single_file() {
-    let request = build_copy_request("/tmp/legacy.txt", &ContentType::FilePath, None);
+    let (completion_tx, _completion_rx) = async_channel::bounded(1);
+    let request = build_copy_request("/tmp/legacy.txt", &ContentType::FilePath, completion_tx);
 
     match request {
         Some(crate::clipboard::CopyRequest::Files { paths, completion }) => {
             assert_eq!(paths, vec!["/tmp/legacy.txt"]);
-            assert!(completion.is_none());
+            assert!(completion.is_some());
         }
         _ => panic!("expected files copy request"),
     }
@@ -415,6 +417,7 @@ fn test_build_copy_request_when_file_payload_is_legacy_string_returns_single_fil
 
 #[test]
 fn test_build_copy_request_for_record_when_rich_text_returns_rich_text_request() {
+    let (completion_tx, _completion_rx) = async_channel::bounded(1);
     let record = test_record(
         7,
         "Formatted text",
@@ -423,7 +426,7 @@ fn test_build_copy_request_for_record_when_rich_text_returns_rich_text_request()
         test_datetime(11),
     );
 
-    let request = build_copy_request_for_record(&record, ConfirmFormat::Default, None);
+    let request = build_copy_request_for_record(&record, ConfirmFormat::Default, completion_tx);
 
     match request {
         Some(crate::clipboard::CopyRequest::RichText {
@@ -435,7 +438,7 @@ fn test_build_copy_request_for_record_when_rich_text_returns_rich_text_request()
             assert_eq!(plain_text, "Formatted text");
             assert_eq!(html, None);
             assert_eq!(rtf, None);
-            assert!(completion.is_none());
+            assert!(completion.is_some());
         }
         _ => panic!("expected rich text copy request"),
     }
@@ -443,6 +446,7 @@ fn test_build_copy_request_for_record_when_rich_text_returns_rich_text_request()
 
 #[test]
 fn test_build_copy_request_for_record_when_rich_text_and_plain_text_mode_returns_text_request() {
+    let (completion_tx, _completion_rx) = async_channel::bounded(1);
     let record = test_record(
         8,
         "Formatted text",
@@ -451,12 +455,12 @@ fn test_build_copy_request_for_record_when_rich_text_and_plain_text_mode_returns
         test_datetime(12),
     );
 
-    let request = build_copy_request_for_record(&record, ConfirmFormat::PlainText, None);
+    let request = build_copy_request_for_record(&record, ConfirmFormat::PlainText, completion_tx);
 
     match request {
         Some(crate::clipboard::CopyRequest::Text { text, completion }) => {
             assert_eq!(text, "Formatted text");
-            assert!(completion.is_none());
+            assert!(completion.is_some());
         }
         _ => panic!("expected plain text copy request"),
     }

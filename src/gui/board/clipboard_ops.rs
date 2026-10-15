@@ -31,32 +31,30 @@ pub(in crate::gui::board) enum ConfirmFormat {
 pub(in crate::gui::board) fn build_copy_request(
     content: &str,
     content_type: &ContentType,
-    completion: Option<async_channel::Sender<ClipboardWriteResult>>,
+    completion: async_channel::Sender<ClipboardWriteResult>,
 ) -> Option<CopyRequest> {
     match content_type {
-        ContentType::Text => Some(completion.map_or_else(
-            || CopyRequest::text(content.to_string()),
-            |tx| CopyRequest::text_with_completion(content.to_string(), tx),
+        ContentType::Text => Some(CopyRequest::text_with_completion(
+            content.to_string(),
+            completion,
         )),
-        ContentType::Image => Some(completion.map_or_else(
-            || CopyRequest::image(content.to_string()),
-            |tx| CopyRequest::image_with_completion(content.to_string(), tx),
+        ContentType::Image => Some(CopyRequest::image_with_completion(
+            content.to_string(),
+            completion,
         )),
         ContentType::FilePath => {
             let paths = deserialize_file_paths(content);
             if paths.is_empty() {
                 None
             } else {
-                Some(if let Some(tx) = completion {
-                    CopyRequest::files_with_completion(paths, tx)
-                } else {
-                    CopyRequest::files(paths)
-                })
+                Some(CopyRequest::files_with_completion(paths, completion))
             }
         }
-        ContentType::RichText => Some(completion.map_or_else(
-            || CopyRequest::rich_text(content.to_string(), None, None),
-            |tx| CopyRequest::rich_text_with_completion(content.to_string(), None, None, tx),
+        ContentType::RichText => Some(CopyRequest::rich_text_with_completion(
+            content.to_string(),
+            None,
+            None,
+            completion,
         )),
     }
 }
@@ -64,12 +62,12 @@ pub(in crate::gui::board) fn build_copy_request(
 pub(in crate::gui::board) fn build_copy_request_for_record(
     record: &ClipboardRecord,
     confirm_format: ConfirmFormat,
-    completion: Option<async_channel::Sender<ClipboardWriteResult>>,
+    completion: async_channel::Sender<ClipboardWriteResult>,
 ) -> Option<CopyRequest> {
     if confirm_format == ConfirmFormat::PlainText && record.content_type == ContentType::RichText {
-        return Some(completion.map_or_else(
-            || CopyRequest::text(record.content.clone()),
-            |tx| CopyRequest::text_with_completion(record.content.clone(), tx),
+        return Some(CopyRequest::text_with_completion(
+            record.content.clone(),
+            completion,
         ));
     }
 
@@ -81,10 +79,12 @@ pub(in crate::gui::board) fn build_copy_request_for_record(
         (load_rich_text_html(meta), load_rich_text_rtf(meta))
     });
 
-    Some(match completion {
-        Some(tx) => CopyRequest::rich_text_with_completion(record.content.clone(), html, rtf, tx),
-        None => CopyRequest::rich_text(record.content.clone(), html, rtf),
-    })
+    Some(CopyRequest::rich_text_with_completion(
+        record.content.clone(),
+        html,
+        rtf,
+        completion,
+    ))
 }
 
 pub(in crate::gui::board) async fn wait_for_clipboard_write(
@@ -114,6 +114,12 @@ pub(in crate::gui::board) async fn wait_for_clipboard_write(
 }
 
 impl RopyBoard {
+    /// Release this popup's confirmation state without accepting its old result.
+    pub(super) const fn invalidate_copy_confirmation(&mut self) {
+        self.copy_generation = self.copy_generation.wrapping_add(1);
+        self.copy_in_progress = false;
+    }
+
     /// Confirm selection: copy record to clipboard and hide.
     /// The clipboard listener will re-capture the copy event and the
     /// repository layer handles deduplication via content hash upsert.
@@ -170,15 +176,9 @@ impl RopyBoard {
         let copy_tx = self.copy_tx.clone();
         // Rich-text sidecars are read off the UI thread.
         let request = cx.background_spawn(async move {
-            let completion = mode
-                .requires_clipboard_completion()
-                .then(|| async_channel::bounded(1));
-            let request = build_copy_request_for_record(
-                &record,
-                confirm_format,
-                completion.as_ref().map(|(tx, _)| tx.clone()),
-            );
-            (request, completion.map(|(_, rx)| rx))
+            let (completion_tx, completion_rx) = async_channel::bounded(1);
+            let request = build_copy_request_for_record(&record, confirm_format, completion_tx);
+            (request, completion_rx)
         });
         cx.spawn_in(window, async move |this, cx| {
             let (request, completion) = request.await;
@@ -186,20 +186,21 @@ impl RopyBoard {
                 if copy_tx.send(request).await.is_err() {
                     tracing::warn!("failed to send clipboard write request");
                     false
-                } else if let Some(rx) = completion {
-                    wait_for_clipboard_write(&rx, cx.background_executor()).await
                 } else {
-                    true
+                    wait_for_clipboard_write(&completion, cx.background_executor()).await
                 }
             } else {
                 false
             };
             let _ = this.update_in(cx, |this, window, cx| {
+                // A reopened board may already own a different copy request.
+                if this.copy_generation != generation {
+                    return;
+                }
                 this.copy_in_progress = false;
                 cx.notify();
                 // A dismissed/reopened board must not hide or paste on a stale completion.
-                if this.copy_generation != generation
-                    || this.active_panel != super::ActivePanel::ClipboardList
+                if this.active_panel != super::ActivePanel::ClipboardList
                     || this.ui_state.any_overlay_visible()
                 {
                     return;
