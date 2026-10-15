@@ -1,107 +1,55 @@
-# Custom Elements
+# Custom elements
 
-**Contents:** [When to Use](#when-to-use) · [Quick Start](#quick-start) · [Core Concepts](#core-concepts) · [Reference Documentation](#reference-documentation)
+**Contents:** [Choose the abstraction](#choose-the-abstraction) · [Rendering phases](#rendering-phases) · [Retained behavior](#retained-behavior) · [References](#references)
 
-## When to Use
+## Choose the abstraction
 
-Use the low-level `Element` trait when:
-- Need fine-grained control over layout calculation
-- Building complex, performance-critical components
-- Implementing custom layout algorithms (masonry, circular, etc.)
-- High-level `Render`/`RenderOnce` APIs are insufficient
+Use RenderOnce for supplied, value-like presentation and an Entity-backed
+Render view for behavior that survives frames. Use the low-level Element trait
+only when layout, measurement, or painting cannot be expressed by existing
+components. A custom canvas can provide small drawing hooks without duplicating
+an entire Element implementation.
 
-**Prefer `Render`/`RenderOnce` for:** Simple components, standard layouts, declarative UI
+These notes describe the locked `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 sources.
+They replace illustrative implementations that were not runnable applications.
+Read the normative [choice of unit](../coding-guides.md#choose-the-right-unit)
+and [layout guide](../coding-guides.md#layout-measurement-and-scrolling) first.
 
-## Quick Start
+## Rendering phases
 
-The `Element` trait provides direct control over three rendering phases:
+| Phase | Work | State passed onward |
+| --- | --- | --- |
+| `request_layout` | Build layout nodes and request measurement | `RequestLayoutState` |
+| `prepaint` | Use resolved bounds, place children, insert hitboxes | `PrepaintState` |
+| `paint` | Draw and register the frame's input handlers | Both previous states are available |
 
-```rust
-impl Element for MyElement {
-    type RequestLayoutState = MyLayoutState;  // Data passed to later phases
-    type PrepaintState = MyPaintState;        // Data for painting
+Requesting a LayoutId does not resolve its bounds. The framework computes
+layout before prepaint; do not query a newly requested child's layout bounds
+inside request_layout to implement masonry or row sizing. Use the resolved
+bounds supplied to prepaint or an appropriate measured-layout callback.
 
-    fn id(&self) -> Option<ElementId> {
-        Some(self.id.clone())
-    }
+Keep the same child elements and their phase state through all three phases.
+Do not recreate a StyledText or AnyElement at paint time after laying out a
+different instance. AnyElement's wrapper methods differ from the Element trait
+methods; inspect their actual signatures before forwarding children.
 
-    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
-        None
-    }
+## Retained behavior
 
-    // Phase 1: Calculate sizes and positions
-    fn request_layout(&mut self, .., window: &mut Window, cx: &mut App)
-        -> (LayoutId, Self::RequestLayoutState)
-    {
-        let layout_id = window.request_layout(
-            Style { size: size(px(200.), px(100.)), ..default() },
-            vec![],
-            cx
-        );
-        (layout_id, MyLayoutState { /* ... */ })
-    }
+Elements and their associated phase state describe a frame. Persistent
+selection, scroll position, caches, and async tasks need an Entity, an existing
+handle, or explicitly keyed element state. An ElementId supplies identity;
+it does not preserve arbitrary fields of a newly constructed element.
 
-    // Phase 2: Create hitboxes, prepare for painting
-    fn prepaint(&mut self, .., bounds: Bounds<Pixels>, layout: &mut Self::RequestLayoutState,
-                window: &mut Window, cx: &mut App) -> Self::PrepaintState
-    {
-        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
-        MyPaintState { hitbox }
-    }
+Input handlers registered during paint are `'static`. They cannot borrow
+`&mut self`, a phase-state reference, Window, or App from the current call.
+Capture owned callbacks/handles and update the retained owner when dispatched.
+Insert hitboxes during prepaint and capture the owned hitbox for hit testing.
+Honor dispatch phase and stop propagation only when the behavior needs it.
 
-    // Phase 3: Render and handle interactions
-    fn paint(&mut self, .., bounds: Bounds<Pixels>, layout: &mut Self::RequestLayoutState,
-             paint_state: &mut Self::PrepaintState, window: &mut Window, cx: &mut App)
-    {
-        window.paint_quad(paint_quad(bounds, Anchor::all(px(4.)), cx.theme().background));
+## References
 
-        window.on_mouse_event({
-            let hitbox = paint_state.hitbox.clone();
-            move |event: &MouseDownEvent, phase, window, cx| {
-                if hitbox.is_hovered(window) && phase.bubble() {
-                    // Handle interaction
-                    cx.stop_propagation();
-                }
-            }
-        });
-    }
-}
-
-// Enable element to be used as child
-impl IntoElement for MyElement {
-    type Element = Self;
-    fn into_element(self) -> Self::Element { self }
-}
-```
-
-## Core Concepts
-
-### Three-Phase Rendering
-
-1. **request_layout**: Calculate sizes and positions, return layout ID and state
-2. **prepaint**: Create hitboxes, compute final bounds, prepare for painting
-3. **paint**: Render element, set up interactions (mouse events, cursor styles)
-
-### State Flow
-
-```
-RequestLayoutState → PrepaintState → paint
-```
-
-State flows in one direction through associated types, passed as mutable references between phases.
-
-### Key Operations
-
-- **Layout**: `window.request_layout(style, children, cx)` - Create layout node
-- **Hitboxes**: `window.insert_hitbox(bounds, behavior)` - Create interaction area
-- **Painting**: `window.paint_quad(...)` - Render visual content
-- **Events**: `window.on_mouse_event(handler)` - Handle user input
-
-## Reference Documentation
-
-### Complete API Documentation
-- **API**: See [element-api.md](element-api.md) — associated types, hitbox system, event handling, cursor styles
-- **Examples**: See [element-examples.md](element-examples.md) — text, interactive, complex elements
-- **Patterns**: See [element-patterns.md](element-patterns.md) — text, container, interactive, composite, scrollable
-- **Best Practices**: See [element-best-practices.md](element-best-practices.md) — performance, state, common pitfalls
-- **Advanced**: See [element-advanced.md](element-advanced.md) — masonry/circular layouts, memoization, virtual lists
+- [API contracts](element-api.md): exact trait/wrapper distinction and versioned sources.
+- [Patterns](element-patterns.md): composition, text, input, and scrolling ownership.
+- [Source examples](element-examples.md): implementations maintained with the framework.
+- [Review checklist](element-best-practices.md): state, geometry, event and test checks.
+- [Advanced mechanisms](element-advanced.md): custom measurement, caching and async work.

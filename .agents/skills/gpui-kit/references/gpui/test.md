@@ -69,9 +69,10 @@ is `cargo test -p gpui-kit --features test-support --test ui --locked`.
 ## Complete example
 
 Copy this into `tests/ui.rs`. It follows the Kit integration-test example
-from `crates/kit/tests/ui.rs`, with window setup inlined so this reference works
+from [the 0.7.3 source](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/kit/tests/ui.rs), with window setup inlined so this reference works
 without a repository checkout. In an application, replace that view definition
-with an import of your production view.
+with an import of your production view. The source and locked API were checked;
+Ropy's precheck does not compile Markdown examples.
 
 ```rust
 use gpui_kit::test::{TestSupportExt, TestWindowExt};
@@ -343,12 +344,12 @@ appropriate to that production animation before asserting final geometry.
   geometry and the application result. A label is not rendered text, and a
   correct accessibility value does not establish correct pixels.
 - These tests run in-process. Pixel comparisons need GPUI's separate renderer;
-  packaged-app behavior and full OS IME composition need other coverage. Kit's
-  explicit macOS (Metal) and Linux (WGPU) rendering target is
-  `cargo test -p gpui-kit --features test-support --test rendering --locked`.
-  Linux requires a working WGPU adapter and can use Mesa lavapipe. Windows
-  explicitly skips this target because GPUI 0.3.8 has no Windows headless renderer.
-  Missing renderer support on macOS or Linux fails instead of producing fake images.
+  packaged-app behavior and full OS IME composition need other coverage. The
+  published Kit 0.7.3 `tests/rendering.rs` gates its Metal renderer on macOS and
+  skips other platforms. In an upstream checkout the explicit target is
+  `cargo test -p gpui-kit --features test-support --test rendering --locked`;
+  this is not a Ropy package command. Check the installed test source before
+  assuming a newer website's Linux/WGPU coverage applies to this lockfile.
 
 ## Additional resources
 

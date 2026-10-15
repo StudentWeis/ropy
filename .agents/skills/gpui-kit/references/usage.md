@@ -1,405 +1,93 @@
-# gpui-kit Usage Guide
+# GPUI Kit usage in Ropy
 
-**Contents:** [Setup](#setup) · [Component Types](#component-types) · [Common Components](#common-components) (Button, Input, Select, Checkbox, Icon, Dialog, Notification, Tabs, Tooltip, Form, List) · [Theming](#theming) · [Layout Helpers](#layout-helpers) · [Overlay Layers](#overlay-layers-dialogs-sheets-notifications) · [Shared Traits](#shared-traits)
+This reference targets the locked `gpui-kit` 0.7.3 API. See
+[component conventions](conventions.md), the normative [Coding Guides](coding-guides.md),
+and the [pinned upstream recipes](recipes.md) for complete source context.
+The snippets below are fragments for an existing view, not standalone programs.
+Use Ropy's localization keys for application labels and placeholders.
 
-## Setup
+## Setup and window ownership
 
-Use the [tested application recipe](recipes.md) for complete examples and their verification command. Store subscription handles on the owning view; binding one to a constructor-local variable alone does not keep it alive after construction.
+Keep the dependency features already selected in Ropy's `Cargo.toml` and
+`Cargo.lock`. Do not add another GPUI dependency or switch engines to make an
+example compile. Initialize with `gpui_kit::init(cx)` before constructing
+component-backed views. `gpui_kit::open_window(options, cx, |window, cx| ...)`
+returns `(AnyWindowHandle, Entity<V>)` and installs a `Root` around the view.
+That root owns dialogs, sheets and notifications; application renderers do
+not mount another set of overlay layers.
 
-### 1. Cargo.toml
+For a full application entry point, use the
+[0.7.3 upstream bootstrap](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/examples/ai_recipes/src/bootstrap.rs).
+The current [Getting Started](https://gpui-kit.com/docs/getting-started.md)
+guide explains new-project setup. Upstream examples and verification commands
+are not files or commands in Ropy; see [recipes](recipes.md) for that boundary.
 
-```toml
-[dependencies]
-gpui-kit = "0.7" # re-exports GPUI, platform, base, component and the default icons; Shell is a separate host dependency
-```
+## Retained controls
 
-### 2. Initialization
-
-```rust
-fn main() {
-    gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
-        .run(move |cx| {
-            gpui_kit::init(cx); // MUST be first
-
-            // Wraps the view in a `Root`, which enables dialogs, sheets,
-            // notifications, tooltips and menus in this window.
-            gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| MyApp))
-                .expect("Failed to open window");
-        });
-}
-```
-
-Use `gpui_kit::open_window` for application windows; it mounts `Root` as the window's root view.
-
----
-
-## Component Types
-
-### Stateless (most components)
-
-Used directly in `render`, no stored state:
-
-```rust
-use gpui_kit::component::button::Button;
-
-impl Render for MyView {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        Button::new("btn").primary().label("Submit")
-            .on_click(|_, _, _| println!("clicked"))
-    }
-}
-```
-
-### Stateful (Input, Select, Combobox, etc.)
-
-Require an `Entity<State>` stored in your view:
+Allocate state in the owning view's constructor and store the entity as a
+field. Rendering passes a reference to that same entity:
 
 ```rust
 use gpui_kit::component::input::{Input, InputState};
 
-struct MyView {
-    name: Entity<InputState>,
-}
+// Constructor: retain this as self.search_input: Entity<InputState>.
+let search_input = cx.new(|cx| InputState::new(window, cx));
 
-impl MyView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self {
-            name: cx.new(|cx| InputState::new(window, cx).placeholder("Your name")),
-        }
-    }
-}
-
-impl Render for MyView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        Input::new(&self.name)
-    }
-}
+// Render: the optional ID identifies the input frame, not its state.
+Input::new(&self.search_input).id("search-input")
 ```
 
----
+`Select::new(&self.country_select)` likewise receives an
+`Entity<SelectState<D>>`. `Input::new("id")` and `Select::new("id")` are not
+valid constructors. See the versioned
+[Input source](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/input/input.rs)
+and [Select source](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/select.rs).
 
-## Common Components
+Read text through `self.search_input.read(cx).value()`. Subscribe to
+`InputEvent` using `cx.subscribe_in(&self.search_input, window, ...)` when the
+handler needs a window; store the returned `Subscription` on the owning view.
+Dropping a constructor-local subscription stops observation. See the
+[settings recipe](recipes.md) for the complete ownership pattern.
 
-### Button
+## Commands and controlled values
 
-```rust
-use gpui_kit::component::button::{Button, ButtonGroup};
-
-// Variants
-Button::new("btn").label("Default")
-Button::new("btn").primary().label("Primary")
-Button::new("btn").danger().label("Delete")
-Button::new("btn").warning().label("Warning")
-Button::new("btn").success().label("Success")
-Button::new("btn").ghost().label("Ghost")
-Button::new("btn").link().label("Link")
-
-// States
-Button::new("btn").label("Text").disabled(true)
-Button::new("btn").label("Text").loading(true)
-Button::new("btn").label("Text").selected(true)
-
-// With icon
-Button::new("btn").icon(IconName::Plus).label("Add")
-
-// Sizes
-Button::new("btn").xsmall().label("XS")
-Button::new("btn").small().label("S")
-Button::new("btn").large().label("L")
-
-// Group
-ButtonGroup::new("group")
-    .child(Button::new("a").label("A"))
-    .child(Button::new("b").label("B"))
-    .on_click(|indices, _, _| { /* selected indices */ })
-```
-
-### Input
+A Button takes a stable ID. Variants such as `primary()` require the
+`ButtonVariants` trait, while size and disabled builders use `Sizable` and
+`Disableable`. Import the traits supported by the particular component.
 
 ```rust
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::button::{Button, ButtonVariants};
 
-// State setup (in new/init)
-let input = cx.new(|cx| InputState::new(window, cx)
-    .placeholder("Enter text...")
-    .default_value("Hello")
-);
-
-// Render
-Input::new(&input)
-Input::new(&input).cleanable(true)           // clear button
-Input::new(&input).disabled(true)
-Input::new(&input).prefix(Icon::new(IconName::Search).small())
-Input::new(&input).suffix(Button::new("b").ghost().icon(IconName::X).xsmall())
-Input::new(&input).content_type(InputContentType::Password)
-Input::new(&input).mask_toggle()             // password reveal toggle
-Input::new(&input).appearance(false)         // remove default border/bg
-
-// Reading value
-let value = input.read(cx).value();
-
-// Keep this subscription in the owning view (for example, `_subscriptions`).
-self._subscriptions.push(cx.subscribe_in(&input, window, |view, state, event, window, cx| {
-    match event {
-        InputEvent::Change => { let v = state.read(cx).value(); }
-        InputEvent::PressEnter { .. } => { /* submit */ }
-        InputEvent::Focus | InputEvent::Blur => {}
-    }
-}));
-```
-
-### Select
-
-```rust
-use gpui_kit::component::select::{Select, SelectState};
-
-// Simple string list
-let state = cx.new(|cx| {
-    SelectState::new(vec!["Apple", "Orange", "Banana"], Some(IndexPath::default()), window, cx)
-});
-
-// Render
-Select::new(&state)
-Select::new(&state).placeholder("Pick one")
-
-// Reading selection
-let selected = state.read(cx).selected_item();
-```
-
-### Checkbox / Switch / Radio
-
-```rust
-use gpui_kit::component::{checkbox::Checkbox, switch::Switch};
-
-// Stateless (controlled)
-Checkbox::new("cb").checked(self.checked)
-    .on_change(cx.listener(|this, checked, _, cx| {
-        this.checked = *checked;
-        cx.notify();
-    }))
-
-Switch::new("sw").checked(self.enabled)
-    .on_change(cx.listener(|this, checked, _, cx| {
-        this.enabled = *checked;
-        cx.notify();
+Button::new("save").primary().label(save_label)
+    .on_click(cx.listener(|this, _, window, cx| {
+        this.save(window, cx);
     }))
 ```
 
-### Icon
+Here `save_label` and `save` belong to the application. Keyboard and menu
+entry points should invoke the same owner method or action; see
+[actions](gpui/action.md) for the window/context callback contract.
 
-```rust
-use gpui_kit::component::{Icon, IconName};
+Checkbox, Switch and Radio receive the owner's `checked(bool)` value and
+request changes through `on_change`. The callback must update that owner and
+notify; rebuilding the element alone does not persist a change. RadioGroup
+uses an optional selected index, which the application maps to domain identity.
 
-Icon::new(IconName::Check)
-Icon::new(IconName::Search).small()
-Icon::new(IconName::Plus).large().text_color(cx.theme().primary)
-```
+## Composition and theme
 
-### Dialog
+- `Form::new()` and `Field::new()` are value-like layout parts. Label orientation
+  and column count are independent; see [conventions](conventions.md).
+- `TabBar::new("tabs")` owns a collection of `Tab::new().label(...)` parts.
+  `Tab::new` takes no ID argument in 0.7.3; do not infer constructors from Button.
+- Use `ActiveTheme` to read `cx.theme()` semantic tokens, and `Theme::update`
+  for global edits so color/token projections stay synchronized.
+- `h_flex()` centers its children across the row; full-height columns may need
+  `items_stretch()`. `v_flex()` leaves the cross-axis stretch default.
+- Import `WindowExt` for `window.open_dialog`, `open_sheet` and
+  `push_notification`. Retain owner state and restore focus on dismissal.
 
-```rust
-use gpui_kit::component::dialog::{Dialog, DialogAction, DialogClose, DialogFooter};
-
-// Open from window context. `footer` takes an element, not a closure.
-// DialogClose dismisses the dialog, so no manual close call is needed.
-window.open_dialog(cx, |dialog, _, _| {
-    dialog
-        .title("Export Report")
-        .child("Choose a destination for the exported file.")
-        .footer(
-            DialogFooter::new()
-                .gap_2()
-                .child(DialogClose::new().child(
-                    Button::new("cancel").label("Cancel").outline(),
-                ))
-                .child(DialogAction::new().child(
-                    Button::new("export").label("Export").primary(),
-                )),
-        )
-});
-```
-
-### AlertDialog
-
-Use `AlertDialog` — not `Dialog` — to confirm a consequential action. It is not
-overlay-closable and has no close button, so the choice must be made. Name the
-object in the title and the result on the confirming button; see the Design
-Guides for the copy rules.
-
-```rust
-use gpui_kit::component::button::ButtonVariant;
-
-window.open_alert_dialog(cx, |alert, _, _| {
-    alert
-        .title("Remove “Roadmap”?")
-        .description("Files on disk aren’t deleted.")
-        .confirm()
-        .ok_text("Remove")
-        .ok_variant(ButtonVariant::Danger)
-        .on_ok(|_, _, _| true)
-});
-```
-
-`button_props(DialogButtonProps)` takes the same properties as one value; it
-overrides only the fields that value sets, so `confirm` and earlier callbacks
-survive it.
-
-### Notification
-
-```rust
-// Simple string message
-window.push_notification("Saved successfully!", cx);
-
-// With type variant
-window.push_notification(
-    Notification::new("Upload complete").info().message("File uploaded"),
-    cx,
-);
-```
-
-### Tabs
-
-```rust
-use gpui_kit::component::tab::{Tab, TabBar};
-
-TabBar::new("tabs")
-    .child(Tab::new("tab1").child("Overview"))
-    .child(Tab::new("tab2").child("Settings"))
-    .child(Tab::new("tab3").child("Logs"))
-```
-
-### Tooltip
-
-```rust
-// On any element with .id(), add .tooltip():
-div()
-    .id("my-btn")
-    .tooltip(|window, cx| Tooltip::new("Delete item").build(window, cx))
-    .child("Delete")
-
-// Or on a Button directly:
-Button::new("btn").icon(IconName::Trash).tooltip("Delete")
-
-// Component tooltips open after 500 ms; override per trigger,
-// or install `tooltip::TooltipDefaults` to change it app-wide:
-Button::new("help").icon(IconName::Info).tooltip("Help")
-    .tooltip_show_delay(Duration::ZERO)
-```
-
-### Form
-
-```rust
-use gpui_kit::component::form::{v_form, h_form, field};
-
-// Vertical form
-v_form()
-    .child(field().label("Name").child(Input::new(&self.name)))
-    .child(field().label("Email").child(Input::new(&self.email)))
-    .footer(Button::new("submit").primary().label("Submit"))
-
-// Horizontal label alignment
-h_form()
-    .child(field().label("Username").child(Input::new(&self.username)))
-```
-
-### List (searchable, virtualized)
-
-```rust
-use gpui_kit::component::list::{List, ListState, ListDelegate, ListItem, ListEvent};
-
-// Implement ListDelegate for your data type, then:
-let list_state = cx.new(|cx| ListState::new(MyDelegate::new(), window, cx));
-
-// Render
-List::new(&list_state)
-// Keep this subscription in the owning view, alongside list_state.
-self._subscriptions.push(cx.subscribe(&list_state, |this, _, event, cx| {
-    if let ListEvent::Select(index_path) = event {
-        // handle selection
-    }
-}));
-```
-
----
-
-## Theming
-
-```rust
-use gpui_kit::component::ActiveTheme as _;
-
-// Access colors
-cx.theme().primary
-cx.theme().background
-cx.theme().foreground
-cx.theme().border
-cx.theme().surface
-cx.theme().muted
-cx.theme().destructive
-
-// Use in styles
-div()
-    .bg(cx.theme().surface)
-    .text_color(cx.theme().foreground)
-    .border_color(cx.theme().border)
-```
-
-### Switch Theme
-
-```rust
-use gpui_kit::component::{Theme, ThemeMode};
-
-// Switch light/dark: loads that mode's registered theme
-Theme::change(ThemeMode::Dark, None, cx);
-// or, as one edit among others
-Theme::update(cx, |theme| theme.mode = ThemeMode::Dark);
-
-// Load a named theme
-Theme::update(cx, |theme| theme.apply_config(&theme_config));
-
-// Edit fields; `update` keeps colors, tokens and the Base projection in step
-Theme::update(cx, |theme| theme.radius = px(8.));
-```
-
----
-
-## Layout Helpers
-
-`gpui_kit::component` extends GPUI with convenient layout methods:
-
-```rust
-h_flex()    // div().flex().flex_row().items_center()
-v_flex()    // div().flex().flex_col()
-
-// Common patterns
-h_flex().gap_2().items_center()
-    .child(Icon::new(IconName::User))
-    .child(label("Username"))
-
-v_flex().gap_4().p_4()
-    .child(Input::new(&self.name))
-    .child(Input::new(&self.email))
-    .child(Button::new("submit").primary().label("Submit"))
-```
-
----
-
-## Overlay Layers (Dialogs, Sheets, Notifications)
-
-The window's `Root` renders dialogs, sheets and notifications above the view, so a window opened with `gpui_kit::open_window` needs nothing else — `window.open_dialog(..)` just works. Applications define their own quit and close-window actions, key bindings, and confirmation flows. `open_window` returns `(AnyWindowHandle, Entity<V>)`. The complete tested consumer recipe is [`examples/ai_recipes/src/bootstrap.rs`](../../../examples/ai_recipes/src/bootstrap.rs).
-
-Root always mounts all three layers. The former `Root::render_*_layer` methods have been removed; delete their calls from application views when migrating to 0.7.0.
-
----
-
-## Shared Traits
-
-Builders return the component so methods can be chained. Constructors follow component families: controls take a stable ID, retained controls take state, and compound parts may take no arguments. See [component conventions](conventions.md).
-
-- `Sizable`: `.xsmall()` / `.small()` / `.medium()` (default) / `.large()`
-- `Disableable`: `.disabled(bool)`
-- `Selectable`: `.selected(bool)`
-- `Styled`: any GPUI style methods (`.w()`, `.bg()`, `.p_2()`, etc.)
-
-For any component not covered here, fetch its doc from:
-`https://gpui-kit.com/component/{name}.md`
+Use the [current component catalog](https://gpui-kit.com/llms.txt) to locate a
+component page, then check signatures in the installed 0.7.3 source before
+copying newer documentation. For layout, state and lifecycle rules follow the
+normative guides; for verification in this repository follow
+[docs/TESTING.md](../../../../docs/TESTING.md) and `./scripts/precheck.sh`.

@@ -2,7 +2,7 @@
 PR title MUST follow Conventional Commits, e.g.:
   feat(gui): add grid layout mode
   fix(clipboard): handle empty selection on X11
-CI will reject the PR otherwise.
+Follow .agents/skills/contribution-flow/SKILL.md for the contribution SOP.
 -->
 
 ## Summary
@@ -13,7 +13,8 @@ CI will reject the PR otherwise.
 
 Closes #
 
-<!-- For trivial changes (typo, deps bump, formatting, CI tweak) write "N/A — trivial change" instead. -->
+<!-- Follow the Issue policy in .agents/skills/contribution-flow/SKILL.md.
+If the user explicitly requested skipping the Issue, record that request here. -->
 
 ## Changes
 

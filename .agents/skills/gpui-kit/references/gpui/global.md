@@ -1,195 +1,48 @@
-# Global State
+# Global state
 
-**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Common Use Cases](#common-use-cases) · [Best Practices](#best-practices) · [When to Use](#when-to-use)
+**Contents:** [Ownership](#ownership) · [Mutation and observation](#mutation-and-observation) · [Services and async work](#services-and-async-work)
 
-## Overview
+## Ownership
 
-Global state in GPUI provides app-wide shared data accessible from any context.
+A type implementing Global can have one application-wide value stored in App.
+Use this for application configuration and shared services; keep feature/view
+state with its narrowest owner. Global does not mean thread-safe or immutable,
+and Clone is not required by the Global trait.
 
-**Key Trait**: `Global` - Implement on types to make them globally accessible
+The [Global trait](https://docs.rs/crate/gpui-pre/0.3.9/source/src/global.rs),
+[App storage](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app.rs), and
+[BorrowAppContext operations](https://docs.rs/crate/gpui-pre/0.3.9/source/src/gpui.rs)
+are fixed to gpui-pre 0.3.9, used by the repository's gpui-kit 0.7.3 dependency.
 
-## Quick Start
+## Mutation and observation
 
-### Define Global State
+Set a value with set_global, read it with global, and mutate through
+update_global/global_mut. Register the global before a required read/update;
+missing required globals panic. Avoid re-entering the same global from inside
+its update closure, where it is temporarily leased out of App storage.
 
-```rust
-use gpui_kit::Global;
+In this version, set_global and global_mut queue global-observer notification;
+update_global restores its lease through end_global_lease, which also queues
+notification. They do **not** require manually broadcasting a separate event
+to all global observers. A view that depends on a global should retain an
+observer and notify itself when it needs a redraw.
 
-#[derive(Clone)]
-struct AppSettings {
-    theme: Theme,
-    language: String,
-}
+For `Context<T>`, the observer shape is
+`cx.observe_global::<Settings>(|this, cx| ...)`; for `App`, it is
+`cx.observe_global::<Settings>(|cx| ...)`. Store the returned Subscription.
+Mutating data behind an Arc/lock/atomic obtained from a shared reference does
+not pass through GPUI's global mutation hooks; define an explicit notification
+path when that data affects the UI.
 
-impl Global for AppSettings {}
-```
+For component theme changes, use Theme::update and follow the normative
+[theme guide](../coding-guides.md#theme-and-styling): ordinary global observer
+notification does not by itself synchronize the theme's derived tokens and
+Base projection.
 
-### Set and Access Globals
+## Services and async work
 
-```rust
-fn main() {
-    gpui_kit::application().run(|cx: &mut App| {
-        // Set global
-        cx.set_global(AppSettings {
-            theme: Theme::Dark,
-            language: "en".to_string(),
-        });
-
-        // Access global (read-only)
-        let settings = cx.global::<AppSettings>();
-        println!("Theme: {:?}", settings.theme);
-    });
-}
-```
-
-### Update Globals
-
-```rust
-impl MyComponent {
-    fn change_theme(&mut self, new_theme: Theme, cx: &mut Context<Self>) {
-        cx.update_global::<AppSettings, _>(|settings, cx| {
-            settings.theme = new_theme;
-            // Global updates don't trigger automatic notifications
-            // Manually notify components that care
-        });
-
-        cx.notify(); // Re-render this component
-    }
-}
-```
-
-## Common Use Cases
-
-### 1. App Configuration
-
-```rust
-#[derive(Clone)]
-struct AppConfig {
-    api_endpoint: String,
-    max_retries: u32,
-    timeout: Duration,
-}
-
-impl Global for AppConfig {}
-
-// Set once at startup
-cx.set_global(AppConfig {
-    api_endpoint: "https://api.example.com".to_string(),
-    max_retries: 3,
-    timeout: Duration::from_secs(30),
-});
-
-// Access anywhere
-let config = cx.global::<AppConfig>();
-```
-
-### 2. Feature Flags
-
-```rust
-#[derive(Clone)]
-struct FeatureFlags {
-    enable_beta_features: bool,
-    enable_analytics: bool,
-}
-
-impl Global for FeatureFlags {}
-
-impl MyComponent {
-    fn render_beta_feature(&self, cx: &App) -> Option<impl IntoElement> {
-        let flags = cx.global::<FeatureFlags>();
-
-        if flags.enable_beta_features {
-            Some(div().child("Beta feature"))
-        } else {
-            None
-        }
-    }
-}
-```
-
-### 3. Shared Services
-
-```rust
-#[derive(Clone)]
-struct ServiceRegistry {
-    http_client: Arc<HttpClient>,
-    logger: Arc<Logger>,
-}
-
-impl Global for ServiceRegistry {}
-
-impl MyComponent {
-    fn fetch_data(&mut self, cx: &mut Context<Self>) {
-        let registry = cx.global::<ServiceRegistry>();
-        let client = registry.http_client.clone();
-
-        cx.spawn(async move |cx| {
-            let data = client.get("api/data").await?;
-            // Process data...
-            Ok::<_, anyhow::Error>(())
-        }).detach();
-    }
-}
-```
-
-## Best Practices
-
-### ✅ Use Arc for Shared Resources
-
-```rust
-#[derive(Clone)]
-struct GlobalState {
-    database: Arc<Database>,  // Cheap to clone
-    cache: Arc<RwLock<Cache>>,
-}
-
-impl Global for GlobalState {}
-```
-
-### ✅ Immutable by Default
-
-Globals are read-only by default. Use interior mutability when needed:
-
-```rust
-#[derive(Clone)]
-struct Counter {
-    count: Arc<AtomicUsize>,
-}
-
-impl Global for Counter {}
-
-impl Counter {
-    fn increment(&self) {
-        self.count.fetch_add(1, Ordering::SeqCst);
-    }
-
-    fn get(&self) -> usize {
-        self.count.load(Ordering::SeqCst)
-    }
-}
-```
-
-### ❌ Don't: Overuse Globals
-
-```rust
-// ❌ Bad: Too many globals
-cx.set_global(UserState { ... });
-cx.set_global(CartState { ... });
-cx.set_global(CheckoutState { ... });
-
-// ✅ Good: Use entities for component state
-let user_entity = cx.new(|_| UserState { ... });
-```
-
-## When to Use
-
-**Use Globals for:**
-- App-wide configuration
-- Feature flags
-- Shared services (HTTP client, logger)
-- Read-only reference data
-
-**Use Entities for:**
-- Component-specific state
-- State that changes frequently
-- State that needs notifications
+Clone an owned service handle out of the global before starting async work;
+do not hold an App/global borrow across await. Context::spawn receives
+`(WeakEntity<T>, &mut AsyncApp)`, while App::spawn receives only AsyncApp.
+Keep UI mutation on the foreground context and handle owner release/stale
+results. See [async contracts](async.md) and [event lifetime](event.md).

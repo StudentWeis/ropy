@@ -1,95 +1,50 @@
-# ElementId
+# Element identity
 
-`ElementId` is a unique identifier for a GPUI element. It is required for elements that need:
-- Mouse event handling (`on_click`, `on_hover`, etc.)
-- State storage via `window.use_keyed_state`
-- Interaction tracking
+Follow [Stable identity](../coding-guides.md#stable-identity). Ropy locks
+`gpui-kit` 0.7.3, with `gpui-pre` 0.3.9 as its default engine. See the
+[versioned ElementId definition and conversions](https://docs.rs/crate/gpui-pre/0.3.9/source/src/window.rs).
 
-## Making an Element Stateful
+An `ElementId` identifies a node within its parent's identity scope. GPUI
+combines ancestor IDs into a `GlobalElementId`; sibling IDs must be distinct.
+A stable ID lets element-local state survive reconstruction of the element
+tree. Changing an ID deliberately resets that identity.
 
-Call `.id()` on a `div()` to create a `Stateful<Div>`:
+Use a fixed string for a single named control and a domain-derived ID for
+repeated controls. Never key reorderable or filterable rows by their current
+index, translated label, or a random value created during render. A position
+passed to a selection API is not a persistent identity.
 
-```rust
-div().id("my-element")          // ElementId from &str
-div().id(42usize)               // ElementId from usize
-div().id(ElementId::from(idx))  // Explicit
-```
-
-Without `.id()`, a div cannot receive mouse events or store state.
-
-## Accepted Types
+These are builder fragments inside a renderer, with `project.id: u64`:
 
 ```rust
-impl Into<ElementId> for &str      // "my-id"
-impl Into<ElementId> for String    // String::from("my-id")
-impl Into<ElementId> for usize     // 0, 1, 2, ...
-impl Into<ElementId> for u64
-impl Into<ElementId> for SharedString
+Button::new("save").label("Save")
+Button::new(("delete-project", project.id)).label("Delete")
+div().id(("project-row", project.id))
 ```
 
-## Uniqueness Rules
+Import `Button` from `gpui_kit::component::button` and GPUI's element traits
+where needed. String literals (`&'static str`), owned `String`, `SharedString`,
+integer IDs and supported namespace tuples convert into `ElementId`; an
+arbitrary borrowed `&str` is not the same as a static string literal.
 
-IDs must be unique within the same **stateful parent's scope** — not globally. GPUI builds a `GlobalElementId` by chaining parent IDs:
+## Identity and retained state are separate
+
+For a `div`, `.id(...)` creates a `Stateful<Div>` for keyed state and APIs
+such as `on_click`. Do not generalize this to all mouse events: lower-level
+mouse handlers are also available through `InteractiveElement`.
+
+Not every component constructor takes an ID. Stateful controls receive the
+entity retained by their owning view; their default identity derives from
+that entity. An explicit `.id(...)` customizes the frame identity without
+replacing the state:
 
 ```rust
-div().id("app").child(
-    div().id("list1").children(vec![
-        div().id(1usize).child("Item 1"),  // GlobalId: ["app", "list1", 1]
-        div().id(2usize).child("Item 2"),  // GlobalId: ["app", "list1", 2]
-    ])
-).child(
-    div().id("list2").children(vec![
-        div().id(1usize).child("Item 1"),  // GlobalId: ["app", "list2", 1] — no conflict
-    ])
-)
+Input::new(&self.search_input).id("search-input")
+Select::new(&self.country_select).id("country-select")
 ```
 
-Items in different parent scopes can reuse simple IDs (integers, short strings).
-
-## In Component Structs
-
-Components always store `id: ElementId` and pass it in `new()`:
-
-```rust
-#[derive(IntoElement)]
-pub struct Button {
-    id: ElementId,
-    base: Stateful<Div>,
-    // ...
-}
-
-impl Button {
-    pub fn new(id: impl Into<ElementId>) -> Self {
-        let id = id.into();
-        Self {
-            id: id.clone(),
-            base: div().id(id),  // id applied to base
-            // ...
-        }
-    }
-}
-
-impl RenderOnce for Button {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        self.base  // already has .id() applied
-            .on_click(/* ... */)
-    }
-}
-```
-
-## Usage at Call Sites
-
-```rust
-// Use unique string IDs for named components
-Button::new("save-btn").label("Save")
-Button::new("cancel-btn").label("Cancel")
-
-// Use index-based IDs in lists
-for (i, item) in items.iter().enumerate() {
-    div().id(i)  // unique within this parent
-}
-
-// Use descriptive IDs for debugging
-Input::new("search-input")
-Select::new("country-select")
-```
+These are render fragments, not standalone programs. See the verified 0.7.3
+[Input constructor](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/input/input.rs) and
+[Select constructor](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/select.rs), and
+[component conventions](../conventions.md) for state ownership. Allocate the
+state once in the owning view's constructor, not on every render.

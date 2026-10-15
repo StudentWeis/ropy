@@ -12,8 +12,11 @@ each layer is reachable by name: `gpui_kit::component` (styled components),
 
 Start with [component-family conventions](references/conventions.md) to choose the constructor, state owner, event, and layout contract for the task. Learn the family once, then verify the specific component supports the capability.
 
-For a complete compiled view with retained state, subscriptions, and overlay
-layers, read [the tested application recipe](references/recipes.md).
+For upstream source examples with retained state, subscriptions, and overlay
+layers, read [the pinned application recipes](references/recipes.md). Their
+upstream verification commands do not exist in Ropy. This checkout locks
+`gpui-kit` 0.7.3 (default engine `gpui-pre` 0.3.9); the lockfile and installed
+source take precedence over newer website examples for exact signatures.
 
 ## Read the Guides First
 
@@ -247,8 +250,8 @@ verify the action's outcome through normal Rust assertions.
 
 ## GPUI References
 
-Load the file for the mechanism the task touches. Each file starts with a
-contents line.
+Load the file for the mechanism the task touches. The references distinguish
+local contracts from upstream source examples and commands.
 
 | Topic                       | File                                                   | Load when                                                       |
 | --------------------------- | ------------------------------------------------------ | --------------------------------------------------------------- |
@@ -266,12 +269,12 @@ contents line.
 
 Deep dives, for when the topic file is not enough:
 
-- **Element trait**: [element-api.md](references/gpui/element-api.md) (complete API, hitbox, events) ·
+- **Element trait**: [element-api.md](references/gpui/element-api.md) (phase contracts, hitbox, events) ·
   [element-patterns.md](references/gpui/element-patterns.md) (text, interactive, container, composite) ·
-  [element-examples.md](references/gpui/element-examples.md) (full examples) ·
+  [element-examples.md](references/gpui/element-examples.md) (verified upstream examples) ·
   [element-best-practices.md](references/gpui/element-best-practices.md) (performance, state, pitfalls) ·
   [element-advanced.md](references/gpui/element-advanced.md) (custom layouts, async updates, virtual lists)
-- **Entities**: [entity-api.md](references/gpui/entity-api.md) (complete API, lifecycle) ·
+- **Entities**: [entity-api.md](references/gpui/entity-api.md) (versioned API, lifecycle) ·
   [entity-patterns.md](references/gpui/entity-patterns.md) (model-view, cross-entity, observer) ·
   [entity-best-practices.md](references/gpui/entity-best-practices.md) (memory, performance) ·
   [entity-advanced.md](references/gpui/entity-advanced.md) (collections, registry, debounce, state machines)
