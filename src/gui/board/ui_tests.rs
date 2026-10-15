@@ -1014,3 +1014,28 @@ fn test_native_activation_initializes_hidden_board(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn test_copy_invalidated_during_preparation_never_reaches_writer(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.confirm_record(window, cx, 0);
+            assert!(rx.is_empty(), "preparation must still be pending");
+            board.on_hide_action(&super::Hide, window, cx);
+            board.on_active_action(&super::Active, window, cx);
+            crate::utils::write_or_recover(&board.records)[0].content = "new selection".into();
+            board.confirm_record(window, cx, 0);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let requests: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert_eq!(
+        requests.len(),
+        1,
+        "cancelled preparation reached the writer"
+    );
+    assert!(matches!(&requests[0], CopyRequest::Text { text, .. } if text == "new selection"));
+}

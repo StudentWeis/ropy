@@ -182,6 +182,14 @@ impl RopyBoard {
         });
         cx.spawn_in(window, async move |this, cx| {
             let (request, completion) = request.await;
+            // Preparing a rich-text request may outlive this popup activation.
+            // Do not let that old payload overwrite a newer clipboard request.
+            if !this
+                .read_with(cx, |this, _| this.copy_generation == generation)
+                .unwrap_or(false)
+            {
+                return;
+            }
             let success = if let Some(request) = request {
                 if copy_tx.send(request).await.is_err() {
                     tracing::warn!("failed to send clipboard write request");
