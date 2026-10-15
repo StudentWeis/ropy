@@ -878,3 +878,164 @@ fn test_internal_focus_change_does_not_hide_active_popup(cx: &mut TestAppContext
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(board.read(cx).copy_generation, generation));
 }
+
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI test contexts stay on the UI thread"
+)]
+async fn test_copy_completion_from_closed_window_preserves_new_request(cx: &mut TestAppContext) {
+    let (old_handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(old_handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.confirm_record(window, cx, 0));
+    })
+    .unwrap();
+    let CopyRequest::Text {
+        completion: Some(old_done),
+        ..
+    } = rx.recv().await.unwrap()
+    else {
+        unreachable!("copy must request writer acknowledgement")
+    };
+
+    cx.update_window(old_handle, |_, window, _| window.remove_window())
+        .unwrap();
+    let new_handle = cx.update(|cx| crate::gui::app::reopen_window(cx, board.clone()).unwrap());
+    cx.update_window(new_handle.into(), |_, window, cx| {
+        board.update(cx, |board, cx| board.confirm_record(window, cx, 0));
+    })
+    .unwrap();
+    let CopyRequest::Text {
+        completion: Some(new_done),
+        ..
+    } = rx.recv().await.unwrap()
+    else {
+        unreachable!("copy must request writer acknowledgement")
+    };
+
+    old_done.try_send(Ok(())).unwrap();
+    cx.run_until_parked();
+    cx.update_window(new_handle.into(), |_, window, cx| {
+        assert!(board.read(cx).copy_in_progress);
+        assert!(window.notifications(cx).is_empty());
+        board.update(cx, |board, cx| board.confirm_record(window, cx, 0));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(
+        rx.try_recv().is_err(),
+        "stale completion admitted a third copy"
+    );
+
+    new_done.try_send(Ok(())).unwrap();
+    cx.run_until_parked();
+    cx.read(|cx| assert!(!board.read(cx).copy_in_progress));
+}
+
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI test contexts stay on the UI thread"
+)]
+async fn test_copy_reactivation_allows_retry_before_previous_writer_finishes(
+    cx: &mut TestAppContext,
+) {
+    let (handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.confirm_record(window, cx, 0));
+    })
+    .unwrap();
+    let old_request = rx.recv().await.unwrap();
+
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_hide_action(&super::Hide, window, cx);
+            board.on_active_action(&super::Active, window, cx);
+            assert!(
+                !board.copy_in_progress,
+                "dismissed work still blocks the board"
+            );
+            board.confirm_record(window, cx, 0);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(
+        rx.try_recv().is_ok(),
+        "reactivated board did not queue the retry"
+    );
+    drop(old_request);
+}
+
+#[gpui_kit::test]
+fn test_native_activation_initializes_hidden_board(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        cx.set_global(GlobalSettings::new(Settings::default()));
+        cx.set_global(GlobalRepository::new(None));
+    });
+    let (copy_tx, _copy_rx) = async_channel::unbounded();
+    let handle = cx.update(|cx| {
+        crate::gui::create_window(
+            cx,
+            Arc::new(RwLock::new(vec![record(1)])),
+            Arc::new(Mutex::new(CopyTracker::default())),
+            copy_tx,
+        )
+    });
+    cx.update_window(handle.into(), |root, window, cx| {
+        let board = root.downcast::<gpui_kit::component::Root>().unwrap();
+        let board = board
+            .read(cx)
+            .view()
+            .clone()
+            .downcast::<RopyBoard>()
+            .unwrap();
+        assert!(!board.read(cx).activated, "startup must stay inactive");
+        window.render_frame(cx);
+        assert!(window.try_find("settings-button").is_none());
+        // The platform activation callback also runs when another process
+        // restores the existing native window, without dispatching Active.
+        window.activate_window();
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle.into(), |root, window, cx| {
+        let root = root.downcast::<gpui_kit::component::Root>().unwrap();
+        let board = root
+            .read(cx)
+            .view()
+            .clone()
+            .downcast::<RopyBoard>()
+            .unwrap();
+        assert!(board.read(cx).activated);
+        window.render_frame(cx);
+        assert!(window.find("settings-button").visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_copy_invalidated_during_preparation_never_reaches_writer(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.confirm_record(window, cx, 0);
+            assert!(rx.is_empty(), "preparation must still be pending");
+            board.on_hide_action(&super::Hide, window, cx);
+            board.on_active_action(&super::Active, window, cx);
+            crate::utils::write_or_recover(&board.records)[0].content = "new selection".into();
+            board.confirm_record(window, cx, 0);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let requests: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert_eq!(
+        requests.len(),
+        1,
+        "cancelled preparation reached the writer"
+    );
+    assert!(matches!(&requests[0], CopyRequest::Text { text, .. } if text == "new selection"));
+}

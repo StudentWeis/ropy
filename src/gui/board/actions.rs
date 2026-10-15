@@ -287,7 +287,7 @@ impl RopyBoard {
             return;
         }
 
-        self.copy_generation = self.copy_generation.wrapping_add(1);
+        self.invalidate_copy_confirmation();
         self.selected_index = 0;
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
@@ -324,7 +324,7 @@ impl RopyBoard {
             return;
         }
 
-        self.copy_generation = self.copy_generation.wrapping_add(1);
+        self.invalidate_copy_confirmation();
         match self.active_panel {
             ActivePanel::Settings => {
                 settings::reset_settings_dialog(self, window, cx);

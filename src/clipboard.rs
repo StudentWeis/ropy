@@ -56,13 +56,6 @@ pub(crate) enum CopyRequest {
 }
 
 impl CopyRequest {
-    pub(crate) const fn text(text: String) -> Self {
-        Self::Text {
-            text,
-            completion: None,
-        }
-    }
-
     pub(crate) const fn text_with_completion(
         text: String,
         completion: CompletionSender<ClipboardWriteResult>,
@@ -70,13 +63,6 @@ impl CopyRequest {
         Self::Text {
             text,
             completion: Some(completion),
-        }
-    }
-
-    pub(crate) const fn image(path: String) -> Self {
-        Self::Image {
-            path,
-            completion: None,
         }
     }
 
@@ -90,13 +76,6 @@ impl CopyRequest {
         }
     }
 
-    pub(crate) const fn files(paths: Vec<String>) -> Self {
-        Self::Files {
-            paths,
-            completion: None,
-        }
-    }
-
     pub(crate) const fn files_with_completion(
         paths: Vec<String>,
         completion: CompletionSender<ClipboardWriteResult>,
@@ -104,19 +83,6 @@ impl CopyRequest {
         Self::Files {
             paths,
             completion: Some(completion),
-        }
-    }
-
-    pub(crate) const fn rich_text(
-        plain_text: String,
-        html: Option<String>,
-        rtf: Option<String>,
-    ) -> Self {
-        Self::RichText {
-            plain_text,
-            html,
-            rtf,
-            completion: None,
         }
     }
 
@@ -150,23 +116,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_copy_request_text_constructor_sets_text_without_completion() {
-        let request = CopyRequest::text("hello".to_string());
-
-        match request {
-            CopyRequest::Text { text, completion } => {
-                assert_eq!(text, "hello");
-                assert!(completion.is_none());
-            }
-            CopyRequest::Image { .. }
-            | CopyRequest::Files { .. }
-            | CopyRequest::RichText { .. } => {
-                panic!("expected text copy request")
-            }
-        }
-    }
-
-    #[test]
     fn test_copy_request_text_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = async_channel::bounded(1);
         let request = CopyRequest::text_with_completion("hello".to_string(), completion_tx);
@@ -184,21 +133,6 @@ mod tests {
         }
 
         assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
-    }
-
-    #[test]
-    fn test_copy_request_image_constructor_sets_path_without_completion() {
-        let request = CopyRequest::image("/tmp/example.png".to_string());
-
-        match request {
-            CopyRequest::Image { path, completion } => {
-                assert_eq!(path, "/tmp/example.png");
-                assert!(completion.is_none());
-            }
-            CopyRequest::Text { .. } | CopyRequest::Files { .. } | CopyRequest::RichText { .. } => {
-                panic!("expected image copy request")
-            }
-        }
     }
 
     #[test]
@@ -222,21 +156,6 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_request_files_constructor_sets_paths_without_completion() {
-        let request = CopyRequest::files(vec!["/tmp/example.txt".to_string()]);
-
-        match request {
-            CopyRequest::Files { paths, completion } => {
-                assert_eq!(paths, vec!["/tmp/example.txt"]);
-                assert!(completion.is_none());
-            }
-            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::RichText { .. } => {
-                panic!("expected files copy request")
-            }
-        }
-    }
-
-    #[test]
     #[expect(clippy::unwrap_used)]
     fn test_copy_request_files_with_completion_sends_signal() {
         let (completion_tx, completion_rx) = async_channel::bounded(1);
@@ -254,32 +173,6 @@ mod tests {
         }
 
         assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
-    }
-
-    #[test]
-    fn test_copy_request_rich_text_constructor_sets_payload_without_completion() {
-        let request = CopyRequest::rich_text(
-            "hello".to_string(),
-            Some("<p>hello</p>".to_string()),
-            Some("{\\rtf1 hello}".to_string()),
-        );
-
-        match request {
-            CopyRequest::RichText {
-                plain_text,
-                html,
-                rtf,
-                completion,
-            } => {
-                assert_eq!(plain_text, "hello");
-                assert_eq!(html.as_deref(), Some("<p>hello</p>"));
-                assert_eq!(rtf.as_deref(), Some("{\\rtf1 hello}"));
-                assert!(completion.is_none());
-            }
-            CopyRequest::Text { .. } | CopyRequest::Image { .. } | CopyRequest::Files { .. } => {
-                panic!("expected rich text copy request")
-            }
-        }
     }
 
     #[test]
