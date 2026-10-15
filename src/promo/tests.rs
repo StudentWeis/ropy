@@ -51,13 +51,20 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
             ThemeId::default(),
             Language::new("en"),
         )));
-        cx.set_global(GlobalRepository::new(None));
     });
     let records = demo_records(Path::new("missing-logo.png"), &Language::default()).unwrap();
-    let (handle, view) = cx.update(|cx| open_promo_window(records, cx).unwrap());
+    let fixture = tempfile::tempdir().unwrap();
+    let (handle, view) = cx.update(|cx| open_promo_window(records, fixture.path(), cx).unwrap());
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
+        assert!(
+            window.try_find("repository-unavailable").is_none(),
+            "promotional captures must show a healthy demo board"
+        );
         window.click("settings-button", cx);
+        window.click(("favorite-btn", 1u64), cx);
+        window.click(("pin-btn", 1u64), cx);
+        window.click(("delete-btn", 1u64), cx);
         window.press("tab", cx);
         window.press("enter", cx);
         window.input("/", cx);
@@ -67,11 +74,71 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
         assert_eq!(board.selected_index, 0);
         assert!(board.search_input.read(cx).value().is_empty());
         assert!(board.copy_tx.is_closed());
-        assert!(GlobalRepository::global(cx).cloned().is_none());
+        let repository = GlobalRepository::global(cx).cloned().unwrap();
+        assert_eq!(repository.images_dir(), fixture.path().join("images"));
+        assert_eq!(repository.count(), 0);
+        assert_eq!(crate::utils::read_or_recover(&board.records).len(), 4);
         assert_eq!(board.layout_mode, LayoutMode::List);
         assert!(board.pinned);
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_record_action_labels_follow_state_and_locale(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    for (locale, labels) in [
+        (
+            "en",
+            [
+                "Add to favorites",
+                "Remove from favorites",
+                "Pin record",
+                "Unpin record",
+                "Delete record",
+            ],
+        ),
+        (
+            "zh-CN",
+            ["收藏记录", "取消收藏", "置顶记录", "取消置顶", "删除记录"],
+        ),
+        (
+            "ja",
+            [
+                "お気に入りに追加",
+                "お気に入りから削除",
+                "記録をピン留め",
+                "記録のピン留めを解除",
+                "記録を削除",
+            ],
+        ),
+    ] {
+        cx.update(|cx| {
+            cx.set_global(GlobalSettings::new(demo_settings(
+                ThemeId::default(),
+                Language::new(locale),
+            )));
+        });
+        let records = demo_records(Path::new("missing-logo.png"), &Language::new(locale)).unwrap();
+        let fixture = tempfile::tempdir().unwrap();
+        let (handle, view) =
+            cx.update(|cx| open_promo_window(records, fixture.path(), cx).unwrap());
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(window.find(("favorite-btn", 1u64)).label(), Some(labels[0]));
+            assert_eq!(window.find(("pin-btn", 1u64)).label(), Some(labels[2]));
+            assert_eq!(window.find(("delete-btn", 1u64)).label(), Some(labels[4]));
+            view.read(cx).board.clone().update(cx, |board, cx| {
+                board.favorite_ids = Arc::new(std::collections::HashSet::from([1]));
+                crate::utils::write_or_recover(&board.records)[0].pinned = true;
+                cx.notify();
+            });
+            window.render_frame(cx);
+            assert_eq!(window.find(("favorite-btn", 1u64)).label(), Some(labels[1]));
+            assert_eq!(window.find(("pin-btn", 1u64)).label(), Some(labels[3]));
+        })
+        .unwrap();
+    }
 }
 
 #[test]

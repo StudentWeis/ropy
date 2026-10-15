@@ -21,8 +21,6 @@ use crate::{
 
 impl Render for RopyBoard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let surface_bg = self.main_panel_surface(cx.theme().background);
-
         let mut base = v_flex()
             .id("ropy-board")
             .track_focus(&self.focus_handle)
@@ -32,7 +30,7 @@ impl Render for RopyBoard {
             .size_full()
             .px_4()
             .pb_4()
-            .bg(surface_bg);
+            .bg(cx.theme().background);
 
         if !self.activated {
             return gpui_kit::div().size_full().child(base).into_any_element();

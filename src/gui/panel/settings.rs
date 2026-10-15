@@ -572,59 +572,35 @@ pub(crate) fn reset_settings_dialog(
     cx: &mut Context<'_, RopyBoard>,
 ) {
     // Reset selections to persisted values from GPUI Global
-    let (
-        lang_idx,
-        layout_idx,
-        layout_mode,
-        autostart_enabled,
-        auto_check_enabled,
-        include_prerelease_enabled,
-        hover_preview_enabled,
-        space_preview_enabled,
-        confirm_mode,
-        activation_key,
-        window_opacity,
-    ) = GlobalSettings::read(cx, |s| {
-        let lang = crate::gui::settings::available_languages()
-            .iter()
-            .position(|lang| lang == &s.language)
-            .unwrap_or(0);
-        let layout = crate::config::LayoutMode::all()
-            .iter()
-            .position(|layout_mode| layout_mode == &s.layout.mode)
-            .unwrap_or_default();
-        (
-            lang,
-            layout,
-            s.layout.mode,
-            s.autostart.enabled,
-            s.update.auto_check,
-            s.update.include_prerelease,
-            s.preview.hover_preview_enabled,
-            s.preview.space_preview_enabled,
-            s.confirm.mode,
-            s.hotkey.activation_key.clone(),
-            s.window.opacity_percent,
-        )
-    });
+    let settings = GlobalSettings::read(cx, Clone::clone);
+    let lang_idx = crate::gui::settings::available_languages()
+        .iter()
+        .position(|language| language == &settings.language)
+        .unwrap_or(0);
+    let layout_idx = crate::config::LayoutMode::all()
+        .iter()
+        .position(|layout_mode| layout_mode == &settings.layout.mode)
+        .unwrap_or_default();
     board.settings_editor.selected_language = lang_idx;
     board.settings_editor.selected_layout = layout_idx;
-    board.settings_editor.autostart.enabled = autostart_enabled;
-    board.settings_editor.update_settings.auto_check_enabled = auto_check_enabled;
+    board.settings_editor.autostart.enabled = settings.autostart.enabled;
+    board.settings_editor.update_settings.auto_check_enabled = settings.update.auto_check;
     board
         .settings_editor
         .update_settings
-        .include_prerelease_enabled = include_prerelease_enabled;
-    board.settings_editor.panel_state.hover_preview_enabled = hover_preview_enabled;
-    board.settings_editor.panel_state.space_preview_enabled = space_preview_enabled;
-    board.confirm_mode = confirm_mode;
-    board.layout_mode = layout_mode;
-    board.settings_editor.window_opacity_percent = window_opacity;
+        .include_prerelease_enabled = settings.update.include_prerelease;
+    board.settings_editor.panel_state.hover_preview_enabled =
+        settings.preview.hover_preview_enabled;
+    board.settings_editor.panel_state.space_preview_enabled =
+        settings.preview.space_preview_enabled;
+    board.confirm_mode = settings.confirm.mode;
+    board.layout_mode = settings.layout.mode;
+    board.settings_editor.window_opacity_percent = settings.window.opacity_percent;
     board
         .settings_editor
         .pending_hotkey
-        .clone_from(&activation_key);
-    board.settings_editor.hotkey_before_recording = activation_key;
+        .clone_from(&settings.hotkey.activation_key);
+    board.settings_editor.hotkey_before_recording = settings.hotkey.activation_key;
     board.settings_editor.hotkey.recording = false;
 
     // Reset the language select dropdown
@@ -654,9 +630,9 @@ pub(crate) fn reset_settings_dialog(
         .settings_editor
         .panel_state
         .window_opacity_slider_visible = false;
-    board.sync_window_opacity_slider(window_opacity, window, cx);
-    crate::gui::app::apply_current_theme(window, cx, window_opacity);
-    crate::gui::app::apply_window_opacity(window, window_opacity);
+    board.sync_window_opacity_slider(settings.window.opacity_percent, window, cx);
+    crate::gui::app::apply_current_theme(window, cx, settings.window.opacity_percent);
+    crate::gui::app::apply_window_opacity(window, settings.window.opacity_percent);
     let current_hotkey = board.settings_editor.pending_hotkey.clone();
     board.sync_activation_key_input("", &current_hotkey, window, cx);
 

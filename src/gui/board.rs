@@ -46,7 +46,7 @@ use updater_ui::UpdateManager;
 use crate::{
     clipboard::CopyTracker,
     config::{ConfirmMode, LayoutMode},
-    gui::{SharedRecords, hide_window, settings::GlobalSettings, surface_with_opacity},
+    gui::{SharedRecords, hide_window, settings::GlobalSettings},
     utils::read_or_recover,
 };
 
@@ -221,10 +221,6 @@ impl RopyBoard {
 
     pub(crate) const fn can_toggle_window_pin(&self) -> bool {
         Self::window_pin_available(self.confirm_mode)
-    }
-
-    pub(crate) fn main_panel_surface(&self, color: gpui_kit::Hsla) -> gpui_kit::Hsla {
-        surface_with_opacity(color, self.settings_editor.window_opacity_percent)
     }
 
     pub(crate) const fn visible_list_len(&self, record_count: usize) -> usize {

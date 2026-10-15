@@ -21,8 +21,8 @@ use crate::{
         board::RopyBoard,
         constants::default_window_size,
         settings::GlobalSettings,
+        surface_with_opacity,
         theme::{ThemeDefinition, ThemeId, ThemeMode},
-        utils::surface_with_opacity,
     },
 };
 
@@ -128,6 +128,7 @@ pub(crate) fn apply_current_theme(window: &mut Window, cx: &mut App, opacity_per
 }
 
 /// Set the application theme from a bundled theme definition.
+/// Surface tokens include window opacity; consumers must use them unchanged.
 pub(crate) fn set_app_theme(
     window: &mut Window,
     cx: &mut App,
@@ -181,6 +182,86 @@ mod tests {
 
     use super::{Assets, set_app_theme};
     use crate::gui::{theme::ThemeDefinition, utils::surface_with_opacity};
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test window setup and update must succeed"
+    )]
+    fn test_board_surfaces_apply_window_opacity_once(cx: &mut TestAppContext) {
+        use std::sync::{Arc, Mutex, RwLock};
+
+        use gpui_kit::{AppContext, component::ActiveTheme, test::TestWindowExt};
+
+        use crate::{
+            clipboard::CopyTracker,
+            config::Settings,
+            gui::{board::RopyBoard, repository::GlobalRepository, settings::GlobalSettings},
+            repository::{ClipboardRecord, ContentType},
+        };
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let mut settings = Settings::default();
+            settings.window.opacity_percent = 50;
+            cx.set_global(GlobalSettings::new(settings));
+            cx.set_global(GlobalRepository::new(None));
+        });
+        let (handle, _) = cx.update(|cx| {
+            gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
+                set_app_theme(window, cx, &crate::gui::theme::ThemeId::default(), 50);
+                let (tx, _) = async_channel::bounded(1);
+                cx.new(|cx| {
+                    let mut board = RopyBoard::new(
+                        Arc::new(RwLock::new(vec![ClipboardRecord::new(
+                            1,
+                            "opacity regression".into(),
+                            chrono::Local::now(),
+                            ContentType::Text,
+                        )])),
+                        Arc::new(Mutex::new(CopyTracker::default())),
+                        tx,
+                        window,
+                        cx,
+                    );
+                    board.activated = true;
+                    board.pinned = true;
+                    board.filter_state.search_options.case_sensitive = true;
+                    board
+                })
+            })
+            .unwrap()
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.hover("search-case-sensitive-btn", cx);
+            let quads = window.painted_quads();
+            for (expected, minimum_surfaces) in [
+                (cx.theme().background, 1),
+                (cx.theme().secondary, 4),
+                (cx.theme().accent, 1),
+            ] {
+                let colors: Vec<_> = quads
+                    .iter()
+                    .filter_map(|quad| quad.background.as_solid())
+                    .filter(|color| color.alpha(1.) == expected.alpha(1.))
+                    .collect();
+                assert!(
+                    colors.len() >= minimum_surfaces,
+                    "expected at least {minimum_surfaces} surfaces for {expected:?}, found {}",
+                    colors.len()
+                );
+                for color in colors {
+                    assert!(
+                        (color.a - 0.5).abs() < 0.001,
+                        "50% surface became {}",
+                        color.a
+                    );
+                }
+            }
+        })
+        .unwrap();
+    }
 
     #[rstest]
     #[case("icons/chevron-down.svg")]
