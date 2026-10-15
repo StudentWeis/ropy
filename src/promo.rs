@@ -25,7 +25,7 @@ use crate::{
         Assets, app::set_app_theme, board::RopyBoard, repository::GlobalRepository,
         settings::GlobalSettings, theme::ThemeId,
     },
-    repository::{ClipboardRecord, ContentType},
+    repository::{ClipboardRecord, ClipboardRepository, ContentType, errors::RepositoryError},
 };
 
 const GAP: u32 = 12;
@@ -64,6 +64,8 @@ pub(crate) enum PromoError {
     Logo(String),
     #[error("could not resolve the fixed demonstration date in the local timezone")]
     Timestamp,
+    #[error("failed to initialize promotional storage: {0}")]
+    Repository(#[from] RepositoryError),
 }
 
 impl PromoCommand {
@@ -216,8 +218,15 @@ fn signal_when_rendered(
 
 fn open_promo_window(
     records: Vec<ClipboardRecord>,
+    fixture: &Path,
     cx: &mut App,
-) -> gpui_kit::Result<(gpui_kit::AnyWindowHandle, Entity<PromoView>)> {
+) -> Result<(gpui_kit::AnyWindowHandle, Entity<PromoView>), PromoError> {
+    // The board needs a healthy repository even though its deterministic records
+    // are supplied directly. All storage stays inside the capture's temporary
+    // directory; never open the user's default repository here.
+    let repository =
+        ClipboardRepository::open(&fixture.join("clipboard.redb"), fixture.join("images"))?;
+    cx.set_global(GlobalRepository::new(Some(Arc::new(repository))));
     let bounds = Bounds::centered(None, crate::gui::default_window_size(), cx);
     let result = gpui_kit::open_window(
         WindowOptions {
@@ -250,7 +259,8 @@ fn open_promo_window(
             });
             cx.new(|_| PromoView { board })
         },
-    )?;
+    )
+    .map_err(|error| PromoError::Window(error.to_string()))?;
     Ok(result)
 }
 
@@ -261,7 +271,9 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new(".")),
     )?;
-    let logo = fixture.path().join("logo.png");
+    // Keep the TempDir here until the event loop exits, not in its setup closure.
+    let fixture_path = fixture.path().to_path_buf();
+    let logo = fixture_path.join("logo.png");
     let asset = Assets::get("logo.png")
         .ok_or_else(|| PromoError::Logo("bundled logo is missing".into()))?;
     std::fs::write(&logo, asset.data)?;
@@ -277,8 +289,7 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
         gpui_kit::init(cx);
         rust_i18n::set_locale(settings.language.code());
         cx.set_global(GlobalSettings::new(settings));
-        cx.set_global(GlobalRepository::new(None));
-        match open_promo_window(records, cx) {
+        match open_promo_window(records, &fixture_path, cx) {
             Ok((handle, _)) => {
                 let _ = handle.update(cx, |_, window, cx| {
                     window.activate_window();
@@ -293,7 +304,7 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
                 });
             }
             Err(error) => {
-                *failure_for_app.borrow_mut() = Some(PromoError::Window(error.to_string()));
+                *failure_for_app.borrow_mut() = Some(error);
                 cx.quit();
             }
         }

@@ -33,7 +33,7 @@ use super::{
 };
 use crate::{
     config::LayoutMode,
-    gui::{SharedRecords, surface_with_opacity},
+    gui::{SharedRecords, settings::GlobalSettings},
     repository::{ClipboardRecord, ContentType, assets::thumb_path_for},
     utils::read_or_recover,
 };
@@ -258,14 +258,14 @@ struct ItemStyle {
 }
 
 impl ItemStyle {
-    fn from_app(cx: &App, opacity_percent: u8) -> Self {
+    fn from_app(cx: &App) -> Self {
         Self {
-            selected_background: surface_with_opacity(cx.theme().accent, opacity_percent),
-            normal_background: surface_with_opacity(cx.theme().secondary, opacity_percent),
-            border: surface_with_opacity(cx.theme().border, opacity_percent),
+            selected_background: cx.theme().accent,
+            normal_background: cx.theme().secondary,
+            border: cx.theme().border,
             hover_border: cx.theme().foreground,
-            meta_background: surface_with_opacity(cx.theme().background, opacity_percent),
-            badge_background: surface_with_opacity(cx.theme().accent, opacity_percent),
+            meta_background: cx.theme().background,
+            badge_background: cx.theme().accent,
         }
     }
 }
@@ -325,7 +325,6 @@ pub(super) struct RenderContext<'a> {
     record: &'a ClipboardRecord,
     flags: RenderFlags,
     layout_mode: LayoutMode,
-    opacity_percent: u8,
     overlay_visible: bool,
     view: &'a gpui_kit::WeakEntity<RopyBoard>,
 }
@@ -339,7 +338,6 @@ pub(super) struct RecordsListState {
     show_preview: bool,
     hover_preview_enabled: bool,
     overlay_visible: bool,
-    opacity_percent: u8,
     pub(super) view: gpui_kit::WeakEntity<RopyBoard>,
 }
 
@@ -356,7 +354,6 @@ impl RecordsListState {
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
                 && !overlay_visible,
             overlay_visible,
-            opacity_percent: board.settings_editor.window_opacity_percent,
             view: context.weak_entity(),
         }
     }
@@ -410,7 +407,6 @@ impl RecordsListState {
                 },
             },
             layout_mode: self.layout_mode,
-            opacity_percent: self.opacity_percent,
             overlay_visible: self.overlay_visible,
             view: &self.view,
         }
@@ -529,29 +525,39 @@ fn render_grid_record_header(
             false,
             cx,
         )))
-        .child(render_record_actions(ctx))
+        .child(render_record_actions(ctx, cx))
 }
 
-fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
+fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let record_id = ctx.record.id;
     let view_favorite = ctx.view.clone();
     let view_pin = ctx.view.clone();
     let view_delete = ctx.view.clone();
+    let language = GlobalSettings::read(cx, |settings| settings.language.clone());
+    let favorite_label = if ctx.flags.is_favorite() {
+        t!("record_remove_favorite", locale = language.code())
+    } else {
+        t!("record_add_favorite", locale = language.code())
+    };
+    let pin_label = if ctx.record.pinned {
+        t!("record_unpin", locale = language.code())
+    } else {
+        t!("record_pin", locale = language.code())
+    };
+    let delete_label = t!("record_delete", locale = language.code());
 
     let favorite_button = {
+        let button = Button::new(("favorite-btn", record_id));
         let button = if ctx.flags.is_favorite() {
-            Button::new(("favorite-btn", record_id))
-                .xsmall()
-                .primary()
-                .label("★")
+            button.primary().label("★")
         } else {
-            Button::new(("favorite-btn", record_id))
-                .xsmall()
-                .ghost()
-                .label("☆")
+            button.ghost().label("☆")
         };
         button
+            .xsmall()
+            .accessibility_label(favorite_label.clone())
+            .tooltip(favorite_label)
             .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                 cx.stop_propagation();
             })
@@ -573,6 +579,8 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
+            .accessibility_label(pin_label.clone())
+            .tooltip(pin_label)
             .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                 cx.stop_propagation();
             })
@@ -590,6 +598,8 @@ fn render_record_actions(ctx: &RenderContext<'_>) -> AnyElement {
         .xsmall()
         .ghost()
         .label("×")
+        .accessibility_label(delete_label.clone())
+        .tooltip(delete_label)
         .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
             cx.stop_propagation();
         })
@@ -700,7 +710,7 @@ pub(super) fn render_list_item_with_grid_height(
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let preview_data = PreviewData::new(ctx.record);
-    let styles = ItemStyle::from_app(cx, ctx.opacity_percent);
+    let styles = ItemStyle::from_app(cx);
 
     let card = if compact {
         let card_shell = grid_height_override.map_or_else(
@@ -732,7 +742,7 @@ pub(super) fn render_list_item_with_grid_height(
                     .items_start()
                     .gap_2()
                     .child(render_record_body(ctx, &preview_data, &styles, cx))
-                    .child(render_record_actions(ctx)),
+                    .child(render_record_actions(ctx, cx)),
             ),
             ctx,
             &styles,
