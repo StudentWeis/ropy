@@ -1,207 +1,51 @@
-# Actions & Keybindings
+# Actions and keybindings
 
-**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Key Formats](#key-formats) · [Menu Bar Shortcuts](#menu-bar-shortcuts) · [Action Naming](#action-naming) · [Context-Aware Bindings](#context-aware-bindings) · [Best Practices](#best-practices)
+**Contents:** [Ownership](#ownership) · [Handler contract](#handler-contract) · [Dispatch and menus](#dispatch-and-menus)
 
-## Overview
+## Ownership
 
-Actions provide declarative keyboard-driven UI interactions in GPUI.
+Use an Action for a command shared by keyboard, menu, and pointer entry points.
+Define unit actions with `gpui_kit::actions!`, register `KeyBinding`s on `App`,
+and put `key_context`, `track_focus`, and `on_action` on the region that owns the
+command. The binding is useful only when that region is on the focus path.
+See the normative [events, actions, and focus guide](../coding-guides.md#events-actions-and-focus).
 
-**Key Concepts:**
-- Define actions with `actions!` macro or `#[derive(Action)]`
-- Bind keys with `cx.bind_keys()`
-- Handle with `.on_action()` on elements
-- Context-aware via `key_context()`
+## Handler contract
 
-## Quick Start
+For the repository's `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 dependency,
+`Context<T>::listener` accepts
+`Fn(&mut T, &E, &mut Window, &mut Context<T>) + 'static` and returns an element
+callback accepting `(&E, &mut Window, &mut App)`. A method passed to
+`cx.listener(Self::save)` therefore needs the Window argument, even if unused.
 
-### Simple Actions
+This is a fragment inside an existing view, not a standalone application:
 
 ```rust
-use gpui_kit::actions;
-
-actions!(editor, [MoveUp, MoveDown, Save, Quit]);
-
-const CONTEXT: &str = "Editor";
-
-pub fn init(cx: &mut App) {
-    cx.bind_keys([
-        KeyBinding::new("up", MoveUp, Some(CONTEXT)),
-        KeyBinding::new("down", MoveDown, Some(CONTEXT)),
-        KeyBinding::new("cmd-s", Save, Some(CONTEXT)),
-        KeyBinding::new("cmd-q", Quit, Some(CONTEXT)),
-    ]);
-}
-
-impl Render for Editor {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .key_context(CONTEXT)
-            .on_action(cx.listener(Self::move_up))
-            .on_action(cx.listener(Self::move_down))
-            .on_action(cx.listener(Self::save))
-    }
-}
-
-impl Editor {
-    fn move_up(&mut self, _: &MoveUp, cx: &mut Context<Self>) {
-        // Handle move up
-        cx.notify();
-    }
-
-    fn move_down(&mut self, _: &MoveDown, cx: &mut Context<Self>) {
-        cx.notify();
-    }
-
-    fn save(&mut self, _: &Save, cx: &mut Context<Self>) {
-        // Save logic
-        cx.notify();
-    }
+fn save(&mut self, _: &Save, _window: &mut Window, cx: &mut Context<Self>) {
+    self.save_document();
+    cx.notify();
 }
 ```
 
-### Actions with Parameters
+The corresponding render chain is `.on_action(cx.listener(Self::save))`.
+Use the supplied `this`/`&mut self` in a listener; do not capture a render-time
+borrow of the view in the callback. The [locked listener implementation](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs)
+and [element action handling](https://docs.rs/crate/gpui-pre/0.3.9/source/src/elements/div.rs)
+are the authority for callback signatures and dispatch phases.
 
-```rust
-#[derive(Clone, PartialEq, Action, Deserialize)]
-#[action(namespace = editor)]
-pub struct InsertText {
-    pub text: String,
-}
+## Dispatch and menus
 
-#[derive(Action, Clone, PartialEq, Eq, Deserialize)]
-#[action(namespace = editor, no_json)]
-pub struct Digit(pub u8);
+Keep one owner method for each command and route each entry point through it.
+Only stop propagation when the interaction must prevent an ancestor from
+handling the same event. Test both keyboard and pointer entry points through
+the [UI integration workflow](test.md).
 
-cx.bind_keys([
-    KeyBinding::new("0", Digit(0), Some(CONTEXT)),
-    KeyBinding::new("1", Digit(1), Some(CONTEXT)),
-    // ...
-]);
+Bind keys before calling `cx.set_menus`: native menu shortcuts are derived from
+the keymap when menus are built. Rebuild menus after changing bindings or menu
+labels. Check platform key names against the locked implementation instead of
+assuming `cmd` means Ctrl on every platform. Application quit/close commands
+and their confirmation policy belong to the application.
 
-impl Editor {
-    fn on_digit(&mut self, action: &Digit, cx: &mut Context<Self>) {
-        self.insert_digit(action.0, cx);
-    }
-}
-```
-
-## Key Formats
-
-```rust
-// Modifiers
-"cmd-s"         // Command (macOS) / Ctrl (Windows/Linux)
-"ctrl-c"        // Control
-"alt-f"         // Alt
-"shift-tab"     // Shift
-"cmd-ctrl-f"    // Multiple modifiers
-
-// Keys
-"a-z", "0-9"    // Letters and numbers
-"f1-f12"        // Function keys
-"up", "down", "left", "right"
-"enter", "escape", "space", "tab"
-"backspace", "delete"
-"-", "=", "[", "]", etc.  // Special characters
-```
-
-## Menu Bar Shortcuts
-
-`cx.set_menus` reads the keymap **at the moment it is called** and bakes each
-item's shortcut into the native menu. A key bound afterwards never appears next
-to its menu item, and the item does not react to that key. There is no event to
-hook: bind first, then build the menus, and rebuild them when the keymap
-changes.
-
-```rust
-pub fn init(cx: &mut App) {
-    // 1. Bindings first — the menu items copy their shortcuts from these.
-    cx.bind_keys([
-        KeyBinding::new("cmd-n", NewChat, None),
-        KeyBinding::new("cmd-,", OpenSettings, None),
-        KeyBinding::new("cmd-q", Quit, None),
-    ]);
-
-    // 2. Then the menu bar.
-    cx.set_menus(vec![Menu {
-        name: "File".into(),
-        items: vec![
-            MenuItem::action("New Chat", NewChat),
-            MenuItem::action("Settings…", OpenSettings),
-            MenuItem::separator(),
-            MenuItem::action("Quit", Quit),
-        ],
-    }]);
-}
-```
-
-Call `cx.set_menus` again after anything that changes bindings or labels: a
-user keymap file loaded later, a locale switch that renames the items. `Undo`,
-`Redo`, `Cut`, `Copy`, `Paste` need no `on_action` of your own — give the item
-an `OsAction` and the platform forwards it to the focused text control.
-
-## Action Naming
-
-Prefer verb-noun pattern:
-
-```rust
-actions!([
-    OpenFile,      // ✅ Good
-    CloseWindow,   // ✅ Good
-    ToggleSidebar, // ✅ Good
-    Save,          // ✅ Good (common exception)
-]);
-```
-
-## Context-Aware Bindings
-
-```rust
-const EDITOR_CONTEXT: &str = "Editor";
-const MODAL_CONTEXT: &str = "Modal";
-
-// Same key, different contexts
-cx.bind_keys([
-    KeyBinding::new("escape", CloseModal, Some(MODAL_CONTEXT)),
-    KeyBinding::new("escape", ClearSelection, Some(EDITOR_CONTEXT)),
-]);
-
-// Set context on element
-div()
-    .key_context(EDITOR_CONTEXT)
-    .child(editor_content)
-```
-
-## Best Practices
-
-### ✅ Use Contexts
-
-```rust
-// ✅ Good: Context-aware
-div()
-    .key_context("MyComponent")
-    .on_action(cx.listener(Self::handle))
-```
-
-### ✅ Name Actions Clearly
-
-```rust
-// ✅ Good: Clear intent
-actions!([
-    SaveDocument,
-    CloseTab,
-    TogglePreview,
-]);
-```
-
-### ✅ Handle with Listeners
-
-```rust
-// ✅ Good: Proper handler naming
-impl MyComponent {
-    fn on_action_save(&mut self, _: &Save, cx: &mut Context<Self>) {
-        // Handle save
-        cx.notify();
-    }
-}
-
-div().on_action(cx.listener(Self::on_action_save))
-```
+See [focus handling](focus-handle.md) for retained handles, tab stops, and focus
+restoration, and the [versioned App source](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app.rs)
+for menu and binding APIs.

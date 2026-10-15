@@ -1,258 +1,62 @@
-# Context Management
+# Context management
 
-**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Common Operations](#common-operations) · [Context Hierarchy](#context-hierarchy) · [cx.listener](#cxlistener--binding-callbacks-to-self) · [subscribe_in](#subscribe_in--subscribe-with-window-access) · [observe_window_activation](#observe_window_activation) · [observe_global](#observe_global) · [defer / defer_in](#defer-and-defer_in) · [Naming Convention](#context-naming-convention)
+**Contents:** [Choose the context](#choose-the-context) · [Callbacks](#callbacks) · [Deferred work](#deferred-work)
 
-## Overview
+## Choose the context
 
-GPUI uses different context types for different scenarios:
+The following describes the locked `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 APIs.
+Contexts are capabilities supplied for an operation, not an inheritance tree.
 
-**Context Types:**
-- **`App`**: Global app state, entity creation
-- **`Window`**: Window-specific operations, painting, layout
-- **`Context<T>`**: Entity-specific context for component `T`
-- **`AsyncApp`**: Async context for foreground tasks
-- **`AsyncWindowContext`**: Async context with window access
+| Context | Responsibility |
+| --- | --- |
+| `App` | Application state, globals, entity creation and access |
+| `Context<T>` | App access plus the current entity, listeners, events, notification |
+| `Window` | Focus, input dispatch, window geometry and rendering phases |
+| `AsyncApp` | Application access from foreground async tasks |
+| `AsyncWindowContext` | Async application access associated with a window |
 
-## Quick Start
+Retain typed handles such as `Entity`, `WeakEntity`, or `FocusHandle`; do not
+retain the borrowed `&mut` contexts. `Window::is_window_active()` checks native
+window activation; `FocusHandle::is_focused(window)` checks a focus target.
+They describe different state.
 
-### Context<T> - Component Context
+## Callbacks
 
-```rust
-impl MyComponent {
-    fn update_state(&mut self, cx: &mut Context<Self>) {
-        self.value = 42;
-        cx.notify(); // Trigger re-render
+Callback arity depends on the receiver. For `Context<T>`:
 
-        // Spawn async task
-        cx.spawn(async move |cx| {
-            // Async work
-        }).detach();
+| Operation | Callback parameters |
+| --- | --- |
+| `listener` | `&mut T, &Event, &mut Window, &mut Context<T>` |
+| `observe` | `&mut T, Entity<Observed>, &mut Context<T>` |
+| `subscribe` | `&mut T, Entity<Emitter>, &Event, &mut Context<T>` |
+| `subscribe_in` | `&mut T, Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
+| `observe_global` | `&mut T, &mut Context<T>` |
+| `observe_window_activation` | `&mut T, &mut Window, &mut Context<T>` |
+| `spawn` | `WeakEntity<T>, &mut AsyncApp` |
+| `spawn_in` | `WeakEntity<T>, &mut AsyncWindowContext` |
 
-        // Get current entity
-        let entity = cx.entity();
-    }
-}
-```
+In particular, `Context<T>::spawn` takes a two-argument async closure, while
+`App::spawn` takes one. `Context<T>::observe_global` takes two arguments, while
+`App::observe_global` takes one. Keep the returned Subscription alive when
+observing/subscribing. Use the context provided to the callback rather than
+capturing the outer borrow.
 
-### App - Global Context
+The [locked Context implementation](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs)
+and [App implementation](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app.rs)
+are the signature references. See [events](event.md), [async tasks](async.md),
+and [focus](focus-handle.md) for their lifetime contracts.
 
-```rust
-fn main() {
-    gpui_kit::application().run(|cx: &mut App| {
-        gpui_kit::init(cx);
+## Deferred work
 
-        // Create entities
-        let entity = cx.new(|cx| MyState::default());
+`App::defer` runs a closure with `&mut App` after the current update.
+`Context<T>::defer_in(window, ...)` runs with
+`(&mut T, &mut Window, &mut Context<T>)`. The latter re-borrows the owning
+entity when invoked. Operate on its supplied `&mut T`; reading or updating
+that same entity through its handle re-enters the borrow and panics. A callback
+through a different entity can also cycle back, so inspect the entire path.
 
-        // Open windows (wraps the view in a `Root`)
-        gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| cx.new(|_| MyView))
-            .expect("failed to open window");
-    });
-}
-```
-
-### Window - Window Context
-
-```rust
-impl Render for MyView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Window operations
-        let is_focused = window.is_window_focused();
-        let bounds = window.bounds();
-
-        div().child("Content")
-    }
-}
-```
-
-### AsyncApp - Async Context
-
-```rust
-cx.spawn(async move |cx: &mut AsyncApp| {
-    let data = fetch_data().await;
-
-    entity.update(cx, |state, inner_cx| {
-        state.data = data;
-        inner_cx.notify();
-    }).ok();
-}).detach();
-```
-
-## Common Operations
-
-### Entity Operations
-
-```rust
-// Create entity
-let entity = cx.new(|cx| MyState::default());
-
-// Update entity
-entity.update(cx, |state, cx| {
-    state.value = 42;
-    cx.notify();
-});
-
-// Read entity
-let value = entity.read(cx).value;
-```
-
-### Notifications and Events
-
-```rust
-// Trigger re-render
-cx.notify();
-
-// Emit event
-cx.emit(MyEvent::Updated);
-
-// Observe entity
-cx.observe(&entity, |this, observed, cx| {
-    // React to changes
-}).detach();
-
-// Subscribe to events
-cx.subscribe(&entity, |this, source, event, cx| {
-    // Handle event
-}).detach();
-```
-
-### Window Operations
-
-```rust
-// Window state
-let focused = window.is_window_focused();
-let bounds = window.bounds();
-let scale = window.scale_factor();
-
-// Close window
-window.remove_window();
-```
-
-### Async Operations
-
-```rust
-// Spawn foreground task
-cx.spawn(async move |cx| {
-    // Async work with entity access
-}).detach();
-
-// Spawn background task
-cx.background_spawn(async move {
-    // Heavy computation
-}).detach();
-```
-
-## Context Hierarchy
-
-```
-App (Global)
-  └─ Window (Per-window)
-       └─ Context<T> (Per-component)
-            └─ AsyncApp (In async tasks)
-                 └─ AsyncWindowContext (Async + Window)
-```
-
-## cx.listener — Binding Callbacks to Self
-
-`cx.listener` creates a callback that borrows `&mut self` (the current entity). Use it for `on_click`, `on_action`, and other element event handlers:
-
-```rust
-impl Render for MyView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .on_action(cx.listener(Self::on_save))
-            .child(
-                Button::new("btn")
-                    .on_click(cx.listener(|this, _event, _window, cx| {
-                        this.count += 1;
-                        cx.notify();
-                    }))
-            )
-    }
-}
-
-impl MyView {
-    fn on_save(&mut self, _: &Save, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.notify();
-    }
-}
-```
-
-`cx.listener(Self::method)` is equivalent to creating a closure that calls `self.method(...)`.
-
-## subscribe_in — Subscribe with Window Access
-
-Use `subscribe_in` (instead of `subscribe`) when the callback needs `&mut Window`:
-
-```rust
-let _subscription = cx.subscribe_in(&input, window, |this, state, event, window, cx| {
-    match event {
-        InputEvent::Change => {
-            let val = state.read(cx).value();
-            this.on_input_change(val, window, cx);
-        }
-        _ => {}
-    }
-});
-// Store _subscription in struct to keep it alive
-```
-
-`subscribe` vs `subscribe_in`:
-- `subscribe(&entity, |this, source, event, cx|)` — no window access
-- `subscribe_in(&entity, window, |this, source, event, window, cx|)` — has window access
-
-## observe_window_activation
-
-React when the window gains or loses focus:
-
-```rust
-let _sub = cx.observe_window_activation(window, |this, window, cx| {
-    if window.is_window_active() {
-        this.resume(cx);
-    } else {
-        this.pause(cx);
-    }
-});
-```
-
-## observe_global
-
-React when a global value changes:
-
-```rust
-cx.observe_global::<Theme>(|cx| {
-    // Theme changed — react
-    cx.notify();
-});
-```
-
-## defer and defer_in
-
-Schedule work after the current update completes:
-
-```rust
-// defer: runs after current App update, no window access
-cx.defer(|cx| {
-    // Runs after current entity update is done
-});
-
-// defer_in: runs after update, with window access
-cx.defer_in(window, |this, window, cx| {
-    // Can access window here
-    // CAUTION: never call entity.update(cx) on *this same entity* inside defer_in
-    // — it re-enters the lock and panics. Use the &mut self reference directly.
-    this.some_method(window, cx);
-});
-```
-
-## Context Naming Convention
-
-Always name contexts `cx` regardless of type:
-
-```rust
-fn new(window: &mut Window, cx: &mut App) {}             // cx = App
-impl Render for View {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) {}  // cx = Context<Self>
-}
-cx.spawn(async move |this, cx: &mut AsyncApp| {})         // cx = AsyncApp
-```
+An entity's `cx.notify()` schedules observers/redraw after a state change; it
+is not an event payload or a synchronous render call. Keep render declarative.
+For complete initialization and Root ownership, use the
+[application recipes](../recipes.md), and follow the normative
+[phase and context guide](../coding-guides.md#understand-gpuis-phases-and-contexts).

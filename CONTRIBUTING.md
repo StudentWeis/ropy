@@ -32,7 +32,7 @@ Ropy uses TOML configuration files to define themes. Theme files are located in 
 
 2. **Define Theme Content**
 
-   The theme file must include `theme_name`, `mode` (`light` or `dark`), and a full set of color fields (hexadecimal values). Refer to [`assets/themes/ropy-dark.toml`](../assets/themes/ropy-dark.toml) for the complete field list and expected format.
+   The theme file must include `theme_name`, `mode` (`light` or `dark`), and a full set of color fields (six-digit RGB hexadecimal values). Refer to [`assets/themes/ropy-dark.toml`](./assets/themes/ropy-dark.toml) for the complete field list and expected format.
 
 ### Examples
 
@@ -60,7 +60,7 @@ Ropy supports internationalization (i18n). Language files also use TOML format a
 
 2. **Define Language Content**
 
-   The first line of the language file should contain the `language_name` field (written in the language itself) for display in settings. Refer to [`assets/locales/en.toml`](../assets/locales/en.toml) for the full structure and all translation keys.
+   The first line of the language file should contain the `language_name` field (written in the language itself) for display in settings. Refer to [`assets/locales/en.toml`](./assets/locales/en.toml) for the full structure and all translation keys.
 
 ### Translation Tips
 

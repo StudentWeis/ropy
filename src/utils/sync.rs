@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_or_recover_recovers_poisoned_rwlock() {
+    fn test_read_and_write_or_recover_recover_poisoned_rwlock() {
         let lock = Arc::new(RwLock::new(String::from("before panic")));
         let poisoned_lock = Arc::clone(&lock);
 
@@ -92,6 +92,9 @@ mod tests {
             panic!("poison rwlock for recovery test");
         })
         .join();
+
+        assert!(lock.is_poisoned());
+        assert_eq!(read_or_recover(&lock).as_str(), "before panic during panic");
 
         let mut guard = write_or_recover(&lock);
         guard.push_str(" after recovery");

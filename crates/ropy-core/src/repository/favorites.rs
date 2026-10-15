@@ -78,7 +78,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 mod tests {
     use std::{thread, time::Duration};
 
-    use crate::repository::test_helpers::create_test_repo;
+    use crate::repository::{backend::KvTree, test_helpers::create_test_repo};
 
     #[test]
     fn test_favorite_ids_when_empty_returns_empty_vec() {
@@ -154,14 +154,20 @@ mod tests {
         repo.toggle_favorite(record_b.id)
             .expect("Failed to favorite");
 
-        // Delete record_a from the records store, making its favorite entry stale
-        repo.delete(record_a.id).expect("Failed to delete");
+        // Bypass repository cleanup to model a dangling persisted favorite.
+        // repo.delete also removes the favorite and cannot create this fixture.
+        repo.records
+            .remove(&record_a.id.to_be_bytes())
+            .expect("Failed to remove backing record");
+        assert!(repo.get_by_id(record_a.id).unwrap().is_none());
+        assert!(repo.favorite_ids().unwrap().contains(&record_a.id));
 
         let favorite_set = repo.favorite_id_set().expect("Failed to get favorite set");
 
         // Only record_b should remain since record_a's data was deleted
         assert_eq!(favorite_set.len(), 1);
         assert!(favorite_set.contains(&record_b.id));
+        assert!(!favorite_set.contains(&record_a.id));
     }
 
     #[test]

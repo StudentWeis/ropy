@@ -264,50 +264,50 @@ fn test_surface_with_opacity_scales_alpha() {
     assert!((faded.l - color.l).abs() < f32::EPSILON);
 }
 
-#[test]
-fn test_toggle_content_filter() {
-    // Toggling the same filter twice returns to All
-    let mut filter = ContentFilter::All;
+#[gpui_kit::test]
+fn test_toggle_content_filter_reclick_clears_and_other_filter_switches(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    use std::sync::{Arc, Mutex, RwLock};
 
-    // Simulate toggle to Text
-    filter = if filter == ContentFilter::Text {
-        ContentFilter::All
-    } else {
-        ContentFilter::Text
-    };
-    assert_eq!(filter, ContentFilter::Text);
+    use gpui_kit::AppContext as _;
 
-    // Simulate toggle Text again -> back to All
-    filter = if filter == ContentFilter::Text {
-        ContentFilter::All
-    } else {
-        ContentFilter::Text
-    };
-    assert_eq!(filter, ContentFilter::All);
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        cx.set_global(crate::gui::settings::GlobalSettings::new(
+            crate::config::Settings::default(),
+        ));
+    });
+    let (copy_tx, _copy_rx) = async_channel::unbounded();
+    let (_, board) = cx.update(|cx| {
+        gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                RopyBoard::new(
+                    Arc::new(RwLock::new(Vec::new())),
+                    Arc::new(Mutex::new(crate::clipboard::CopyTracker::default())),
+                    copy_tx,
+                    window,
+                    cx,
+                )
+            })
+        })
+        .expect("open board")
+    });
 
-    // Simulate toggle to Image
-    filter = if filter == ContentFilter::Image {
-        ContentFilter::All
-    } else {
-        ContentFilter::Image
-    };
-    assert_eq!(filter, ContentFilter::Image);
-
-    // Simulate toggle to Files
-    filter = if filter == ContentFilter::Files {
-        ContentFilter::All
-    } else {
-        ContentFilter::Files
-    };
-    assert_eq!(filter, ContentFilter::Files);
-
-    // Simulate toggle to Text while Image is active -> switches to Text
-    filter = if filter == ContentFilter::Text {
-        ContentFilter::All
-    } else {
-        ContentFilter::Text
-    };
-    assert_eq!(filter, ContentFilter::Text);
+    board.update(cx, |board, _| {
+        assert_eq!(board.filter_state.content_filter, ContentFilter::All);
+        for (target, expected) in [
+            (ContentFilter::Text, ContentFilter::Text),
+            (ContentFilter::Text, ContentFilter::All),
+            (ContentFilter::Image, ContentFilter::Image),
+            (ContentFilter::Files, ContentFilter::Files),
+            (ContentFilter::Text, ContentFilter::Text),
+            (ContentFilter::All, ContentFilter::All),
+        ] {
+            board.toggle_content_filter(target);
+            assert_eq!(board.filter_state.content_filter, expected);
+        }
+    });
 }
 
 #[test]
