@@ -264,8 +264,13 @@ fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
 #[test]
 fn test_save_image_from_path_basic() {
     let repo = create_test_repo();
+    let images = tempfile::tempdir().expect("Failed to create image fixtures");
 
-    let path = "/tmp/test_image.png".to_string();
+    let path = images
+        .path()
+        .join("test_image.png")
+        .to_string_lossy()
+        .into_owned();
     let hash = 12345_u64;
 
     let record = repo
@@ -280,24 +285,35 @@ fn test_save_image_from_path_basic() {
 #[test]
 fn test_save_image_from_path_dedup() {
     let repo = create_test_repo();
+    let images = tempfile::tempdir().expect("Failed to create image fixtures");
 
-    let path1 = "/tmp/image1.png".to_string();
-    let path2 = "/tmp/image2.png".to_string();
+    let path1 = images.path().join("image1.png");
+    let path2 = images.path().join("image2.png");
+    let thumb1 = thumb_path_for(&path1);
+    let thumb2 = thumb_path_for(&path2);
+    for path in [&path1, &path2, &thumb1, &thumb2] {
+        std::fs::write(path, b"image fixture").expect("Failed to write image fixture");
+    }
     let hash = 12345_u64;
 
     let r1 = repo
-        .save_image_from_path(path1, hash)
+        .save_image_from_path(path1.to_string_lossy().into_owned(), hash)
         .expect("Failed to save first");
 
     thread::sleep(Duration::from_millis(10));
 
     let r2 = repo
-        .save_image_from_path(path2, hash)
+        .save_image_from_path(path2.to_string_lossy().into_owned(), hash)
         .expect("Failed to save second");
 
     assert_eq!(r1.id, r2.id);
     assert_eq!(repo.count(), 1);
     assert!(r2.created_at > r1.created_at);
+    assert_eq!(r2.content, r1.content);
+    assert!(path1.exists());
+    assert!(thumb1.exists());
+    assert!(!path2.exists());
+    assert!(!thumb2.exists());
 }
 
 #[test]
