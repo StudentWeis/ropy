@@ -40,7 +40,6 @@ perl -i -0777 -pe "s/(\[package\.metadata\.bundle\.bin\.ropy\]\n(?:.*\n)*?versio
 
 # Check code formatting, linting, and tests before release
 ./scripts/precheck.sh
-./scripts/record_build_size.sh
 
 # Generate changelog for the new release
 if [[ -z "${GITHUB_TOKEN:-}" ]]; then

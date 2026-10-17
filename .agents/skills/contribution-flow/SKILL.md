@@ -51,8 +51,14 @@ Must pass before any commit:
 
 ### 5. Commit
 
+Stage only the files for this change, including new files and deletions. Inspect
+the staged diff and status before committing; leave unrelated changes unstaged.
+
 ```bash
-git commit -am "<type>(<scope>): <short description>
+git add -- <paths-for-this-change>
+git diff --cached
+git status --short
+git commit -m "<type>(<scope>): <short description>
 
 Refs #<N>"
 ```

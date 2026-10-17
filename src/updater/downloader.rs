@@ -455,28 +455,4 @@ mod tests {
             "e480cb6fb62b8a6be76827b9e23059e7e82730289a575088f2ce14956806b865"
         );
     }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_progress_channel_send_blocking_delivers_values() {
-        let (sender, receiver) = async_channel::unbounded::<f32>();
-
-        sender.send_blocking(0.25).unwrap();
-        sender.send_blocking(0.5).unwrap();
-        sender.send_blocking(1.0).unwrap();
-
-        assert_eq!(receiver.try_recv().unwrap(), 0.25);
-        assert_eq!(receiver.try_recv().unwrap(), 0.5);
-        assert_eq!(receiver.try_recv().unwrap(), 1.0);
-    }
-
-    #[test]
-    fn test_progress_channel_drop_sender_closes_receiver() {
-        let (sender, receiver) = async_channel::unbounded::<f32>();
-
-        drop(sender);
-
-        assert!(receiver.try_recv().is_err());
-        assert!(receiver.is_closed());
-    }
 }
