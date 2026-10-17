@@ -55,10 +55,14 @@ fn open_board(
 }
 
 fn record(id: u64) -> ClipboardRecord {
+    // Keep newest-first ordering independent of the platform clock's resolution.
+    let timestamp = 1_700_000_000 + i64::try_from(id).unwrap();
     ClipboardRecord::new(
         id,
         format!("record {id}"),
-        chrono::Local::now(),
+        chrono::DateTime::from_timestamp(timestamp, 0)
+            .unwrap()
+            .with_timezone(&chrono::Local),
         crate::repository::ContentType::Text,
     )
     .pinned(true)
@@ -233,10 +237,11 @@ fn test_board_unmodified_numbers_copy_corresponding_records(cx: &mut TestAppCont
         cx.run_until_parked();
         let request = rx.try_recv().expect("bare number must request a copy");
         cx.update(|cx| board.update(cx, |board, _| board.invalidate_copy_confirmation()));
-        assert!(
-            matches!(request, CopyRequest::Text { text, .. } if text == expected),
-            "{key}"
-        );
+        let actual = match &request {
+            CopyRequest::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        };
+        assert_eq!(actual, Some(expected), "{key}");
     }
 }
 
