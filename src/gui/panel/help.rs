@@ -16,7 +16,7 @@ use crate::{
                 ConfirmRecord, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext,
                 CycleFilterPrev, DeleteRecord, FocusSearch, Hide, PreviewSelection,
                 QUICK_SELECT_COUNT, SelectLeft, SelectNext, SelectPrev, SelectRight,
-                ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin,
+                ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin, binding_applies_to_history,
             },
         },
         panel::common::{panel_back_button, panel_header_with_back},
@@ -40,7 +40,11 @@ impl ShortcutRow {
     }
 
     fn action(mut self, action: &dyn Action, cx: &App) -> Self {
-        for binding in cx.key_bindings().borrow().bindings_for_action(action) {
+        let keymap = cx.key_bindings();
+        let keymap = keymap.borrow();
+        let mut bindings = keymap.bindings_for_action(action).collect::<Vec<_>>();
+        bindings.sort_by_key(|binding| !binding_applies_to_history(binding));
+        for binding in bindings {
             let keys = binding
                 .keystrokes()
                 .iter()
@@ -48,7 +52,14 @@ impl ShortcutRow {
                 .collect::<Vec<_>>()
                 .join(" ");
             if !self.keys.contains(&keys) {
-                self.keys.push(keys);
+                let display = if binding_applies_to_history(binding) {
+                    keys
+                } else {
+                    t!("help_search_binding", keys = keys).to_string()
+                };
+                if !self.keys.contains(&display) {
+                    self.keys.push(display);
+                }
             }
         }
         self

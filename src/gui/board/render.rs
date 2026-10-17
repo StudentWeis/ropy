@@ -61,6 +61,17 @@ impl Render for RopyBoard {
             );
         }
 
+        if let Some(message) = super::actions::keybinding_error_message(cx) {
+            base = base.child(
+                gpui_kit::div()
+                    .id("keybindings-error")
+                    .test_support()
+                    .aria_label(message.clone())
+                    .py_2()
+                    .child(Alert::error("keybindings-error-alert", message)),
+            );
+        }
+
         let body: AnyElement = match self.active_panel {
             ActivePanel::Settings => base
                 .on_key_down(cx.listener(Self::on_settings_key_down))

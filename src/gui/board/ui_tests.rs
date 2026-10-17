@@ -27,10 +27,22 @@ fn open_board(
     Entity<RopyBoard>,
     async_channel::Receiver<CopyRequest>,
 ) {
+    open_board_with_settings(cx, records, Settings::default())
+}
+
+fn open_board_with_settings(
+    cx: &TestAppContext,
+    records: Vec<ClipboardRecord>,
+    settings: Settings,
+) -> (
+    AnyWindowHandle,
+    Entity<RopyBoard>,
+    async_channel::Receiver<CopyRequest>,
+) {
     let (tx, rx) = async_channel::unbounded();
     cx.update(|cx| {
         gpui_kit::init(cx);
-        cx.set_global(GlobalSettings::new(Settings::default()));
+        cx.set_global(GlobalSettings::new(settings));
         cx.set_global(GlobalRepository::new(None));
         super::bind_application_keys(cx);
     });
@@ -54,6 +66,122 @@ fn open_board(
     (window, board, rx)
 }
 
+#[gpui_kit::test]
+fn test_history_override_disables_d_and_keeps_delete(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings
+        .keybindings
+        .history
+        .insert("delete_record".into(), vec!["delete".into()]);
+    let (handle, board, _) = open_board_with_settings(cx, vec![record(1)], settings);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("d", cx);
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.press("delete", cx);
+        assert_eq!(board.read(cx).pending_delete_id, Some(1));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_history_override_preserves_search_navigation_and_labels_its_keys(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings
+        .keybindings
+        .history
+        .insert("select_next".into(), vec!["n".into()]);
+    let (handle, board, _) =
+        open_board_with_settings(cx, vec![record(1), record(2), record(3)], settings);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("down", cx);
+        window.press("j", cx);
+        assert_eq!(board.read(cx).selected_index, 0);
+        window.press("n", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("/", cx);
+        window.press("down", cx);
+        assert_eq!(board.read(cx).selected_index, 2);
+        window.input("n", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "n");
+
+        window.click("help-button", cx);
+        let label = window
+            .find("board::SelectPrev")
+            .label()
+            .unwrap()
+            .to_string();
+        let down = gpui_kit::component::kbd::Kbd::format(&Keystroke::parse("down").unwrap());
+        assert!(
+            label.contains(t!("help_search_binding", keys = down).as_ref()),
+            "{label}"
+        );
+        assert!(label.contains(" / N"), "{label}");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_history_conflict_disables_history_and_shows_repair_message(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings
+        .keybindings
+        .history
+        .insert("delete_record".into(), vec!["j".into()]);
+    let (handle, board, _) = open_board_with_settings(cx, vec![record(1), record(2)], settings);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let message = window
+            .find("keybindings-error")
+            .label()
+            .unwrap()
+            .to_string();
+        assert!(message.contains("delete_record"), "{message}");
+        assert!(message.contains("select_next"), "{message}");
+        assert!(message.contains("config.toml"), "{message}");
+        for key in ["j", "d", "delete"] {
+            window.press(key, cx);
+        }
+        assert_eq!(board.read(cx).selected_index, 0);
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.focus(&board.read(cx).search_input.focus_handle(cx), cx);
+        window.press("down", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.input("d", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "d");
+        window.press("escape", cx);
+        assert!(
+            !board
+                .read(cx)
+                .search_input
+                .focus_handle(cx)
+                .is_focused(window)
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_history_config_rebinds_quick_select_target(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings
+        .keybindings
+        .history
+        .insert("confirm_record_2".into(), vec!["ctrl-2".into()]);
+    let (handle, board, rx) = open_board_with_settings(cx, vec![record(1), record(2)], settings);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("2", cx);
+        assert!(!board.read(cx).copy_in_progress);
+        window.press("ctrl-2", cx);
+        assert!(board.read(cx).copy_in_progress);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(matches!(rx.try_recv().unwrap(), CopyRequest::Text { text, .. } if text == "record 1"));
+}
+
 fn record(id: u64) -> ClipboardRecord {
     // Keep newest-first ordering independent of the platform clock's resolution.
     let timestamp = 1_700_000_000 + i64::try_from(id).unwrap();
@@ -66,6 +194,23 @@ fn record(id: u64) -> ClipboardRecord {
         crate::repository::ContentType::Text,
     )
     .pinned(true)
+}
+
+#[gpui_kit::test]
+fn test_history_settings_recovery_does_not_restore_default_delete_binding(cx: &mut TestAppContext) {
+    let (handle, board, _) =
+        open_board_with_settings(cx, vec![record(1)], Settings::recovery_defaults());
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        for key in ["d", "delete"] {
+            window.press(key, cx);
+        }
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.focus(&board.read(cx).search_input.focus_handle(cx), cx);
+        window.input("d", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "d");
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -334,18 +479,17 @@ fn test_board_space_preview_release_after_search_focus_hides_preview(cx: &mut Te
 }
 
 #[gpui_kit::test]
-fn test_board_preview_release_follows_registered_binding(cx: &mut TestAppContext) {
-    let (handle, board, _) = open_board(cx, vec![record(1)]);
+fn test_board_preview_release_follows_configured_binding(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings
+        .keybindings
+        .history
+        .insert("preview_selection".into(), vec!["v".into()]);
+    let (handle, board, _) = open_board_with_settings(cx, vec![record(1)], settings);
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, _| {
             board.settings_editor.panel_state.space_preview_enabled = true;
         });
-        cx.clear_key_bindings();
-        cx.bind_keys([gpui_kit::KeyBinding::new(
-            "v",
-            super::actions::PreviewSelection,
-            None,
-        )]);
         window.render_frame(cx);
         window.dispatch_event(
             KeyDownEvent {

@@ -147,3 +147,11 @@ promo_code = 'fn main() { println!("Hello, Ropy!"); }'
 settings_recovery_required = "设置加载失败。已暂停保存设置和自动清理历史，并保留系统自启动状态。请修复 config.toml 后重启 Ropy。"
 clipboard_write_unconfirmed = "无法确认复制成功，请重试。"
 repository_unavailable = "剪贴板历史不可用，新的复制内容无法保存。请检查数据目录权限并关闭其他 Ropy 实例，然后重启 Ropy。"
+
+# Configurable history shortcuts
+keybindings_error = "列表快捷键已暂停：%{error}请修正 config.toml 中的 keybindings.history，然后重启 Ropy。搜索框操作和 Esc 仍可使用。"
+keybindings_unknown_action = "未知动作“%{action}”。"
+keybindings_invalid_key = "动作“%{action}”的快捷键“%{key}”不受支持，请使用单个按键或组合键。"
+keybindings_reserved_key = "动作“%{action}”的快捷键“%{key}”已保留给窗口或焦点操作。"
+keybindings_conflict = "快捷键“%{key}”同时分配给了“%{first}”和“%{second}”。"
+help_search_binding = "%{keys}（搜索框）"

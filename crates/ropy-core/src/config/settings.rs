@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 use std::{
     cfg_select,
+    collections::BTreeMap,
     io::Write as _,
     path::{Path, PathBuf},
 };
@@ -50,6 +51,8 @@ pub enum SettingsError {
 pub struct Settings {
     /// Shortcut preferences; native key syntax is validated by the desktop adapter.
     pub hotkey: HotkeySettings,
+    /// Application shortcut overrides; key syntax and action names are validated by the GUI.
+    pub keybindings: KeybindingSettings,
     /// History visibility and retention limits.
     pub storage: StorageSettings,
     /// Bundled theme used when system appearance following is disabled.
@@ -73,6 +76,17 @@ pub struct Settings {
     /// Runtime protection after a failed load; never persisted in config.toml.
     #[serde(skip)]
     recovery_required: bool,
+}
+
+/// User overrides for history commands. Omitted actions inherit their default keys;
+/// an empty key list disables an action's history shortcuts.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+#[non_exhaustive]
+pub struct KeybindingSettings {
+    /// Stable action identifiers mapped to replacement key lists.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub history: BTreeMap<String, Vec<String>>,
 }
 
 impl Settings {
@@ -469,6 +483,49 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn test_settings_keybindings_save_preserves_overrides_without_materializing_defaults() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        std::fs::write(&path, "[keybindings.history]\ndelete_record = [\"delete\", \"ctrl-d\"]\ntoggle_favorite = []\n").unwrap();
+        let mut settings = Settings::load_from_dir(directory.path()).unwrap();
+        assert_eq!(
+            settings.keybindings.history["delete_record"],
+            ["delete", "ctrl-d"]
+        );
+        assert_eq!(
+            settings.keybindings.history["toggle_favorite"],
+            Vec::<String>::new()
+        );
+        assert!(!settings.keybindings.history.contains_key("select_next"));
+        settings.storage.max_history_records = 75;
+        settings.save_to_file(&path).unwrap();
+        let loaded = Settings::load_from_dir(directory.path()).unwrap();
+        assert_eq!(loaded.keybindings, settings.keybindings);
+        assert_eq!(loaded.storage.max_history_records, 75);
+
+        std::fs::write(&path, "[keybindings.history]\n").unwrap();
+        assert_eq!(
+            Settings::load_from_dir(directory.path())
+                .unwrap()
+                .keybindings
+                .history,
+            BTreeMap::new()
+        );
+    }
+
+    #[rstest]
+    #[case("[keybindings.histroy]\ndelete_record = []")]
+    #[case("[keybindings.history]\ndelete_record = \"delete\"")]
+    #[case("[keybindings.history]\ndelete_record = [1]")]
+    fn test_settings_invalid_keybinding_structure_preserves_file(#[case] content: &str) {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        std::fs::write(&path, content).unwrap();
+        assert!(Settings::load_from_dir(directory.path()).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+    }
 
     #[rstest]
     #[case("ropy-light")]

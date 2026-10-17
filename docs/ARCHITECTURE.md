@@ -145,8 +145,21 @@ including character aliases and numbered record selection, are registered in
 dialog. Binding predicates let inputs and native selectors keep their editing
 and navigation keys. Search still permits up/down result navigation and Enter.
 
+`Settings.keybindings.history` stores only user overrides as stable action IDs
+and key lists; core has no GPUI dependency. The GUI shortcut module owns those
+IDs alongside default bindings and compiles the overrides once, after settings
+are installed and before windows open. Missing entries inherit defaults, empty
+lists disable history bindings, and nonempty lists replace them. GPUI parses
+user keys fallibly; the adapter rejects unsupported keys, reserved window/focus
+controls and normalized conflicts before registering any history bindings.
+Invalid overrides pause all configurable history shortcuts and produce a
+localized persistent alert without substituting defaults. Settings recovery
+also skips history registration. Fixed search/window bindings remain available.
+There is no second runtime keymap or live reload; see [History shortcuts](KEYBINDINGS.md).
+
 The help panel groups actions by purpose and reads their registered bindings
 from GPUI; it does not maintain another list of key names. Ordinary shortcuts
+that remain available only in search are labeled accordingly. Board commands
 have no separate key-down dispatcher. Preview key-up handling reads the preview
 action's binding and releases the preview even after focus or modifiers change.
 Settings hotkey recording remains a raw-event consumer because it captures
@@ -160,7 +173,7 @@ control display only and must not replace an unreadable user retention policy.
 The persistent recovery alert explains that saving and automatic cleanup are
 paused until the configuration is repaired and the application is restarted.
 Core validates storage limits and opacity. After loading, the desktop
-adapter validates shortcut syntax with `global-hotkey` and restores the default
+adapter validates the global activation shortcut with `global-hotkey` and restores the default
 for invalid values before native registration. The parser and its tests remain
 outside core. Recovery defaults still block saving after an invalid configuration load, so a
 broken user file is not overwritten by defaults.

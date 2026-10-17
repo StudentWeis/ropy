@@ -124,6 +124,9 @@ Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` 
 - Use row actions to pin records so they are excluded from storage cleanup.
 - Choose between `copy_to_clipboard` and `paste_immediately` confirm modes in Settings.
 
+History shortcuts can be [customized in `config.toml`](docs/KEYBINDINGS.md),
+including disabling individual aliases such as `D` for deletion.
+
 ## Limitations (Not planned)
 
 - The system clipboard does not expose the original application source for copied items.

@@ -1,7 +1,9 @@
 use gpui_kit::{AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window};
 
 mod shortcuts;
-pub(crate) use shortcuts::bind_application_keys;
+pub(crate) use shortcuts::{
+    bind_application_keys, binding_applies_to_history, keybinding_error_message,
+};
 
 pub(crate) const QUICK_SELECT_COUNT: usize = 5;
 
