@@ -113,6 +113,8 @@ pub(crate) enum LastCopyState {
 #[expect(clippy::panic, clippy::unwrap_used)]
 mod tests {
 
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
@@ -132,7 +134,7 @@ mod tests {
             }
         }
 
-        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
+        assert_matches!(completion_rx.try_recv(), Ok(Ok(())));
     }
 
     #[test]
@@ -152,7 +154,7 @@ mod tests {
             }
         }
 
-        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
+        assert_matches!(completion_rx.try_recv(), Ok(Ok(())));
     }
 
     #[test]
@@ -172,7 +174,7 @@ mod tests {
             }
         }
 
-        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
+        assert_matches!(completion_rx.try_recv(), Ok(Ok(())));
     }
 
     #[test]
@@ -203,6 +205,6 @@ mod tests {
             }
         }
 
-        assert!(matches!(completion_rx.try_recv(), Ok(Ok(()))));
+        assert_matches!(completion_rx.try_recv(), Ok(Ok(())));
     }
 }

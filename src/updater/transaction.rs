@@ -278,26 +278,27 @@ pub(crate) fn handle_startup() -> Result<bool, UpdateError> {
         return Ok(false);
     }
     let installation = Installation::current()?;
-    if let Ok(target) = installation.target() {
-        let root = transaction_root(target);
-        if root.join("backup").exists() {
-            let transaction = Transaction::load(&root)?;
-            // A live helper already owns recovery. An interrupted transaction
-            // is resumed by a helper outside the installation being replaced.
-            if let Ok(lock) = transaction.lock() {
-                if root.join("healthy").exists() {
-                    // A failed backup cleanup must not roll back an acknowledged
-                    // healthy version on the next launch.
-                    if let Err(error) = remove_if_exists(&transaction.backup()) {
-                        tracing::warn!(%error, "could not remove acknowledged update backup");
-                    }
-                    return Ok(false);
-                }
-                drop(lock);
-                let _child = start_helper(&root)?;
-                return Ok(true);
+    let Ok(target) = installation.target() else {
+        return Ok(false);
+    };
+    let root = transaction_root(target);
+    // A live helper already owns recovery. An interrupted transaction
+    // is resumed by a helper outside the installation being replaced.
+    if root.join("backup").exists()
+        && let transaction = Transaction::load(&root)?
+        && let Ok(lock) = transaction.lock()
+    {
+        if root.join("healthy").exists() {
+            // A failed backup cleanup must not roll back an acknowledged
+            // healthy version on the next launch.
+            if let Err(error) = remove_if_exists(&transaction.backup()) {
+                tracing::warn!(%error, "could not remove acknowledged update backup");
             }
+            return Ok(false);
         }
+        drop(lock);
+        let _child = start_helper(&root)?;
+        return Ok(true);
     }
     Ok(false)
 }

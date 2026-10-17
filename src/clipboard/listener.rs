@@ -341,6 +341,8 @@ pub(crate) fn prepare_clipboard_monitor(
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {
+    use std::assert_matches;
+
     use rstest::rstest;
 
     use super::*;
@@ -753,9 +755,6 @@ mod tests {
 
         let result = try_send_image_overwrite(&tx, &rx, (make_test_image(1), 1));
 
-        assert!(matches!(
-            result,
-            Err(async_channel::TrySendError::Closed(_))
-        ));
+        assert_matches!(result, Err(async_channel::TrySendError::Closed(_)));
     }
 }

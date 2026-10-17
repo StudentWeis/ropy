@@ -336,6 +336,8 @@ fn cached_display_names() -> &'static HashMap<String, String> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use std::assert_matches;
+
     use rstest::rstest;
 
     use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode, cached_display_names};
@@ -498,6 +500,6 @@ mod tests {
     fn test_theme_definition_load_missing_theme_returns_not_found_error() {
         let result = ThemeDefinition::load(&ThemeId::new("missing-theme"));
 
-        assert!(matches!(result, Err(ThemeError::NotFound(code)) if code == "missing-theme"));
+        assert_matches!(result, Err(ThemeError::NotFound(code)) if code == "missing-theme");
     }
 }

@@ -323,7 +323,10 @@ pub fn set_always_on_top(window: &Window, pinned: bool) {
 #[cfg(test)]
 #[expect(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::{
+        assert_matches,
+        sync::{Arc, Mutex, RwLock},
+    };
 
     use gpui_kit::{AppContext, KeyBinding, TestAppContext, test::TestWindowExt};
 
@@ -379,10 +382,10 @@ mod tests {
             cx.update_window(handle.into(), |_, window, cx| {
                 assert_eq!(cx.windows().len(), 1, "only one popup may exist");
                 assert_eq!(board(cx).unwrap().entity_id(), retained.entity_id());
-                assert!(matches!(
+                assert_matches!(
                     retained.read(cx).update_manager.status,
                     UpdateStatus::Checking
-                ));
+                );
                 let input = retained.read(cx).search_input.entity_id();
                 assert_ne!(
                     previous_input,
@@ -421,16 +424,16 @@ mod tests {
             );
             crate::gui::tray::send_open_settings(cx);
             assert_eq!(cx.windows().len(), 1);
-            assert!(matches!(
+            assert_matches!(
                 retained.read(cx).active_panel,
                 crate::gui::board::ActivePanel::Settings
-            ));
+            );
             crate::gui::tray::send_open_about(cx);
             assert_eq!(cx.windows().len(), 1);
-            assert!(matches!(
+            assert_matches!(
                 retained.read(cx).active_panel,
                 crate::gui::board::ActivePanel::About
-            ));
+            );
         });
     }
 }
