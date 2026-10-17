@@ -46,7 +46,9 @@ Localization uses `rust-i18n` directly: `main.rs` embeds `assets/locales/*.toml`
 with English fallback; UI code calls `t!`. Startup and successful language changes
 set the shared rust-i18n locale used by both Ropy and GPUI Component. Language
 changes also refresh retained selector labels, input placeholders and native tray
-menus (on the GTK thread on Linux). Promo fixtures and translation tests pass an
+menus through the application-owned `TrayState`. Linux uses the KSNI D-Bus
+backend, whose worker threads are managed by `tray-icon`; no GTK event loop
+is required. Promo fixtures and translation tests pass an
 explicit locale so they do not change process-wide language state. Core retains
 only the serializable `Language` identifier and has no translation dependency.
 

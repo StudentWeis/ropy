@@ -1,8 +1,4 @@
-#[cfg(target_os = "linux")]
-use gpui_kit::AppContext;
-#[cfg(not(target_os = "linux"))]
-use gpui_kit::ReadGlobal;
-use gpui_kit::{App, BorrowAppContext, Global};
+use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal};
 use rust_i18n::t;
 #[cfg(not(target_os = "linux"))]
 use tray_icon::TrayIconEvent;
@@ -22,14 +18,6 @@ const TRAY_ICON_SIZE: u32 = 32;
 #[derive(Default)]
 pub(crate) struct TrayState {
     tray_icon: Option<TrayIcon>,
-}
-
-// GTK owns its tray on the thread running the default GLib main loop.
-#[cfg(target_os = "linux")]
-thread_local! {
-    static GTK_TRAY: std::cell::RefCell<TrayState> = const {
-        std::cell::RefCell::new(TrayState { tray_icon: None })
-    };
 }
 
 impl Global for TrayState {}
@@ -54,9 +42,6 @@ impl TrayState {
     }
 
     /// Install the platform tray handle into the global state.
-    ///
-    /// On Linux, tray initialization happens on the GTK thread and the icon is
-    /// retained in `GTK_TRAY`; menu refreshes are dispatched to that thread.
     pub(crate) fn install(cx: &mut App, tray_icon: Option<TrayIcon>) {
         cx.update_global::<Self, _>(|state: &mut Self, _cx| {
             state.replace(tray_icon);
@@ -64,13 +49,7 @@ impl TrayState {
     }
 
     pub(crate) fn refresh_menu(cx: &App) {
-        #[cfg(not(target_os = "linux"))]
         Self::global(cx).refresh();
-        #[cfg(target_os = "linux")]
-        {
-            let _ = cx;
-            gtk::glib::idle_add_once(|| GTK_TRAY.with(|state| state.borrow().refresh()));
-        }
     }
 
     fn refresh(&self) {
@@ -152,32 +131,9 @@ pub(crate) enum TrayEvent {
 
 pub(crate) fn start_tray_handler(cx: &App) -> Option<TrayIcon> {
     let (tx, rx) = async_channel::unbounded();
-    let tray = spawn_tray_platform(cx, tx);
+    let tray = start_tray_handler_inner(tx);
     spawn_tray_event_loop(cx, rx);
     tray
-}
-
-#[cfg(not(target_os = "linux"))]
-fn spawn_tray_platform(_cx: &App, tx: async_channel::Sender<TrayEvent>) -> Option<TrayIcon> {
-    start_tray_handler_inner(tx)
-}
-
-#[cfg(target_os = "linux")]
-fn spawn_tray_platform(cx: &App, tx: async_channel::Sender<TrayEvent>) -> Option<TrayIcon> {
-    // On Linux the tray must be initialized on the GTK thread. We cannot
-    // return the TrayIcon out of the spawned task, so GTK_TRAY owns it and
-    // the GPUI-side state holds no native handle.
-    cx.background_spawn(async move {
-        if let Err(e) = gtk::init() {
-            tracing::error!(error = %e, "failed to init gtk modules; tray disabled");
-            return;
-        }
-        GTK_TRAY.with(|state| state.borrow_mut().replace(start_tray_handler_inner(tx)));
-        gtk::main();
-        GTK_TRAY.with(|state| state.borrow_mut().replace(None));
-    })
-    .detach();
-    None
 }
 
 fn spawn_tray_event_loop(cx: &App, rx: async_channel::Receiver<TrayEvent>) {
@@ -337,6 +293,95 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires a private session bus; run with dbus-run-session"]
+    fn test_tray_without_gtk_initializes_refreshes_and_drops() {
+        let (tray, ..) = init_tray().unwrap_or_else(|error| panic!("tray init: {error}"));
+        let mut state = TrayState::default();
+        state.replace(Some(tray));
+
+        futures_lite::future::block_on(assert_dbus_tray_menu());
+        assert_eq!(state.rebuild_menu().ok(), Some(true));
+        futures_lite::future::block_on(assert_dbus_tray_menu());
+        state.replace(None);
+        assert_eq!(state.rebuild_menu().ok(), Some(false));
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn assert_dbus_tray_menu() {
+        verify_dbus_tray_menu()
+            .await
+            .unwrap_or_else(|error| panic!("D-Bus tray menu: {error}"));
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn verify_dbus_tray_menu() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{collections::HashMap, time::Duration};
+
+        use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
+
+        let connection = zbus::Connection::session().await?;
+        let bus = zbus::fdo::DBusProxy::new(&connection).await?;
+        let prefix = format!("org.kde.StatusNotifierItem-{}-", std::process::id());
+        let service = bus
+            .list_names()
+            .await?
+            .into_iter()
+            .find(|name| name.starts_with(&prefix))
+            .ok_or("tray service was not registered")?;
+        let tray = zbus::Proxy::new(
+            &connection,
+            service.to_string(),
+            "/StatusNotifierItem",
+            "org.kde.StatusNotifierItem",
+        )
+        .await?;
+        assert_eq!(tray.get_property::<String>("Status").await?, "Active");
+        let icons: Vec<(i32, i32, Vec<u8>)> = tray.get_property("IconPixmap").await?;
+        assert_eq!((icons[0].0, icons[0].1), (32, 32));
+        let path: OwnedObjectPath = tray.get_property("Menu").await?;
+        let menu = zbus::Proxy::new(
+            &connection,
+            service.to_string(),
+            path,
+            "com.canonical.dbusmenu",
+        )
+        .await?;
+        let items: Vec<(i32, HashMap<String, OwnedValue>)> = menu
+            .call("GetGroupProperties", &(Vec::<i32>::new(), vec!["label"]))
+            .await?;
+        let items: Vec<_> = items.iter().filter(|(id, _)| *id != 0).collect();
+        assert_eq!(items.len(), 3);
+        let receiver = tray_icon::menu::MenuEvent::receiver();
+        for ((id, properties), (label, expected_id)) in items.iter().zip([
+            (t!("tray_settings"), TRAY_SETTINGS_ID),
+            (t!("tray_about"), TRAY_ABOUT_ID),
+            (t!("tray_quit"), TRAY_QUIT_ID),
+        ]) {
+            assert_eq!(<&str>::try_from(&properties["label"])?, label.as_ref());
+            menu.call::<_, _, ()>("Event", &(*id, "clicked", Value::from(0_i32), 0_u32))
+                .await?;
+            assert_eq!(
+                receiver.recv_timeout(Duration::from_secs(2))?.id,
+                MenuId::new(expected_id)
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_tray_menu_without_gtk_preserves_action_ids() {
+        let menu = build_tray_menu().unwrap_or_else(|error| panic!("tray menu: {error}"));
+        let ids: Vec<_> = menu.items().iter().map(|item| item.id().clone()).collect();
+
+        assert_eq!(
+            ids,
+            [TRAY_SETTINGS_ID, TRAY_ABOUT_ID, TRAY_QUIT_ID].map(MenuId::new)
+        );
+    }
 
     #[test]
     fn test_tray_state_default_has_no_icon() {
