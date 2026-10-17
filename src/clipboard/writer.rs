@@ -170,6 +170,8 @@ fn notify_completion(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[cfg(target_os = "linux")]
@@ -263,7 +265,7 @@ mod tests {
             Ok(())
         });
 
-        assert!(matches!(result, Err(ClipboardWriteError::Image(_))));
+        assert_matches!(result, Err(ClipboardWriteError::Image(_)));
         assert!(!setter_called.get());
     }
 
@@ -273,10 +275,10 @@ mod tests {
 
         notify_completion(Some(completion_tx), Err(ClipboardWriteError::EmptyFileList));
 
-        assert!(matches!(
+        assert_matches!(
             completion_rx.try_recv(),
             Ok(Err(ClipboardWriteError::EmptyFileList))
-        ));
+        );
     }
 
     #[test]

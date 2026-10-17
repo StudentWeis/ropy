@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+use std::assert_matches;
+
 use gpui_kit::{ReadGlobal, TestAppContext, test::TestWindowExt};
 use rstest::rstest;
 
@@ -191,19 +193,19 @@ fn test_compose_mismatched_or_blank_images_rejected() {
         RgbaImage::new(2, 2).save(path).unwrap();
     }
     let output = temp.path().join("output.png");
-    assert!(matches!(
+    assert_matches!(
         compose(&output, &inputs),
         Err(PromoError::InvalidScreenshots)
-    ));
+    );
     for (path, width) in inputs.iter().zip([3, 2, 2, 2]) {
         let mut image = RgbaImage::new(width, 3);
         image.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
         image.save(path).unwrap();
     }
-    assert!(matches!(
+    assert_matches!(
         compose(&output, &inputs),
         Err(PromoError::InvalidScreenshots)
-    ));
+    );
     assert!(!output.exists());
 }
 

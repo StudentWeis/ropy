@@ -463,6 +463,8 @@ impl Default for PreviewSettings {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use rstest::rstest;
     use tempfile::TempDir;
 
@@ -593,11 +595,11 @@ mod tests {
 
         let result = Settings::load_from_dir(temp_dir.path());
 
-        assert!(matches!(result, Err(SettingsError::Io { path, .. }) if path == config_path));
-        assert!(matches!(
+        assert_matches!(result, Err(SettingsError::Io { path, .. }) if path == config_path);
+        assert_matches!(
             Settings::recovery_defaults().save_to_file(&config_path),
             Err(SettingsError::RecoveryRequired)
-        ));
+        );
         assert_eq!(
             std::fs::read_link(config_path).expect("Failed to inspect fixture"),
             PathBuf::from("config.toml")
@@ -613,7 +615,7 @@ mod tests {
 
         let result = Settings::load_from_dir(temp_dir.path());
 
-        assert!(matches!(result, Err(SettingsError::Deserialize(_))));
+        assert_matches!(result, Err(SettingsError::Deserialize(_)));
         assert_eq!(
             std::fs::read_to_string(config_path).expect("Failed to read fixture"),
             invalid_content
@@ -871,7 +873,7 @@ enabled = true
     #[test]
     fn test_confirm_mode_default() {
         let default = ConfirmMode::default();
-        assert!(matches!(default, ConfirmMode::CopyToClipboard));
+        assert_matches!(default, ConfirmMode::CopyToClipboard);
     }
 
     #[test]

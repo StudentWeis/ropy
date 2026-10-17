@@ -103,7 +103,7 @@ impl CurlCommandBuilder {
             let body = stdout
                 .rsplit_once(HTTP_STATUS_MARKER)
                 .map_or(stdout.as_str(), |(body, _)| body);
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr = String::from_utf8_lossy_owned(output.stderr);
             tracing::error!(status = %output.status, stderr = %stderr, body = %body, "curl request failed");
             return Err(curl_failure(&output.status, body, &stderr));
         }
@@ -153,6 +153,8 @@ fn curl_failure(status: &str, body: &str, stderr: &str) -> UpdateError {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     fn request_mock(http_status: u16, body: &str) -> Result<String, UpdateError> {
@@ -216,7 +218,7 @@ mod tests {
             "curl: (22) The requested URL returned error: 403",
         );
 
-        assert!(matches!(error, UpdateError::RateLimited));
+        assert_matches!(error, UpdateError::RateLimited);
     }
 
     #[test]
@@ -245,6 +247,6 @@ mod tests {
 
         let result = request_mock(403, body);
 
-        assert!(matches!(result, Err(UpdateError::RateLimited)));
+        assert_matches!(result, Err(UpdateError::RateLimited));
     }
 }

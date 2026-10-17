@@ -342,6 +342,8 @@ fn walkdir(dir: &Path) -> Result<Vec<PathBuf>, UpdateError> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[rstest::rstest]
@@ -385,10 +387,10 @@ mod tests {
     #[case("abcdef")]
     #[case("z948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447")]
     fn test_parse_checksum_when_malformed_returns_error(#[case] checksum: &str) {
-        assert!(matches!(
+        assert_matches!(
             parse_checksum(checksum),
             Err(UpdateError::InvalidChecksum(_))
-        ));
+        );
     }
 
     #[test]
@@ -401,10 +403,10 @@ mod tests {
             asset_size: 1,
         };
 
-        assert!(matches!(
+        assert_matches!(
             required_checksum_url(&release),
             Err(UpdateError::MissingChecksumAsset(_))
-        ));
+        );
     }
 
     #[test]

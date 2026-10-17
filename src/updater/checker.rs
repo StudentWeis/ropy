@@ -166,6 +166,8 @@ fn http_get(url: &str) -> Result<String, UpdateError> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[expect(clippy::unwrap_used)]
@@ -358,7 +360,7 @@ mod tests {
 
         let result = resolve_release(release, &Version::new(0, 5, 4), "aarch64-apple-darwin");
 
-        assert!(matches!(result, Err(UpdateError::MissingChecksumAsset(_))));
+        assert_matches!(result, Err(UpdateError::MissingChecksumAsset(_)));
     }
 
     // ── parse_version Error Cases ─────────────────────────────────

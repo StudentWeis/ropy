@@ -1,6 +1,6 @@
 #![cfg_attr(test, allow(clippy::panic, clippy::expect_used, clippy::unwrap_used))]
 
-use std::collections::HashSet;
+use std::{assert_matches, collections::HashSet};
 
 use chrono::{Local, TimeZone};
 use gpui_kit::{Bounds, Pixels, point, px, size};
@@ -113,7 +113,7 @@ fn test_resolve_window_pin_state_disables_pin_for_immediate_paste() {
 
 #[test]
 fn test_update_manager_new_starts_idle() {
-    assert!(matches!(UpdateManager::new().status, UpdateStatus::Idle));
+    assert_matches!(UpdateManager::new().status, UpdateStatus::Idle);
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn test_update_manager_begin_check_ignores_duplicate_in_flight_request() {
     let mut manager = UpdateManager::new();
 
     assert!(manager.begin_check());
-    assert!(matches!(manager.status, UpdateStatus::Checking));
+    assert_matches!(manager.status, UpdateStatus::Checking);
     assert!(!manager.begin_check());
 }
 

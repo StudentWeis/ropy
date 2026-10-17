@@ -177,6 +177,8 @@ pub(crate) fn set_app_theme(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use gpui_kit::{Anchor, AssetSource, TestAppContext, rgb, solid_background};
     use rstest::rstest;
 
@@ -268,7 +270,7 @@ mod tests {
     #[case("icons/sun.svg")]
     #[case("icons/moon.svg")]
     fn test_settings_icons_load_from_application_assets(#[case] path: &str) {
-        assert!(matches!(Assets.load(path), Ok(Some(_))), "missing {path}");
+        assert_matches!(Assets.load(path), Ok(Some(_)), "missing {path}");
         assert!(
             Assets
                 .list("icons/")

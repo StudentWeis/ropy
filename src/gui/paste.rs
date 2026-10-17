@@ -73,6 +73,8 @@ const fn paste_modifier_key() -> Key {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[cfg(target_os = "linux")]
@@ -96,12 +98,12 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn test_paste_modifier_key_when_macos_returns_meta() {
-        assert!(matches!(paste_modifier_key(), Key::Meta));
+        assert_matches!(paste_modifier_key(), Key::Meta);
     }
 
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn test_paste_modifier_key_when_non_macos_returns_control() {
-        assert!(matches!(paste_modifier_key(), Key::Control));
+        assert_matches!(paste_modifier_key(), Key::Control);
     }
 }

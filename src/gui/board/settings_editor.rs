@@ -140,15 +140,16 @@ pub(super) fn build_layout_select(
         &layout_select,
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
-            if let SelectEvent::Confirm(Some(val)) = event {
-                let options = layout_mode_items();
-                if let Some(idx) = options
-                    .iter()
-                    .position(|item| item.as_ref() == val.as_ref())
-                {
-                    this.settings_editor.selected_layout = idx;
-                    this.save_selected_layout(window, cx);
-                }
+            let SelectEvent::Confirm(Some(val)) = event else {
+                return;
+            };
+            let options = layout_mode_items();
+            if let Some(idx) = options
+                .iter()
+                .position(|item| item.as_ref() == val.as_ref())
+            {
+                this.settings_editor.selected_layout = idx;
+                this.save_selected_layout(window, cx);
             }
         },
     )
@@ -178,15 +179,16 @@ pub(super) fn build_language_select(
         &language_select,
         window,
         |this, _entity, event: &SelectEvent<Vec<SharedString>>, window, cx| {
-            if let SelectEvent::Confirm(Some(val)) = event {
-                let langs = crate::gui::settings::available_languages();
-                if let Some(idx) = langs
-                    .iter()
-                    .position(|l| crate::gui::settings::language_display_name(l) == val.as_ref())
-                {
-                    this.settings_editor.selected_language = idx;
-                    this.save_selected_language(window, cx);
-                }
+            let SelectEvent::Confirm(Some(val)) = event else {
+                return;
+            };
+            let langs = crate::gui::settings::available_languages();
+            if let Some(idx) = langs
+                .iter()
+                .position(|l| crate::gui::settings::language_display_name(l) == val.as_ref())
+            {
+                this.settings_editor.selected_language = idx;
+                this.save_selected_language(window, cx);
             }
         },
     )

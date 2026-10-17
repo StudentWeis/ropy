@@ -390,7 +390,7 @@ fn register_hotkey(hotkey_str: &str) -> Option<GlobalHotKeyManager> {
 #[cfg(test)]
 #[expect(clippy::expect_used)]
 mod tests {
-    use std::cell::Cell;
+    use std::{assert_matches, cell::Cell};
 
     use rstest::rstest;
 
@@ -464,10 +464,10 @@ mod tests {
             },
             &mut |_| {},
         );
-        assert!(matches!(
+        assert_matches!(
             response.try_recv(),
             Ok(Err(HotkeyUpdateError::Registration))
-        ));
+        );
         assert!(!persisted);
         assert_eq!(state.manager, Some("old"));
     }
@@ -484,7 +484,7 @@ mod tests {
             &mut |_| Some("new"),
             &mut |_| Err(HotkeyUpdateError::Persistence("fixture failure".into())),
         );
-        assert!(matches!(result, Err(HotkeyUpdateError::Persistence(_))));
+        assert_matches!(result, Err(HotkeyUpdateError::Persistence(_)));
         assert_eq!(state.current_hotkey, "ctrl+shift+a");
         assert_eq!(state.manager, Some("old"));
     }
@@ -541,10 +541,10 @@ mod tests {
     fn test_hotkey_update_closed_channel_returns_error() {
         let (tx, rx) = async_channel::unbounded();
         drop(rx);
-        assert!(matches!(
+        assert_matches!(
             request_hotkey_update(&tx, "ctrl+shift+a".into()),
             Err(HotkeyUpdateError::Disconnected)
-        ));
+        );
     }
 
     #[test]

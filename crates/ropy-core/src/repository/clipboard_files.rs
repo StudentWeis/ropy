@@ -28,7 +28,7 @@ fn decode_percent_encoded(input: &str) -> String {
         index += 1;
     }
 
-    String::from_utf8_lossy(&decoded).into_owned()
+    String::from_utf8_lossy_owned(decoded)
 }
 
 fn normalize_file_path(path: &str) -> Option<String> {
