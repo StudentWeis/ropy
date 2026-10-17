@@ -111,3 +111,18 @@ shortcut registration or activation-token handling. This fixture validates the
 client protocol contract; it does not replace testing a real desktop portal.
 Report untested desktops and infrastructure blockers explicitly. Passing CI alone
 does not certify GNOME, KDE, Niri or Hyprland GUI behavior.
+
+## Linux tray backend
+
+Linux uses the KSNI backend without GTK or AppIndicator. Run its lifecycle
+regression on a private session bus so it cannot register on your desktop:
+
+```bash
+dbus-run-session -- cargo test --locked -p ropy test_tray_without_gtk_initializes_refreshes_and_drops -- --ignored
+```
+
+CI runs this separately from the ordinary unit suite. It verifies tray creation,
+icon properties, localized menu labels, all three menu events before and after
+menu replacement, and teardown without GTK initialization. Real desktop panel
+rendering, opening application panels from menu actions and panel restart recovery
+still require GUI validation with a StatusNotifierItem host.

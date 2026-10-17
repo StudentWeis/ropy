@@ -19,7 +19,7 @@ resident-window refactor was tested with XWayland; native popup tests use
 
 Install the normal Linux build dependencies from `.github/dist-build-setup.yml`,
 plus `sway`, `wl-clipboard`, `grim`, `python3-gi`, `gir1.2-gtk-3.0`,
-`python3-evdev`, `seatd`, `fonts-dejavu-core`, `libayatana-appindicator3-1` and
+`python3-evdev`, `seatd`, `fonts-dejavu-core` and
 `at-spi2-core`. Use the Rust toolchain specified by the repository. Install
 `xwayland` only when reproducing the historical XWayland comparison; it is not
 required for the native scenario.
