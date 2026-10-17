@@ -1,7 +1,8 @@
 # History shortcuts
 
 Open **Settings → History shortcuts → Customize…**, or **Help → Customize…**.
-Click a key to replace it, **+** to add an alias, or **×** to remove that key.
+Click a key to replace it, **+ Add** to add an alias, or the **×** inside a key's
+group to remove that key.
 The row menu can restore defaults or clear all keys for one action.
 
 Edits stay in a draft until you click **Apply**. Conflicts identify both actions;

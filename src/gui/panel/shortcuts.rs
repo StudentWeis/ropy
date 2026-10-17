@@ -346,11 +346,18 @@ fn shortcut_controls(
         remaining.retain(|other| other != key);
         let label =
             gpui_kit::Keystroke::parse(key).map_or_else(|_| key.clone(), |key| Kbd::format(&key));
+        let remove_label = t!("shortcuts_remove_key", key = label, action = shortcut.label);
         controls = controls.child(
             h_flex()
+                .flex_shrink_0()
+                .border_1()
+                .border_color(cx.theme().border)
+                .rounded(cx.theme().radius)
+                .bg(cx.theme().background)
                 .child(
                     Button::new(SharedString::from(format!("shortcuts-key-{id}-{key}")))
                         .small()
+                        .ghost()
                         .label(label.clone())
                         .disabled(disabled)
                         .accessibility_label(t!(
@@ -367,16 +374,14 @@ fn shortcut_controls(
                             );
                         })),
                 )
+                .child(div().w_px().h_4().bg(cx.theme().border))
                 .child(
                     Button::new(SharedString::from(format!("shortcuts-remove-{id}-{key}")))
                         .small()
                         .ghost()
                         .label(t!("shortcuts_remove_symbol"))
-                        .accessibility_label(t!(
-                            "shortcuts_remove_key",
-                            key = label,
-                            action = shortcut.label
-                        ))
+                        .accessibility_label(remove_label.clone())
+                        .tooltip(remove_label)
                         .disabled(disabled)
                         .on_click(cx.listener(move |board, _, _, cx| {
                             board.edit_shortcuts(
@@ -397,7 +402,7 @@ fn shortcut_controls(
     controls = controls.child(
         Button::new(SharedString::from(format!("shortcuts-add-{id}")))
             .small()
-            .ghost()
+            .outline()
             .label(t!("shortcuts_add"))
             .accessibility_label(t!("shortcuts_add_key", action = shortcut.label))
             .disabled(disabled)
