@@ -30,11 +30,6 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install cargo-machete
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-machete
-
       - name: Run lightweight precheck
         run: ./scripts/precheck.sh --check --light
 

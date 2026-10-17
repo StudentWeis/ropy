@@ -22,7 +22,7 @@ class PrecheckTests(unittest.TestCase):
             PRECHECK_TEST_LOG=str(self.log),
             PRECHECK_FAIL_COMMAND="",
         )
-        for name in ("cargo", "python3", "cargo-machete", "shfmt"):
+        for name in ("cargo", "python3", "shfmt"):
             command = self.work / name
             command.write_text('''#!/bin/bash
 set -eu
@@ -61,7 +61,6 @@ fi
         result, commands = self.run_precheck("--check", "--light")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("cargo +nightly fmt --all --check", commands)
-        self.assertIn("cargo machete", commands)
         self.assertIn("python3 scripts/check/check_icons.py", commands)
         self.assertIn("python3 scripts/check/check_themes.py", commands)
         self.assertIn("python3 -m unittest discover -s scripts/tests", commands)

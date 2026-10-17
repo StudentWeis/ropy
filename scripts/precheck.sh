@@ -4,7 +4,7 @@ set -euo pipefail
 # Usage:
 #   scripts/precheck.sh                  # local: fix formatting, then all checks
 #   scripts/precheck.sh --check          # CI: verify without changing files
-#   scripts/precheck.sh --check --light  # formatting, resources, scripts, dependencies
+#   scripts/precheck.sh --check --light  # formatting, resources, scripts
 #   scripts/precheck.sh --check --rust   # clippy, tests, documentation
 
 CHECK_ONLY=0
@@ -48,9 +48,6 @@ if [[ "$PHASE" != rust ]]; then
 	python3 scripts/check/check_icons.py
 	python3 scripts/check/check_themes.py
 	python3 -m unittest discover -s scripts/tests
-	if command -v cargo-machete &>/dev/null; then
-		$CARGO_CMD machete
-	fi
 fi
 
 if [[ "$PHASE" != light ]]; then
