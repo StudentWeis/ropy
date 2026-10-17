@@ -16,9 +16,9 @@ scripts/update_version.sh 0.6.0-beta --execute    # pre-release
 
 The release pipeline (`cargo release`) automatically:
 1. Bumps the version in `Cargo.toml` `[package]`.
-2. Syncs the version to `[package.metadata.bundle.bin.ropy]` via `pre-release-replacements`.
-3. Runs `scripts/release_prepare.sh` (pre-release hook) which executes `precheck.sh`, `record_build_size.sh`, generates the changelog with `git-cliff`, and verifies `dist plan`.
-4. Commits, tags, and pushes — triggering the GitHub Actions release workflow.
+2. Runs `scripts/release_prepare.sh` (pre-release hook), which syncs the version to `[package.metadata.bundle.bin.ropy]`, executes `precheck.sh`, generates the changelog with `git-cliff`, and verifies `dist plan`.
+3. Commits, tags, and pushes — triggering the GitHub Actions release workflow.
+4. CI measures the built release artifacts and attaches `bench-sizes.json` to the GitHub Release. See [Benchmarks](./docs/BENCHMARKS.md) for the report format and local benchmarks.
 
 ## Adding a New Theme
 

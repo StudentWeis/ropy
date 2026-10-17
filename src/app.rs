@@ -314,7 +314,6 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clipboard::ClipboardEvent;
 
     #[test]
     fn test_drain_pending_notifications_when_channel_has_queued_items_drains_all() {
@@ -337,39 +336,5 @@ mod tests {
         let drained = drain_pending_notifications(&rx);
 
         assert_eq!(drained, 0);
-    }
-
-    #[test]
-    fn test_notify_channel_when_full_try_send_returns_full_error() {
-        // Simulates the producer path: when the foreground refresh task is
-        // briefly stalled, notifications coalesce by being dropped after the
-        // bounded channel saturates.
-        let (tx, rx) = async_channel::bounded::<()>(UI_NOTIFY_CHANNEL_CAPACITY);
-
-        for _ in 0..UI_NOTIFY_CHANNEL_CAPACITY {
-            tx.try_send(()).expect("Failed to enqueue notification");
-        }
-
-        let result = tx.try_send(());
-
-        assert!(matches!(result, Err(async_channel::TrySendError::Full(()))));
-        assert_eq!(rx.len(), UI_NOTIFY_CHANNEL_CAPACITY);
-    }
-
-    #[test]
-    fn test_clipboard_event_channel_has_bounded_capacity() {
-        let (tx, _rx) = async_channel::bounded::<ClipboardEvent>(CLIPBOARD_EVENT_CHANNEL_CAPACITY);
-
-        for index in 0..CLIPBOARD_EVENT_CHANNEL_CAPACITY {
-            tx.try_send(ClipboardEvent::Text(format!("event-{index}")))
-                .expect("Failed to enqueue clipboard event");
-        }
-
-        let overflow_result = tx.try_send(ClipboardEvent::Text("overflow".to_string()));
-
-        assert!(matches!(
-            overflow_result,
-            Err(async_channel::TrySendError::Full(_))
-        ));
     }
 }

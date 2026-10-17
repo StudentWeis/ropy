@@ -77,11 +77,14 @@ impl Chord {
 
     fn check_available_except(&self, json: &str, own_arg: &str) -> Result<(), Error> {
         let binds: Vec<Binding> = serde_json::from_str(json)?;
+        // j/binds does not include the keymap needed to resolve numeric keycodes.
+        // Reject confirmed symbol/catch-all conflicts; an unknown code alone is
+        // not evidence that this chord is occupied.
         if binds.iter().any(|bind| {
             !(bind.handler == "__lua" && !own_arg.is_empty() && bind.arg == own_arg)
                 && bind.submap.is_empty()
                 && (bind.modmask == self.modmask || bind.ignore_mods)
-                && (bind.key.eq_ignore_ascii_case(&self.key) || bind.keycode != 0 || bind.catch_all)
+                && (bind.key.eq_ignore_ascii_case(&self.key) || bind.catch_all)
         }) {
             return Err(Error::Conflict);
         }
@@ -93,7 +96,6 @@ impl Chord {
 struct Binding {
     modmask: u32,
     key: String,
-    keycode: u32,
     submap: String,
     #[serde(default, rename = "dispatcher")]
     handler: String,
@@ -376,6 +378,31 @@ mod tests {
         assert!(chord.check_available(binds).is_err());
         assert!(chord.check_available("[]").is_ok());
         assert!(chord.check_available("invalid json").is_err());
+    }
+
+    #[rstest]
+    #[case(r#"{"modmask":5,"key":"F1","keycode":67,"submap":""}"#, false)]
+    #[case(r#"{"modmask":5,"key":"","keycode":67,"submap":""}"#, false)]
+    #[case(r#"{"modmask":5,"key":"d","keycode":0,"submap":""}"#, true)]
+    #[case(r#"{"modmask":4,"key":"d","keycode":0,"submap":""}"#, false)]
+    #[case(r#"{"modmask":5,"key":"d","keycode":0,"submap":"other"}"#, false)]
+    #[case(
+        r#"{"modmask":5,"key":"","keycode":0,"submap":"","catch_all":true}"#,
+        true
+    )]
+    #[case(
+        r#"{"modmask":0,"key":"d","keycode":0,"submap":"","ignore_mods":true}"#,
+        true
+    )]
+    fn test_conflict_requires_matching_chord(#[case] binding: &str, #[case] conflict: bool) {
+        let chord = Chord::parse("ctrl+shift+d").expect("chord");
+        assert_eq!(
+            matches!(
+                chord.check_available(&format!("[{binding}]")),
+                Err(Error::Conflict)
+            ),
+            conflict,
+        );
     }
 
     #[test]

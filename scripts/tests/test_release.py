@@ -58,10 +58,9 @@ class ReleaseTests(unittest.TestCase):
         shutil.copyfile(ROOT / "scripts/release_prepare.sh", scripts / "release_prepare.sh")
         manifest = self.work / "Cargo.toml"
         original = '[package]\nversion = "0.1.0"\n[package.metadata.bundle.bin.ropy]\nversion = "0.1.0"\n'
-        for name in ("precheck.sh", "record_build_size.sh"):
-            path = scripts / name
-            path.write_text('#!/bin/sh\nprintf "%s\\n" preparation >> steps\n')
-            path.chmod(0o755)
+        precheck = scripts / "precheck.sh"
+        precheck.write_text('#!/bin/sh\nprintf "%s\\n" preparation >> steps\n')
+        precheck.chmod(0o755)
         self.command("git", 'printf "%s\\n" changelog >> steps\n')
         self.command("dist", 'printf "%s\\n" plan >> steps\n')
         env = dict(self.env, NEW_VERSION="0.1.1", GITHUB_TOKEN="fixture", DRY_RUN="false")
@@ -78,7 +77,7 @@ class ReleaseTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn('version = "0.1.1"', manifest.read_text())
                     self.assertEqual((self.work / "steps").read_text().splitlines(),
-                                     ["preparation", "preparation", "changelog", "plan"])
+                                     ["preparation", "changelog", "plan"])
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(manifest.read_text(), original)

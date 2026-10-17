@@ -139,6 +139,7 @@ as `bench-sizes.json` by the existing artifact workflow.
 
 No separate storage service, timing runner or automatic Git/PR mutation is
 introduced. The commands only produce local files; normal commit/push/PR review
-provides cloud retention. The old `docs/data/build_sizes.csv` and
-`record_build_size.sh` remain historical measurements; their missing environment
-metadata prevents using them as comparable v1 baselines.
+provides cloud retention. The old `docs/data/build_sizes.csv` is a frozen
+historical archive; it is no longer updated. Its missing environment metadata
+prevents using it as a comparable v1 baseline. Published release sizes come from CI-generated
+`bench-sizes.json`; the local release hook no longer collects sizes.
