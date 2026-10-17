@@ -6,12 +6,13 @@ usage() {
 Usage: scripts/update_version.sh <level|version> [cargo-release args...]
 
 Examples:
-  scripts/update_version.sh patch                        # dry-run patch bump
-  scripts/update_version.sh 0.6.0 --execute              # release 0.6.0
-  scripts/update_version.sh 0.6.0-beta --execute          # pre-release
-  scripts/update_version.sh rc --execute --no-confirm     # release candidate
+  scripts/update_version.sh patch                                 # dry-run patch bump
+  scripts/update_version.sh 0.6.0 --execute --no-tag --no-push       # prepare stable release
+  scripts/update_version.sh 0.6.0-beta --execute --no-tag --no-push  # prepare prerelease
 
 This wrapper delegates to cargo release.
+Merge the preparation commit through a PR, wait for main CI, then tag the
+merged commit. Follow docs/RELEASING.md for the publishing sequence.
 Dry-run mode is the default and automatically adds --no-verify to avoid
 leaving Cargo.lock behind in repositories that do not track lockfiles.
 EOF

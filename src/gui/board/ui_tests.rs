@@ -6,8 +6,8 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyWindowHandle, AppContext, Entity, Focusable, KeyBinding, TestAppContext,
-    component::WindowExt, test::TestWindowExt,
+    AnyWindowHandle, AppContext, Entity, Focusable, InputEvent, KeyDownEvent, KeyUpEvent,
+    Keystroke, TestAppContext, component::WindowExt, test::TestWindowExt,
 };
 use rust_i18n::t;
 
@@ -32,16 +32,7 @@ fn open_board(
         gpui_kit::init(cx);
         cx.set_global(GlobalSettings::new(Settings::default()));
         cx.set_global(GlobalRepository::new(None));
-        cx.bind_keys([
-            KeyBinding::new("enter", super::ConfirmSelection, Some("!Select && !List")),
-            KeyBinding::new(
-                "shift-enter",
-                super::ConfirmSelectionPlainText,
-                Some("!Select && !List"),
-            ),
-            KeyBinding::new("escape", super::Hide, Some("!Select && !List")),
-            KeyBinding::new("down", super::SelectNext, Some("!Select && !List")),
-        ]);
+        super::bind_application_keys(cx);
     });
     let (window, board) = cx.update(|cx| {
         gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
@@ -71,6 +62,214 @@ fn record(id: u64) -> ClipboardRecord {
         crate::repository::ContentType::Text,
     )
     .pinned(true)
+}
+
+#[gpui_kit::test]
+fn test_board_shortcuts_with_modifiers_do_not_delete_or_copy(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        for key in ["ctrl-d", "alt-d", "cmd-d", "shift-d", "ctrl-1"] {
+            window.press(key, cx);
+            assert!(!board.read(cx).ui_state.delete_confirm_visible(), "{key}");
+            assert!(!board.read(cx).copy_in_progress, "{key}");
+        }
+        window.press("d", cx);
+        assert!(board.read(cx).ui_state.delete_confirm_visible());
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(rx.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn test_board_unmodified_number_copies_first_record(cx: &mut TestAppContext) {
+    let (handle, _, rx) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("1", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let request = rx.try_recv().expect("bare 1 must request a copy");
+    assert!(matches!(request, CopyRequest::Text { text, .. } if text == "record 1"));
+}
+
+#[gpui_kit::test]
+fn test_board_delete_key_preserves_search_text_editing_and_opens_confirmation(
+    cx: &mut TestAppContext,
+) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("/", cx);
+        window.input("rrecord 1", cx);
+        window.press("home", cx);
+        window.press("delete", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "record 1");
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.press("escape", cx);
+        window.press("delete", cx);
+        assert!(board.read(cx).ui_state.delete_confirm_visible());
+        assert_eq!(board.read(cx).pending_delete_id, Some(1));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_search_horizontal_arrows_move_text_cursor(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("/", cx);
+        window.input("ab", cx);
+        window.press("left", cx);
+        window.input("x", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "axb");
+        window.press("right", cx);
+        window.input("y", cx);
+        assert_eq!(board.read(cx).search_input.read(cx).value(), "axby");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_delete_key_does_not_open_record_dialog_behind_clear_dialog(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
+        });
+        window.render_frame(cx);
+        window.press("delete", cx);
+        assert!(board.read(cx).ui_state.clear_confirm_visible());
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        assert_eq!(board.read(cx).pending_delete_id, None);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_space_preview_release_after_search_focus_hides_preview(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, _| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+        });
+        window.render_frame(cx);
+        let keystroke = Keystroke::parse("space").unwrap();
+        window.dispatch_event(
+            KeyDownEvent {
+                keystroke: keystroke.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.render_frame(cx);
+        assert!(board.read(cx).ui_state.preview_visible());
+        window.press("/", cx);
+        assert!(
+            board
+                .read(cx)
+                .search_input
+                .focus_handle(cx)
+                .is_focused(window)
+        );
+        window.dispatch_event(KeyUpEvent { keystroke }.to_platform_input(), cx);
+        assert!(!board.read(cx).ui_state.preview_visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_space_preview_deactivation_hides_preview_in_pinned_window(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.activate_window();
+        board.update(cx, |board, _| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+        });
+        window.render_frame(cx);
+        window.dispatch_event(
+            KeyDownEvent {
+                keystroke: Keystroke::parse("space").unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        assert!(board.read(cx).ui_state.preview_visible());
+    })
+    .unwrap();
+    cx.run_until_parked();
+    gpui_kit::VisualTestContext::from_window(handle, cx).deactivate_window();
+    cx.run_until_parked();
+    cx.read(|cx| {
+        assert!(!board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).pinned);
+    });
+}
+
+#[gpui_kit::test]
+fn test_board_controls_expose_localized_accessible_names(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        for (id, label) in [
+            ("pin-button", t!("unpin")),
+            ("help-button", t!("help_title")),
+            ("about-button", t!("about_title")),
+            ("settings-button", t!("settings_button")),
+            ("filter-text-btn", t!("filter_text")),
+            ("filter-image-btn", t!("filter_image")),
+            ("filter-files-btn", t!("filter_files")),
+            ("filter-favorites-btn", t!("filter_favorites")),
+            ("search-case-sensitive-btn", t!("search_case_sensitive")),
+            ("search-whole-word-btn", t!("search_match_whole_word")),
+        ] {
+            assert_eq!(window.find(id).label(), Some(label.as_ref()), "{id}");
+        }
+        assert_eq!(
+            window
+                .find(("input", board.read(cx).search_input.entity_id()))
+                .label(),
+            Some(t!("search_records").as_ref())
+        );
+        window.click("settings-button", cx);
+        for (id, label) in [
+            ("cancel-button", t!("back")),
+            ("autostart-toggle", t!("settings_autostart")),
+            ("confirm-mode-toggle", t!("settings_paste_immediately")),
+            ("hover-preview-toggle", t!("settings_hover_preview")),
+            ("space-preview-toggle", t!("settings_space_preview")),
+            ("auto-check-toggle", t!("update_auto_check")),
+            ("include-prerelease-toggle", t!("update_include_prerelease")),
+            ("max-history-save-button", t!("settings_max_history_save")),
+            ("max-storage-save-button", t!("settings_max_storage_save")),
+        ] {
+            assert_eq!(window.find(id).label(), Some(label.as_ref()), "{id}");
+        }
+        let editor = &board.read(cx).settings_editor;
+        for (input, label) in [
+            (
+                &editor.settings_max_history_input,
+                t!("settings_max_history"),
+            ),
+            (
+                &editor.settings_max_storage_input,
+                t!("settings_max_storage"),
+            ),
+        ] {
+            assert_eq!(
+                window.find(("input", input.entity_id())).label(),
+                Some(label.as_ref())
+            );
+        }
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

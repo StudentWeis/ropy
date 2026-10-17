@@ -66,6 +66,7 @@ pub(super) fn panel_back_button(id: &'static str) -> Button {
         .small()
         .ghost()
         .label(crate::constants::BACK_ARROW)
+        .accessibility_label(rust_i18n::t!("back"))
 }
 
 pub(super) fn panel_header_with_back<T, B>(

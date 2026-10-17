@@ -29,7 +29,7 @@ Callback arity depends on the receiver. For `Context<T>`:
 | `listener` | `&mut T, &Event, &mut Window, &mut Context<T>` |
 | `observe` | `&mut T, Entity<Observed>, &mut Context<T>` |
 | `subscribe` | `&mut T, Entity<Emitter>, &Event, &mut Context<T>` |
-| `subscribe_in` | `&mut T, Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
+| `subscribe_in` | `&mut T, &Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
 | `observe_global` | `&mut T, &mut Context<T>` |
 | `observe_window_activation` | `&mut T, &mut Window, &mut Context<T>` |
 | `spawn` | `WeakEntity<T>, &mut AsyncApp` |

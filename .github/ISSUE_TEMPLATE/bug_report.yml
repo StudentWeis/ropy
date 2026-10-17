@@ -48,8 +48,17 @@ body:
         - macOS
         - Windows
         - Linux (X11)
+        - Linux (Wayland)
     validations:
       required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Desktop / Compositor
+      description: For Linux, include the desktop or compositor name and version.
+      placeholder: e.g. Sway 1.11, Hyprland 0.56, KDE Plasma 6
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:

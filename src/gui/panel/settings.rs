@@ -341,6 +341,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
             .child(
                 div().flex_1().min_w_0().child(
                     Input::new(&board.settings_editor.settings_max_history_input)
+                        .aria_label(t!("settings_max_history"))
                         .appearance(false)
                         .px_2()
                         .py_1(),
@@ -348,6 +349,7 @@ fn render_max_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
             )
             .child(
                 save_button
+                    .accessibility_label(t!("settings_max_history_save"))
                     .xsmall()
                     .compact()
                     .rounded(px(4.0))
@@ -386,6 +388,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
             .child(
                 div().flex_1().min_w_0().child(
                     Input::new(&board.settings_editor.settings_max_storage_input)
+                        .aria_label(t!("settings_max_storage"))
                         .appearance(false)
                         .px_2()
                         .py_1(),
@@ -393,6 +396,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
             )
             .child(
                 save_button
+                    .accessibility_label(t!("settings_max_storage_save"))
                     .xsmall()
                     .compact()
                     .rounded(px(4.0))
@@ -410,6 +414,7 @@ fn render_max_storage_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> imp
 
 fn render_autostart_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("autostart-toggle")
+        .accessibility_label(t!("settings_autostart"))
         .checked(board.settings_editor.autostart.enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.toggle_autostart(window, cx);
@@ -419,6 +424,7 @@ fn render_autostart_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl 
 
 fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("confirm-mode-toggle")
+        .accessibility_label(t!("settings_paste_immediately"))
         .checked(matches!(
             board.confirm_mode,
             crate::config::ConfirmMode::PasteImmediately
@@ -439,6 +445,7 @@ fn render_confirm_mode_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
 
 fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("hover-preview-toggle")
+        .accessibility_label(t!("settings_hover_preview"))
         .checked(board.settings_editor.panel_state.hover_preview_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.save_hover_preview_enabled(
@@ -452,6 +459,7 @@ fn render_hover_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
 
 fn render_space_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("space-preview-toggle")
+        .accessibility_label(t!("settings_space_preview"))
         .checked(board.settings_editor.panel_state.space_preview_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.save_space_preview_enabled(
@@ -531,6 +539,7 @@ fn render_open_dirs_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
 
 fn render_auto_check_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let toggle = Switch::new("auto-check-toggle")
+        .accessibility_label(t!("update_auto_check"))
         .checked(board.settings_editor.update_settings.auto_check_enabled)
         .on_click(cx.listener(|board, _, window, cx| {
             board.save_auto_check_enabled(
@@ -547,6 +556,7 @@ fn render_include_prerelease_row(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let toggle = Switch::new("include-prerelease-toggle")
+        .accessibility_label(t!("update_include_prerelease"))
         .checked(
             board
                 .settings_editor

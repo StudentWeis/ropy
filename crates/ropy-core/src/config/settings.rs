@@ -134,15 +134,18 @@ impl Settings {
             source,
         })?;
 
-        if !config_file.exists() {
-            return Ok(Self::default().validated());
-        }
-
-        let config_content =
-            std::fs::read_to_string(&config_file).map_err(|source| SettingsError::Io {
-                path: config_file.clone(),
-                source,
-            })?;
+        let config_content = match std::fs::read_to_string(&config_file) {
+            Ok(content) => content,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default().validated());
+            }
+            Err(source) => {
+                return Err(SettingsError::Io {
+                    path: config_file,
+                    source,
+                });
+            }
+        };
 
         Self::from_config_content(&config_content)
     }
@@ -578,6 +581,27 @@ mod tests {
             DEFAULT_MAX_HISTORY_RECORDS
         );
         assert!(!temp_dir.path().join("config.toml").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_load_from_dir_when_config_lookup_fails_requires_recovery() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let config_path = temp_dir.path().join("config.toml");
+        // A symlink loop makes metadata lookup fail even for privileged test runners.
+        std::os::unix::fs::symlink("config.toml", &config_path).expect("Failed to create fixture");
+
+        let result = Settings::load_from_dir(temp_dir.path());
+
+        assert!(matches!(result, Err(SettingsError::Io { path, .. }) if path == config_path));
+        assert!(matches!(
+            Settings::recovery_defaults().save_to_file(&config_path),
+            Err(SettingsError::RecoveryRequired)
+        ));
+        assert_eq!(
+            std::fs::read_link(config_path).expect("Failed to inspect fixture"),
+            PathBuf::from("config.toml")
+        );
     }
 
     #[test]

@@ -1,4 +1,6 @@
-use gpui_kit::{Bounds, Context, Focusable, KeyDownEvent, KeyUpEvent, Pixels, Window};
+use gpui_kit::{
+    App, Bounds, Context, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Pixels, Window,
+};
 
 use crate::{
     config::LayoutMode,
@@ -49,6 +51,34 @@ mod generated_actions {
 }
 
 pub(crate) use generated_actions::*;
+
+pub(crate) fn bind_application_keys(cx: &mut App) {
+    // Native selectors and their popup lists own navigation, confirmation and dismissal.
+    // Inputs also own cursor movement and deletion; up/down still navigate search results.
+    let quit_key_binding = cfg_select! {
+        target_os = "macos" => KeyBinding::new("cmd-q", Quit, None),
+        _ => KeyBinding::new("alt-f4", Quit, None),
+    };
+
+    cx.bind_keys([
+        KeyBinding::new("escape", Hide, Some("!Select && !List")),
+        quit_key_binding,
+        KeyBinding::new("left", SelectLeft, Some("!Input && !Select && !List")),
+        KeyBinding::new("right", SelectRight, Some("!Input && !Select && !List")),
+        KeyBinding::new("up", SelectPrev, Some("!Select && !List")),
+        KeyBinding::new("down", SelectNext, Some("!Select && !List")),
+        KeyBinding::new("delete", DeleteRecord, Some("!Input && !Select && !List")),
+        KeyBinding::new("enter", ConfirmSelection, Some("!Select && !List")),
+        KeyBinding::new(
+            "shift-enter",
+            ConfirmSelectionPlainText,
+            Some("!Select && !List"),
+        ),
+        KeyBinding::new("alt-right", CycleFilterNext, None),
+        KeyBinding::new("alt-left", CycleFilterPrev, None),
+        KeyBinding::new("alt-f", ToggleFavoritesFilter, None),
+    ]);
+}
 
 pub(super) fn horizontal_grid_target_index(
     selected_index: usize,
@@ -265,7 +295,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.ui_state.delete_confirm_visible() {
+        if self.should_ignore_board_key_event(window, cx) {
             return;
         }
         if let Some(id) = self.filtered_record_id_at(self.selected_index) {
@@ -289,6 +319,7 @@ impl RopyBoard {
 
         self.invalidate_copy_confirmation();
         self.selected_index = 0;
+        self.ui_state.hide_preview();
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
         }
@@ -308,6 +339,9 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if self.ui_state.hide_preview() {
+            cx.notify();
+        }
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             self.cancel_hotkey_recording(window, cx);
             return;
@@ -369,15 +403,14 @@ impl RopyBoard {
     /// GPUI's `actions!` / `bind_keys` / `on_action` system because they use
     /// single-character keys (`/`, `j`, `k`, `d`, `p`, `1`–`5`, etc.) that
     /// would conflict with normal text input when the search `InputState` is
-    /// focused. The focus-guard below ensures these shortcuts are only active
-    /// when the main board — not the search input — has focus.
+    /// focused. Only unmodified keys with board focus trigger these shortcuts.
     pub(crate) fn on_key_down(
         &mut self,
         event: &KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.should_ignore_board_key_event(window, cx) {
+        if event.keystroke.modifiers.modified() || self.should_ignore_board_key_event(window, cx) {
             return;
         }
 
@@ -441,13 +474,10 @@ impl RopyBoard {
     pub(crate) fn on_key_up(
         &mut self,
         event: &KeyUpEvent,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.should_ignore_board_key_event(window, cx) {
-            return;
-        }
-
+        // Focus may have moved into search or another panel since Space was pressed.
         if event.keystroke.key == "space" && self.ui_state.hide_preview() {
             cx.notify();
         }

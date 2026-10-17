@@ -55,6 +55,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     }
                     .when(can_toggle_window_pin, |button| button.opacity(1.0_f32))
                     .icon(Icon::empty().path("icons/pin-to-top.svg"))
+                    .accessibility_label(pin_tooltip.clone())
                     .tooltip(pin_tooltip)
                     .on_click(cx.listener(|this, _event, window, cx| {
                         this.toggle_window_pin(window);
@@ -69,6 +70,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("help-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/help.svg"))
+                        .accessibility_label(t!("help_title"))
                         .tooltip(t!("help_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::Help;
@@ -82,6 +84,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("about-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/info.svg"))
+                        .accessibility_label(t!("about_title"))
                         .tooltip(t!("about_title"))
                         .on_click(cx.listener(|this, _click_event, _window, cx| {
                             this.active_panel = crate::gui::board::ActivePanel::About;
@@ -95,6 +98,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     Button::new("settings-button")
                         .ghost()
                         .icon(Icon::empty().path("icons/settings.svg"))
+                        .accessibility_label(t!("settings_button"))
                         .tooltip(t!("settings_button"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.open_settings_panel(window, cx);

@@ -28,10 +28,9 @@ use std::{
 };
 
 // Re-export utilities for external use
-pub(crate) use actions::{
-    Active, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev, Hide,
-    Quit, SelectLeft, SelectNext, SelectPrev, SelectRight, ToggleFavoritesFilter,
-};
+#[cfg(test)]
+pub(crate) use actions::Hide;
+pub(crate) use actions::{Active, bind_application_keys};
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui_kit::{
     AppContext, Bounds, Context, Entity, FocusHandle, ListAlignment, ListState, Pixels, Point,
@@ -370,15 +369,18 @@ impl RopyBoard {
                     this.on_active_action(&Active, window, cx);
                 }
             }
-            // When the window loses focus, hide the window (unless pinned).
-            if !crate::gui::window::has_native_focus(window)
-                && Self::should_auto_hide_on_focus_out(this.pinned)
-                && !window.has_active_dialog(cx)
-            {
-                this.invalidate_copy_confirmation();
-                // Clear search input when hiding the window
-                this.clear_search(window, cx);
-                hide_window(window, cx, this.pinned);
+            if !crate::gui::window::has_native_focus(window) {
+                // A key released in another application will not reach this window.
+                if this.ui_state.hide_preview() {
+                    cx.notify();
+                }
+                // When the window loses focus, hide the window (unless pinned).
+                if Self::should_auto_hide_on_focus_out(this.pinned) && !window.has_active_dialog(cx)
+                {
+                    this.invalidate_copy_confirmation();
+                    this.clear_search(window, cx);
+                    hide_window(window, cx, this.pinned);
+                }
             }
         })
     }

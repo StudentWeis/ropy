@@ -6,19 +6,18 @@ Thank you for considering contributing to Ropy! This document will guide you thr
 
 ## Release
 
-Releases are managed by `cargo-release`. Run `scripts/update_version.sh` to trigger the flow:
+Prepare releases with `cargo-release` on a contribution branch:
 
 ```bash
-scripts/update_version.sh patch                   # dry-run a patch bump
-scripts/update_version.sh 0.6.0 --execute         # release 0.6.0
-scripts/update_version.sh 0.6.0-beta --execute    # pre-release
+scripts/update_version.sh patch                                 # dry-run a patch bump
+scripts/update_version.sh 0.6.0 --execute --no-tag --no-push       # prepare a stable release
+scripts/update_version.sh 0.6.0-beta --execute --no-tag --no-push  # prepare a prerelease
 ```
 
-The release pipeline (`cargo release`) automatically:
-1. Bumps the version in `Cargo.toml` `[package]`.
-2. Runs `scripts/release_prepare.sh` (pre-release hook), which syncs the version to `[package.metadata.bundle.bin.ropy]`, executes `precheck.sh`, generates the changelog with `git-cliff`, and verifies `dist plan`.
-3. Commits, tags, and pushes — triggering the GitHub Actions release workflow.
-4. CI measures the built release artifacts and attaches `bench-sizes.json` to the GitHub Release. See [Benchmarks](./docs/BENCHMARKS.md) for the report format and local benchmarks.
+Preparation updates the version and changelog, runs the checks, and creates a
+local commit. Merge that preparation through a PR, wait for main CI to pass,
+then tag the merged commit. Follow [Release workflow maintenance](./docs/RELEASING.md#protected-release-sequence)
+for the authoritative publishing sequence, package acceptance and recovery steps.
 
 ## Adding a New Theme
 
