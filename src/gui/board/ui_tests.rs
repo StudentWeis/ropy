@@ -83,16 +83,161 @@ fn test_board_shortcuts_with_modifiers_do_not_delete_or_copy(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn test_board_unmodified_number_copies_first_record(cx: &mut TestAppContext) {
-    let (handle, _, rx) = open_board(cx, vec![record(1)]);
+fn test_board_delete_alias_obeys_registered_keymap(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
-        window.press("1", cx);
+        // Removing a shortcut must remove its behavior as well: there must not
+        // be a second, handwritten dispatcher behind GPUI's keymap.
+        cx.clear_key_bindings();
+        cx.bind_keys([gpui_kit::KeyBinding::new(
+            "x",
+            super::actions::DeleteRecord,
+            None,
+        )]);
+        window.press("d", cx);
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.press("x", cx);
+        assert_eq!(board.read(cx).pending_delete_id, Some(1));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_navigation_aliases_preserve_search_input(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1), record(2), record(3)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("j", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("down", cx);
+        assert_eq!(board.read(cx).selected_index, 2);
+        window.press("k", cx);
+        window.press("up", cx);
+        assert_eq!(board.read(cx).selected_index, 0);
+
+        window.press("/", cx);
+        window.press("down", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("up", cx);
+        assert_eq!(board.read(cx).selected_index, 0);
+        window.input("jdkflhpq12345 /", cx);
+        assert_eq!(
+            board.read(cx).search_input.read(cx).value(),
+            "jdkflhpq12345 /"
+        );
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        assert!(!board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).pinned);
+        assert_eq!(board.read(cx).active_panel, ActivePanel::ClipboardList);
     })
     .unwrap();
     cx.run_until_parked();
-    let request = rx.try_recv().expect("bare 1 must request a copy");
-    assert!(matches!(request, CopyRequest::Text { text, .. } if text == "record 1"));
+    assert!(rx.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn test_board_grid_navigation_aliases_share_actions(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1), record(2)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, _| {
+            board.layout_mode = crate::config::LayoutMode::Grid;
+        });
+        window.render_frame(cx);
+        window.press("l", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("left", cx);
+        assert_eq!(board.read(cx).selected_index, 0);
+        window.press("right", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("h", cx);
+        assert_eq!(board.read(cx).selected_index, 0);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_help_reflects_registered_shortcuts(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("help-button", cx);
+        assert_eq!(board.read(cx).active_panel, ActivePanel::Help);
+        assert!(
+            window
+                .find("board::DeleteRecord")
+                .label()
+                .unwrap()
+                .ends_with(" / D")
+        );
+
+        cx.clear_key_bindings();
+        cx.bind_keys([gpui_kit::KeyBinding::new(
+            "x",
+            super::actions::DeleteRecord,
+            None,
+        )]);
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("board::DeleteRecord").label(),
+            Some(format!("{}: X", t!("help_delete")).as_str()),
+        );
+        window.press("x", cx);
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_dialog_suspends_history_shortcuts(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, vec![record(1), record(2)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("d", cx);
+        let pending_delete_id = board.read(cx).pending_delete_id;
+        assert!(pending_delete_id.is_some());
+        for key in ["j", "down", "f", "p", "alt-f", "1", "q"] {
+            window.press(key, cx);
+            assert_eq!(board.read(cx).selected_index, 0, "{key}");
+            assert_eq!(board.read(cx).pending_delete_id, pending_delete_id, "{key}");
+            assert!(board.read(cx).pinned, "{key}");
+            assert!(board.read(cx).favorite_ids.is_empty(), "{key}");
+            assert!(!board.read(cx).filter_state.favorites_only, "{key}");
+            assert!(!board.read(cx).copy_in_progress, "{key}");
+        }
+        window.press("escape", cx);
+        assert!(!board.read(cx).ui_state.delete_confirm_visible());
+        window.press("j", cx);
+        assert_eq!(board.read(cx).selected_index, 1);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(rx.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn test_board_unmodified_numbers_copy_corresponding_records(cx: &mut TestAppContext) {
+    let (handle, board, rx) = open_board(cx, (1..=5).map(record).collect());
+    for (key, expected) in [
+        ("1", "record 5"),
+        ("2", "record 4"),
+        ("3", "record 3"),
+        ("4", "record 2"),
+        ("5", "record 1"),
+    ] {
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.press(key, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let request = rx.try_recv().expect("bare number must request a copy");
+        cx.update(|cx| board.update(cx, |board, _| board.invalidate_copy_confirmation()));
+        assert!(
+            matches!(request, CopyRequest::Text { text, .. } if text == expected),
+            "{key}"
+        );
+    }
 }
 
 #[gpui_kit::test]
@@ -179,6 +324,46 @@ fn test_board_space_preview_release_after_search_focus_hides_preview(cx: &mut Te
         );
         window.dispatch_event(KeyUpEvent { keystroke }.to_platform_input(), cx);
         assert!(!board.read(cx).ui_state.preview_visible());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_preview_release_follows_registered_binding(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, _| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+        });
+        cx.clear_key_bindings();
+        cx.bind_keys([gpui_kit::KeyBinding::new(
+            "v",
+            super::actions::PreviewSelection,
+            None,
+        )]);
+        window.render_frame(cx);
+        window.dispatch_event(
+            KeyDownEvent {
+                keystroke: Keystroke::parse("v").unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        assert!(board.read(cx).ui_state.preview_visible());
+        window.focus(&board.read(cx).search_input.focus_handle(cx), cx);
+        window.render_frame(cx);
+        for (key, visible) in [("space", true), ("shift-v", false)] {
+            window.dispatch_event(
+                KeyUpEvent {
+                    keystroke: Keystroke::parse(key).unwrap(),
+                }
+                .to_platform_input(),
+                cx,
+            );
+            assert_eq!(board.read(cx).ui_state.preview_visible(), visible, "{key}");
+        }
     })
     .unwrap();
 }

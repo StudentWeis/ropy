@@ -1,105 +1,102 @@
 use gpui_kit::{
-    Context, StatefulInteractiveElement,
-    component::{ActiveTheme, h_flex, v_flex},
+    Action, App, AsKeystroke, Context, SharedString, StatefulInteractiveElement,
+    base::TestSupportExt,
+    component::{ActiveTheme, h_flex, kbd::Kbd, v_flex},
     div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
-    px,
 };
 use rust_i18n::t;
 
 use crate::{
     config::LayoutMode,
     gui::{
-        board::RopyBoard,
+        board::{
+            RopyBoard,
+            actions::{
+                ConfirmRecord, ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext,
+                CycleFilterPrev, DeleteRecord, FocusSearch, Hide, PreviewSelection,
+                QUICK_SELECT_COUNT, SelectLeft, SelectNext, SelectPrev, SelectRight,
+                ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin,
+            },
+        },
         panel::common::{panel_back_button, panel_header_with_back},
     },
 };
 
 struct ShortcutRow {
-    key: &'static str,
-    label_key: &'static str,
-    /// When true, this shortcut is hidden in list mode because the action
-    /// (horizontal navigation) only makes sense in the grid layout.
-    grid_only: bool,
+    keys: Vec<String>,
+    id: &'static str,
+    label: SharedString,
 }
 
-const SHORTCUTS: &[ShortcutRow] = &[
-    ShortcutRow {
-        key: "/",
-        label_key: "help_search",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "↑ / ↓",
-        label_key: "help_nav_vertical",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "K / J",
-        label_key: "help_nav_vertical",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "← / →",
-        label_key: "help_nav_left_right",
-        grid_only: true,
-    },
-    ShortcutRow {
-        key: "H / L",
-        label_key: "help_nav_left_right",
-        grid_only: true,
-    },
-    ShortcutRow {
-        key: "1 – 5",
-        label_key: "help_quick_select",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Space",
-        label_key: "help_toggle_preview",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Enter",
-        label_key: "help_confirm",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Shift+Enter",
-        label_key: "help_confirm_plain_text",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Delete / D",
-        label_key: "help_delete",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "F",
-        label_key: "help_favorite",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Alt+← / Alt+→",
-        label_key: "help_cycle_filter",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Alt+F",
-        label_key: "help_toggle_favorites_filter",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "P",
-        label_key: "help_pin",
-        grid_only: false,
-    },
-    ShortcutRow {
-        key: "Esc / Q",
-        label_key: "help_hide",
-        grid_only: false,
-    },
-];
+impl ShortcutRow {
+    fn new(label: impl Into<SharedString>, action: &dyn Action, cx: &App) -> Self {
+        Self {
+            keys: Vec::new(),
+            id: action.name(),
+            label: label.into(),
+        }
+        .action(action, cx)
+    }
+
+    fn action(mut self, action: &dyn Action, cx: &App) -> Self {
+        for binding in cx.key_bindings().borrow().bindings_for_action(action) {
+            let keys = binding
+                .keystrokes()
+                .iter()
+                .map(|key| Kbd::format(key.as_keystroke()))
+                .collect::<Vec<_>>()
+                .join(" ");
+            if !self.keys.contains(&keys) {
+                self.keys.push(keys);
+            }
+        }
+        self
+    }
+}
+
+// Presentation groups refer to actions; key names come exclusively from GPUI's
+// registered bindings, including aliases and platform-specific modifiers.
+fn shortcut_rows(board: &RopyBoard, cx: &App) -> Vec<ShortcutRow> {
+    let mut rows = vec![
+        ShortcutRow::new(t!("help_search"), &FocusSearch, cx),
+        ShortcutRow::new(t!("help_nav_vertical"), &SelectPrev, cx).action(&SelectNext, cx),
+    ];
+    if board.layout_mode == LayoutMode::Grid {
+        rows.push(
+            ShortcutRow::new(t!("help_nav_left_right"), &SelectLeft, cx).action(&SelectRight, cx),
+        );
+    }
+    let quick_select = (1..QUICK_SELECT_COUNT).fold(
+        ShortcutRow::new(t!("help_quick_select"), &ConfirmRecord { index: 0 }, cx),
+        |row, index| row.action(&ConfirmRecord { index }, cx),
+    );
+    rows.extend([
+        quick_select,
+        ShortcutRow::new(t!("help_toggle_preview"), &PreviewSelection, cx),
+        ShortcutRow::new(t!("help_confirm"), &ConfirmSelection, cx),
+        ShortcutRow::new(
+            t!("help_confirm_plain_text"),
+            &ConfirmSelectionPlainText,
+            cx,
+        ),
+        ShortcutRow::new(t!("help_delete"), &DeleteRecord, cx),
+        ShortcutRow::new(t!("help_favorite"), &ToggleFavorite, cx),
+        ShortcutRow::new(t!("help_cycle_filter"), &CycleFilterPrev, cx)
+            .action(&CycleFilterNext, cx),
+        ShortcutRow::new(
+            t!("help_toggle_favorites_filter"),
+            &ToggleFavoritesFilter,
+            cx,
+        ),
+    ]);
+    if board.can_toggle_window_pin() {
+        rows.push(ShortcutRow::new(t!("help_pin"), &ToggleWindowPin, cx));
+    }
+    rows.push(ShortcutRow::new(t!("help_hide"), &Hide, cx));
+    rows.retain(|row| !row.keys.is_empty());
+    rows
+}
 
 pub(crate) fn render_help_content(
     board: &RopyBoard,
@@ -130,7 +127,8 @@ pub(crate) fn render_help_content(
         .bg(cx.theme().secondary)
         .child(
             div()
-                .w(px(100.))
+                .w_32()
+                .flex_shrink_0()
                 .text_sm()
                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(cx.theme().secondary_foreground)
@@ -146,13 +144,12 @@ pub(crate) fn render_help_content(
         );
 
     // Build shortcut rows
-    let rows = SHORTCUTS
-        .iter()
-        .filter(|row| board.layout_mode == LayoutMode::Grid || !row.grid_only)
-        .filter(|row| board.can_toggle_window_pin() || row.label_key != "help_pin")
+    let rows = shortcut_rows(board, cx)
+        .into_iter()
         .enumerate()
         .map(|(i, row)| {
-            let label = t!(row.label_key);
+            let label = row.label;
+            let keys = row.keys.join(" / ");
 
             let row_bg = if i % 2 == 0 {
                 cx.theme().background
@@ -161,6 +158,9 @@ pub(crate) fn render_help_content(
             };
 
             h_flex()
+                .id(row.id)
+                .test_support()
+                .aria_label(format!("{label}: {keys}"))
                 .w_full()
                 .px_2()
                 .py_1()
@@ -169,7 +169,7 @@ pub(crate) fn render_help_content(
                 .bg(row_bg)
                 .child(
                     // Key badge
-                    div().w(px(100.)).child(
+                    div().w_32().flex_shrink_0().child(
                         div()
                             .flex()
                             .items_center()
@@ -182,7 +182,7 @@ pub(crate) fn render_help_content(
                             .text_xs()
                             .font_family("monospace")
                             .text_color(cx.theme().foreground)
-                            .child(row.key),
+                            .child(keys),
                     ),
                 )
                 .child(

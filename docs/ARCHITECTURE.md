@@ -138,6 +138,20 @@ store.
 
 ## Settings and presentation
 
+Board commands are GPUI Actions in `gui/board/actions.rs`. Default shortcuts,
+including character aliases and numbered record selection, are registered in
+`gui/board/actions/shortcuts.rs`. The board supplies the `Ropy` context and adds
+`RopyHistory` only while the history panel is active without a confirmation
+dialog. Binding predicates let inputs and native selectors keep their editing
+and navigation keys. Search still permits up/down result navigation and Enter.
+
+The help panel groups actions by purpose and reads their registered bindings
+from GPUI; it does not maintain another list of key names. Ordinary shortcuts
+have no separate key-down dispatcher. Preview key-up handling reads the preview
+action's binding and releases the preview even after focus or modifiers change.
+Settings hotkey recording remains a raw-event consumer because it captures
+keystrokes rather than executing board commands.
+
 `Settings` is a plain serializable value. `GlobalSettings` is the GPUI-owned live
 snapshot; UI callers read it through a closure and mutate it through the adapter.
 The existing settings workflow still restores the previous value if saving fails.
