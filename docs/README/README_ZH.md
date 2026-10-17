@@ -99,7 +99,7 @@ cargo build --release
 
 ### 开发命令
 
-安装 GNU Make、Bash 和 `awk` 后（Windows 可使用 MSYS2 等兼容环境），执行 `make` 或 `make help` 查看开发命令。Cargo 使用 `rust-toolchain.toml` 中固定的 Rust 版本；格式化还需要 nightly rustfmt（`rustup toolchain install nightly --profile minimal --component rustfmt`）。
+安装 GNU Make、Bash 和 `awk` 后（Windows 可使用 MSYS2 等兼容环境），执行 `make` 或 `make help` 查看开发命令。Cargo 使用 `rust-toolchain.toml` 中固定的 Rust 版本；格式化还需要 nightly rustfmt（`rustup toolchain install "$(cat rustfmt-toolchain)" --profile minimal --component rustfmt`）。
 
 ```sh
 make build          # 调试构建

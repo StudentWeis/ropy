@@ -18,6 +18,7 @@ install-updater = false
 
 # Keep release.yml generated; project-specific work uses dist's extension points.
 github-build-setup = "../dist-build-setup.yml"
+github-custom-job-permissions = { "release-update-manifest" = { contents = "read", actions = "read" } }
 global-artifacts-jobs = ["./release-update-manifest"]
 
 [dist.dependencies.apt]

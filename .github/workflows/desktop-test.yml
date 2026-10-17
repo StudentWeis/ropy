@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   plan:
+    name: Resolve desktop test revision
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     defaults:

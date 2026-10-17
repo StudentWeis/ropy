@@ -15,7 +15,7 @@ CI uses the same script without modifying files:
 
 - `./scripts/precheck.sh --check --light` verifies Rust formatting, i18n, icons,
   themes and script tests before compilation.
-- `./scripts/precheck.sh --check --rust` runs Clippy, tests and documentation on Linux.
+- `./scripts/precheck.sh --check --rust` runs Clippy, tests, the isolated Linux tray regression and documentation.
 - `./scripts/precheck.sh --check` runs both phases for local CI reproduction.
 
 After the lightweight gate passes, core-only Linux tests, Linux desktop checks,
@@ -83,7 +83,7 @@ selection, changed history limits and clearing history with a request pending.
   including the desktop tests that use the core `test` feature for fault injection.
 - `python3 scripts/check/check_core_dependencies.py`: verify the full core
   dependency graph, including platform-specific and test dependencies.
-- `cargo +nightly fmt --all --check`: check formatting in both packages.
+- `make fmt-check`: check formatting in both packages.
 
 The precheck uses explicit `--workspace` selection because the default member is
 still the root desktop application. Core CI deliberately installs no GTK/X11
@@ -121,8 +121,38 @@ regression on a private session bus so it cannot register on your desktop:
 dbus-run-session -- cargo test --locked -p ropy test_tray_without_gtk_initializes_refreshes_and_drops -- --ignored
 ```
 
-CI runs this separately from the ordinary unit suite. It verifies tray creation,
+The Rust phase of precheck runs this on Linux, separately from the ordinary unit suite.
+Install `dbus-run-session` (the `dbus` package on Ubuntu) before running precheck;
+a missing session-bus tool fails the check rather than skipping tray coverage. It verifies tray creation,
 icon properties, localized menu labels, all three menu events before and after
 menu replacement, and teardown without GTK initialization. Real desktop panel
 rendering, opening application panels from menu actions and panel restart recovery
 still require GUI validation with a StatusNotifierItem host.
+
+## Reproducible CI gates
+
+The Rust compiler is pinned by `rust-toolchain.toml`; the formatter is pinned
+separately by `rustfmt-toolchain`. Install both before local verification:
+
+```sh
+rustup show active-toolchain
+rustup component add clippy
+rustup toolchain install "$(cat rustfmt-toolchain)" --profile minimal --component rustfmt
+```
+
+Makefile and precheck Rust validation commands use `--locked`. Dependency changes
+must include the reviewed `Cargo.lock` update. Upgrade the formatter deliberately
+by changing `rustfmt-toolchain` and running `make fmt` and the full precheck.
+
+The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)`
+and Release `plan` checks, with the PR up to date before merge. GitHub branch
+protection is server configuration, not something workflow YAML enables itself.
+The reviewed API payload is `.github/main-branch-protection.json`. Administrators
+can reconcile it with `gh api --method PUT repos/StudentWeis/ropy/branches/main/protection
+--input .github/main-branch-protection.json` and read the protection endpoint back
+to verify it. It requires a PR without requiring another reviewer, binds checks
+to GitHub Actions, applies to admins and disallows force pushes and deletion.
+The manual desktop packaging plan has a distinct check name so it cannot satisfy
+the Release `plan` requirement.
+See [Release acceptance](RELEASE_ACCEPTANCE.md) for the manual package smoke gate
+and its evidence requirements; CI unit tests alone do not certify a release.

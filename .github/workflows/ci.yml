@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install nightly rustfmt
-        run: rustup toolchain install nightly --profile minimal --component rustfmt
+        run: rustup toolchain install "$(cat rustfmt-toolchain)" --profile minimal --component rustfmt
 
       - uses: actions/setup-python@v5
         with:
@@ -71,6 +71,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            dbus \
             pkg-config \
             libxdo-dev \
             libxkbcommon-x11-dev
@@ -80,9 +81,6 @@ jobs:
         with:
           # PRs restore main's cache without paying to upload a branch-local copy.
           save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Test Linux tray without GTK
-        run: dbus-run-session -- cargo test --locked -p ropy test_tray_without_gtk_initializes_refreshes_and_drops -- --ignored
 
       - name: Run Rust precheck
         run: ./scripts/precheck.sh --check --rust
@@ -109,10 +107,10 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build all targets
-        run: cargo build --workspace --all-targets --all-features
+        run: cargo build --locked --workspace --all-targets --all-features
 
       - name: Run unit tests
-        run: cargo test --workspace --all-targets --all-features
+        run: cargo test --locked --workspace --all-targets --all-features
 
   ci:
     # Preserve the previous required check, now aggregating every platform.

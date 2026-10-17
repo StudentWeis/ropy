@@ -99,7 +99,7 @@ cargo build --release
 
 ### Development commands
 
-With GNU Make, Bash and `awk` installed (on Windows, use a compatible shell such as MSYS2), run `make` or `make help` to list the development commands. Cargo uses the Rust version pinned in `rust-toolchain.toml`; formatting additionally requires nightly rustfmt (`rustup toolchain install nightly --profile minimal --component rustfmt`).
+With GNU Make, Bash and `awk` installed (on Windows, use a compatible shell such as MSYS2), run `make` or `make help` to list the development commands. Cargo uses the Rust version pinned in `rust-toolchain.toml`; formatting additionally requires nightly rustfmt (`rustup toolchain install "$(cat rustfmt-toolchain)" --profile minimal --component rustfmt`).
 
 ```sh
 make build          # Debug build

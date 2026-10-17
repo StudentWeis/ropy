@@ -9,14 +9,21 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   update-manifest:
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Require successful CI for the release commit
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check/check_release_ci.py "$GITHUB_REPOSITORY" "$(git rev-parse HEAD)"
       - uses: actions/download-artifact@v8
         with:
           pattern: artifacts-build-local-*
