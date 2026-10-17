@@ -19,8 +19,18 @@ const BOARD: Option<&str> = Some("Ropy && !Select && !List");
 const HISTORY: Option<&str> = Some("RopyHistory && !Input && !Select && !List");
 const SEARCH: Option<&str> = Some("RopyHistory > Input && !Select && !List");
 
-struct HistoryShortcut {
-    id: String,
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShortcutGroup {
+    Common,
+    Navigation,
+    QuickSelection,
+    Window,
+}
+
+pub(crate) struct HistoryShortcut {
+    pub(crate) id: String,
+    pub(crate) label: SharedString,
+    pub(crate) group: ShortcutGroup,
     primary: KeyBinding,
     aliases: Vec<KeyBinding>,
 }
@@ -28,6 +38,8 @@ struct HistoryShortcut {
 impl HistoryShortcut {
     fn new(
         id: impl Into<String>,
+        label: impl Into<SharedString>,
+        group: ShortcutGroup,
         action: impl Action + Clone,
         primary: &str,
         aliases: &[&str],
@@ -38,36 +50,138 @@ impl HistoryShortcut {
             .collect();
         Self {
             id: id.into(),
+            label: label.into(),
+            group,
             primary: KeyBinding::new(primary, action, HISTORY),
             aliases,
         }
     }
+
+    pub(crate) fn default_keys(&self) -> Vec<String> {
+        std::iter::once(&self.primary)
+            .chain(&self.aliases)
+            .map(|binding| binding.keystrokes()[0].as_keystroke().unparse())
+            .collect()
+    }
 }
 
 // This is the single source of default history bindings and their stable config IDs.
-fn history_shortcuts() -> Vec<HistoryShortcut> {
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep catalog metadata beside each default binding"
+)]
+pub(crate) fn history_shortcuts() -> Vec<HistoryShortcut> {
+    use ShortcutGroup::{Common, Navigation, QuickSelection, Window};
     let mut shortcuts = vec![
-        HistoryShortcut::new("hide", Hide, "q", &[]),
-        HistoryShortcut::new("focus_search", FocusSearch, "/", &[]),
-        HistoryShortcut::new("preview_selection", PreviewSelection, "space", &[]),
-        HistoryShortcut::new("toggle_window_pin", ToggleWindowPin, "p", &[]),
-        HistoryShortcut::new("toggle_favorite", ToggleFavorite, "f", &[]),
-        HistoryShortcut::new("select_left", SelectLeft, "left", &["h"]),
-        HistoryShortcut::new("select_right", SelectRight, "right", &["l"]),
-        HistoryShortcut::new("select_prev", SelectPrev, "up", &["k"]),
-        HistoryShortcut::new("select_next", SelectNext, "down", &["j"]),
-        HistoryShortcut::new("delete_record", DeleteRecord, "delete", &["d"]),
-        HistoryShortcut::new("confirm_selection", ConfirmSelection, "enter", &[]),
+        HistoryShortcut::new("hide", t!("help_hide"), Window, Hide, "q", &[]),
+        HistoryShortcut::new(
+            "focus_search",
+            t!("help_search"),
+            Common,
+            FocusSearch,
+            "/",
+            &[],
+        ),
+        HistoryShortcut::new(
+            "preview_selection",
+            t!("help_toggle_preview"),
+            Common,
+            PreviewSelection,
+            "space",
+            &[],
+        ),
+        HistoryShortcut::new(
+            "toggle_window_pin",
+            t!("help_pin"),
+            Window,
+            ToggleWindowPin,
+            "p",
+            &[],
+        ),
+        HistoryShortcut::new(
+            "toggle_favorite",
+            t!("help_favorite"),
+            Common,
+            ToggleFavorite,
+            "f",
+            &[],
+        ),
+        HistoryShortcut::new(
+            "select_left",
+            t!("shortcuts_left"),
+            Navigation,
+            SelectLeft,
+            "left",
+            &["h"],
+        ),
+        HistoryShortcut::new(
+            "select_right",
+            t!("shortcuts_right"),
+            Navigation,
+            SelectRight,
+            "right",
+            &["l"],
+        ),
+        HistoryShortcut::new(
+            "select_prev",
+            t!("shortcuts_prev"),
+            Navigation,
+            SelectPrev,
+            "up",
+            &["k"],
+        ),
+        HistoryShortcut::new(
+            "select_next",
+            t!("shortcuts_next"),
+            Navigation,
+            SelectNext,
+            "down",
+            &["j"],
+        ),
+        HistoryShortcut::new(
+            "delete_record",
+            t!("help_delete"),
+            Common,
+            DeleteRecord,
+            "delete",
+            &["d"],
+        ),
+        HistoryShortcut::new(
+            "confirm_selection",
+            t!("help_confirm"),
+            Common,
+            ConfirmSelection,
+            "enter",
+            &[],
+        ),
         HistoryShortcut::new(
             "confirm_selection_plain_text",
+            t!("help_confirm_plain_text"),
+            Common,
             ConfirmSelectionPlainText,
             "shift-enter",
             &[],
         ),
-        HistoryShortcut::new("cycle_filter_next", CycleFilterNext, "alt-right", &[]),
-        HistoryShortcut::new("cycle_filter_prev", CycleFilterPrev, "alt-left", &[]),
+        HistoryShortcut::new(
+            "cycle_filter_next",
+            t!("shortcuts_filter_next"),
+            Navigation,
+            CycleFilterNext,
+            "alt-right",
+            &[],
+        ),
+        HistoryShortcut::new(
+            "cycle_filter_prev",
+            t!("shortcuts_filter_prev"),
+            Navigation,
+            CycleFilterPrev,
+            "alt-left",
+            &[],
+        ),
         HistoryShortcut::new(
             "toggle_favorites_filter",
+            t!("help_toggle_favorites_filter"),
+            Navigation,
             ToggleFavoritesFilter,
             "alt-f",
             &[],
@@ -76,6 +190,8 @@ fn history_shortcuts() -> Vec<HistoryShortcut> {
     shortcuts.extend((0..QUICK_SELECT_COUNT).map(|index| {
         HistoryShortcut::new(
             format!("confirm_record_{}", index + 1),
+            t!("shortcuts_quick_select", index = index + 1),
+            QuickSelection,
             ConfirmRecord { index },
             &(index + 1).to_string(),
             &[],
@@ -93,7 +209,7 @@ fn window_bindings() -> [KeyBinding; 2] {
 }
 
 #[derive(Debug, Error)]
-enum KeybindingError {
+pub(crate) enum KeybindingError {
     #[error("unknown history action: {action}")]
     UnknownAction { action: String },
     #[error("invalid key {key:?} for history action {action}")]
@@ -108,14 +224,49 @@ enum KeybindingError {
     },
 }
 
+impl KeybindingError {
+    pub(crate) fn affects(&self, id: &str) -> bool {
+        match self {
+            Self::UnknownAction { action }
+            | Self::InvalidKey { action, .. }
+            | Self::ReservedKey { action, .. } => action == id,
+            Self::Conflict { first, second, .. } => first == id || second == id,
+        }
+    }
+
+    pub(crate) fn message(&self) -> SharedString {
+        let shortcuts = history_shortcuts();
+        let label = |id: &str| {
+            shortcuts
+                .iter()
+                .find(|s| s.id == id)
+                .map_or_else(|| SharedString::from(id.to_owned()), |s| s.label.clone())
+        };
+        match self {
+            Self::UnknownAction { action } => t!("keybindings_unknown_action", action = action),
+            Self::InvalidKey { action, key } => {
+                t!("keybindings_invalid_key", action = label(action), key = key)
+            }
+            Self::ReservedKey { action, key } => t!(
+                "keybindings_reserved_key",
+                action = label(action),
+                key = key
+            ),
+            Self::Conflict { key, first, second } => t!(
+                "keybindings_conflict",
+                key = key,
+                first = label(first),
+                second = label(second)
+            ),
+        }
+        .into()
+    }
+}
+
 #[derive(Default)]
 struct KeybindingStatus(Option<KeybindingError>);
 impl Global for KeybindingStatus {}
 
-#[expect(
-    clippy::redundant_pub_crate,
-    reason = "re-exported at crate visibility by actions"
-)]
 pub(crate) fn keybinding_error_message(cx: &App) -> Option<SharedString> {
     let error = cx.try_global::<KeybindingStatus>()?.0.as_ref()?;
     let detail = match error {
@@ -164,7 +315,7 @@ fn supported_key(key: &str) -> bool {
             .is_some_and(|n| (1..=24).contains(&n) && key == format!("f{n}"))
 }
 
-fn compile_history_bindings(
+pub(crate) fn compile_history_bindings(
     settings: &KeybindingSettings,
 ) -> Result<Vec<KeyBinding>, KeybindingError> {
     let shortcuts = history_shortcuts();
@@ -251,10 +402,6 @@ fn parse_history_binding(
 }
 
 /// Register once at startup, after settings and component bindings are loaded.
-#[expect(
-    clippy::redundant_pub_crate,
-    reason = "re-exported at crate visibility by actions"
-)]
 pub(crate) fn bind_application_keys(cx: &mut App) {
     cx.bind_keys(window_bindings());
     // These keys retain their search-input behavior regardless of history overrides.
@@ -282,6 +429,28 @@ pub(crate) fn bind_application_keys(cx: &mut App) {
     }
 }
 
+/// Replace only bindings owned by the history catalog, preserving bindings added
+/// by components after startup as well as fixed search and window controls.
+pub(crate) fn replace_history_bindings(bindings: Vec<KeyBinding>, cx: &mut App) {
+    let shortcuts = history_shortcuts();
+    let retained: Vec<_> = cx
+        .key_bindings()
+        .borrow()
+        .bindings()
+        .filter(|binding| {
+            !shortcuts.iter().any(|shortcut| {
+                binding.predicate() == shortcut.primary.predicate()
+                    && binding.action().partial_eq(shortcut.primary.action())
+            })
+        })
+        .cloned()
+        .collect();
+    cx.clear_key_bindings();
+    cx.bind_keys(retained);
+    cx.bind_keys(bindings);
+    cx.set_global(KeybindingStatus::default());
+}
+
 fn board_context(history_active: bool) -> KeyContext {
     let mut context = KeyContext::default();
     context.add("Ropy");
@@ -291,10 +460,6 @@ fn board_context(history_active: bool) -> KeyContext {
     context
 }
 
-#[expect(
-    clippy::redundant_pub_crate,
-    reason = "re-exported at crate visibility by actions"
-)]
 pub(crate) fn binding_applies_to_history(binding: &KeyBinding) -> bool {
     binding
         .predicate()

@@ -69,24 +69,10 @@ impl RopyBoard {
         if GlobalSettings::read(cx, Settings::is_recovery_required) {
             return Err(t!("settings_recovery_required").into_owned());
         }
-        let mut result = Ok(());
-        let mut updater = Some(updater);
-
-        GlobalSettings::update(cx, |settings| {
-            let previous = settings.clone();
-
-            if let Some(updater) = updater.take() {
-                updater(settings);
-            }
-
-            if let Err(error) = settings.save() {
-                tracing::warn!(error = %error, "failed to save settings");
-                *settings = previous;
-                result = Err(format!("{error}"));
-            }
-        });
-
-        result
+        GlobalSettings::persist(cx, updater).map_err(|error| {
+            tracing::warn!(%error, "failed to save settings");
+            error.to_string()
+        })
     }
 
     fn set_language_selection(

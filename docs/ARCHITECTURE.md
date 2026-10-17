@@ -147,15 +147,22 @@ and navigation keys. Search still permits up/down result navigation and Enter.
 
 `Settings.keybindings.history` stores only user overrides as stable action IDs
 and key lists; core has no GPUI dependency. The GUI shortcut module owns those
-IDs alongside default bindings and compiles the overrides once, after settings
-are installed and before windows open. Missing entries inherit defaults, empty
+IDs, localized labels and groups alongside default bindings. It compiles overrides
+at startup and when a shortcut draft is applied. Missing entries inherit defaults, empty
 lists disable history bindings, and nonempty lists replace them. GPUI parses
 user keys fallibly; the adapter rejects unsupported keys, reserved window/focus
 controls and normalized conflicts before registering any history bindings.
 Invalid overrides pause all configurable history shortcuts and produce a
 localized persistent alert without substituting defaults. Settings recovery
 also skips history registration. Fixed search/window bindings remain available.
-There is no second runtime keymap or live reload; see [History shortcuts](KEYBINDINGS.md).
+`gui/board/shortcut_editor.rs` owns the page-local draft and recording state.
+Recording intercepts keystrokes before action dispatch. Apply validates the whole
+draft and persists a candidate settings snapshot before publishing it. Only then
+does it replace the catalog-owned history bindings in the current GPUI keymap,
+preserving component bindings registered since startup. Failed saves keep the
+old live settings and bindings. Closing/recreating a popup retains the draft;
+recording is canceled when focus is lost. There is no file watcher or second
+runtime keymap; see [History shortcuts](KEYBINDINGS.md).
 
 The help panel groups actions by purpose and reads their registered bindings
 from GPUI; it does not maintain another list of key names. Ordinary shortcuts

@@ -61,7 +61,9 @@ impl Render for RopyBoard {
             );
         }
 
-        if let Some(message) = super::actions::keybinding_error_message(cx) {
+        if self.active_panel != ActivePanel::Shortcuts
+            && let Some(message) = super::actions::keybinding_error_message(cx)
+        {
             base = base.child(
                 gpui_kit::div()
                     .id("keybindings-error")
@@ -76,6 +78,9 @@ impl Render for RopyBoard {
             ActivePanel::Settings => base
                 .on_key_down(cx.listener(Self::on_settings_key_down))
                 .child(render_settings_content(self, cx))
+                .into_any_element(),
+            ActivePanel::Shortcuts => base
+                .child(crate::gui::panel::shortcuts::render_shortcuts(self, cx))
                 .into_any_element(),
             ActivePanel::About => base
                 .child(render_about_content(self, cx))

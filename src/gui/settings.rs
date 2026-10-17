@@ -1,28 +1,56 @@
 //! GPUI owns the live settings snapshot; the config module owns its format.
 
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal, SharedString};
+use ropy_core::config::settings::SettingsError;
 use rust_i18n::t;
 
 use crate::config::{LayoutMode, Settings, language_id::Language};
 
 #[derive(Debug, Clone)]
-pub(crate) struct GlobalSettings(Settings);
+pub(crate) struct GlobalSettings {
+    settings: Settings,
+    config_file: Option<PathBuf>,
+}
 
 impl Global for GlobalSettings {}
 
 impl GlobalSettings {
-    pub(crate) const fn new(settings: Settings) -> Self {
-        Self(settings)
+    pub(crate) fn new(settings: Settings) -> Self {
+        Self::at_path(settings, Settings::config_file().ok())
+    }
+
+    pub(crate) const fn at_path(settings: Settings, config_file: Option<PathBuf>) -> Self {
+        Self {
+            settings,
+            config_file,
+        }
     }
 
     pub(crate) fn read<R>(cx: &App, reader: impl FnOnce(&Settings) -> R) -> R {
-        reader(&Self::global(cx).0)
+        reader(&Self::global(cx).settings)
     }
 
     pub(crate) fn update<R>(cx: &mut App, update: impl FnOnce(&mut Settings) -> R) -> R {
-        cx.update_global::<Self, _>(|global, _| update(&mut global.0))
+        cx.update_global::<Self, _>(|global, _| update(&mut global.settings))
+    }
+
+    /// Persist a candidate before publishing it to the running application.
+    pub(crate) fn persist(
+        cx: &mut App,
+        update: impl FnOnce(&mut Settings),
+    ) -> Result<(), SettingsError> {
+        let global = Self::global(cx);
+        let path = global
+            .config_file
+            .as_ref()
+            .ok_or(SettingsError::ConfigDirectoryNotFound)?;
+        let mut candidate = global.settings.clone();
+        update(&mut candidate);
+        candidate.save_to_file(path)?;
+        Self::update(cx, |settings| *settings = candidate);
+        Ok(())
     }
 }
 

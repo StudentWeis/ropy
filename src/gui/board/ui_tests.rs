@@ -19,6 +19,8 @@ use crate::{
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
+mod shortcut_editor;
+
 fn open_board(
     cx: &TestAppContext,
     records: Vec<ClipboardRecord>,
@@ -67,6 +69,20 @@ fn open_board_with_settings(
         .expect("open board")
     });
     (window, board, rx)
+}
+
+#[gpui_kit::test]
+fn test_shortcuts_editor_opens_from_help_and_returns_without_changes(cx: &mut TestAppContext) {
+    let (handle, _, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("help-button", cx);
+        window.click("customize-shortcuts", cx);
+        assert!(window.find("shortcuts-apply").label().is_some());
+        window.click("shortcuts-back", cx);
+        assert!(window.find("customize-shortcuts").label().is_some());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
