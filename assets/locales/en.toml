@@ -146,3 +146,11 @@ promo_code = 'fn main() { println!("Hello, Ropy!"); }'
 settings_recovery_required = "Settings could not be loaded. Saving settings and automatic history cleanup are paused; startup preferences are unchanged. Repair config.toml, then restart Ropy."
 clipboard_write_unconfirmed = "Could not confirm the clipboard write. Try copying again."
 repository_unavailable = "Clipboard history is unavailable. New copies cannot be saved. Check the data folder permissions and close other Ropy instances, then restart Ropy."
+
+# Configurable history shortcuts
+keybindings_error = "History shortcuts are paused: %{error} Fix keybindings.history in config.toml, then restart Ropy. Search controls and Escape still work."
+keybindings_unknown_action = "Unknown action \"%{action}\"."
+keybindings_invalid_key = "Unsupported shortcut \"%{key}\" for \"%{action}\". Use one key or key combination."
+keybindings_reserved_key = "Shortcut \"%{key}\" for \"%{action}\" is reserved for window or focus controls."
+keybindings_conflict = "Shortcut \"%{key}\" is assigned to both \"%{first}\" and \"%{second}\"."
+help_search_binding = "%{keys} (search)"

@@ -195,11 +195,11 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
     let application = gpui_kit::Application::with_platform(platform.clone());
     application.with_assets(crate::gui::Assets).run(move |cx| {
         gpui_kit::init(cx);
-        bind_application_keys(cx);
 
         // Activate the persisted locale before constructing application or component UI.
         let settings = load_settings();
         cx.set_global(GlobalSettings::new(settings.clone()));
+        bind_application_keys(cx);
         rust_i18n::set_locale(settings.language.code());
         crate::gui::tray::TrayState::register(cx);
 

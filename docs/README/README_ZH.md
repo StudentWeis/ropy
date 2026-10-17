@@ -124,6 +124,8 @@ make precheck       # 格式化代码并执行完整的提交前检查
 - 使用行内操作置顶记录，使其排除在存储清理之外。
 - 在设置中选择 `copy_to_clipboard` 或 `paste_immediately` 确认模式。
 
+列表快捷键支持[通过 `config.toml` 自定义](../KEYBINDINGS.md)，例如保留 `Delete`、禁用 `D` 删除。修改后重启生效。
+
 ## 局限性（无计划支持）
 
 - 系统剪贴板不会暴露复制条目的原始应用程序来源。
