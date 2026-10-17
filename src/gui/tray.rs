@@ -143,6 +143,7 @@ fn load_tray_icon_rgba(bytes: &[u8]) -> Result<(Vec<u8>, u32, u32), image::Image
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrayEvent {
+    #[cfg(not(target_os = "linux"))]
     Show,
     Settings,
     About,
@@ -183,6 +184,7 @@ fn spawn_tray_event_loop(cx: &App, rx: async_channel::Receiver<TrayEvent>) {
     cx.spawn(async move |async_app| {
         while let Ok(event) = rx.recv().await {
             match event {
+                #[cfg(not(target_os = "linux"))]
                 TrayEvent::Show => {
                     async_app.update(super::window::show);
                 }

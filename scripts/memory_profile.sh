@@ -6,7 +6,7 @@
 #
 # This script uses macOS built-in tools (vmmap, heap) to analyze memory usage.
 
-set -e
+set -euo pipefail
 
 PID=$(pgrep -x ropy 2>/dev/null || true)
 
@@ -32,20 +32,22 @@ echo ""
 # 2. vmmap summary - shows virtual memory regions
 echo "--- vmmap Summary ---"
 echo "(Full output saved to $OUTPUT_DIR/vmmap.txt)"
-vmmap --summary "$PID" 2>/dev/null | tee "$OUTPUT_DIR/vmmap_summary.txt"
-vmmap "$PID" >"$OUTPUT_DIR/vmmap.txt" 2>/dev/null
+vmmap --summary "$PID" >"$OUTPUT_DIR/vmmap_summary.txt"
+cat "$OUTPUT_DIR/vmmap_summary.txt"
+vmmap "$PID" >"$OUTPUT_DIR/vmmap.txt"
 echo ""
 
 # 3. heap analysis - shows heap allocations by type
 echo "--- Heap Summary ---"
 echo "(Full output saved to $OUTPUT_DIR/heap.txt)"
-heap "$PID" 2>/dev/null | head -50 | tee "$OUTPUT_DIR/heap_summary.txt"
-heap "$PID" >"$OUTPUT_DIR/heap.txt" 2>/dev/null
+heap "$PID" >"$OUTPUT_DIR/heap.txt"
+head -50 "$OUTPUT_DIR/heap.txt" | tee "$OUTPUT_DIR/heap_summary.txt"
 echo ""
 
 # 4. malloc history (top allocations)
 echo "--- Malloc Zones ---"
-heap --addresses=all "$PID" 2>/dev/null | tail -20 | tee "$OUTPUT_DIR/heap_addresses.txt"
+heap --addresses=all "$PID" >"$OUTPUT_DIR/heap_addresses_full.txt"
+tail -20 "$OUTPUT_DIR/heap_addresses_full.txt" | tee "$OUTPUT_DIR/heap_addresses.txt"
 echo ""
 
 echo "=== Full reports saved to $OUTPUT_DIR/ ==="

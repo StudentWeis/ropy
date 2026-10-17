@@ -348,7 +348,7 @@ impl RopyBoard {
         self.clear_search(window, cx);
         hide_window(window, cx, self.pinned);
         if self.pinned {
-            self.pinned = false;
+            self.set_window_pinned(window, false);
             cx.notify();
         }
     }

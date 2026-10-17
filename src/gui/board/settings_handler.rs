@@ -6,6 +6,7 @@ use gpui_kit::{
     prelude::Styled,
     px,
 };
+use ropy_core::config::settings::StorageSettings;
 use rust_i18n::t;
 
 use super::{RopyBoard, settings_editor};
@@ -264,16 +265,13 @@ impl RopyBoard {
     /// Validate max history input from settings UI.
     /// Returns `Ok(parsed_value)` when input is valid, or `Err(())` when invalid.
     pub(super) fn parse_max_history_input(input: &str, current_max: usize) -> Result<usize, ()> {
-        const MIN: usize = 1;
-        const MAX: usize = 10_000;
-
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(current_max);
         }
 
         match trimmed.parse::<usize>() {
-            Ok(v) if (MIN..=MAX).contains(&v) => Ok(v),
+            Ok(v) if StorageSettings::HISTORY_RANGE.contains(&v) => Ok(v),
             _ => Err(()),
         }
     }
@@ -281,16 +279,13 @@ impl RopyBoard {
     /// Validate max storage input from settings UI.
     /// Returns `Ok(parsed_value)` when input is valid, or `Err(())` when invalid.
     pub(super) fn parse_max_storage_input(input: &str, current_max: usize) -> Result<usize, ()> {
-        const MIN: usize = 1;
-        const MAX: usize = 100_000;
-
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(current_max);
         }
 
         match trimmed.parse::<usize>() {
-            Ok(v) if (MIN..=MAX).contains(&v) => Ok(v),
+            Ok(v) if StorageSettings::STORAGE_RANGE.contains(&v) => Ok(v),
             _ => Err(()),
         }
     }

@@ -405,10 +405,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 }
 
 impl<B: StorageBackend> ClipboardRepository<B> {
-    /// Toggle a record's pinned state; an absent record is left unchanged.
+    /// Toggle an existing record's pinned state.
     ///
     /// # Errors
-    /// Returns an error if the record cannot be read, encoded or transactionally updated.
+    /// Returns an error if the record does not exist or cannot be read, encoded,
+    /// or transactionally updated.
     pub fn toggle_pin(&self, id: u64) -> Result<(), RepositoryError> {
         let _operation = self.lock_operation();
         let mut record = self

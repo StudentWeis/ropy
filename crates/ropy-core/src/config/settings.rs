@@ -231,8 +231,14 @@ impl Settings {
     }
 
     fn validate_storage(&mut self) {
-        self.storage.max_history_records = self.storage.max_history_records.clamp(1, 10_000);
-        self.storage.max_storage_records = self.storage.max_storage_records.clamp(1, 100_000);
+        self.storage.max_history_records = self.storage.max_history_records.clamp(
+            *StorageSettings::HISTORY_RANGE.start(),
+            *StorageSettings::HISTORY_RANGE.end(),
+        );
+        self.storage.max_storage_records = self.storage.max_storage_records.clamp(
+            *StorageSettings::STORAGE_RANGE.start(),
+            *StorageSettings::STORAGE_RANGE.end(),
+        );
         if self.storage.max_storage_records < self.storage.max_history_records {
             self.storage.max_storage_records = self.storage.max_history_records;
         }
@@ -385,6 +391,13 @@ pub struct StorageSettings {
     /// ensures `max_storage_records >= max_history_records` so the
     /// visible window can always be filled.
     pub max_storage_records: usize,
+}
+
+impl StorageSettings {
+    /// Supported visible-history limits.
+    pub const HISTORY_RANGE: std::ops::RangeInclusive<usize> = 1..=10_000;
+    /// Supported retained-storage limits.
+    pub const STORAGE_RANGE: std::ops::RangeInclusive<usize> = 1..=100_000;
 }
 
 impl Default for StorageSettings {
