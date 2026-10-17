@@ -131,18 +131,21 @@ still require GUI validation with a StatusNotifierItem host.
 
 ## Reproducible CI gates
 
-The Rust compiler is pinned by `rust-toolchain.toml`; the formatter is pinned
-separately by `rustfmt-toolchain`. Install both before local verification:
+The Rust compiler, rustfmt and Clippy share the stable version and components
+declared in `rust-toolchain.toml`. Install them before local verification:
 
 ```sh
 rustup show active-toolchain
-rustup component add clippy
-rustup toolchain install "$(cat rustfmt-toolchain)" --profile minimal --component rustfmt
 ```
 
 Makefile and precheck Rust validation commands use `--locked`. Dependency changes
-must include the reviewed `Cargo.lock` update. Upgrade the formatter deliberately
-by changing `rustfmt-toolchain` and running `make fmt` and the full precheck.
+must include the reviewed `Cargo.lock` update. Upgrade the shared toolchain
+deliberately in `rust-toolchain.toml`, then run `make fmt` and the full precheck.
+
+Formatting uses stable rustfmt defaults. Existing import groups and separate
+`use` statements are preserved, with imports sorted within each group. Automatic
+standard-library/external/local grouping and crate-level merging are no longer
+enforced.
 
 The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)`
 and Release `plan` checks, with the PR up to date before merge. GitHub branch
