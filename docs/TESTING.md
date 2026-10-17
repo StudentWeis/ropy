@@ -7,15 +7,14 @@
 ## Precheck and CI
 
 Run `./scripts/precheck.sh` before committing. It formats locally, checks resources
-and script tests, checks
-unused dependencies when cargo-machete is installed, then
-runs Clippy, all-target/all-feature tests, and documentation checks across the workspace. Clippy covers
-the compiler checks, so a separate `cargo check` is unnecessary.
+and script tests, then runs Clippy, all-target/all-feature tests, and documentation
+checks across the workspace. Clippy covers the compiler checks, so a separate
+`cargo check` is unnecessary.
 
 CI uses the same script without modifying files:
 
 - `./scripts/precheck.sh --check --light` verifies Rust formatting, i18n, icons,
-  themes, script tests and unused dependencies before compilation.
+  themes and script tests before compilation.
 - `./scripts/precheck.sh --check --rust` runs Clippy, tests and documentation on Linux.
 - `./scripts/precheck.sh --check` runs both phases for local CI reproduction.
 

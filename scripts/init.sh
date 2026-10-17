@@ -11,7 +11,7 @@ fi
 cargo install cargo-binstall
 
 # Other dependencies
-cargo binstall 'hk@^2.5' cargo-dist cargo-release git-cliff cargo-machete cargo-outdated
+cargo binstall 'hk@^2.5' cargo-dist cargo-release git-cliff cargo-outdated
 
 # For pre-commit hooks
 # Replace the previous hook script, including on Git with config-based hooks.
