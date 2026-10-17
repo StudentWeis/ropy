@@ -328,13 +328,15 @@ mod tests {
         sync::{Arc, Mutex, RwLock},
     };
 
-    use gpui_kit::{AppContext, KeyBinding, TestAppContext, test::TestWindowExt};
+    use gpui_kit::{AppContext, TestAppContext, test::TestWindowExt};
 
     use super::*;
     use crate::{
         clipboard::CopyTracker,
         config::Settings,
-        gui::{board::Hide, repository::GlobalRepository, settings::GlobalSettings},
+        gui::{
+            board::bind_application_keys, repository::GlobalRepository, settings::GlobalSettings,
+        },
         repository::ClipboardRecord,
         updater::models::UpdateStatus,
     };
@@ -358,7 +360,7 @@ mod tests {
             gpui_kit::init(cx);
             cx.set_global(GlobalSettings::new(Settings::default()));
             cx.set_global(GlobalRepository::new(None));
-            cx.bind_keys([KeyBinding::new("escape", Hide, None)]);
+            bind_application_keys(cx);
             let handle = crate::gui::create_window(
                 cx,
                 Arc::new(RwLock::new(records)),

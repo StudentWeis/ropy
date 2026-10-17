@@ -1,6 +1,9 @@
-use gpui_kit::{
-    App, Bounds, Context, Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Pixels, Window,
-};
+use gpui_kit::{AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window};
+
+mod shortcuts;
+pub(crate) use shortcuts::bind_application_keys;
+
+pub(crate) const QUICK_SELECT_COUNT: usize = 5;
 
 use crate::{
     config::LayoutMode,
@@ -30,6 +33,8 @@ impl RopyBoard {
     reason = "gpui_kit::actions! macro generates PartialEq; we cannot inject Eq from outside"
 )]
 mod generated_actions {
+    use gpui_kit as gpui;
+
     gpui_kit::actions!(
         board,
         [
@@ -45,40 +50,27 @@ mod generated_actions {
             DeleteRecord,
             CycleFilterNext,
             CycleFilterPrev,
-            ToggleFavoritesFilter
+            ToggleFavoritesFilter,
+            FocusSearch,
+            PreviewSelection,
+            ToggleWindowPin,
+            ToggleFavorite
         ]
     );
+
+    /// Confirm a record by its position in the filtered list.
+    #[derive(Clone, Debug, PartialEq, Eq, gpui::Action)]
+    #[action(namespace = board, no_json)]
+    #[expect(
+        clippy::redundant_pub_crate,
+        reason = "re-exported at crate visibility with the unit actions"
+    )]
+    pub(crate) struct ConfirmRecord {
+        pub(crate) index: usize,
+    }
 }
 
 pub(crate) use generated_actions::*;
-
-pub(crate) fn bind_application_keys(cx: &mut App) {
-    // Native selectors and their popup lists own navigation, confirmation and dismissal.
-    // Inputs also own cursor movement and deletion; up/down still navigate search results.
-    let quit_key_binding = cfg_select! {
-        target_os = "macos" => KeyBinding::new("cmd-q", Quit, None),
-        _ => KeyBinding::new("alt-f4", Quit, None),
-    };
-
-    cx.bind_keys([
-        KeyBinding::new("escape", Hide, Some("!Select && !List")),
-        quit_key_binding,
-        KeyBinding::new("left", SelectLeft, Some("!Input && !Select && !List")),
-        KeyBinding::new("right", SelectRight, Some("!Input && !Select && !List")),
-        KeyBinding::new("up", SelectPrev, Some("!Select && !List")),
-        KeyBinding::new("down", SelectNext, Some("!Select && !List")),
-        KeyBinding::new("delete", DeleteRecord, Some("!Input && !Select && !List")),
-        KeyBinding::new("enter", ConfirmSelection, Some("!Select && !List")),
-        KeyBinding::new(
-            "shift-enter",
-            ConfirmSelectionPlainText,
-            Some("!Select && !List"),
-        ),
-        KeyBinding::new("alt-right", CycleFilterNext, None),
-        KeyBinding::new("alt-left", CycleFilterPrev, None),
-        KeyBinding::new("alt-f", ToggleFavoritesFilter, None),
-    ]);
-}
 
 pub(super) fn horizontal_grid_target_index(
     selected_index: usize,
@@ -295,9 +287,6 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.should_ignore_board_key_event(window, cx) {
-            return;
-        }
         if let Some(id) = self.filtered_record_id_at(self.selected_index) {
             let showed_confirm = self.request_delete_record(id, window, cx);
             if !showed_confirm {
@@ -397,78 +386,59 @@ impl RopyBoard {
         cx.quit();
     }
 
-    /// Handle single-character keyboard shortcuts for the clipboard list view.
-    ///
-    /// These shortcuts are intentionally handled via `on_key_down` rather than
-    /// GPUI's `actions!` / `bind_keys` / `on_action` system because they use
-    /// single-character keys (`/`, `j`, `k`, `d`, `p`, `1`–`5`, etc.) that
-    /// would conflict with normal text input when the search `InputState` is
-    /// focused. Only unmodified keys with board focus trigger these shortcuts.
-    pub(crate) fn on_key_down(
+    pub(crate) fn on_focus_search(
         &mut self,
-        event: &KeyDownEvent,
+        _: &FocusSearch,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if event.keystroke.modifiers.modified() || self.should_ignore_board_key_event(window, cx) {
-            return;
-        }
+        window.focus(&self.search_input.focus_handle(cx), cx);
+    }
 
-        match event.keystroke.key.as_str() {
-            "/" => {
-                window.focus(&self.search_input.focus_handle(cx), cx);
-            }
-            "space"
-                if self
-                    .ui_state
-                    .show_space_preview(self.settings_editor.panel_state.space_preview_enabled) =>
-            {
-                self.reveal_selected_record();
-                cx.notify();
-            }
-            "p" if self.can_toggle_window_pin() => {
-                self.toggle_window_pin(window);
-                cx.notify();
-            }
-            "j" => {
-                self.on_select_next(&SelectNext, window, cx);
-            }
-            "k" => {
-                self.on_select_prev(&SelectPrev, window, cx);
-            }
-            "h" => {
-                self.on_select_left(&SelectLeft, window, cx);
-            }
-            "l" => {
-                self.on_select_right(&SelectRight, window, cx);
-            }
-            "d" => {
-                self.on_delete_record(&DeleteRecord, window, cx);
-            }
-            "q" => {
-                self.on_hide_action(&Hide, window, cx);
-            }
-            "f" if let Some(id) = self.filtered_record_id_at(self.selected_index) => {
-                self.toggle_record_favorite(id, cx);
-                cx.notify();
-            }
-            "1" => {
-                self.confirm_record(window, cx, 0);
-            }
-            "2" => {
-                self.confirm_record(window, cx, 1);
-            }
-            "3" => {
-                self.confirm_record(window, cx, 2);
-            }
-            "4" => {
-                self.confirm_record(window, cx, 3);
-            }
-            "5" => {
-                self.confirm_record(window, cx, 4);
-            }
-            _ => {}
+    pub(crate) fn on_preview_selection(
+        &mut self,
+        _: &PreviewSelection,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if self
+            .ui_state
+            .show_space_preview(self.settings_editor.panel_state.space_preview_enabled)
+        {
+            self.reveal_selected_record();
+            cx.notify();
         }
+    }
+
+    pub(crate) fn on_toggle_window_pin(
+        &mut self,
+        _: &ToggleWindowPin,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        self.toggle_window_pin(window);
+        cx.notify();
+    }
+
+    pub(crate) fn on_toggle_favorite(
+        &mut self,
+        _: &ToggleFavorite,
+        _window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if let Some(id) = self.filtered_record_id_at(self.selected_index) {
+            self.toggle_record_favorite(id, cx);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn on_confirm_record(
+        &mut self,
+        action: &ConfirmRecord,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        self.confirm_record(window, cx, action.index);
     }
 
     pub(crate) fn on_key_up(
@@ -477,21 +447,20 @@ impl RopyBoard {
         _window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        // Focus may have moved into search or another panel since Space was pressed.
-        if event.keystroke.key == "space" && self.ui_state.hide_preview() {
+        // Focus may have moved into search or another panel since the preview
+        // key was pressed. Ignore modifiers on release, which can change while held.
+        let released_preview_key = cx
+            .key_bindings()
+            .borrow()
+            .bindings_for_action(&PreviewSelection)
+            .any(|binding| {
+                binding
+                    .keystrokes()
+                    .last()
+                    .is_some_and(|key| key.as_keystroke().key == event.keystroke.key)
+            });
+        if released_preview_key && self.ui_state.hide_preview() {
             cx.notify();
         }
-    }
-
-    fn should_ignore_board_key_event(&self, window: &Window, cx: &Context<'_, Self>) -> bool {
-        if self.ui_state.any_overlay_visible() {
-            return true;
-        }
-
-        if let Some(focused_handle) = window.focused(cx) {
-            return focused_handle == self.search_input.focus_handle(cx);
-        }
-
-        false
     }
 }
