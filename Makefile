@@ -1,7 +1,6 @@
 .DEFAULT_GOAL := help
 
 CARGO ?= cargo
-RUSTFMT_TOOLCHAIN := $(shell cat rustfmt-toolchain)
 
 .PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean bench bench-compare bench-record
 
@@ -26,11 +25,11 @@ check: ## Check all targets and features
 test: ## Run the test suite
 	$(CARGO) test --locked --workspace --all-targets --all-features
 
-fmt: ## Format Rust code with nightly rustfmt
-	$(CARGO) +$(RUSTFMT_TOOLCHAIN) fmt --all
+fmt: ## Format Rust code with the pinned stable rustfmt
+	$(CARGO) fmt --all
 
 fmt-check: ## Check Rust formatting without modifying files
-	$(CARGO) +$(RUSTFMT_TOOLCHAIN) fmt --all --check
+	$(CARGO) fmt --all --check
 
 clippy: ## Lint all targets and features
 	$(CARGO) clippy --locked --workspace --all-targets --all-features

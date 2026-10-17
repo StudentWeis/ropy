@@ -28,7 +28,6 @@ done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-RUSTFMT_TOOLCHAIN="$(cat rustfmt-toolchain)"
 
 # Determine which command to use for Rust operations
 if command -v rtk &>/dev/null; then
@@ -39,9 +38,9 @@ fi
 
 if [[ "$PHASE" != rust ]]; then
 	if [[ $CHECK_ONLY -eq 1 ]]; then
-		$CARGO_CMD "+$RUSTFMT_TOOLCHAIN" fmt --all --check
+		$CARGO_CMD fmt --all --check
 	else
-		$CARGO_CMD "+$RUSTFMT_TOOLCHAIN" fmt --all
+		$CARGO_CMD fmt --all
 		if command -v shfmt &>/dev/null; then
 			shfmt -w ./**/*.sh
 		fi

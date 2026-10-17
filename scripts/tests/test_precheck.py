@@ -9,7 +9,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-FORMAT_COMMAND = f"cargo +{(ROOT / 'rustfmt-toolchain').read_text().strip()} fmt --all --check"
+FORMAT_COMMAND = "cargo fmt --all --check"
 
 
 class PrecheckTests(unittest.TestCase):
