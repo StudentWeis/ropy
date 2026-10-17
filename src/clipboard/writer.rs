@@ -87,19 +87,53 @@ fn set_image(ctx: &ClipboardContext, path: &str) -> ClipboardWriteResult {
 }
 
 fn set_files(ctx: &ClipboardContext, paths: &[String]) -> ClipboardWriteResult {
+    write_files_with(
+        paths,
+        |contents| ctx.set(contents).map_err(clipboard_error),
+        |files| ctx.set_files(files).map_err(clipboard_error),
+    )
+}
+
+fn write_files_with(
+    paths: &[String],
+    set_contents: impl FnOnce(Vec<ClipboardContent>) -> ClipboardWriteResult,
+    set_file_list: impl FnOnce(Vec<String>) -> ClipboardWriteResult,
+) -> ClipboardWriteResult {
     if paths.is_empty() {
         return Err(ClipboardWriteError::EmptyFileList);
     }
 
+    #[cfg(target_os = "linux")]
+    let clipboard_paths: Vec<_> = paths.iter().map(|path| file_uri_from_path(path)).collect();
+    #[cfg(not(target_os = "linux"))]
+    let clipboard_paths = paths.to_vec();
     let contents = vec![
         ClipboardContent::Text(paths.join("\n")),
-        ClipboardContent::Files(paths.to_vec()),
+        ClipboardContent::Files(clipboard_paths.clone()),
     ];
 
-    if ctx.set(contents).is_ok() {
+    if set_contents(contents).is_ok() {
         return Ok(());
     }
-    ctx.set_files(paths.to_vec()).map_err(clipboard_error)
+    set_file_list(clipboard_paths)
+}
+
+#[cfg(target_os = "linux")]
+fn file_uri_from_path(path: &str) -> String {
+    // clipboard-rs forwards file URIs unchanged on X11 and Wayland, but only
+    // prefixes bare paths. Escape filename bytes before crossing that boundary.
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut uri = String::from("file://");
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
+            uri.push(char::from(byte));
+        } else {
+            uri.push('%');
+            uri.push(char::from(HEX[usize::from(byte >> 4)]));
+            uri.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+    }
+    uri
 }
 
 fn set_rich_text(
@@ -137,6 +171,67 @@ fn notify_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[rstest::rstest]
+    #[case("/tmp/report%20final.txt", "file:///tmp/report%2520final.txt")]
+    #[case("/tmp/report final.txt", "file:///tmp/report%20final.txt")]
+    #[case("/tmp/report#1?.txt", "file:///tmp/report%231%3F.txt")]
+    #[case("/tmp/report\r\nnext.txt", "file:///tmp/report%0D%0Anext.txt")]
+    #[case("/tmp/中文.txt", "file:///tmp/%E4%B8%AD%E6%96%87.txt")]
+    #[case("/tmp/report-1_~.txt", "file:///tmp/report-1_~.txt")]
+    fn test_file_uri_from_path_preserves_filename_on_recapture(
+        #[case] path: &str,
+        #[case] expected_uri: &str,
+    ) {
+        let uri = file_uri_from_path(path);
+
+        assert_eq!(uri, expected_uri);
+        assert_eq!(crate::repository::normalize_file_paths(&[uri]), vec![path]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_write_files_with_encodes_both_outputs_and_preserves_plain_text(
+        #[case] fail_combined_write: bool,
+    ) {
+        let paths = vec![
+            "/tmp/report%20#\n中文.txt".into(),
+            "/tmp/second file.txt".into(),
+        ];
+        let expected = vec![
+            "file:///tmp/report%2520%23%0A%E4%B8%AD%E6%96%87.txt".to_string(),
+            "file:///tmp/second%20file.txt".to_string(),
+        ];
+        let fallback_called = std::cell::Cell::new(false);
+
+        let result = write_files_with(
+            &paths,
+            |contents| {
+                assert!(
+                    matches!(&contents[0], ClipboardContent::Text(text) if text == &paths.join("\n"))
+                );
+                assert!(
+                    matches!(&contents[1], ClipboardContent::Files(files) if files == &expected)
+                );
+                if fail_combined_write {
+                    Err(ClipboardWriteError::Clipboard("injected failure".into()))
+                } else {
+                    Ok(())
+                }
+            },
+            |files| {
+                fallback_called.set(true);
+                assert_eq!(files, expected);
+                Ok(())
+            },
+        );
+
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(fallback_called.get(), fail_combined_write);
+    }
 
     #[test]
     #[expect(clippy::unwrap_used)]

@@ -43,6 +43,12 @@ class ReleaseTests(unittest.TestCase):
 
     def command(self, name, body):
         path = self.bin / name
+        if name == "cargo":
+            body = '''if [[ "$1" == metadata ]]; then
+printf '{"target_directory":"%s"}\\n' "${BUNDLE_TEST_TARGET_DIR:-$PWD/target}"
+exit 0
+fi
+''' + body
         path.write_text("#!/bin/bash\nset -eu\n" + body)
         path.chmod(0o755)
 
@@ -139,6 +145,31 @@ printf metadata > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Conten
             self.assertEqual(payload.extractfile("Ropy.app/Contents/MacOS/ropy").read(), b"binary")
         checksum = Path(str(archive) + ".sha256").read_text().split()[0]
         self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
+
+    def test_dmg_custom_target_directory_ignores_stale_default_bundle(self):
+        target = "aarch64-apple-darwin"
+        stale = self.work / f"target/{target}/release/bundle/osx/Ropy.app"
+        stale.mkdir(parents=True)
+        (stale / "binary").write_text("old application")
+        self.env["BUNDLE_TEST_TARGET_DIR"] = str(self.work / "custom target")
+        self.command("cargo", '''
+while [[ "$1" != "--target" ]]; do shift; done
+bundle="$BUNDLE_TEST_TARGET_DIR/$2/release/bundle/osx/Ropy.app"
+mkdir -p "$bundle"
+printf 'current application' > "$bundle/binary"
+''')
+        self.command("hdiutil", '''
+while [[ "$1" != "-srcfolder" ]]; do shift; done
+cp "$2/Ropy.app/binary" "${@: -1}"
+''')
+        result = self.bundle(target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            (self.work / f"target/distrib/ropy-{target}.dmg").read_text(),
+            "current application",
+        )
+        with tarfile.open(self.work / f"target/distrib/ropy-{target}-app.tar.xz") as archive:
+            self.assertEqual(archive.extractfile("Ropy.app/binary").read(), b"current application")
 
     def test_dmg_missing_bundle_fails_without_using_stale_output(self):
         other = self.work / "target/stale/release/bundle/osx/Ropy.app"

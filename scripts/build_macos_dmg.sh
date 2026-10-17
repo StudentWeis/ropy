@@ -17,8 +17,9 @@ esac
 
 cargo bundle --package ropy --release --target "$bundle_target" --format osx
 
-# Restrict the source to this target; a shared workspace can contain both architectures.
-app="target/$bundle_target/release/bundle/osx/Ropy.app"
+# Match cargo-bundle's source directory, including Cargo config and environment overrides.
+target_dir="$(cargo metadata --locked --no-deps --format-version 1 | jq -er '.target_directory')"
+app="$target_dir/$bundle_target/release/bundle/osx/Ropy.app"
 if [[ ! -d "$app" ]]; then
 	echo "cargo-bundle did not produce $app" >&2
 	exit 1

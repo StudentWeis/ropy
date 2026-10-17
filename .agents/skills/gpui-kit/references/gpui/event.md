@@ -21,7 +21,7 @@ From an owning `Context<T>`:
 | --- | --- |
 | `observe(&entity, ...)` | `&mut T, Entity<Observed>, &mut Context<T>` |
 | `subscribe(&entity, ...)` | `&mut T, Entity<Emitter>, &Event, &mut Context<T>` |
-| `subscribe_in(&entity, window, ...)` | `&mut T, Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
+| `subscribe_in(&entity, window, ...)` | `&mut T, &Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
 | `subscribe_self(...)` | `&mut T, &Event, &mut Context<T>` |
 | `observe_global::<G>(...)` | `&mut T, &mut Context<T>` |
 | `observe_window_activation(window, ...)` | `&mut T, &mut Window, &mut Context<T>` |

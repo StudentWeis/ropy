@@ -17,7 +17,7 @@ stayed inside the guest. Sway 1.11 ran with software rendering. The earlier
 resident-window refactor was tested with XWayland; native popup tests use
 `xwayland disable` and remove `DISPLAY` from the application environment.
 
-Install the normal Linux build dependencies from `.github/dist-build-setup.yml`,
+Install the normal Linux build dependencies from `[dist.dependencies.apt]` in `dist-workspace.toml`,
 plus `sway`, `wl-clipboard`, `grim`, `python3-gi`, `gir1.2-gtk-3.0`,
 `python3-evdev`, `seatd`, `fonts-dejavu-core` and
 `at-spi2-core`. Use the Rust toolchain specified by the repository. Install

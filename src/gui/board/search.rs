@@ -186,6 +186,7 @@ fn create_search_option_button(
     cx: &gpui_kit::App,
 ) -> Button {
     let id = element_id.into();
+    let tooltip = tooltip.into();
     let button = if is_active {
         let accent = cx.theme().accent;
         let variant = gpui_kit::component::button::ButtonCustomVariant::new(cx)
@@ -204,6 +205,7 @@ fn create_search_option_button(
         .rounded(px(4.0))
         .text_xs()
         .label(label)
+        .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
 }
 
@@ -254,6 +256,7 @@ fn render_search_icon() -> impl IntoElement {
 fn render_search_input_box(board: &RopyBoard) -> impl IntoElement {
     div().flex_1().min_w_0().child(
         Input::new(&board.search_input)
+            .aria_label(t!("search_records"))
             .appearance(false)
             .px_1()
             .py_1(),
@@ -326,6 +329,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         .child(
             text_button
                 .icon(Icon::empty().path("icons/filter-text.svg"))
+                .accessibility_label(text_filter_tooltip.clone())
                 .tooltip(text_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -340,6 +344,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         .child(
             image_button
                 .icon(Icon::empty().path("icons/filter-image.svg"))
+                .accessibility_label(image_filter_tooltip.clone())
                 .tooltip(image_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -354,6 +359,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         .child(
             files_button
                 .icon(Icon::empty().path("icons/filter-files.svg"))
+                .accessibility_label(files_filter_tooltip.clone())
                 .tooltip(files_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -387,6 +393,7 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
         .child(
             favorites_button
                 .icon(Icon::empty().path("icons/filter-star.svg"))
+                .accessibility_label(favorites_filter_tooltip.clone())
                 .tooltip(favorites_filter_tooltip)
                 .rounded(px(14.0))
                 .on_click(cx.listener(|this, _, _, cx| {

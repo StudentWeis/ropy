@@ -11,18 +11,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use gpui_kit::{App, AppContext, KeyBinding, ReadGlobal};
+use gpui_kit::{App, AppContext, ReadGlobal};
 
 use crate::{
     clipboard::{ClipboardCapture, CopyTracker},
     config::{AutoStartManager, Settings},
     constants::APP_NAME,
     gui::{
-        board::{
-            ConfirmSelection, ConfirmSelectionPlainText, CycleFilterNext, CycleFilterPrev, Hide,
-            Quit, RopyBoard, SelectLeft, SelectNext, SelectPrev, SelectRight,
-            ToggleFavoritesFilter,
-        },
+        board::{RopyBoard, bind_application_keys},
         repository::GlobalRepository,
         settings::GlobalSettings,
     },
@@ -175,33 +171,6 @@ fn setup_hotkey_listener(
     crate::gui::hotkey::start_hotkey_listener(hotkey_str, cx, move |async_app, token| {
         crate::gui::window::activate_from_hotkey(async_app, token);
     })
-}
-
-fn bind_application_keys(cx: &mut App) {
-    // Native selectors and their popup lists own navigation, confirmation and dismissal.
-    // Unscoped application bindings otherwise take precedence over component bindings.
-    let quit_key_binding = cfg_select! {
-        target_os = "macos" => KeyBinding::new("cmd-q", Quit, None),
-        _ => KeyBinding::new("alt-f4", Quit, None),
-    };
-
-    cx.bind_keys([
-        KeyBinding::new("escape", Hide, Some("!Select && !List")),
-        quit_key_binding,
-        KeyBinding::new("left", SelectLeft, Some("!Select && !List")),
-        KeyBinding::new("right", SelectRight, Some("!Select && !List")),
-        KeyBinding::new("up", SelectPrev, Some("!Select && !List")),
-        KeyBinding::new("down", SelectNext, Some("!Select && !List")),
-        KeyBinding::new("enter", ConfirmSelection, Some("!Select && !List")),
-        KeyBinding::new(
-            "shift-enter",
-            ConfirmSelectionPlainText,
-            Some("!Select && !List"),
-        ),
-        KeyBinding::new("alt-right", CycleFilterNext, None),
-        KeyBinding::new("alt-left", CycleFilterPrev, None),
-        KeyBinding::new("alt-f", ToggleFavoritesFilter, None),
-    ]);
 }
 
 fn load_settings() -> Settings {

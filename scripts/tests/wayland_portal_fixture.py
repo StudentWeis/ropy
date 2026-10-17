@@ -112,12 +112,7 @@ def main():
     bus.add_signal_receiver(owner_changed, signal_name="NameOwnerChanged", dbus_interface="org.freedesktop.DBus")
     report = {"mode": args.mode, "binary_sha256": hashlib.sha256(args.binary.read_bytes()).hexdigest(), "checks": []}
 
-    def run():
-        log = (args.output / "application.log").open("w")
-        command = [str(args.binary)] + (["--show"] if args.mode == "startup" else [])
-        app_env = env | ({"XDG_ACTIVATION_TOKEN": TOKEN + "-startup"} if args.mode == "startup" else {})
-        app = subprocess.Popen(command, env=app_env, stdout=log, stderr=subprocess.STDOUT)
-
+    def exercise(app):
         def wait(predicate, label, timeout=8):
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
@@ -138,65 +133,83 @@ def main():
         def key(chord):
             subprocess.run(["sudo", "python3", str(args.input_helper), chord], check=True, env=env)
 
+        wait(lambda: state["bound"], "portal received binding request")
+        assert state["trigger"] == "CTRL+SHIFT+D", state
+        assert state["description"], state
+        time.sleep(0.5)
+        if args.mode != "startup":
+            assert popup() is None, "hidden startup"
+        if args.mode == "accept":
+            def emit(session, shortcut):
+                def signal():
+                    portal.Activated(dbus.ObjectPath(session), shortcut, dbus.UInt64(0), {"activation_token": TOKEN})
+                    return False
+                GLib.idle_add(signal)
+            emit(state["session"] + "_other", "show")
+            emit(state["session"], "unrelated")
+            time.sleep(0.3)
+            assert popup() is None, "unrelated portal events must not open popup"
+            report["checks"].append("unrelated session and shortcut signals ignored")
+            emit(state["session"], "show")
+            wait(lambda: popup() is not None, "portal signal opens native popup")
+            wait(lambda: f'activate("{TOKEN}"' in (args.output / "application.log").read_text(), "activation token reaches Wayland compositor")
+            key("Escape")
+            wait(lambda: popup() is None, "portal popup dismisses")
+            subprocess.run([str(args.binary), "--show"], env=env | {"XDG_ACTIVATION_TOKEN": TOKEN + "-ipc"}, check=True, timeout=5)
+            wait(lambda: popup() is not None, "second process reopens resident instance")
+            wait(lambda: f'activate("{TOKEN}-ipc"' in (args.output / "application.log").read_text(), "second process token reaches compositor")
+        elif args.mode == "startup":
+            wait(lambda: popup() is not None, "--show first launch maps popup")
+            protocol = (args.output / "application.log").read_text()
+            assert protocol.count(f'activate("{TOKEN}-startup"') == 1, "one-shot startup token used once"
+            assert protocol.count(".get_toplevel(") == 1, "startup surface must not be destroyed and recreated"
+            report["checks"].append("initial surface retains one-shot startup token")
+        else:
+            if args.mode == "deny":
+                wait(lambda: state["disconnected"], "denied registration releases private bus connection")
+            subprocess.run([str(args.binary), "--show"], env=env, check=True, timeout=5)
+            wait(lambda: popup() is not None, "manual activation remains available")
+        wait(lambda: popup() and popup()["focused"], "popup has input focus")
+        key("alt+F4")
+        wait(lambda: app.poll() is not None, "normal quit completes while portal is active or pending")
+        assert app.returncode == 0, app.returncode
+        wait(lambda: state["disconnected"], "portal connection released on shutdown")
+        if args.mode in ("accept", "startup"):
+            assert state["closed"], "active portal session explicitly closed"
+            report["checks"].append("active session explicitly closed before quit")
+        report.update(status="pass", session_closed=state["closed"])
+
+    def run():
         try:
-            wait(lambda: state["bound"], "portal received binding request")
-            assert state["trigger"] == "CTRL+SHIFT+D", state
-            assert state["description"], state
-            time.sleep(0.5)
-            if args.mode != "startup":
-                assert popup() is None, "hidden startup"
-            if args.mode == "accept":
-                def emit(session, shortcut):
-                    def signal():
-                        portal.Activated(dbus.ObjectPath(session), shortcut, dbus.UInt64(0), {"activation_token": TOKEN})
-                        return False
-                    GLib.idle_add(signal)
-                emit(state["session"] + "_other", "show")
-                emit(state["session"], "unrelated")
-                time.sleep(0.3)
-                assert popup() is None, "unrelated portal events must not open popup"
-                report["checks"].append("unrelated session and shortcut signals ignored")
-                emit(state["session"], "show")
-                wait(lambda: popup() is not None, "portal signal opens native popup")
-                wait(lambda: f'activate("{TOKEN}"' in (args.output / "application.log").read_text(), "activation token reaches Wayland compositor")
-                key("Escape")
-                wait(lambda: popup() is None, "portal popup dismisses")
-                subprocess.run([str(args.binary), "--show"], env=env | {"XDG_ACTIVATION_TOKEN": TOKEN + "-ipc"}, check=True, timeout=5)
-                wait(lambda: popup() is not None, "second process reopens resident instance")
-                wait(lambda: f'activate("{TOKEN}-ipc"' in (args.output / "application.log").read_text(), "second process token reaches compositor")
-            elif args.mode == "startup":
-                wait(lambda: popup() is not None, "--show first launch maps popup")
-                protocol = (args.output / "application.log").read_text()
-                assert protocol.count(f'activate("{TOKEN}-startup"') == 1, "one-shot startup token used once"
-                assert protocol.count(".get_toplevel(") == 1, "startup surface must not be destroyed and recreated"
-                report["checks"].append("initial surface retains one-shot startup token")
-            else:
-                if args.mode == "deny":
-                    wait(lambda: state["disconnected"], "denied registration releases private bus connection")
-                subprocess.run([str(args.binary), "--show"], env=env, check=True, timeout=5)
-                wait(lambda: popup() is not None, "manual activation remains available")
-            wait(lambda: popup() and popup()["focused"], "popup has input focus")
-            key("alt+F4")
-            wait(lambda: app.poll() is not None, "normal quit completes while portal is active or pending")
-            assert app.returncode == 0, app.returncode
-            wait(lambda: state["disconnected"], "portal connection released on shutdown")
-            if args.mode in ("accept", "startup"):
-                assert state["closed"], "active portal session explicitly closed"
-                report["checks"].append("active session explicitly closed before quit")
-            report.update(status="pass", session_closed=state["closed"])
+            with (args.output / "application.log").open("w") as log:
+                app = None
+                try:
+                    command = [str(args.binary)] + (["--show"] if args.mode == "startup" else [])
+                    app_env = env | ({"XDG_ACTIVATION_TOKEN": TOKEN + "-startup"} if args.mode == "startup" else {})
+                    app = subprocess.Popen(command, env=app_env, stdout=log, stderr=subprocess.STDOUT)
+                    exercise(app)
+                except Exception as error:
+                    report.update(status="failed", error=str(error))
+                finally:
+                    try:
+                        if app is not None and app.poll() is None:
+                            app.terminate()
+                            try:
+                                app.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                app.kill()
+                                app.wait(timeout=5)
+                    except Exception as error:
+                        report.update(status="failed", cleanup_error=str(error))
         except Exception as error:
             report.update(status="failed", error=str(error))
         finally:
-            if app.poll() is None:
-                app.terminate()
-                try:
-                    app.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    app.kill()
-                    app.wait()
-            log.close()
-            (args.output / "report.json").write_text(json.dumps(report, indent=2))
-            GLib.idle_add(loop.quit)
+            try:
+                (args.output / "report.json").write_text(json.dumps(report, indent=2))
+            except Exception as error:
+                report.update(status="failed", report_error=str(error))
+            finally:
+                GLib.idle_add(loop.quit)
 
     thread = threading.Thread(target=run)
     thread.start()
