@@ -26,6 +26,10 @@ for arg in "$@"; do
 	esac
 done
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+RUSTFMT_TOOLCHAIN="$(cat rustfmt-toolchain)"
+
 # Determine which command to use for Rust operations
 if command -v rtk &>/dev/null; then
 	CARGO_CMD="rtk cargo"
@@ -35,9 +39,9 @@ fi
 
 if [[ "$PHASE" != rust ]]; then
 	if [[ $CHECK_ONLY -eq 1 ]]; then
-		$CARGO_CMD +nightly fmt --all --check
+		$CARGO_CMD "+$RUSTFMT_TOOLCHAIN" fmt --all --check
 	else
-		$CARGO_CMD +nightly fmt --all
+		$CARGO_CMD "+$RUSTFMT_TOOLCHAIN" fmt --all
 		if command -v shfmt &>/dev/null; then
 			shfmt -w ./**/*.sh
 		fi
@@ -53,7 +57,15 @@ fi
 if [[ "$PHASE" != light ]]; then
 	python3 scripts/check/check_core_dependencies.py
 	# Clippy already performs the compiler checks for the same target/feature set.
-	$CARGO_CMD clippy --workspace --all-targets --all-features
-	$CARGO_CMD test --workspace --all-targets --all-features
-	RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --workspace --no-deps
+	$CARGO_CMD clippy --locked --workspace --all-targets --all-features
+	$CARGO_CMD test --locked --workspace --all-targets --all-features
+	if [[ "$(uname -s)" == Linux ]]; then
+		if ! command -v dbus-run-session &>/dev/null; then
+			echo "Linux precheck requires dbus-run-session; install your distribution's D-Bus tools." >&2
+			exit 1
+		fi
+		echo "Testing Linux tray on a private session bus"
+		dbus-run-session -- $CARGO_CMD test --locked -p ropy test_tray_without_gtk_initializes_refreshes_and_drops -- --ignored
+	fi
+	RUSTDOCFLAGS="-D warnings" $CARGO_CMD doc --locked --workspace --no-deps
 fi

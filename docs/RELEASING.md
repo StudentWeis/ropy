@@ -27,7 +27,8 @@ publishing. Tag builds run the full pipeline:
    and `Info.plist` together with the executable. DMGs remain manual downloads.
 4. The `release-update-manifest.yml` reusable workflow runs after all local
    artifacts finish. It downloads both dist archives and complete macOS bundles,
-   then generates `latest.json` from the downloaded archives and
+   first requires the latest main CI run for the exact release commit to have
+   completed successfully, then generates `latest.json` from the downloaded archives and
    the release plan, then uploads it as an `artifacts-*` workflow artifact. A
    missing archive or checksum fails this job and blocks release publication.
 5. dist's generated host job collects all artifacts, including the DMGs and
@@ -185,3 +186,27 @@ Validate syntax, style, download/unpacking and both architecture hashes. On a
 machine without an existing Ropy installation, smoke-test installation, launch,
 managed update behavior, upgrade/reinstall and uninstall before publishing
 packaging changes. Never overwrite an existing app or clipboard data for tests.
+
+## Protected release sequence
+
+Prepare the version and changelog on a branch and merge them through a PR before
+pushing a version tag. With cargo-release, use its preparation-only options:
+
+```sh
+scripts/update_version.sh <version> --execute --no-tag --no-push
+```
+
+After the preparation PR merges, wait for main CI to succeed. Tag the merged
+commit (not the pre-squash branch commit). The release manifest job queries the
+`ci.yml` workflow's push runs on main for that exact SHA, and accepts only the
+latest run when completed successfully. Missing, running, cancelled, skipped or
+failed runs block publication. API errors also fail closed. Once CI succeeds,
+retry the failed Release jobs; do not move an existing published tag.
+
+The check lives in the existing update-manifest job, so it adds no runner or
+extra job. It runs after packaging and before publication. Generated Release
+workflow changes must continue to come from cargo-dist configuration.
+
+Complete [Release acceptance](RELEASE_ACCEPTANCE.md) against packaged artifacts.
+The human GUI acceptance procedure is separate from the automated CI gate;
+there is currently no GitHub environment approval enforcing that manual step.

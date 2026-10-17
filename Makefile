@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
 CARGO ?= cargo
+RUSTFMT_TOOLCHAIN := $(shell cat rustfmt-toolchain)
 
 .PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean bench bench-compare bench-record
 
@@ -11,31 +12,31 @@ setup: ## Install development tools and Git hooks
 	./scripts/init.sh
 
 build: ## Build the debug application
-	$(CARGO) build
+	$(CARGO) build --locked
 
 build-release: ## Build the optimized application
-	$(CARGO) build --release
+	$(CARGO) build --locked --release
 
 run: ## Build and run the debug application
-	$(CARGO) run
+	$(CARGO) run --locked
 
 check: ## Check all targets and features
-	$(CARGO) check --workspace --all-targets --all-features
+	$(CARGO) check --locked --workspace --all-targets --all-features
 
 test: ## Run the test suite
-	$(CARGO) test --workspace --all-targets --all-features
+	$(CARGO) test --locked --workspace --all-targets --all-features
 
 fmt: ## Format Rust code with nightly rustfmt
-	$(CARGO) +nightly fmt --all
+	$(CARGO) +$(RUSTFMT_TOOLCHAIN) fmt --all
 
 fmt-check: ## Check Rust formatting without modifying files
-	$(CARGO) +nightly fmt --all --check
+	$(CARGO) +$(RUSTFMT_TOOLCHAIN) fmt --all --check
 
 clippy: ## Lint all targets and features
-	$(CARGO) clippy --workspace --all-targets --all-features
+	$(CARGO) clippy --locked --workspace --all-targets --all-features
 
 doc: ## Generate documentation with warnings treated as errors
-	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --workspace --no-deps
+	RUSTDOCFLAGS="-D warnings" $(CARGO) doc --locked --workspace --no-deps
 
 precheck: ## Run the full local pre-commit gate (including formatting)
 	./scripts/precheck.sh
