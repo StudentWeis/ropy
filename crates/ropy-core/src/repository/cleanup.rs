@@ -65,11 +65,15 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     ) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
         let total = self.count();
+        let trigger = ClipboardRepository::<RedbBackend>::cleanup_trigger_record_count(keep_count);
+        // Ordinary records cannot outnumber all records. Avoid reading retention
+        // exemptions until even the total exceeds the buffered limit.
+        if total <= trigger {
+            return Ok(0);
+        }
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
-        if ordinary_total
-            <= ClipboardRepository::<RedbBackend>::cleanup_trigger_record_count(keep_count)
-        {
+        if ordinary_total <= trigger {
             return Ok(0);
         }
 
@@ -243,6 +247,19 @@ mod tests {
         assert_eq!(repo.count(), 4);
         assert!(repo.get_by_id(pinned.id).expect("query").is_some());
         assert!(repo.get_by_id(favorited.id).expect("query").is_some());
+    }
+
+    #[test]
+    fn test_cleanup_below_trigger_skips_retention_record_reads() {
+        let repo = create_test_repo();
+        let record = repo.save_text("Favorite".into()).expect("save");
+        repo.toggle_favorite(record.id).expect("favorite");
+        repo.records.fail_next_get();
+
+        assert_eq!(repo.cleanup_old_records_if_needed(10).expect("cleanup"), 0);
+        // The injected failure remains pending: cleanup did not read the record.
+        assert!(repo.get_by_id(record.id).is_err());
+        assert!(repo.get_by_id(record.id).expect("query").is_some());
     }
 
     #[test]

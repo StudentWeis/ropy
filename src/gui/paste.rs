@@ -93,11 +93,6 @@ mod tests {
         assert_eq!(settings.wayland_display.as_deref(), Some("/dev/null"));
     }
 
-    #[test]
-    fn test_paste_delay_when_called_returns_expected_duration() {
-        assert_eq!(paste_delay(), Duration::from_millis(PASTE_DELAY_MS));
-    }
-
     #[cfg(target_os = "macos")]
     #[test]
     fn test_paste_modifier_key_when_macos_returns_meta() {

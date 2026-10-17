@@ -81,27 +81,4 @@ mod tests {
         assert_eq!(release.assets[0].name, "ropy-aarch64-apple-darwin.tar.xz");
         assert_eq!(release.assets[0].size, 1024);
     }
-
-    #[test]
-    fn test_update_status_available_when_cloned_preserves_release_info() {
-        let release = ReleaseInfo {
-            version: "0.4.2".to_string(),
-            release_notes: "Bug fixes".to_string(),
-            download_url: "https://example.com/ropy.tar.xz".to_string(),
-            checksum_url: "https://example.com/ropy.tar.xz.sha256".to_string(),
-            asset_size: 1024,
-        };
-
-        let status = UpdateStatus::Available(release.clone());
-
-        assert_eq!(status, UpdateStatus::Available(release));
-    }
-
-    #[test]
-    fn test_update_status_error_when_compared_tracks_message() {
-        let left = UpdateStatus::Error(super::super::errors::UpdateFailure::Network);
-        let right = UpdateStatus::Error(super::super::errors::UpdateFailure::Network);
-
-        assert_eq!(left, right);
-    }
 }

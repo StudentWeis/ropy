@@ -151,6 +151,7 @@ pub(crate) fn ensure_window(cx: &mut App) -> Option<WindowHandle<Root>> {
     }
 }
 
+#[cfg(any(test, not(target_os = "linux")))]
 pub(crate) fn show(cx: &mut App) {
     show_with_token(None, cx);
 }

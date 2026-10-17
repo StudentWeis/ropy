@@ -81,8 +81,12 @@ A floor, not a substitute for the guides.
   application styling code.
 - **Stable identity.** Repeated elements need domain-derived `ElementId`s, not
   list indexes.
-- **No `pub` fields across the seam.** Public data types use builders and
-  reader methods.
+- **Keep invariant-bearing fields private.** Use builders and reader methods
+  across layer boundaries. Deliberately record-like configuration, theme tokens,
+  geometry, and serialized schemas may expose fields; mark these public structs
+  `#[non_exhaustive]` and provide construction APIs. See the public API rules in
+  [Coding Guides](references/coding-guides.md); apply them to new APIs rather
+  than requiring unrelated migrations.
 - **Spell `Context` out.** `cx` is GPUI's; name anything else after what it
   holds.
 
