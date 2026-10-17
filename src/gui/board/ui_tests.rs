@@ -42,6 +42,9 @@ fn open_board_with_settings(
     let (tx, rx) = async_channel::unbounded();
     cx.update(|cx| {
         gpui_kit::init(cx);
+        // Entrance animations use wall-clock time; keep hitboxes stable between
+        // the pointer move, mouse-down and mouse-up frames in interaction tests.
+        cx.set_reduce_motion(true);
         cx.set_global(GlobalSettings::new(settings));
         cx.set_global(GlobalRepository::new(None));
         super::bind_application_keys(cx);
