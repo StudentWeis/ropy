@@ -1,7 +1,13 @@
 use gpui_kit::{
     Action, App, AsKeystroke, Context, SharedString, StatefulInteractiveElement,
     base::TestSupportExt,
-    component::{ActiveTheme, h_flex, kbd::Kbd, v_flex},
+    component::{
+        ActiveTheme, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex,
+        kbd::Kbd,
+        v_flex,
+    },
     div,
     prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
 };
@@ -205,15 +211,29 @@ pub(crate) fn render_help_content(
                 )
         });
 
-    v_flex().size_full().child(header).child(
-        v_flex()
-            .id("help-content")
-            .overflow_y_scroll()
-            .size_full()
-            .flex_1()
-            .gap_0p5()
-            .pb_4()
-            .child(col_header)
-            .children(rows),
+    v_flex()
+        .size_full()
+        .child(header)
+        .child(customize_button(cx))
+        .child(
+            v_flex()
+                .id("help-content")
+                .overflow_y_scroll()
+                .size_full()
+                .flex_1()
+                .gap_0p5()
+                .pb_4()
+                .child(col_header)
+                .children(rows),
+        )
+}
+
+fn customize_button(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    h_flex().justify_end().pb_2().child(
+        Button::new("customize-shortcuts")
+            .small()
+            .ghost()
+            .label(t!("shortcuts_customize"))
+            .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx))),
     )
 }

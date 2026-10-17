@@ -1,7 +1,21 @@
 # History shortcuts
 
-Edit `config.toml` and restart Ropy to customize history-list shortcuts. Settings
-and the global activation hotkey continue to use the existing settings panel.
+Open **Settings → History shortcuts → Customize…**, or **Help → Customize…**.
+Click a key to replace it, **+** to add an alias, or **×** to remove that key.
+The row menu can restore defaults or clear all keys for one action.
+
+Edits stay in a draft until you click **Apply**. Conflicts identify both actions;
+you can change both sides of a swap before applying. Apply saves the configuration
+first, then updates the running shortcuts and help immediately. If saving fails,
+the previous shortcuts remain active and the draft is kept. **Revert** discards
+the draft; **Reset all** restores defaults in the draft. Leaving an edited page
+asks whether to keep editing or discard changes.
+
+While recording, Delete, Backspace and Enter are ordinary keys. Escape cancels;
+Tab cancels and continues focus navigation. Losing window focus cancels recording
+but keeps edits. The global activation hotkey has its own control in Settings.
+
+You can also edit `config.toml` directly; external file changes require a restart.
 
 | Platform | Configuration file |
 | --- | --- |
@@ -28,8 +42,9 @@ select_next = ["down", "n"]
 ```
 
 Saving unrelated settings preserves these overrides. Ropy does not write the
-resolved default bindings into the configuration. This version loads shortcuts
-at startup; it does not provide a shortcut editor or live reloading.
+resolved default bindings into the configuration. Restoring defaults removes
+the override; explicitly clearing an action writes an empty array. An explicit
+override equal to the defaults remains explicit until you restore defaults.
 
 ## Actions and defaults
 
@@ -90,7 +105,8 @@ pauses **all configurable history shortcuts** and displays a persistent error
 with the offending action/key. Ropy leaves the overrides intact and does not
 silently restore a shortcut you intended to disable. Search controls, Escape,
 mouse controls, and the platform quit shortcut remain available. Correct the
-configuration and restart Ropy to apply it.
+configuration in the shortcut editor and apply it, or edit the file and restart.
+Unknown action entries appear in the editor and can be removed explicitly.
 
 A malformed TOML file, unknown section under `keybindings`, or a value with the
 wrong type enters the existing settings recovery mode, which also pauses

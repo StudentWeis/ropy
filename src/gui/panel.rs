@@ -5,3 +5,5 @@ mod common;
 pub mod help;
 /// Settings panel content and reset helpers.
 pub mod settings;
+/// History shortcut editor presentation.
+pub mod shortcuts;

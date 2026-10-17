@@ -15,6 +15,8 @@ mod render;
 pub mod search;
 mod settings_editor;
 mod settings_handler;
+/// Draft state and interactions for the history shortcut editor.
+pub mod shortcut_editor;
 mod updater_ui;
 
 #[cfg(test)]
@@ -60,6 +62,7 @@ pub(crate) enum ActivePanel {
     Settings,
     About,
     Help,
+    Shortcuts,
 }
 
 pub(super) fn search_query_changed(previous_query: &str, next_query: &str) -> bool {
@@ -192,6 +195,8 @@ pub(crate) struct RopyBoard {
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
     pub(crate) settings_editor: SettingsEditor,
+    pub(crate) shortcut_editor: Option<shortcut_editor::ShortcutEditor>,
+    _shortcut_recording_subscription: Subscription,
     pub(crate) confirm_mode: ConfirmMode,
     pub(crate) layout_mode: LayoutMode,
     pub(crate) pinned: bool,
@@ -350,7 +355,10 @@ impl RopyBoard {
         self.settings_editor = SettingsEditor::new(window, cx);
         self.last_search_query.clear();
         self.invalidate_copy_confirmation();
-        self.active_panel = ActivePanel::ClipboardList;
+        if self.active_panel != ActivePanel::Shortcuts {
+            self.active_panel = ActivePanel::ClipboardList;
+        }
+        self.cancel_shortcut_recording(cx);
         self.ui_state = UiState::default();
         self.pending_delete_id = None;
         self.sync_filtered_records(cx);
@@ -370,6 +378,7 @@ impl RopyBoard {
                 }
             }
             if !crate::gui::window::has_native_focus(window) {
+                this.cancel_shortcut_recording(cx);
                 // A key released in another application will not reach this window.
                 if this.ui_state.hide_preview() {
                     cx.notify();
@@ -428,6 +437,7 @@ impl RopyBoard {
         let layout_mode = settings.layout.mode;
         let confirm_mode = settings.confirm.mode;
         let settings_editor = SettingsEditor::new(window, cx);
+        let shortcut_recording_subscription = Self::observe_shortcut_recording(cx);
 
         let favorite_ids = Arc::new(HashSet::new());
         let search_input = cx.new(|cx| InputState::new(window, cx));
@@ -474,6 +484,8 @@ impl RopyBoard {
             history_refresh_task: None,
             active_panel: ActivePanel::default(),
             settings_editor,
+            shortcut_editor: None,
+            _shortcut_recording_subscription: shortcut_recording_subscription,
             confirm_mode,
             layout_mode,
             pinned: false,

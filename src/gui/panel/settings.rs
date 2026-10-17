@@ -111,6 +111,15 @@ pub(crate) fn render_settings_content(
         t!("settings_section_behavior"),
         vec![
             render_activation_key_row(board, cx).into_any_element(),
+            settings_row(
+                t!("shortcuts_title"),
+                Button::new("settings-shortcuts")
+                    .small()
+                    .label(t!("shortcuts_customize"))
+                    .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx))),
+                cx,
+            )
+            .into_any_element(),
             render_confirm_mode_row(board, cx).into_any_element(),
             render_hover_preview_row(board, cx).into_any_element(),
             render_space_preview_row(board, cx).into_any_element(),

@@ -1,6 +1,7 @@
 use gpui_kit::{AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window};
 
-mod shortcuts;
+/// History shortcut catalog, validation and registration.
+pub mod shortcuts;
 pub(crate) use shortcuts::{
     bind_application_keys, binding_applies_to_history, keybinding_error_message,
 };
@@ -315,7 +316,10 @@ impl RopyBoard {
             settings::reset_settings_dialog(self, window, cx);
         }
         self.reveal_selected_record();
-        self.active_panel = ActivePanel::ClipboardList;
+        if self.active_panel != ActivePanel::Shortcuts {
+            self.active_panel = ActivePanel::ClipboardList;
+        }
+        self.cancel_shortcut_recording(cx);
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
         self.activated = true;
         window.focus(&self.focus_handle, cx);
@@ -351,6 +355,10 @@ impl RopyBoard {
 
         self.invalidate_copy_confirmation();
         match self.active_panel {
+            ActivePanel::Shortcuts => {
+                self.leave_shortcuts(window, cx);
+                return;
+            }
             ActivePanel::Settings => {
                 settings::reset_settings_dialog(self, window, cx);
                 return;
