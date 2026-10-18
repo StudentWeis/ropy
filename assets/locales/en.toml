@@ -192,3 +192,6 @@ shortcuts_discard_title = "Discard shortcut changes?"
 shortcuts_discard_description = "These changes have not been applied. Leaving will discard them."
 shortcuts_discard = "Discard changes"
 shortcuts_continue = "Keep editing"
+
+shortcuts_modified = "Modified"
+shortcuts_locate_action = "Go to %{action}"

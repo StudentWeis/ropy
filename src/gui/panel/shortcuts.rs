@@ -7,6 +7,7 @@ use gpui_kit::{
         h_flex,
         kbd::Kbd,
         menu::{DropdownMenu, PopupMenuItem},
+        tag::Tag,
         v_flex,
     },
     div,
@@ -48,6 +49,7 @@ pub(crate) fn render_shortcuts(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
+        .track_scroll(&editor.scroll)
         .gap_2()
         .pb_3()
         .child(
@@ -56,6 +58,8 @@ pub(crate) fn render_shortcuts(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -
                 .text_color(cx.theme().muted_foreground)
                 .child(t!("shortcuts_description")),
         );
+    let mut error_targets = Vec::new();
+    let mut child_index = 1; // The description is the first scroll child.
     for (group, title) in [
         (ShortcutGroup::Common, t!("shortcuts_common")),
         (ShortcutGroup::Navigation, t!("shortcuts_navigation")),
@@ -73,8 +77,17 @@ pub(crate) fn render_shortcuts(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -
                 .text_color(cx.theme().muted_foreground)
                 .child(title),
         );
+        child_index += 1; // Group heading.
         for shortcut in shortcuts.iter().filter(|s| s.group == group) {
+            if editor
+                .error
+                .as_ref()
+                .is_some_and(|error| error.affects(&shortcut.id))
+            {
+                error_targets.push((shortcut, child_index));
+            }
             content = content.child(shortcut_row(shortcut, board, disabled, cx));
+            child_index += 1;
         }
     }
     // Preserve unknown entries from hand-edited files until explicitly removed.
@@ -84,35 +97,10 @@ pub(crate) fn render_shortcuts(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -
         .keys()
         .filter(|id| !shortcuts.iter().any(|s| &s.id == *id))
     {
-        let action = id.clone();
-        content = content.child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().danger)
-                        .child(t!("keybindings_unknown_action", action = id)),
-                )
-                .child(
-                    Button::new(SharedString::from(format!("shortcuts-remove-unknown-{id}")))
-                        .small()
-                        .label(t!("shortcuts_remove_unknown"))
-                        .disabled(disabled)
-                        .on_click(cx.listener(move |board, _, _, cx| {
-                            board.edit_shortcuts(
-                                |editor| {
-                                    editor.edit(|draft| {
-                                        draft.history.remove(&action);
-                                    });
-                                },
-                                cx,
-                            );
-                        })),
-                ),
-        );
+        content = content.child(unknown_shortcut_row(id, disabled, cx));
     }
-    let footer = shortcut_footer(editor, disabled, cx);
+
+    let footer = shortcut_footer(editor, error_targets, disabled, cx);
     v_flex()
         .flex_1()
         .min_h_0()
@@ -122,6 +110,34 @@ pub(crate) fn render_shortcuts(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -
         .child(footer)
 }
 
+fn unknown_shortcut_row(id: &str, disabled: bool, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let action = id.to_owned();
+    v_flex()
+        .gap_1()
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().danger)
+                .child(t!("keybindings_unknown_action", action = id)),
+        )
+        .child(
+            Button::new(SharedString::from(format!("shortcuts-remove-unknown-{id}")))
+                .small()
+                .label(t!("shortcuts_remove_unknown"))
+                .disabled(disabled)
+                .on_click(cx.listener(move |board, _, _, cx| {
+                    board.edit_shortcuts(
+                        |editor| {
+                            editor.edit(|draft| {
+                                draft.history.remove(&action);
+                            });
+                        },
+                        cx,
+                    );
+                })),
+        )
+}
+
 fn shortcut_row(
     shortcut: &HistoryShortcut,
     board: &RopyBoard,
@@ -129,7 +145,7 @@ fn shortcut_row(
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
     let Some(editor) = &board.shortcut_editor else {
-        return v_flex();
+        return v_flex().into_any_element();
     };
     let id = &shortcut.id;
     let recording = editor.recording.as_ref().is_some_and(|r| r.action == *id);
@@ -137,11 +153,17 @@ fn shortcut_row(
     let keys = editor.keys(shortcut);
     let controls = shortcut_controls(shortcut, &keys, disabled || editor.recording.is_some(), cx);
     v_flex()
+        .id(SharedString::from(format!("shortcuts-row-{id}")))
+        .test_support()
+        .track_focus(&editor.row_focus[id])
+        .focus(|row| row.border_color(cx.theme().ring))
         .w_full()
         .gap_1()
         .p_2()
         .rounded_md()
         .bg(cx.theme().secondary)
+        .border_1()
+        .border_color(cx.theme().secondary)
         .child(
             h_flex()
                 .justify_between()
@@ -153,6 +175,16 @@ fn shortcut_row(
                         .text_sm()
                         .child(shortcut.label.clone()),
                 )
+                .when(editor.is_modified(shortcut), |header| {
+                    header.child(
+                        div()
+                            .id(SharedString::from(format!("shortcuts-modified-{id}")))
+                            .test_support()
+                            .aria_label(t!("shortcuts_modified"))
+                            .flex_shrink_0()
+                            .child(Tag::secondary().small().child(t!("shortcuts_modified"))),
+                    )
+                })
                 .child(menu),
         )
         .when(keys.is_empty(), |row| {
@@ -199,10 +231,12 @@ fn shortcut_row(
                 )
             },
         )
+        .into_any_element()
 }
 
 fn shortcut_footer(
     editor: &ShortcutEditor,
+    error_targets: Vec<(&HistoryShortcut, usize)>,
     disabled: bool,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
@@ -238,6 +272,32 @@ fn shortcut_footer(
                     t!("shortcuts_saved")
                 }),
         )
+        .when(!error_targets.is_empty(), |footer| {
+            footer.child(
+                h_flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .children(error_targets.into_iter().map(|(shortcut, index)| {
+                        let scroll = editor.scroll.clone();
+                        let focus = editor.row_focus[&shortcut.id].clone();
+                        Button::new(SharedString::from(format!(
+                            "shortcuts-locate-{}",
+                            shortcut.id
+                        )))
+                        .small()
+                        .outline()
+                        .label(t!("shortcuts_locate_action", action = shortcut.label))
+                        .disabled(recording)
+                        .on_click(cx.listener(
+                            move |_, _, window, cx| {
+                                scroll.scroll_to_top_of_item(index);
+                                window.focus(&focus, cx);
+                                cx.notify();
+                            },
+                        ))
+                    })),
+            )
+        })
         .child(
             h_flex()
                 .gap_2()

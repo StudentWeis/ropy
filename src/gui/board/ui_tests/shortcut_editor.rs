@@ -64,7 +64,17 @@ fn test_shortcuts_apply_persists_alias_removal_and_refreshes_help(cx: &mut TestA
             .keybindings
             .history
             .is_empty()));
+        assert!(
+            window
+                .try_find("shortcuts-modified-delete_record")
+                .is_some()
+        );
         window.click("shortcuts-apply", cx);
+        assert!(
+            window
+                .try_find("shortcuts-modified-delete_record")
+                .is_some()
+        );
         assert_eq!(
             GlobalSettings::read(cx, |s| s.keybindings.history["delete_record"].clone()),
             ["delete"]
@@ -101,6 +111,7 @@ fn test_shortcuts_apply_persists_alias_removal_and_refreshes_help(cx: &mut TestA
 fn test_shortcuts_conflicting_draft_can_swap_bindings_before_apply(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let (handle, board) = open_editor(cx, dir.path().join("config.toml"));
+    cx.simulate_window_resize(handle, gpui_kit::size(px(400.), px(550.)));
     cx.update_window(handle, |_, window, cx| {
         click_row_control(window, "shortcuts-key-preview_selection-space", cx);
         window.press("/", cx);
@@ -118,8 +129,37 @@ fn test_shortcuts_conflicting_draft_can_swap_bindings_before_apply(cx: &mut Test
             error.contains(t!("help_toggle_preview").as_ref()),
             "{error}"
         );
-        click_row_control(window, "shortcuts-key-focus_search-/", cx);
+        window.scroll(
+            "shortcuts-content",
+            ScrollDelta::Pixels(point(px(0.), px(-10000.))),
+            cx,
+        );
+        assert!(
+            window.find("shortcuts-menu-focus_search").bounds().top()
+                < window.find("shortcuts-content").bounds().top()
+        );
+        window.click("shortcuts-locate-focus_search", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let viewport = window.find("shortcuts-content").bounds();
+        let target = window.find("shortcuts-menu-focus_search");
+        assert!(target.bounds().top() >= viewport.top());
+        assert!(target.bounds().bottom() <= viewport.bottom());
+        assert_eq!(
+            window.find("shortcuts-row-focus_search").focused(),
+            Some(true)
+        );
+        window.press("tab", cx);
+        assert_eq!(
+            window.find("shortcuts-menu-focus_search").focused(),
+            Some(true)
+        );
+        window.click("shortcuts-key-focus_search-/", cx);
         window.press("space", cx);
+        assert!(window.try_find("shortcuts-locate-focus_search").is_none());
         window.click("shortcuts-apply", cx);
         window.click("shortcuts-back", cx);
         window.press("escape", cx);
@@ -213,13 +253,19 @@ fn test_shortcuts_restoring_defaults_removes_overrides_without_growing_keymap(
     let (handle, _) = open_editor(cx, dir.path().join("config.toml"));
     cx.update_window(handle, |_, window, cx| {
         let count = cx.key_bindings().borrow().bindings().len();
+        // Explicitly recording the default must not label an action as customized.
+        click_row_control(window, "shortcuts-key-focus_search-/", cx);
+        window.press("/", cx);
+        assert!(window.try_find("shortcuts-modified-focus_search").is_none());
         for _ in 0..2 {
             click_row_control(window, "shortcuts-remove-focus_search-/", cx);
             window.click("shortcuts-apply", cx);
             assert!(GlobalSettings::read(cx, |s| {
                 s.keybindings.history["focus_search"].is_empty()
             }));
+            assert!(window.try_find("shortcuts-modified-focus_search").is_some());
             window.click("shortcuts-defaults", cx);
+            assert!(window.try_find("shortcuts-modified-focus_search").is_none());
             window.click("shortcuts-apply", cx);
             assert!(GlobalSettings::read(cx, |s| s
                 .keybindings

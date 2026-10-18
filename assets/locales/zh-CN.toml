@@ -193,3 +193,6 @@ shortcuts_discard_title = "放弃快捷键修改？"
 shortcuts_discard_description = "这些修改尚未应用，离开后将丢弃。"
 shortcuts_discard = "放弃修改"
 shortcuts_continue = "继续编辑"
+
+shortcuts_modified = "已修改"
+shortcuts_locate_action = "定位：%{action}"
