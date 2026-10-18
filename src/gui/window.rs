@@ -204,9 +204,30 @@ pub(crate) fn initialize(window: &Window) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// Preserve the compositor focus request associated with a global shortcut.
+/// Toggle only for the global shortcut; tray and OS activation remain show-only.
+/// An unfocused pinned popup is brought forward instead of being dismissed.
 pub(crate) fn activate_from_hotkey(cx: &AsyncApp, token: Option<&str>) {
-    cx.update(|cx| show_with_token(token, cx));
+    cx.update(|cx| {
+        let handle = cx.try_global::<Popup>().and_then(|popup| popup.handle);
+        let handled = handle.is_some_and(|handle| {
+            handle
+                .update(cx, |_, window, cx| {
+                    if !has_native_focus(window) {
+                        return false;
+                    }
+                    if let Some(board) = board(cx) {
+                        board.update(cx, |board, cx| {
+                            board.dismiss_from_hotkey(window, cx);
+                        });
+                    }
+                    true
+                })
+                .unwrap_or(false)
+        });
+        if !handled {
+            show_with_token(token, cx);
+        }
+    });
 }
 
 /// Dismiss the active popup. Wayland destroys the native window; resident
@@ -339,6 +360,121 @@ mod tests {
         repository::ClipboardRecord,
         updater::models::UpdateStatus,
     };
+
+    fn install_hidden_test_popup(cx: &TestAppContext) {
+        let (copy_tx, _copy_rx) = async_channel::unbounded();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_global(GlobalSettings::new(Settings::default()));
+            cx.set_global(GlobalRepository::new(None));
+            bind_application_keys(cx);
+            let handle = crate::gui::create_window(
+                cx,
+                Arc::new(RwLock::new(Vec::new())),
+                Arc::new(Mutex::new(CopyTracker::default())),
+                copy_tx,
+            );
+            Popup::install(handle, PopupLifetime::Transient, false, cx);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_toggles_focused_popup_and_tray_only_shows(cx: &mut TestAppContext) {
+        install_hidden_test_popup(cx);
+        for pinned in [false, true] {
+            activate_from_hotkey(&cx.to_async(), None);
+            cx.run_until_parked();
+            let handle = cx.update(|cx| {
+                assert_eq!(cx.windows().len(), 1);
+                show(cx);
+                show(cx);
+                assert_eq!(cx.windows().len(), 1, "show must never toggle");
+                ensure_window(cx).unwrap()
+            });
+            cx.update_window(handle.into(), |_, window, cx| {
+                assert!(window.is_window_active());
+                board(cx).unwrap().update(cx, |board, _| {
+                    board.set_window_pinned(window, pinned);
+                    assert_eq!(board.pinned, pinned);
+                });
+                window.render_frame(cx);
+                window.press("/", cx);
+                window.input("search marker", cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            activate_from_hotkey(&cx.to_async(), None);
+            cx.run_until_parked();
+            cx.update(|cx| {
+                assert!(
+                    cx.windows().is_empty(),
+                    "hotkey must dismiss even from search"
+                );
+                let board = board(cx).unwrap();
+                assert!(!board.read(cx).pinned);
+                assert!(board.read(cx).search_input.read(cx).value().is_empty());
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_refocuses_unfocused_pinned_popup(cx: &mut TestAppContext) {
+        install_hidden_test_popup(cx);
+        activate_from_hotkey(&cx.to_async(), None);
+        cx.run_until_parked();
+        let handle = cx.update(|cx| ensure_window(cx).unwrap());
+        cx.update_window(handle.into(), |_, window, cx| {
+            board(cx).unwrap().update(cx, |board, _| {
+                board.set_window_pinned(window, true);
+            });
+        })
+        .unwrap();
+        gpui_kit::VisualTestContext::from_window(handle.into(), cx).deactivate_window();
+        activate_from_hotkey(&cx.to_async(), None);
+        cx.run_until_parked();
+        cx.update_window(handle.into(), |_, window, cx| {
+            assert!(
+                window.is_window_active(),
+                "unfocused pinned popup must regain focus"
+            );
+            assert!(board(cx).unwrap().read(cx).pinned);
+        })
+        .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_preserves_recording_then_dismisses_settings(cx: &TestAppContext) {
+        install_hidden_test_popup(cx);
+        cx.update(|cx| {
+            crate::gui::tray::send_open_settings(cx);
+            board(cx).unwrap().update(cx, |board, _| {
+                board.settings_editor.hotkey.recording = true;
+            });
+        });
+        activate_from_hotkey(&cx.to_async(), None);
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(
+                cx.windows().len(),
+                1,
+                "recording must not dismiss the popup"
+            );
+            let board = board(cx).unwrap();
+            assert!(board.read(cx).settings_editor.hotkey.recording);
+            board.update(cx, |board, _| {
+                board.settings_editor.hotkey.recording = false;
+            });
+        });
+        activate_from_hotkey(&cx.to_async(), None);
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert!(
+                cx.windows().is_empty(),
+                "hotkey dismisses the whole settings panel"
+            );
+        });
+    }
 
     #[gpui_kit::test]
     fn test_transient_popup_reopens_with_fresh_inputs_and_retained_state(cx: &mut TestAppContext) {
