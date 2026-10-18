@@ -8,16 +8,16 @@ use crate::gui::{settings::GlobalSettings, theme::ThemeCatalog};
 
 impl RopyBoard {
     pub(crate) fn reload_themes(&mut self, cx: &mut Context<'_, Self>) {
-        if self.settings_editor.theme.busy {
+        if self.theme_files.busy {
             return;
         }
         let Some(directory) = GlobalSettings::themes_directory(cx) else {
-            self.settings_editor.theme.message = Some(t!("themes_location_failed").to_string());
+            self.theme_files.message = Some(t!("themes_location_failed").to_string());
             cx.notify();
             return;
         };
-        self.settings_editor.theme.busy = true;
-        self.settings_editor.theme.message = None;
+        self.theme_files.busy = true;
+        self.theme_files.message = None;
         cx.notify();
         let catalog = ThemeCatalog::global(cx).clone();
         let task = cx.background_spawn(async move { catalog.reload(&directory) });
@@ -25,7 +25,7 @@ impl RopyBoard {
             let catalog = task.await;
             let _ = board.update(cx, |board, cx| {
                 cx.set_global(catalog);
-                board.settings_editor.theme.busy = false;
+                board.theme_files.busy = false;
                 cx.notify();
             });
         })
@@ -41,11 +41,11 @@ impl RopyBoard {
     }
 
     fn theme_file_command(&mut self, export: bool, window: &Window, cx: &mut Context<'_, Self>) {
-        if self.settings_editor.theme.busy {
+        if self.theme_files.busy {
             return;
         }
         let Some(directory) = GlobalSettings::themes_directory(cx) else {
-            self.settings_editor.theme.message = Some(t!("themes_location_failed").to_string());
+            self.theme_files.message = Some(t!("themes_location_failed").to_string());
             cx.notify();
             return;
         };
@@ -58,8 +58,8 @@ impl RopyBoard {
             .as_ref()
             .map_or(id, |workspace| workspace.selected.clone());
         let source = catalog.source(&id).unwrap_or_default().to_owned();
-        self.settings_editor.theme.busy = true;
-        self.settings_editor.theme.message = None;
+        self.theme_files.busy = true;
+        self.theme_files.message = None;
         cx.notify();
         let task =
             cx.background_spawn(
@@ -77,15 +77,7 @@ impl RopyBoard {
                             Ok(prompt) => match prompt.await {
                                 Ok(Ok(Some(path))) => cx
                                     .background_spawn(async move {
-                                        use std::io::Write;
-                                        let directory = path
-                                            .parent()
-                                            .unwrap_or_else(|| std::path::Path::new("."));
-                                        let mut file = tempfile::NamedTempFile::new_in(directory)?;
-                                        file.write_all(source.as_bytes())?;
-                                        file.as_file().sync_all()?;
-                                        file.persist(path).map_err(|error| error.error)?;
-                                        Ok::<(), std::io::Error>(())
+                                        crate::gui::theme::storage::export(&path, &source)
                                     })
                                     .await
                                     .map_err(|error| error.to_string()),
@@ -103,11 +95,10 @@ impl RopyBoard {
                 Err(error) => Err(error.to_string()),
             };
             let _ = board.update(cx, |board, cx| {
-                board.settings_editor.theme.busy = false;
+                board.theme_files.busy = false;
                 if let Err(error) = result {
                     tracing::warn!(%error, "theme file command failed");
-                    board.settings_editor.theme.message =
-                        Some(t!("themes_file_command_failed").to_string());
+                    board.theme_files.message = Some(t!("themes_file_command_failed").to_string());
                 }
                 cx.notify();
             });

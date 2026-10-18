@@ -1,4 +1,6 @@
 mod catalog;
+pub(crate) mod document;
+pub(crate) mod storage;
 
 pub(crate) use catalog::ThemeCatalog;
 

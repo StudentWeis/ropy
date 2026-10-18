@@ -198,6 +198,7 @@ pub(crate) struct RopyBoard {
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
     pub(crate) settings_editor: SettingsEditor,
+    pub(crate) theme_files: theme_workspace::ThemeFileState,
     pub(crate) theme_workspace: Option<theme_workspace::ThemeWorkspace>,
     pub(crate) shortcut_editor: Option<shortcut_editor::ShortcutEditor>,
     _shortcut_recording_subscription: Subscription,
@@ -357,9 +358,7 @@ impl RopyBoard {
         self.theme_catalog_subscription = Self::observe_themes(window, cx);
         self.search_input = cx.new(|cx| InputState::new(window, cx));
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
-        let theme_busy = self.settings_editor.theme.busy;
         self.settings_editor = SettingsEditor::new(window, cx);
-        self.settings_editor.theme.busy = theme_busy;
         if let Some(draft) = self
             .theme_workspace
             .as_mut()
@@ -517,6 +516,7 @@ impl RopyBoard {
             settings_editor,
             shortcut_editor: None,
             theme_workspace: None,
+            theme_files: theme_workspace::ThemeFileState::default(),
             _shortcut_recording_subscription: shortcut_recording_subscription,
             confirm_mode,
             layout_mode,

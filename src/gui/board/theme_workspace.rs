@@ -1,17 +1,26 @@
-//! Isolated theme drafts: preview never changes the live application palette.
+//! Window-bound draft controls and application commands.
+mod color;
 use super::{ActivePanel, RopyBoard};
+use crate::gui::theme::{
+    document::{ColorRole, DocumentError, ThemeDocument},
+    storage::{ThemeWrite, ThemeWriteError},
+};
 use crate::gui::{
     settings::GlobalSettings,
     theme::{ThemeCatalog, ThemeDefinition, ThemeId, ThemeMode},
 };
+use color::ColorEditor;
 use gpui_kit::{
     App, AppContext, Context, Entity, Subscription, Window,
-    component::{
-        WindowExt, button::ButtonVariant, color_picker::ColorPickerState,
-        dialog::DialogButtonProps, input::InputState,
-    },
+    component::{WindowExt, button::ButtonVariant, dialog::DialogButtonProps, input::InputState},
 };
 use rust_i18n::t;
+
+#[derive(Default)]
+pub(crate) struct ThemeFileState {
+    pub(crate) busy: bool,
+    pub(crate) message: Option<String>,
+}
 
 pub(crate) struct ThemeWorkspace {
     pub(crate) selected: ThemeId,
@@ -23,17 +32,16 @@ pub(crate) struct ThemeDraft {
     pub(crate) name: Entity<InputState>,
     pub(crate) dark: bool,
     pub(crate) advanced: bool,
+    pub(crate) preview_role: ColorRole,
     pub(crate) colors: Vec<ThemeColor>,
-    source: String,
-    baseline: String,
-    target: Option<ThemeId>,
+    baseline: ThemeDocument,
+    target: Option<(ThemeId, String)>,
     subscriptions: Vec<Subscription>,
 }
 
 pub(crate) struct ThemeColor {
-    pub(crate) field: &'static str,
-    pub(crate) label_key: &'static str,
-    pub(crate) picker: Entity<ColorPickerState>,
+    pub(crate) role: ColorRole,
+    pub(crate) editor: Entity<ColorEditor>,
 }
 
 impl ThemeDraft {
@@ -42,10 +50,15 @@ impl ThemeDraft {
         self.name = cx.new(|cx| InputState::new(window, cx).default_value(name));
         self.subscriptions = vec![cx.observe(&self.name, |_, _, cx| cx.notify())];
         for color in &mut self.colors {
-            let value = color.picker.read(cx).value().unwrap_or_default();
-            color.picker = cx.new(|cx| ColorPickerState::new(window, cx).default_value(value));
+            let value = color
+                .editor
+                .read(cx)
+                .value(cx)
+                .unwrap_or_else(|| color.editor.read(cx).preview());
+            let text = color.editor.read(cx).input.read(cx).value().to_string();
+            color.editor = cx.new(|cx| ColorEditor::new(color.role, value, Some(text), window, cx));
             self.subscriptions
-                .push(cx.observe(&color.picker, |_, _, cx| cx.notify()));
+                .push(observe_color(&color.editor, color.role, cx));
         }
     }
 
@@ -56,20 +69,17 @@ impl ThemeDraft {
         window: &mut Window,
         cx: &mut Context<'_, RopyBoard>,
     ) -> Self {
-        let name = cx.new(|cx| {
-            InputState::new(window, cx).default_value(if copy {
-                t!("themes_copy_name", name = theme.name()).to_string()
-            } else {
-                theme.name().to_owned()
-            })
-        });
-        let colors = color_fields(theme)
-            .into_iter()
-            .map(|spec| ThemeColor {
-                field: spec.field,
-                label_key: spec.label_key,
-                picker: cx.new(|cx| {
-                    ColorPickerState::new(window, cx).default_value(gpui_kit::rgb(spec.value))
+        let mut baseline = ThemeDocument::from(theme);
+        if copy {
+            baseline.name = t!("themes_copy_name", name = theme.name()).to_string();
+        }
+        let name = cx.new(|cx| InputState::new(window, cx).default_value(baseline.name.clone()));
+        let colors = ColorRole::ALL
+            .iter()
+            .map(|&role| ThemeColor {
+                role,
+                editor: cx.new(|cx| {
+                    ColorEditor::new(role, role.get(&baseline.palette), None, window, cx)
                 }),
             })
             .collect::<Vec<_>>();
@@ -77,50 +87,50 @@ impl ThemeDraft {
         subscriptions.extend(
             colors
                 .iter()
-                .map(|color| cx.observe(&color.picker, |_, _, cx| cx.notify())),
+                .map(|color| observe_color(&color.editor, color.role, cx)),
         );
-        let mut draft = Self {
+        Self {
             name,
-            dark: theme.mode() == ThemeMode::Dark,
+            dark: baseline.mode == ThemeMode::Dark,
             advanced: false,
+            preview_role: ColorRole::Background,
             colors,
-            source,
-            baseline: String::new(),
-            target: (!copy && theme.id().code().starts_with("user:")).then(|| theme.id().clone()),
+            baseline,
+            target: (!copy && theme.id().code().starts_with("user:"))
+                .then(|| (theme.id().clone(), source)),
             subscriptions,
+        }
+    }
+
+    pub(crate) fn preview(&self, cx: &App) -> ThemeDocument {
+        let mut document = self.baseline.clone();
+        document.name = self.name.read(cx).value().to_string();
+        document.mode = if self.dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
         };
-        draft.baseline = draft.source(cx).unwrap_or_default();
-        draft
-    }
-
-    pub(crate) fn color(&self, field: &str, cx: &App) -> gpui_kit::Hsla {
-        self.colors
-            .iter()
-            .find(|color| color.field == field)
-            .and_then(|color| color.picker.read(cx).displayed_color())
-            .unwrap_or_default()
-    }
-
-    fn source(&self, cx: &App) -> Result<String, String> {
-        let name = self.name.read(cx).value();
-        if name.trim().is_empty() {
-            return Err(t!("themes_empty_name").to_string());
-        }
-        let mut table: toml::Table =
-            toml::from_str(&self.source).map_err(|error| error.to_string())?;
-        table.insert("theme_name".into(), name.trim().into());
-        table.insert(
-            "mode".into(),
-            if self.dark { "dark" } else { "light" }.into(),
-        );
         for color in &self.colors {
-            let value = color.picker.read(cx).value().unwrap_or_default();
-            if value.a < 1.0 {
-                return Err(t!("themes_opaque_only").to_string());
-            }
-            table.insert(color.field.into(), hex_color(value).into());
+            color
+                .role
+                .set(&mut document.palette, color.editor.read(cx).preview());
         }
-        toml::to_string_pretty(&table).map_err(|error| error.to_string())
+        document
+    }
+
+    fn document(&self, cx: &App) -> Result<ThemeDocument, String> {
+        let mut document = self.preview(cx);
+        for color in &self.colors {
+            let value = color.editor.read(cx).value(cx).ok_or_else(|| {
+                t!("themes_invalid_rgb", color = t!(color.role.label_key())).to_string()
+            })?;
+            color.role.set(&mut document.palette, value);
+        }
+        Ok(document)
+    }
+
+    fn is_dirty(&self, cx: &App) -> bool {
+        self.document(cx).as_ref() != Ok(&self.baseline)
     }
 }
 
@@ -147,6 +157,9 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if self.theme_files.busy {
+            return;
+        }
         let Some(workspace) = &mut self.theme_workspace else {
             return;
         };
@@ -176,7 +189,7 @@ impl RopyBoard {
             .theme_workspace
             .as_ref()
             .and_then(|workspace| workspace.draft.as_ref());
-        if draft.is_some_and(|draft| draft.source(cx).as_ref() != Ok(&draft.baseline)) {
+        if draft.is_some_and(|draft| draft.is_dirty(cx)) {
             let owner = cx.entity().downgrade();
             window.open_alert_dialog(cx, move |dialog, _, _| {
                 let owner = owner.clone();
@@ -204,6 +217,9 @@ impl RopyBoard {
     }
 
     pub(crate) fn use_selected_theme(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        if self.theme_files.busy {
+            return;
+        }
         let Some(workspace) = &mut self.theme_workspace else {
             return;
         };
@@ -229,13 +245,37 @@ impl RopyBoard {
     }
 
     pub(crate) fn save_theme_draft(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        if self.theme_files.busy {
+            return;
+        }
         let Some(workspace) = &mut self.theme_workspace else {
             return;
         };
         let Some(draft) = &workspace.draft else {
             return;
         };
-        match save_draft(draft, cx) {
+        let result = draft.document(cx).and_then(|document| {
+            let directory = GlobalSettings::themes_directory(cx)
+                .ok_or_else(|| t!("themes_location_failed").to_string())?;
+            let write = ThemeWrite::save(
+                &directory,
+                &document,
+                draft
+                    .target
+                    .as_ref()
+                    .map(|(id, source)| (id, source.as_str())),
+            )
+            .map_err(theme_write_message)?;
+            if let Err(error) = GlobalSettings::persist(cx, |settings| {
+                settings.theme = write.definition.id().clone();
+                settings.appearance.follow_system = false;
+            }) {
+                write.rollback().map_err(theme_write_message)?;
+                return Err(t!("settings_save_failed", error = error).to_string());
+            }
+            Ok((write.definition, write.source))
+        });
+        match result {
             Ok((definition, source)) => {
                 workspace.selected = definition.id().clone();
                 workspace.draft = None;
@@ -256,220 +296,31 @@ impl RopyBoard {
     }
 }
 
-fn save_draft(draft: &ThemeDraft, cx: &mut App) -> Result<(ThemeDefinition, String), String> {
-    use std::io::Write;
-    let source = draft.source(cx)?;
-    let directory = GlobalSettings::themes_directory(cx)
-        .ok_or_else(|| t!("themes_location_failed").to_string())?;
-    let operation = || -> Result<_, String> {
-        std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        let mut file = tempfile::Builder::new()
-            .prefix("custom-")
-            .suffix(".toml")
-            .rand_bytes(12)
-            .tempfile_in(&directory)
-            .map_err(|error| error.to_string())?;
-        // Generated filenames must obey the loader's lowercase filename policy.
-        let stem = file
-            .path()
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_lowercase();
-        let id = draft
-            .target
-            .clone()
-            .unwrap_or_else(|| ThemeId::new(format!("user:{stem}")));
-        let path = directory.join(format!("{}.toml", id.code().trim_start_matches("user:")));
-        let previous = match std::fs::read(&path) {
-            Ok(bytes) => Some(bytes),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(error.to_string()),
-        };
-        if draft.target.is_some() && previous.as_deref() != Some(draft.source.as_bytes()) {
-            return Err(t!("themes_external_change").to_string());
+fn theme_write_message(error: ThemeWriteError) -> String {
+    tracing::warn!(%error, "theme write failed");
+    match error {
+        ThemeWriteError::Document(DocumentError::EmptyName) => t!("themes_empty_name").to_string(),
+        ThemeWriteError::Changed => t!("themes_external_change").to_string(),
+        ThemeWriteError::Restore { backup, .. } => {
+            t!("themes_recovery_copy", path = backup.display()).to_string()
         }
-        let definition = ThemeDefinition::parse(&id, &source).map_err(|error| error.to_string())?;
-        file.write_all(source.as_bytes())
-            .map_err(|error| error.to_string())?;
-        file.as_file()
-            .sync_all()
-            .map_err(|error| error.to_string())?;
-        if draft.target.is_some() {
-            file.persist(&path).map_err(|error| error.to_string())?;
-        } else {
-            file.persist_noclobber(&path)
-                .map_err(|error| error.to_string())?;
-        }
-        Ok((definition, path, previous))
-    };
-    let (definition, path, previous) = operation()?;
-    if let Err(error) = GlobalSettings::persist(cx, |settings| {
-        settings.theme = definition.id().clone();
-        settings.appearance.follow_system = false;
-    }) {
-        let rollback = previous.map_or_else(
-            || std::fs::remove_file(&path),
-            |bytes| std::fs::write(&path, bytes),
-        );
-        if let Err(rollback) = rollback {
-            return Err(
-                t!("themes_rollback_failed", error = error, rollback = rollback).to_string(),
-            );
-        }
-        return Err(t!("settings_save_failed", error = error).to_string());
+        _ => t!("themes_file_command_failed").to_string(),
     }
-    Ok((definition, source))
 }
 
-fn color_fields(theme: &ThemeDefinition) -> Vec<ColorSpec> {
-    let palette = theme.palette();
-    let mut colors = vec![
-        ColorSpec {
-            field: "background",
-            label_key: "theme_color_background",
-            value: palette.background,
-        },
-        ColorSpec {
-            field: "foreground",
-            label_key: "theme_color_foreground",
-            value: palette.foreground,
-        },
-        ColorSpec {
-            field: "primary",
-            label_key: "theme_color_primary",
-            value: palette.primary,
-        },
-        ColorSpec {
-            field: "primary_foreground",
-            label_key: "theme_color_primary_foreground",
-            value: palette.primary_foreground,
-        },
-        ColorSpec {
-            field: "secondary",
-            label_key: "theme_color_secondary",
-            value: palette.secondary,
-        },
-        ColorSpec {
-            field: "border",
-            label_key: "theme_color_border",
-            value: palette.border,
-        },
-    ];
-    colors.extend(advanced_color_fields(theme));
-    colors
-}
-
-fn advanced_color_fields(theme: &ThemeDefinition) -> Vec<ColorSpec> {
-    let palette = theme.palette();
-    vec![
-        ColorSpec {
-            field: "accent",
-            label_key: "theme_color_accent",
-            value: palette.accent,
-        },
-        ColorSpec {
-            field: "accent_foreground",
-            label_key: "theme_color_accent_foreground",
-            value: palette.accent_foreground,
-        },
-        ColorSpec {
-            field: "secondary_foreground",
-            label_key: "theme_color_secondary_foreground",
-            value: palette.secondary_foreground,
-        },
-        ColorSpec {
-            field: "muted",
-            label_key: "theme_color_muted",
-            value: palette.muted,
-        },
-        ColorSpec {
-            field: "muted_foreground",
-            label_key: "theme_color_muted_foreground",
-            value: palette.muted_foreground,
-        },
-        ColorSpec {
-            field: "input",
-            label_key: "theme_color_input",
-            value: palette.input,
-        },
-        ColorSpec {
-            field: "primary_hover",
-            label_key: "theme_color_primary_hover",
-            value: palette.primary_hover,
-        },
-        ColorSpec {
-            field: "primary_active",
-            label_key: "theme_color_primary_active",
-            value: palette.primary_active,
-        },
-        ColorSpec {
-            field: "danger",
-            label_key: "theme_color_danger",
-            value: palette.danger,
-        },
-        ColorSpec {
-            field: "danger_foreground",
-            label_key: "theme_color_danger_foreground",
-            value: palette.danger_foreground,
-        },
-        ColorSpec {
-            field: "popover",
-            label_key: "theme_color_popover",
-            value: palette.popover,
-        },
-        ColorSpec {
-            field: "popover_foreground",
-            label_key: "theme_color_popover_foreground",
-            value: palette.popover_foreground,
-        },
-        ColorSpec {
-            field: "selection",
-            label_key: "theme_color_selection",
-            value: palette.selection,
-        },
-        ColorSpec {
-            field: "ring",
-            label_key: "theme_color_ring",
-            value: palette.ring,
-        },
-        ColorSpec {
-            field: "list_hover",
-            label_key: "theme_color_list_hover",
-            value: palette.list_hover,
-        },
-        ColorSpec {
-            field: "list_active",
-            label_key: "theme_color_list_active",
-            value: palette.list_active,
-        },
-        ColorSpec {
-            field: "scrollbar_thumb",
-            label_key: "theme_color_scrollbar_thumb",
-            value: palette.scrollbar_thumb,
-        },
-    ]
-}
-
-struct ColorSpec {
-    field: &'static str,
-    label_key: &'static str,
-    value: u32,
-}
-
-/// Round HSL conversion noise so editing another field does not darken unchanged colors.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "Rounded color channels are clamped to the u8 range"
-)]
-fn hex_color(value: gpui_kit::Hsla) -> String {
-    let value = value.to_rgb();
-    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!(
-        "#{:02x}{:02x}{:02x}",
-        channel(value.r),
-        channel(value.g),
-        channel(value.b)
-    )
+fn observe_color(
+    editor: &Entity<ColorEditor>,
+    role: ColorRole,
+    cx: &mut Context<'_, RopyBoard>,
+) -> Subscription {
+    cx.subscribe(editor, move |board, _, _: &color::ColorEdited, cx| {
+        if let Some(draft) = board
+            .theme_workspace
+            .as_mut()
+            .and_then(|workspace| workspace.draft.as_mut())
+        {
+            draft.preview_role = role;
+        }
+        cx.notify();
+    })
 }

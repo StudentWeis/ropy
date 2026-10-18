@@ -1,16 +1,19 @@
 # Custom themes
 
-In Settings, open **Customize themes…**. Select a theme to preview it, then choose
+In Settings, open the theme dropdown and choose **Customize themes…**. Select a theme to preview it, then choose
 **Use theme** to apply it. **Duplicate** starts a new draft from the selected palette;
 custom themes also offer **Edit**. Change the name, appearance and colors in the app.
-**More colors** reveals the remaining palette roles. **Save and use** persists the
+Enter a six-digit hex color or use the RGB sliders beside it. The preview reflects
+the color role being edited. **More colors** reveals the remaining palette roles. **Save and use** persists the
 file and selection; **Cancel** leaves the running theme unchanged. Using a theme
 turns off Follow system; enable it again in Settings to assign light/dark variants.
 
 The workspace's **More** menu contains export, open folder and reload commands.
 Export saves the selected preview's complete TOML palette. You can still edit files
 outside the app and reload them. External changes are checked before overwriting
-an existing custom theme.
+an existing custom theme. Saving and reloading cannot run concurrently. File
+replacement and rollback are atomic; if restoring the old file fails, the app
+reports the path to a recovery copy.
 
 | Platform | Theme folder |
 | --- | --- |

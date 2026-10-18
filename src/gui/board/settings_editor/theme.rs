@@ -140,8 +140,6 @@ pub(crate) struct ThemeEditor {
     light: Entity<SelectState<ThemeOptions>>,
     dark: Entity<SelectState<ThemeOptions>>,
     system_mode: ThemeMode,
-    pub(crate) busy: bool,
-    pub(crate) message: Option<String>,
 }
 
 impl ThemeEditor {
@@ -151,8 +149,6 @@ impl ThemeEditor {
             light: build_select(ThemeTarget::Light, window, cx),
             dark: build_select(ThemeTarget::Dark, window, cx),
             system_mode: window.appearance().into(),
-            busy: false,
-            message: None,
         }
     }
 
@@ -162,6 +158,10 @@ impl ThemeEditor {
             ThemeTarget::Light => &self.light,
             ThemeTarget::Dark => &self.dark,
         }
+    }
+
+    pub(crate) const fn system_mode(&self) -> ThemeMode {
+        self.system_mode
     }
 
     pub(crate) fn update_system_mode(&mut self, mode: ThemeMode) -> bool {
@@ -232,13 +232,7 @@ fn theme_options(target: ThemeTarget, cx: &App) -> Vec<ThemeOption> {
                 return None;
             }
             let id = definition.id().clone();
-            let title = id.code().strip_prefix("user:").map_or_else(
-                || definition.name().to_owned(),
-                |file| {
-                    rust_i18n::t!("themes_user_label", name = definition.name(), file = file)
-                        .to_string()
-                },
-            );
+            let title = definition.name().to_owned();
             let palette = definition.palette();
             Some(ThemeOption {
                 title: title.into(),

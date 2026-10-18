@@ -101,7 +101,7 @@ fn test_user_theme_selection_reload_and_failure_preserve_saved_choice(cx: &mut T
     .unwrap();
     cx.run_until_parked();
     cx.update_window(handle, |_, window, cx| {
-        assert!(!board.read(cx).settings_editor.theme.busy);
+        assert!(!board.read(cx).theme_files.busy);
         assert_eq!(
             gpui_kit::component::Theme::global(cx).background,
             gpui_kit::rgb(0x0023_4567).into()
@@ -178,8 +178,8 @@ fn test_user_theme_export_writes_complete_template_without_changing_selection(
     let catalog = ThemeCatalog::default().reload(&directory.path().join("themes"));
     assert!(catalog.get(&ThemeId::new("user:exported")).is_some());
     cx.update(|cx| {
-        assert!(!board.read(cx).settings_editor.theme.busy);
-        assert!(board.read(cx).settings_editor.theme.message.is_none());
+        assert!(!board.read(cx).theme_files.busy);
+        assert!(board.read(cx).theme_files.message.is_none());
         assert_eq!(
             GlobalSettings::read(cx, |settings| settings.theme.clone()),
             ThemeId::default()
@@ -203,7 +203,7 @@ fn test_theme_workspace_save_failure_preserves_draft_then_retry_persists(cx: &mu
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| board.open_themes(window, cx));
         window.click("theme-new", cx);
-        let picker = board
+        let input = board
             .read(cx)
             .theme_workspace
             .as_ref()
@@ -212,11 +212,15 @@ fn test_theme_workspace_save_failure_preserves_draft_then_retry_persists(cx: &mu
             .as_ref()
             .unwrap()
             .colors[0]
-            .picker
+            .editor
+            .read(cx)
+            .input
             .clone();
-        picker.update(cx, |picker, cx| {
-            picker.select_color(gpui_kit::rgb(0x0012_3456).into(), window, cx);
-        });
+        input.update(cx, |input, cx| input.set_value("#123456", window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| board.attach_window(window, cx));
         window.click("theme-save", cx);
         assert!(window.find("theme-save").visible());
@@ -298,4 +302,95 @@ fn test_theme_workspace_selection_previews_until_use(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_theme_save_while_reload_busy_preserves_draft_and_disk(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalSettings::at_path(
+            Settings::default(),
+            Some(directory.path().join("config.toml")),
+        ));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.open_themes(window, cx);
+            board.new_theme_draft(true, window, cx);
+            board.theme_files.busy = true;
+            board.save_theme_draft(window, cx);
+        });
+        assert!(
+            board
+                .read(cx)
+                .theme_workspace
+                .as_ref()
+                .unwrap()
+                .draft
+                .is_some()
+        );
+    })
+    .unwrap();
+    assert!(!directory.path().join("config.toml").exists());
+    assert!(!directory.path().join("themes").exists());
+}
+
+#[gpui_kit::test]
+fn test_theme_preview_identifies_current_follow_system_theme(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        GlobalSettings::update(cx, |settings| settings.appearance.follow_system = true);
+    });
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.open_themes(window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, _| {
+        assert_eq!(
+            window.find("themes-preview-status").label(),
+            Some(rust_i18n::t!("themes_current").as_ref())
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_theme_invalid_rgb_survives_window_rebind_and_cannot_save(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalSettings::at_path(
+            Settings::default(),
+            Some(directory.path().join("config.toml")),
+        ));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.open_themes(window, cx);
+            board.new_theme_draft(true, window, cx);
+            let input = board
+                .theme_workspace
+                .as_ref()
+                .unwrap()
+                .draft
+                .as_ref()
+                .unwrap()
+                .colors[0]
+                .editor
+                .read(cx)
+                .input
+                .clone();
+            input.update(cx, |input, cx| input.set_value("#12345680", window, cx));
+            board.attach_window(window, cx);
+            board.save_theme_draft(window, cx);
+            let workspace = board.theme_workspace.as_ref().unwrap();
+            assert!(workspace.error.is_some());
+            let editor = workspace.draft.as_ref().unwrap().colors[0].editor.read(cx);
+            assert_eq!(editor.input.read(cx).value().as_ref(), "#12345680");
+        });
+    })
+    .unwrap();
+    assert!(!directory.path().join("themes").exists());
 }

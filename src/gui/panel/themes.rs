@@ -3,15 +3,14 @@ use super::common::{panel_back_button, panel_header_with_back};
 use crate::gui::{
     board::{RopyBoard, theme_workspace::ThemeDraft},
     settings::GlobalSettings,
-    theme::ThemeCatalog,
+    theme::{ThemeCatalog, document::ColorRole},
 };
 use gpui_kit::{
     Context, InteractiveElement, IntoElement, ParentElement, SharedString,
     StatefulInteractiveElement, Styled, TestSupportExt,
     component::{
-        ActiveTheme, Selectable, Sizable,
+        ActiveTheme, Disableable, Selectable, Sizable,
         button::{Button, ButtonVariants},
-        color_picker::ColorSelect,
         h_flex,
         input::Input,
         menu::{DropdownMenu, PopupMenuItem},
@@ -65,6 +64,9 @@ pub(crate) fn render_themes(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                 .p_2()
                 .border_t_1()
                 .border_color(cx.theme().border)
+                .when(board.theme_files.busy, |footer| {
+                    footer.child(div().text_sm().child(t!("themes_working")))
+                })
                 .children(workspace.error.iter().map(|error| {
                     div()
                         .text_sm()
@@ -90,6 +92,7 @@ pub(crate) fn render_themes(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                             Button::new("theme-save")
                                 .primary()
                                 .label(t!("themes_save"))
+                                .disabled(board.theme_files.busy)
                                 .on_click(cx.listener(|board, _, window, cx| {
                                     board.save_theme_draft(window, cx);
                                 })),
@@ -98,11 +101,12 @@ pub(crate) fn render_themes(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     h_flex()
                         .justify_between()
                         .gap_2()
-                        .child(theme_menu(cx))
+                        .child(theme_menu(board.theme_files.busy, cx))
                         .child(
                             Button::new("theme-use")
                                 .primary()
                                 .label(t!("themes_use"))
+                                .disabled(board.theme_files.busy)
                                 .on_click(cx.listener(|board, _, window, cx| {
                                     board.use_selected_theme(window, cx);
                                 })),
@@ -126,6 +130,7 @@ fn render_catalog(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
                     Button::new("theme-new")
                         .small()
                         .label(t!("themes_new"))
+                        .disabled(board.theme_files.busy)
                         .on_click(cx.listener(|board, _, window, cx| {
                             board.new_theme_draft(true, window, cx);
                         })),
@@ -137,6 +142,7 @@ fn render_catalog(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
                             Button::new("theme-edit")
                                 .small()
                                 .label(t!("themes_edit"))
+                                .disabled(board.theme_files.busy)
                                 .on_click(cx.listener(|board, _, window, cx| {
                                     board.new_theme_draft(false, window, cx);
                                 })),
@@ -169,8 +175,7 @@ fn render_catalog(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
         }))
         .children(
             board
-                .settings_editor
-                .theme
+                .theme_files
                 .message
                 .iter()
                 .chain(ThemeCatalog::global(cx).diagnostics.iter())
@@ -181,7 +186,12 @@ fn render_catalog(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
 fn render_editor(draft: &ThemeDraft, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     v_flex()
         .gap_2()
-        .child(Input::new(&draft.name).aria_label(t!("themes_name")))
+        .child(
+            v_flex()
+                .gap_1()
+                .child(div().text_sm().child(t!("themes_name")))
+                .child(Input::new(&draft.name).aria_label(t!("themes_name"))),
+        )
         .child(
             h_flex().justify_between().child(t!("themes_dark")).child(
                 Switch::new("theme-mode")
@@ -212,13 +222,8 @@ fn render_editor(draft: &ThemeDraft, cx: &Context<'_, RopyBoard>) -> impl IntoEl
                     h_flex()
                         .justify_between()
                         .gap_2()
-                        .child(div().text_sm().child(t!(color.label_key)))
-                        .child(
-                            ColorSelect::new(&color.picker)
-                                .small()
-                                .w(gpui_kit::rems(9.))
-                                .accessibility_label(t!(color.label_key)),
-                        )
+                        .child(div().text_sm().child(t!(color.role.label_key())))
+                        .child(div().w(gpui_kit::rems(9.)).child(color.editor.clone()))
                 }),
         )
         .child(
@@ -245,7 +250,7 @@ fn render_editor(draft: &ThemeDraft, cx: &Context<'_, RopyBoard>) -> impl IntoEl
             div()
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
-                .child(t!("themes_opaque_only")),
+                .child(t!("themes_rgb_hint")),
         )
 }
 
@@ -256,13 +261,27 @@ fn render_preview(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
     let Some(theme) = ThemeCatalog::global(cx).get(&workspace.selected) else {
         return div();
     };
-    let palette = theme.palette();
-    let color = |field, fallback| {
-        workspace
-            .draft
-            .as_ref()
-            .map_or_else(|| rgb(fallback).into(), |draft| draft.color(field, cx))
+    let document = workspace.draft.as_ref().map(|draft| draft.preview(cx));
+    let palette = document
+        .as_ref()
+        .map_or_else(|| theme.palette(), |document| &document.palette);
+    let color = |role: ColorRole| rgb(role.get(palette));
+    let current = workspace.draft.is_none()
+        && GlobalSettings::read(cx, |settings| {
+            ThemeCatalog::global(cx).resolve(settings, board.settings_editor.theme.system_mode())
+                == workspace.selected
+        });
+    let status = if current {
+        t!("themes_current")
+    } else {
+        t!("themes_preview")
     };
+    let role = workspace
+        .draft
+        .as_ref()
+        .map_or(ColorRole::Background, |draft| draft.preview_role);
+    let (surface, foreground) = preview_surface(role);
+    let (button, button_text) = preview_button(role);
     v_flex()
         .flex_shrink_0()
         .mx_2()
@@ -271,49 +290,95 @@ fn render_preview(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoEl
         .gap_2()
         .rounded_lg()
         .border_1()
-        .border_color(color("border", palette.border))
-        .bg(color("background", palette.background))
-        .text_color(color("foreground", palette.foreground))
-        .child(div().text_xs().child(
-            if workspace.draft.is_none()
-                && GlobalSettings::read(cx, |settings| {
-                    !settings.appearance.follow_system && settings.theme == workspace.selected
-                })
-            {
-                t!("themes_current")
-            } else {
-                t!("themes_preview")
-            },
-        ))
-        .child(
-            div()
-                .rounded_md()
-                .p_2()
-                .bg(color("secondary", palette.secondary))
-                .child(t!("themes_preview_search")),
-        )
+        .border_color(color(if role == ColorRole::Ring {
+            ColorRole::Ring
+        } else {
+            ColorRole::Border
+        }))
+        .bg(color(ColorRole::Background))
+        .text_color(color(ColorRole::Foreground))
         .child(
             h_flex()
                 .justify_between()
-                .gap_2()
-                .child(div().text_sm().child(t!("themes_preview_item")))
+                .text_xs()
                 .child(
                     div()
-                        .rounded_md()
-                        .px_3()
-                        .py_1()
-                        .bg(color("primary", palette.primary))
-                        .text_color(color("primary_foreground", palette.primary_foreground))
-                        .child(t!("themes_preview_action")),
+                        .id("themes-preview-status")
+                        .test_support()
+                        .aria_label(status.clone())
+                        .child(status),
+                )
+                .children(
+                    workspace
+                        .draft
+                        .as_ref()
+                        .map(|draft| div().child(t!(draft.preview_role.label_key()))),
                 ),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .rounded_md()
+                .p_2()
+                .bg(color(surface))
+                .text_color(color(foreground))
+                .child(
+                    div()
+                        .p_1()
+                        .rounded_sm()
+                        .bg(color(ColorRole::Input))
+                        .child(t!("themes_preview_search")),
+                )
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .child(t!("themes_preview_item"))
+                        .child(
+                            div()
+                                .w_1()
+                                .h_4()
+                                .rounded_full()
+                                .bg(color(ColorRole::ScrollbarThumb)),
+                        ),
+                ),
+        )
+        .child(
+            h_flex().justify_end().child(
+                div()
+                    .rounded_md()
+                    .px_3()
+                    .py_1()
+                    .bg(color(button))
+                    .text_color(color(button_text))
+                    .child(t!("themes_preview_action")),
+            ),
         )
 }
 
-fn theme_menu(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+const fn preview_surface(role: ColorRole) -> (ColorRole, ColorRole) {
+    match role {
+        ColorRole::Accent | ColorRole::AccentForeground => {
+            (ColorRole::Accent, ColorRole::AccentForeground)
+        }
+        ColorRole::Muted | ColorRole::MutedForeground => {
+            (ColorRole::Muted, ColorRole::MutedForeground)
+        }
+        ColorRole::Popover | ColorRole::PopoverForeground => {
+            (ColorRole::Popover, ColorRole::PopoverForeground)
+        }
+        ColorRole::Selection | ColorRole::ListHover | ColorRole::ListActive => {
+            (role, ColorRole::Foreground)
+        }
+        _ => (ColorRole::Secondary, ColorRole::SecondaryForeground),
+    }
+}
+
+fn theme_menu(busy: bool, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     let owner = cx.entity().downgrade();
     Button::new("themes-more")
         .ghost()
         .label(t!("themes_more"))
+        .disabled(busy)
         .dropdown_menu(move |menu, _, _| {
             let export = owner.clone();
             let folder = owner.clone();
@@ -334,4 +399,15 @@ fn theme_menu(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
                 }),
             )
         })
+}
+
+const fn preview_button(role: ColorRole) -> (ColorRole, ColorRole) {
+    match role {
+        ColorRole::PrimaryHover => (ColorRole::PrimaryHover, ColorRole::PrimaryForeground),
+        ColorRole::PrimaryActive => (ColorRole::PrimaryActive, ColorRole::PrimaryForeground),
+        ColorRole::Danger | ColorRole::DangerForeground => {
+            (ColorRole::Danger, ColorRole::DangerForeground)
+        }
+        _ => (ColorRole::Primary, ColorRole::PrimaryForeground),
+    }
 }
