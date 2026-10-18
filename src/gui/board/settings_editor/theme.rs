@@ -5,7 +5,7 @@ use gpui_kit::{
     Window,
     component::{
         IndexPath, h_flex,
-        select::{SelectEvent, SelectItem, SelectState},
+        select::{SelectDelegate, SelectEvent, SelectItem, SelectState},
         separator::Separator,
         v_flex,
     },
@@ -80,7 +80,14 @@ impl ThemeOption {
                 .w_full()
                 .gap_2()
                 .child(Separator::horizontal())
-                .child(self.title.clone())
+                // Balance the Select row's trailing checkmark gutter.
+                .child(
+                    div()
+                        .w_full()
+                        .pl_4()
+                        .text_center()
+                        .child(self.title.clone()),
+                )
                 .into_any_element();
         }
         // These are palette samples (data colors), not colors of the surrounding control.
@@ -125,9 +132,9 @@ impl SelectItem for ThemeOption {
 
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) struct ThemeEditor {
-    fixed: Entity<SelectState<Vec<ThemeOption>>>,
-    light: Entity<SelectState<Vec<ThemeOption>>>,
-    dark: Entity<SelectState<Vec<ThemeOption>>>,
+    fixed: Entity<SelectState<ThemeOptions>>,
+    light: Entity<SelectState<ThemeOptions>>,
+    dark: Entity<SelectState<ThemeOptions>>,
     system_mode: ThemeMode,
     pub(crate) busy: bool,
     pub(crate) message: Option<String>,
@@ -145,10 +152,7 @@ impl ThemeEditor {
         }
     }
 
-    pub(crate) const fn select(
-        &self,
-        target: ThemeTarget,
-    ) -> &Entity<SelectState<Vec<ThemeOption>>> {
+    pub(crate) const fn select(&self, target: ThemeTarget) -> &Entity<SelectState<ThemeOptions>> {
         match target {
             ThemeTarget::Fixed => &self.fixed,
             ThemeTarget::Light => &self.light,
@@ -173,7 +177,7 @@ impl ThemeEditor {
             });
             let items = theme_options(target, cx);
             self.select(target).update(cx, |state, cx| {
-                state.set_items(items, window, cx);
+                state.set_items(ThemeOptions(items), window, cx);
                 state.set_selected_value(&ThemeChoice::Theme(id), window, cx);
             });
         }
@@ -184,7 +188,7 @@ fn build_select(
     target: ThemeTarget,
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
-) -> Entity<SelectState<Vec<ThemeOption>>> {
+) -> Entity<SelectState<ThemeOptions>> {
     let items = theme_options(target, cx);
     let selected = GlobalSettings::read(cx, |settings| {
         target.selected(
@@ -197,11 +201,11 @@ fn build_select(
         .iter()
         .position(|item| item.id == ThemeChoice::Theme(selected.clone()))
         .map(|ix| IndexPath::default().row(ix));
-    let select = cx.new(|cx| SelectState::new(items, index, window, cx));
+    let select = cx.new(|cx| SelectState::new(ThemeOptions(items), index, window, cx));
     cx.subscribe_in(
         &select,
         window,
-        move |board, _, event: &SelectEvent<Vec<ThemeOption>>, window, cx| match event {
+        move |board, _, event: &SelectEvent<ThemeOptions>, window, cx| match event {
             SelectEvent::Confirm(Some(ThemeChoice::Theme(id))) => {
                 board.save_selected_theme(target, id, window, cx);
             }
@@ -244,4 +248,40 @@ fn theme_options(target: ThemeTarget, cx: &App) -> Vec<ThemeOption> {
             swatch: [0; 3],
         }))
         .collect()
+}
+
+/// Use the delegate hook so the command can fill the row instead of the
+/// default adapter's intrinsic-width label wrapper.
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) struct ThemeOptions(Vec<ThemeOption>);
+
+impl SelectDelegate for ThemeOptions {
+    type Item = ThemeOption;
+
+    fn items_count(&self, section: usize) -> usize {
+        self.0.items_count(section)
+    }
+
+    fn item(&self, ix: IndexPath) -> Option<&Self::Item> {
+        self.0.item(ix)
+    }
+
+    fn position<V>(&self, value: &V) -> Option<IndexPath>
+    where
+        Self::Item: SelectItem<Value = V>,
+        V: PartialEq,
+    {
+        self.0.position(value)
+    }
+
+    fn render_item(
+        &self,
+        _: IndexPath,
+        item: &Self::Item,
+        _: bool,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Option<AnyElement> {
+        (item.id == ThemeChoice::Customize).then(|| item.content())
+    }
 }
