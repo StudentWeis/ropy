@@ -53,6 +53,10 @@ impl RopyBoard {
         let id = GlobalSettings::read(cx, |settings| {
             catalog.resolve(settings, window.appearance().into())
         });
+        let id = self
+            .theme_workspace
+            .as_ref()
+            .map_or(id, |workspace| workspace.selected.clone());
         let source = catalog.source(&id).unwrap_or_default().to_owned();
         self.settings_editor.theme.busy = true;
         self.settings_editor.theme.message = None;

@@ -17,6 +17,7 @@ mod settings_editor;
 mod settings_handler;
 /// Draft state and interactions for the history shortcut editor.
 pub mod shortcut_editor;
+pub mod theme_workspace;
 mod updater_ui;
 
 #[cfg(test)]
@@ -63,6 +64,7 @@ pub(crate) enum ActivePanel {
     About,
     Help,
     Shortcuts,
+    Themes,
 }
 
 pub(super) fn search_query_changed(previous_query: &str, next_query: &str) -> bool {
@@ -196,6 +198,7 @@ pub(crate) struct RopyBoard {
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
     pub(crate) settings_editor: SettingsEditor,
+    pub(crate) theme_workspace: Option<theme_workspace::ThemeWorkspace>,
     pub(crate) shortcut_editor: Option<shortcut_editor::ShortcutEditor>,
     _shortcut_recording_subscription: Subscription,
     pub(crate) confirm_mode: ConfirmMode,
@@ -357,9 +360,19 @@ impl RopyBoard {
         let theme_busy = self.settings_editor.theme.busy;
         self.settings_editor = SettingsEditor::new(window, cx);
         self.settings_editor.theme.busy = theme_busy;
+        if let Some(draft) = self
+            .theme_workspace
+            .as_mut()
+            .and_then(|workspace| workspace.draft.as_mut())
+        {
+            draft.attach_window(window, cx);
+        }
         self.last_search_query.clear();
         self.invalidate_copy_confirmation();
-        if self.active_panel != ActivePanel::Shortcuts {
+        if !matches!(
+            self.active_panel,
+            ActivePanel::Shortcuts | ActivePanel::Themes
+        ) {
             self.active_panel = ActivePanel::ClipboardList;
         }
         self.cancel_shortcut_recording(cx);
@@ -503,6 +516,7 @@ impl RopyBoard {
             active_panel: ActivePanel::default(),
             settings_editor,
             shortcut_editor: None,
+            theme_workspace: None,
             _shortcut_recording_subscription: shortcut_recording_subscription,
             confirm_mode,
             layout_mode,

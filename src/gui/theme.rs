@@ -69,7 +69,7 @@ impl ThemeDefinition {
         Self::parse(theme_id, content)
     }
 
-    fn parse(theme_id: &ThemeId, content: &str) -> Result<Self, ThemeError> {
+    pub(crate) fn parse(theme_id: &ThemeId, content: &str) -> Result<Self, ThemeError> {
         let raw = toml::from_str::<ThemeDefinitionRaw>(content).map_err(|source| {
             ThemeError::ParseToml {
                 theme_id: theme_id.code().to_string(),

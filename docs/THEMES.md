@@ -1,8 +1,16 @@
 # Custom themes
 
-In Settings, choose **More → Export theme…** to save a complete copy of the current
-theme. Save it in the theme folder, edit its colors, then click **Reload** and
-select it. **Open theme folder…** creates and opens that folder when needed.
+In Settings, open **Customize themes…**. Select a theme to preview it, then choose
+**Use theme** to apply it. **Duplicate** starts a new draft from the selected palette;
+custom themes also offer **Edit**. Change the name, appearance and colors in the app.
+**More colors** reveals the remaining palette roles. **Save and use** persists the
+file and selection; **Cancel** leaves the running theme unchanged. Using a theme
+turns off Follow system; enable it again in Settings to assign light/dark variants.
+
+The workspace's **More** menu contains export, open folder and reload commands.
+Export saves the selected preview's complete TOML palette. You can still edit files
+outside the app and reload them. External changes are checked before overwriting
+an existing custom theme.
 
 | Platform | Theme folder |
 | --- | --- |
@@ -40,7 +48,7 @@ change. Selecting a theme saves the choice before applying it.
 
 Theme files are read at startup and when you click **Reload**. Reloading updates
 the list, names and active colors without restarting. Invalid files are reported
-in Settings and do not prevent other themes from loading. A previously loaded
+in the theme workspace and do not prevent other themes from loading. A previously loaded
 theme remains available for the rest of the process if its file becomes invalid
 or disappears; export uses that last valid version too.
 
@@ -51,4 +59,4 @@ rewritten by fallback. Repair the file and reload to restore it. A complete
 directory read failure retains the previous snapshot.
 
 Exporting does not select or reload the exported file. There is no automatic file
-watching or visual color editor in this version.
+watching in this version.

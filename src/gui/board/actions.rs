@@ -316,7 +316,10 @@ impl RopyBoard {
             settings::reset_settings_dialog(self, window, cx);
         }
         self.reveal_selected_record();
-        if self.active_panel != ActivePanel::Shortcuts {
+        if !matches!(
+            self.active_panel,
+            ActivePanel::Shortcuts | ActivePanel::Themes
+        ) {
             self.active_panel = ActivePanel::ClipboardList;
         }
         self.cancel_shortcut_recording(cx);
@@ -355,6 +358,10 @@ impl RopyBoard {
 
         self.invalidate_copy_confirmation();
         match self.active_panel {
+            ActivePanel::Themes => {
+                self.leave_themes(window, cx);
+                return;
+            }
             ActivePanel::Shortcuts => {
                 self.leave_shortcuts(window, cx);
                 return;

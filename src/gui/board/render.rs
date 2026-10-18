@@ -79,6 +79,9 @@ impl Render for RopyBoard {
                 .on_key_down(cx.listener(Self::on_settings_key_down))
                 .child(render_settings_content(self, cx))
                 .into_any_element(),
+            ActivePanel::Themes => base
+                .child(crate::gui::panel::themes::render_themes(self, cx))
+                .into_any_element(),
             ActivePanel::Shortcuts => base
                 .child(crate::gui::panel::shortcuts::render_shortcuts(self, cx))
                 .into_any_element(),

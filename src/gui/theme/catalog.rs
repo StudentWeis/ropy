@@ -36,6 +36,11 @@ impl Default for ThemeCatalog {
 }
 
 impl ThemeCatalog {
+    pub(crate) fn insert(&mut self, definition: ThemeDefinition, source: String) {
+        self.themes
+            .insert(definition.id().code().to_owned(), (definition, source));
+    }
+
     pub(crate) fn global(cx: &App) -> &Self {
         // Test and promotional windows use bundled themes without accessing user files.
         static BUNDLED: OnceLock<ThemeCatalog> = OnceLock::new();
