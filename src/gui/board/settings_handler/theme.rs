@@ -15,7 +15,8 @@ impl RopyBoard {
         cx: &mut Context<'_, Self>,
     ) {
         let previous = GlobalSettings::read(cx, |settings| {
-            crate::gui::theme::resolve_theme(settings, window.appearance().into())
+            crate::gui::theme::ThemeCatalog::global(cx)
+                .resolve(settings, window.appearance().into())
         });
         let id = id.clone();
         if let Err(message) = Self::persist_settings_update(cx, |settings| target.set(settings, id))
@@ -26,7 +27,8 @@ impl RopyBoard {
             return;
         }
         let next = GlobalSettings::read(cx, |settings| {
-            crate::gui::theme::resolve_theme(settings, window.appearance().into())
+            crate::gui::theme::ThemeCatalog::global(cx)
+                .resolve(settings, window.appearance().into())
         });
         if next != previous {
             crate::gui::app::apply_current_theme(
@@ -48,8 +50,9 @@ impl RopyBoard {
             return;
         }
         let mode = window.appearance().into();
+        let catalog = crate::gui::theme::ThemeCatalog::global(cx).clone();
         if let Err(message) = Self::persist_settings_update(cx, |settings| {
-            crate::gui::theme::set_follow_system(settings, enabled, mode);
+            catalog.set_follow_system(settings, enabled, mode);
         }) {
             Self::notify_settings_save_failed(window, cx, &message);
             cx.notify();
@@ -120,6 +123,7 @@ impl RopyBoard {
         Self::update_tray_menu(cx);
         self.refresh_activation_key_placeholder(window, cx);
         self.sync_layout_select_items(window, cx);
+        self.settings_editor.theme.sync(window, cx);
         cx.notify();
     }
 

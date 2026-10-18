@@ -123,7 +123,9 @@ pub(crate) fn apply_window_opacity(window: &Window, opacity_percent: u8) {
 /// Apply the saved appearance strategy using this window's OS appearance.
 pub(crate) fn apply_current_theme(window: &mut Window, cx: &mut App, opacity_percent: u8) {
     let mode = window.appearance().into();
-    let id = GlobalSettings::read(cx, |settings| super::theme::resolve_theme(settings, mode));
+    let id = GlobalSettings::read(cx, |settings| {
+        super::theme::ThemeCatalog::global(cx).resolve(settings, mode)
+    });
     set_app_theme(window, cx, &id, opacity_percent);
 }
 
@@ -135,7 +137,10 @@ pub(crate) fn set_app_theme(
     theme_id: &ThemeId,
     opacity_percent: u8,
 ) {
-    let app_theme = ThemeDefinition::load_or_default(theme_id);
+    let app_theme = super::theme::ThemeCatalog::global(cx)
+        .get(theme_id)
+        .cloned()
+        .unwrap_or_else(|| ThemeDefinition::load_or_default(theme_id));
     let component_mode = match app_theme.mode() {
         ThemeMode::Light => ComponentThemeMode::Light,
         ThemeMode::Dark => ComponentThemeMode::Dark,

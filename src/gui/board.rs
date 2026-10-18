@@ -178,6 +178,7 @@ pub(crate) struct RopyBoard {
     pub(crate) focus_handle: FocusHandle,
     pub(crate) window_activation_subscription: Subscription,
     window_appearance_subscription: Subscription,
+    theme_catalog_subscription: Subscription,
     pub(crate) search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) last_search_query: String,
@@ -350,9 +351,12 @@ impl RopyBoard {
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.window_activation_subscription = Self::observe_activation(window, cx);
         self.window_appearance_subscription = Self::observe_appearance(window, cx);
+        self.theme_catalog_subscription = Self::observe_themes(window, cx);
         self.search_input = cx.new(|cx| InputState::new(window, cx));
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
+        let theme_busy = self.settings_editor.theme.busy;
         self.settings_editor = SettingsEditor::new(window, cx);
+        self.settings_editor.theme.busy = theme_busy;
         self.last_search_query.clear();
         self.invalidate_copy_confirmation();
         if self.active_panel != ActivePanel::Shortcuts {
@@ -394,6 +398,18 @@ impl RopyBoard {
         })
     }
 
+    fn observe_themes(window: &Window, cx: &mut Context<'_, Self>) -> Subscription {
+        cx.observe_global_in::<crate::gui::theme::ThemeCatalog>(window, |board, window, cx| {
+            board.settings_editor.theme.sync(window, cx);
+            crate::gui::app::apply_current_theme(
+                window,
+                cx,
+                board.settings_editor.window_opacity_percent,
+            );
+            cx.notify();
+        })
+    }
+
     fn observe_appearance(window: &mut Window, cx: &Context<'_, Self>) -> Subscription {
         cx.observe_window_appearance(window, Self::refresh_system_appearance)
     }
@@ -432,6 +448,7 @@ impl RopyBoard {
 
         let window_activation_subscription = Self::observe_activation(window, cx);
         let window_appearance_subscription = Self::observe_appearance(window, cx);
+        let theme_catalog_subscription = Self::observe_themes(window, cx);
 
         let settings = GlobalSettings::read(cx, Clone::clone);
         let layout_mode = settings.layout.mode;
@@ -467,6 +484,7 @@ impl RopyBoard {
             focus_handle,
             window_activation_subscription,
             window_appearance_subscription,
+            theme_catalog_subscription,
             search_input_subscription,
             search_input,
             last_search_query: String::new(),

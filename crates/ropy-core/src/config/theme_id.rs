@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-/// Theme identifier — the bundle file name without the `.toml` suffix.
+/// Theme identifier: a bundled file stem or `user:<stem>` for a user theme.
 /// Serialized transparently as the raw string so existing `config.toml`
 /// values keep working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

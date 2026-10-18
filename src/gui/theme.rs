@@ -1,10 +1,10 @@
-use std::{collections::HashMap, sync::OnceLock};
+mod catalog;
+
+pub(crate) use catalog::ThemeCatalog;
 
 use rust_embed::RustEmbed;
 use serde::Deserialize;
 use thiserror::Error;
-
-use crate::config::Settings;
 
 /// Bundled theme TOML files. Adding a `<id>.toml` under `assets/themes/`
 /// is enough to make the theme selectable — no Rust code change required.
@@ -12,16 +12,7 @@ use crate::config::Settings;
 #[folder = "assets/themes"]
 struct ThemeAssets;
 
-static DISPLAY_NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
-
 pub(crate) use crate::config::theme_id::ThemeId;
-
-pub(crate) fn theme_display_name(theme: &ThemeId) -> String {
-    cached_display_names()
-        .get(theme.code())
-        .cloned()
-        .unwrap_or_else(|| theme.code().to_owned())
-}
 
 pub(crate) fn available_themes() -> Vec<ThemeId> {
     let mut codes: Vec<String> = ThemeAssets::iter()
@@ -53,37 +44,6 @@ impl From<gpui_kit::WindowAppearance> for ThemeMode {
     }
 }
 
-/// Resolve the displayed theme without changing the user's saved choices.
-pub(crate) fn resolve_theme(settings: &Settings, system_mode: ThemeMode) -> ThemeId {
-    if !settings.appearance.follow_system {
-        return ThemeDefinition::load_or_default(&settings.theme).id;
-    }
-    let selected = match system_mode {
-        ThemeMode::Light => &settings.appearance.light_theme,
-        ThemeMode::Dark => &settings.appearance.dark_theme,
-    };
-    theme_for_mode(selected, system_mode)
-}
-
-/// Reject missing themes and themes assigned to the wrong appearance slot.
-pub(crate) fn theme_for_mode(selected: &ThemeId, mode: ThemeMode) -> ThemeId {
-    if ThemeDefinition::load(selected).is_ok_and(|definition| definition.mode() == mode) {
-        selected.clone()
-    } else {
-        ThemeId::new(match mode {
-            ThemeMode::Light => "ropy-light",
-            ThemeMode::Dark => "ropy-dark",
-        })
-    }
-}
-
-pub(crate) fn set_follow_system(settings: &mut Settings, enabled: bool, system_mode: ThemeMode) {
-    if settings.appearance.follow_system && !enabled {
-        settings.theme = resolve_theme(settings, system_mode);
-    }
-    settings.appearance.follow_system = enabled;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThemeDefinition {
     id: ThemeId,
@@ -106,6 +66,10 @@ impl ThemeDefinition {
                 theme_id: theme_id.code().to_string(),
                 source,
             })?;
+        Self::parse(theme_id, content)
+    }
+
+    fn parse(theme_id: &ThemeId, content: &str) -> Result<Self, ThemeError> {
         let raw = toml::from_str::<ThemeDefinitionRaw>(content).map_err(|source| {
             ThemeError::ParseToml {
                 theme_id: theme_id.code().to_string(),
@@ -135,6 +99,10 @@ impl ThemeDefinition {
         })
     }
 
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
     pub(crate) const fn mode(&self) -> ThemeMode {
         self.mode
     }
@@ -144,6 +112,9 @@ impl ThemeDefinition {
     }
 
     fn try_from_raw(id: ThemeId, raw: ThemeDefinitionRaw) -> Result<Self, ThemeError> {
+        if raw.theme_name.trim().is_empty() {
+            return Err(ThemeError::EmptyName);
+        }
         let palette = ThemePalette {
             background: parse_color(&id, "background", &raw.background)?,
             foreground: parse_color(&id, "foreground", &raw.foreground)?,
@@ -246,6 +217,8 @@ pub(crate) struct ThemePalette {
 
 #[derive(Debug, Error)]
 pub(crate) enum ThemeError {
+    #[error("theme name must not be empty")]
+    EmptyName,
     #[error("theme '{0}' was not found")]
     NotFound(String),
     #[error("theme '{theme_id}' contains invalid UTF-8")]
@@ -269,6 +242,7 @@ pub(crate) enum ThemeError {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ThemeDefinitionRaw {
     theme_name: String,
     mode: ThemeMode,
@@ -315,23 +289,6 @@ fn parse_color(theme_id: &ThemeId, field: &'static str, value: &str) -> Result<u
     })
 }
 
-fn cached_display_names() -> &'static HashMap<String, String> {
-    DISPLAY_NAMES.get_or_init(|| {
-        ThemeAssets::iter()
-            .filter_map(|name| {
-                let theme_code = name.as_ref().strip_suffix(".toml")?.to_owned();
-                let file = ThemeAssets::get(name.as_ref())?;
-                let content = std::str::from_utf8(&file.data).ok()?;
-                let theme_name = toml::from_str::<ThemeDefinitionRaw>(content)
-                    .ok()?
-                    .theme_name;
-
-                Some((theme_code, theme_name))
-            })
-            .collect()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -340,8 +297,25 @@ mod tests {
 
     use rstest::rstest;
 
-    use super::{ThemeDefinition, ThemeError, ThemeId, ThemeMode, cached_display_names};
+    use super::{ThemeCatalog, ThemeDefinition, ThemeError, ThemeId, ThemeMode};
     use crate::config::Settings;
+
+    #[rstest]
+    #[case("theme_name = \"Ropy Dark\"", "theme_name = \"  \"")]
+    #[case("background =", "backgrond =")]
+    #[case("mode = \"dark\"", "mode = \"dark\"\nunknown_color = \"#ffffff\"")]
+    fn test_theme_definition_invalid_user_fields_are_rejected(
+        #[case] from: &str,
+        #[case] to: &str,
+    ) {
+        let content = include_str!("../../assets/themes/ropy-dark.toml").replace(from, to);
+        let result = toml::from_str::<super::ThemeDefinitionRaw>(&content)
+            .map_err(|_| ())
+            .and_then(|raw| {
+                ThemeDefinition::try_from_raw(ThemeId::new("user:test"), raw).map_err(|_| ())
+            });
+        assert!(result.is_err());
+    }
 
     #[rstest]
     #[case(false, ThemeMode::Light, "ropy-dark")]
@@ -359,7 +333,10 @@ mod tests {
         settings.appearance.light_theme = ThemeId::new("nord-light");
         settings.appearance.dark_theme = ThemeId::new("everforest-night");
 
-        assert_eq!(super::resolve_theme(&settings, mode).code(), expected);
+        assert_eq!(
+            ThemeCatalog::default().resolve(&settings, mode).code(),
+            expected
+        );
         assert_eq!(settings.theme.code(), "ropy-dark");
     }
 
@@ -374,7 +351,9 @@ mod tests {
         #[case] expected: &str,
     ) {
         assert_eq!(
-            super::theme_for_mode(&ThemeId::new(code), mode).code(),
+            ThemeCatalog::default()
+                .for_mode(&ThemeId::new(code), mode)
+                .code(),
             expected
         );
     }
@@ -386,20 +365,26 @@ mod tests {
         settings.appearance.light_theme = ThemeId::new("nord-light");
         settings.appearance.dark_theme = ThemeId::new("everforest-night");
 
-        super::set_follow_system(&mut settings, false, ThemeMode::Dark);
+        ThemeCatalog::default().set_follow_system(&mut settings, false, ThemeMode::Dark);
         assert_eq!(
-            super::resolve_theme(&settings, ThemeMode::Light).code(),
+            ThemeCatalog::default()
+                .resolve(&settings, ThemeMode::Light)
+                .code(),
             "everforest-night"
         );
         assert_eq!(settings.appearance.light_theme.code(), "nord-light");
 
-        super::set_follow_system(&mut settings, true, ThemeMode::Light);
+        ThemeCatalog::default().set_follow_system(&mut settings, true, ThemeMode::Light);
         assert_eq!(
-            super::resolve_theme(&settings, ThemeMode::Light).code(),
+            ThemeCatalog::default()
+                .resolve(&settings, ThemeMode::Light)
+                .code(),
             "nord-light"
         );
         assert_eq!(
-            super::resolve_theme(&settings, ThemeMode::Dark).code(),
+            ThemeCatalog::default()
+                .resolve(&settings, ThemeMode::Dark)
+                .code(),
             "everforest-night"
         );
     }
@@ -413,40 +398,6 @@ mod tests {
         assert!(codes.contains(&"ropy-light"));
         assert!(codes.contains(&"everforest-night"));
         assert!(codes.contains(&"nord-light"));
-    }
-
-    #[test]
-    fn test_theme_id_display_name_returns_theme_name() {
-        let theme = ThemeId::new("ropy-dark");
-
-        assert_eq!(crate::gui::theme::theme_display_name(&theme), "Ropy Dark");
-    }
-
-    #[test]
-    fn test_theme_display_name_cache_contains_bundled_themes() {
-        let display_names = cached_display_names();
-
-        assert_eq!(
-            display_names.get("ropy-dark").map(String::as_str),
-            Some("Ropy Dark")
-        );
-        assert_eq!(
-            display_names.get("ropy-light").map(String::as_str),
-            Some("Ropy Light")
-        );
-        assert_eq!(
-            display_names.get("everforest-night").map(String::as_str),
-            Some("Everforest Night")
-        );
-        assert_eq!(
-            display_names.get("nord-light").map(String::as_str),
-            Some("Nord Light")
-        );
-    }
-
-    #[test]
-    fn test_theme_display_name_cache_is_initialized_once() {
-        assert!(std::ptr::eq(cached_display_names(), cached_display_names()));
     }
 
     #[test]

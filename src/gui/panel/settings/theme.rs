@@ -3,8 +3,15 @@
 use gpui_kit::{
     Context, IntoElement, ParentElement, Styled,
     component::{
-        ActiveTheme, Icon, IconName, Sizable, h_flex, select::Select, switch::Switch, v_flex,
+        ActiveTheme, Disableable, Icon, IconName, Sizable,
+        button::{Button, ButtonVariants},
+        h_flex,
+        menu::{DropdownMenu, PopupMenuItem},
+        select::Select,
+        switch::Switch,
+        v_flex,
     },
+    div,
 };
 use rust_i18n::t;
 
@@ -56,7 +63,107 @@ pub(super) fn render_theme_settings(
             cx,
         ))
     };
-    v_flex().w_full().child(follow_row).child(choices.pb_1())
+    v_flex()
+        .w_full()
+        .child(follow_row)
+        .child(choices.pb_1())
+        .child(render_user_themes(board, cx))
+}
+
+fn render_user_themes(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let catalog = crate::gui::theme::ThemeCatalog::global(cx);
+    let busy = board.settings_editor.theme.busy;
+    let owner = cx.entity().downgrade();
+    let fallback = GlobalSettings::read(cx, |settings| {
+        let selected = if settings.appearance.follow_system {
+            [
+                &settings.appearance.light_theme,
+                &settings.appearance.dark_theme,
+            ]
+            .to_vec()
+        } else {
+            vec![&settings.theme]
+        };
+        selected.into_iter().any(|id| catalog.get(id).is_none())
+            || (settings.appearance.follow_system
+                && (catalog.for_mode(
+                    &settings.appearance.light_theme,
+                    crate::gui::theme::ThemeMode::Light,
+                ) != settings.appearance.light_theme
+                    || catalog.for_mode(
+                        &settings.appearance.dark_theme,
+                        crate::gui::theme::ThemeMode::Dark,
+                    ) != settings.appearance.dark_theme))
+    });
+    v_flex()
+        .w_full()
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_2()
+                .child(
+                    Button::new("themes-open-folder")
+                        .flex_shrink_0()
+                        .small()
+                        .outline()
+                        .label(t!("themes_open_folder"))
+                        .disabled(busy)
+                        .on_click(cx.listener(|board, _, window, cx| {
+                            board.open_themes_folder(window, cx);
+                        })),
+                )
+                .child(
+                    Button::new("themes-reload")
+                        .flex_shrink_0()
+                        .small()
+                        .outline()
+                        .label(t!("themes_reload"))
+                        .disabled(busy)
+                        .on_click(cx.listener(|board, _, _, cx| board.reload_themes(cx))),
+                )
+                .child(
+                    Button::new("themes-more")
+                        .small()
+                        .ghost()
+                        .label(t!("themes_more"))
+                        .disabled(busy)
+                        .dropdown_menu(move |menu, _, _| {
+                            let owner = owner.clone();
+                            menu.item(PopupMenuItem::new(t!("themes_export")).on_click(
+                                move |_, window, cx| {
+                                    let _ = owner
+                                        .update(cx, |board, cx| board.export_theme(window, cx));
+                                },
+                            ))
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child(t!("themes_help")),
+        )
+        .children(fallback.then(|| div().text_sm().child(t!("themes_fallback"))))
+        .children(
+            board
+                .settings_editor
+                .theme
+                .message
+                .iter()
+                .map(|message| div().text_sm().child(message.clone())),
+        )
+        .children((!catalog.diagnostics.is_empty()).then(|| {
+            v_flex()
+                .gap_1()
+                .child(div().text_sm().child(t!("themes_errors")))
+                .children(
+                    catalog
+                        .diagnostics
+                        .iter()
+                        .map(|message| div().text_sm().child(message.clone())),
+                )
+        }))
 }
 
 fn theme_row(

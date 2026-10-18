@@ -32,6 +32,14 @@ impl GlobalSettings {
         reader(&Self::global(cx).settings)
     }
 
+    pub(crate) fn themes_directory(cx: &App) -> Option<PathBuf> {
+        Self::global(cx)
+            .config_file
+            .as_ref()?
+            .parent()
+            .map(|path| path.join("themes"))
+    }
+
     pub(crate) fn update<R>(cx: &mut App, update: impl FnOnce(&mut Settings) -> R) -> R {
         cx.update_global::<Self, _>(|global, _| update(&mut global.settings))
     }

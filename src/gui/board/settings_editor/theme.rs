@@ -15,7 +15,7 @@ use crate::{
     config::Settings,
     gui::{
         settings::GlobalSettings,
-        theme::{self, ThemeDefinition, ThemeId, ThemeMode},
+        theme::{ThemeCatalog, ThemeId, ThemeMode},
     },
 };
 
@@ -36,15 +36,14 @@ impl ThemeTarget {
         }
     }
 
-    fn selected(self, settings: &Settings) -> ThemeId {
+    fn selected(self, settings: &Settings, catalog: &ThemeCatalog, mode: ThemeMode) -> ThemeId {
         match self {
-            Self::Fixed => ThemeDefinition::load_or_default(&settings.theme)
-                .id()
-                .clone(),
-            Self::Light => {
-                theme::theme_for_mode(&settings.appearance.light_theme, ThemeMode::Light)
-            }
-            Self::Dark => theme::theme_for_mode(&settings.appearance.dark_theme, ThemeMode::Dark),
+            Self::Fixed => catalog.get(&settings.theme).map_or_else(
+                || catalog.for_mode(&settings.theme, mode),
+                |theme| theme.id().clone(),
+            ),
+            Self::Light => catalog.for_mode(&settings.appearance.light_theme, ThemeMode::Light),
+            Self::Dark => catalog.for_mode(&settings.appearance.dark_theme, ThemeMode::Dark),
         }
     }
 
@@ -112,6 +111,8 @@ pub(crate) struct ThemeEditor {
     light: Entity<SelectState<Vec<ThemeOption>>>,
     dark: Entity<SelectState<Vec<ThemeOption>>>,
     system_mode: ThemeMode,
+    pub(crate) busy: bool,
+    pub(crate) message: Option<String>,
 }
 
 impl ThemeEditor {
@@ -121,6 +122,8 @@ impl ThemeEditor {
             light: build_select(ThemeTarget::Light, window, cx),
             dark: build_select(ThemeTarget::Dark, window, cx),
             system_mode: window.appearance().into(),
+            busy: false,
+            message: None,
         }
     }
 
@@ -143,9 +146,18 @@ impl ThemeEditor {
 
     pub(crate) fn sync(&self, window: &mut Window, cx: &mut Context<'_, RopyBoard>) {
         for target in [ThemeTarget::Fixed, ThemeTarget::Light, ThemeTarget::Dark] {
-            let id = GlobalSettings::read(cx, |settings| target.selected(settings));
-            self.select(target)
-                .update(cx, |state, cx| state.set_selected_value(&id, window, cx));
+            let id = GlobalSettings::read(cx, |settings| {
+                target.selected(
+                    settings,
+                    ThemeCatalog::global(cx),
+                    window.appearance().into(),
+                )
+            });
+            let items = theme_options(target, cx);
+            self.select(target).update(cx, |state, cx| {
+                state.set_items(items, window, cx);
+                state.set_selected_value(&id, window, cx);
+            });
         }
     }
 }
@@ -155,22 +167,14 @@ fn build_select(
     window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SelectState<Vec<ThemeOption>>> {
-    let items: Vec<_> = theme::available_themes()
-        .into_iter()
-        .filter_map(|id| {
-            let definition = ThemeDefinition::load(&id).ok()?;
-            if target.mode().is_some_and(|mode| definition.mode() != mode) {
-                return None;
-            }
-            let palette = definition.palette();
-            Some(ThemeOption {
-                title: theme::theme_display_name(&id).into(),
-                id,
-                swatch: [palette.background, palette.selection, palette.primary],
-            })
-        })
-        .collect();
-    let selected = GlobalSettings::read(cx, |settings| target.selected(settings));
+    let items = theme_options(target, cx);
+    let selected = GlobalSettings::read(cx, |settings| {
+        target.selected(
+            settings,
+            ThemeCatalog::global(cx),
+            window.appearance().into(),
+        )
+    });
     let index = items
         .iter()
         .position(|item| item.id == selected)
@@ -187,4 +191,29 @@ fn build_select(
     )
     .detach();
     select
+}
+
+fn theme_options(target: ThemeTarget, cx: &App) -> Vec<ThemeOption> {
+    ThemeCatalog::global(cx)
+        .definitions()
+        .filter_map(|definition| {
+            if target.mode().is_some_and(|mode| definition.mode() != mode) {
+                return None;
+            }
+            let id = definition.id().clone();
+            let title = id.code().strip_prefix("user:").map_or_else(
+                || definition.name().to_owned(),
+                |file| {
+                    rust_i18n::t!("themes_user_label", name = definition.name(), file = file)
+                        .to_string()
+                },
+            );
+            let palette = definition.palette();
+            Some(ThemeOption {
+                title: title.into(),
+                id,
+                swatch: [palette.background, palette.selection, palette.primary],
+            })
+        })
+        .collect()
 }

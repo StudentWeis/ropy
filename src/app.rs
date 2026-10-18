@@ -192,15 +192,25 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
     let platform = gpui_kit::platform::current_platform(false);
     #[cfg(target_os = "macos")]
     crate::gui::set_activation_policy_accessory(platform.as_ref());
+    let settings = load_settings();
+    rust_i18n::set_locale(settings.language.code());
+    let catalog = crate::gui::theme::ThemeCatalog::default();
+    let catalog = match Settings::config_dir() {
+        Ok(directory) => catalog.reload(&directory.join("themes")),
+        Err(error) => {
+            tracing::warn!(%error, "cannot locate user themes");
+            catalog
+        }
+    };
     let application = gpui_kit::Application::with_platform(platform.clone());
     application.with_assets(crate::gui::Assets).run(move |cx| {
         gpui_kit::init(cx);
 
         // Activate the persisted locale before constructing application or component UI.
-        let settings = load_settings();
         cx.set_global(GlobalSettings::new(settings.clone()));
         bind_application_keys(cx);
         rust_i18n::set_locale(settings.language.code());
+        cx.set_global(catalog);
         crate::gui::tray::TrayState::register(cx);
 
         if !settings.is_recovery_required() {

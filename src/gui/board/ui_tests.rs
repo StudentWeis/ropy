@@ -20,6 +20,7 @@ use crate::{
 };
 
 mod shortcut_editor;
+mod user_themes;
 
 fn open_board(
     cx: &TestAppContext,
