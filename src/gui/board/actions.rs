@@ -338,6 +338,8 @@ impl RopyBoard {
         self.cancel_shortcut_recording(cx);
         self.ui_state.hide_preview();
         self.invalidate_copy_confirmation();
+        self.set_window_pinned(window, false);
+        cx.notify();
         self.dismiss_popup(window, cx);
     }
 
@@ -399,11 +401,11 @@ impl RopyBoard {
 
     fn dismiss_popup(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.clear_search(window, cx);
+        hide_window(window, cx, self.pinned);
         if self.pinned {
             self.set_window_pinned(window, false);
             cx.notify();
         }
-        hide_window(window, cx, false);
     }
 
     #[expect(clippy::unused_self)]
