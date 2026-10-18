@@ -3,12 +3,7 @@
 use gpui_kit::{
     Context, IntoElement, ParentElement, Styled,
     component::{
-        ActiveTheme, Icon, IconName, Sizable,
-        button::{Button, ButtonVariants},
-        h_flex,
-        select::Select,
-        switch::Switch,
-        v_flex,
+        ActiveTheme, Icon, IconName, Sizable, h_flex, select::Select, switch::Switch, v_flex,
     },
 };
 use rust_i18n::t;
@@ -61,21 +56,7 @@ pub(super) fn render_theme_settings(
             cx,
         ))
     };
-    v_flex()
-        .w_full()
-        .child(follow_row)
-        .child(choices.pb_1())
-        .child(render_user_themes(cx))
-}
-
-fn render_user_themes(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    h_flex().w_full().justify_end().pb_2().child(
-        Button::new("themes-customize")
-            .small()
-            .ghost()
-            .label(t!("themes_customize"))
-            .on_click(cx.listener(|board, _, window, cx| board.open_themes(window, cx))),
-    )
+    v_flex().w_full().child(follow_row).child(choices.pb_1())
 }
 
 fn theme_row(

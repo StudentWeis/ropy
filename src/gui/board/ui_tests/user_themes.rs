@@ -14,7 +14,13 @@ fn test_theme_workspace_new_draft_cancel_keeps_live_theme_and_disk(cx: &mut Test
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| board.open_settings_panel(window, cx));
         window.render_frame(cx);
-        window.click("themes-customize", cx);
+        window.click("theme-select", cx);
+        window.press("down", cx);
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
         window.click("theme-new", cx);
         assert!(window.find("theme-save").visible());
         window.click("theme-cancel", cx);
@@ -78,9 +84,12 @@ fn test_user_theme_selection_reload_and_failure_preserve_saved_choice(cx: &mut T
         "user:midnight"
     );
     cx.update_window(handle, |_, window, cx| {
-        window.click("themes-customize", cx);
+        window.click("theme-select", cx);
+        window.press("down", cx);
+        window.press("enter", cx);
     })
     .unwrap();
+    cx.run_until_parked();
     std::fs::write(&path, source.replace("#2d2d2d", "#234567")).unwrap();
     cx.update_window(handle, |_, window, cx| {
         window.click("themes-more", cx);
@@ -144,7 +153,13 @@ fn test_user_theme_export_writes_complete_template_without_changing_selection(
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| board.open_settings_panel(window, cx));
         window.render_frame(cx);
-        window.click("themes-customize", cx);
+        window.click("theme-select", cx);
+        window.press("down", cx);
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
         window.click("themes-more", cx);
         window.render_frame(cx);
         window.press("down", cx);

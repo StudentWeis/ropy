@@ -6,6 +6,8 @@ use gpui_kit::{
     component::{
         IndexPath, h_flex,
         select::{SelectEvent, SelectItem, SelectState},
+        separator::Separator,
+        v_flex,
     },
     div, rgb,
 };
@@ -56,16 +58,31 @@ impl ThemeTarget {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+#[expect(clippy::redundant_pub_crate)]
+pub(crate) enum ThemeChoice {
+    Theme(ThemeId),
+    Customize,
+}
+
 #[derive(Clone)]
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) struct ThemeOption {
-    id: ThemeId,
+    id: ThemeChoice,
     title: SharedString,
     swatch: [u32; 3],
 }
 
 impl ThemeOption {
-    fn content(&self) -> impl IntoElement {
+    fn content(&self) -> AnyElement {
+        if self.id == ThemeChoice::Customize {
+            return v_flex()
+                .w_full()
+                .gap_2()
+                .child(Separator::horizontal())
+                .child(self.title.clone())
+                .into_any_element();
+        }
         // These are palette samples (data colors), not colors of the surrounding control.
         h_flex()
             .gap_2()
@@ -82,17 +99,18 @@ impl ThemeOption {
                     ),
             )
             .child(div().min_w_0().text_ellipsis().child(self.title.clone()))
+            .into_any_element()
     }
 }
 
 impl SelectItem for ThemeOption {
-    type Value = ThemeId;
+    type Value = ThemeChoice;
 
     fn title(&self) -> SharedString {
         self.title.clone()
     }
 
-    fn value(&self) -> &ThemeId {
+    fn value(&self) -> &ThemeChoice {
         &self.id
     }
 
@@ -156,7 +174,7 @@ impl ThemeEditor {
             let items = theme_options(target, cx);
             self.select(target).update(cx, |state, cx| {
                 state.set_items(items, window, cx);
-                state.set_selected_value(&id, window, cx);
+                state.set_selected_value(&ThemeChoice::Theme(id), window, cx);
             });
         }
     }
@@ -177,16 +195,21 @@ fn build_select(
     });
     let index = items
         .iter()
-        .position(|item| item.id == selected)
+        .position(|item| item.id == ThemeChoice::Theme(selected.clone()))
         .map(|ix| IndexPath::default().row(ix));
     let select = cx.new(|cx| SelectState::new(items, index, window, cx));
     cx.subscribe_in(
         &select,
         window,
-        move |board, _, event: &SelectEvent<Vec<ThemeOption>>, window, cx| {
-            if let SelectEvent::Confirm(Some(id)) = event {
+        move |board, _, event: &SelectEvent<Vec<ThemeOption>>, window, cx| match event {
+            SelectEvent::Confirm(Some(ThemeChoice::Theme(id))) => {
                 board.save_selected_theme(target, id, window, cx);
             }
+            SelectEvent::Confirm(Some(ThemeChoice::Customize)) => {
+                board.settings_editor.theme.sync(window, cx);
+                board.open_themes(window, cx);
+            }
+            SelectEvent::Confirm(None) => {}
         },
     )
     .detach();
@@ -211,9 +234,14 @@ fn theme_options(target: ThemeTarget, cx: &App) -> Vec<ThemeOption> {
             let palette = definition.palette();
             Some(ThemeOption {
                 title: title.into(),
-                id,
+                id: ThemeChoice::Theme(id),
                 swatch: [palette.background, palette.selection, palette.primary],
             })
         })
+        .chain(std::iter::once(ThemeOption {
+            id: ThemeChoice::Customize,
+            title: rust_i18n::t!("themes_customize").into(),
+            swatch: [0; 3],
+        }))
         .collect()
 }
