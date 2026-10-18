@@ -206,6 +206,16 @@ pub(crate) fn launch(#[cfg(target_os = "linux")] instance: crate::linux::Instanc
     application.with_assets(crate::gui::Assets).run(move |cx| {
         gpui_kit::init(cx);
 
+        #[cfg(target_os = "linux")]
+        if let Some(rules) = crate::linux::hyprland::PopupRules::current() {
+            cx.set_global(rules);
+            cx.on_app_quit(|cx| {
+                drop(cx.remove_global::<crate::linux::hyprland::PopupRules>());
+                async {}
+            })
+            .detach();
+        }
+
         // Activate the persisted locale before constructing application or component UI.
         cx.set_global(GlobalSettings::new(settings.clone()));
         bind_application_keys(cx);

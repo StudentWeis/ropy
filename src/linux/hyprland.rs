@@ -65,9 +65,43 @@ impl Connection {
     }
 }
 
-/// `XWayland` map requests are asynchronous, and Hyprland may ignore X11's
-/// activation hint. Wait briefly for our mapped window, then explicitly focus
-/// only this process in response to the user's activation shortcut.
+/// Own the native popup's runtime rule for the application lifetime. Reuse the
+/// Lua handle across reconstructions; a configuration reload invalidates it.
+pub(crate) struct PopupRules(Connection);
+
+impl PopupRules {
+    pub(crate) fn current() -> Option<Self> {
+        is_session().then(Connection::current).flatten().map(Self)
+    }
+
+    pub(crate) fn prepare(&self, width: f32, height: f32) -> Result<(), Error> {
+        // Install before GPUI creates the surface: floating after map would
+        // briefly rearrange the user's tiled windows. Match only our native
+        // app ID, leaving XWayland and other applications alone.
+        self.0.eval(&format!(
+            "if _ropy_popup_rule and _ropy_popup_rule:is_enabled() ~= nil then \
+             _ropy_popup_rule:set_enabled(true); else \
+             _ropy_popup_rule = hl.window_rule({{ \
+             match = {{class = '^com[.]ropy[.]app$', xwayland = false}}, \
+             float = true, center = true, size = {{{width}, {height}}} }}); end"
+        ))
+    }
+}
+
+impl Drop for PopupRules {
+    fn drop(&mut self) {
+        if let Err(error) = self.0.eval(
+            "if _ropy_popup_rule and _ropy_popup_rule:is_enabled() ~= nil then \
+             _ropy_popup_rule:set_enabled(false); end",
+        ) {
+            tracing::warn!(%error, "failed to disable Hyprland popup rule");
+        }
+    }
+}
+
+/// Map requests are asynchronous. Wait briefly for our mapped window, then
+/// focus only this process in response to an explicit user activation. This
+/// also restores focus to a pinned window activated through the CLI or tray.
 pub(crate) fn focus_popup() {
     let Some(connection) = Connection::current() else {
         return;
@@ -116,6 +150,37 @@ pub(crate) fn is_session() -> bool {
 #[expect(clippy::expect_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires an isolated Hyprland Lua session; installs popup rules and reloads config"]
+    fn test_live_hyprland_popup_rule_reuse_reload_and_cleanup() {
+        let connection = Connection::current().expect("Hyprland session");
+        let rules = PopupRules(connection.clone());
+        rules.prepare(400.0, 550.0).expect("install rule");
+        connection
+            .eval("assert(_ropy_popup_rule:is_enabled()); _ropy_previous_rule = _ropy_popup_rule")
+            .expect("enabled rule");
+        rules.prepare(400.0, 550.0).expect("reuse rule");
+        connection
+            .eval("assert(_ropy_previous_rule == _ropy_popup_rule)")
+            .expect("no duplicate rule");
+        drop(rules);
+        connection
+            .eval("assert(_ropy_popup_rule:is_enabled() == false)")
+            .expect("disabled on exit");
+        let rules = PopupRules(connection.clone());
+        rules.prepare(400.0, 550.0).expect("restart");
+        connection
+            .eval(
+                "assert(_ropy_previous_rule == _ropy_popup_rule and _ropy_popup_rule:is_enabled())",
+            )
+            .expect("restart reuses disabled rule");
+        connection.request("/reload config-only").expect("reload");
+        rules.prepare(400.0, 550.0).expect("restore after reload");
+        connection
+            .eval("assert(_ropy_popup_rule:is_enabled())")
+            .expect("restored rule");
+    }
 
     #[test]
     fn test_focus_only_targets_mapped_window_of_current_process() {

@@ -15,7 +15,8 @@ No separate Wayland build or feature flag is needed for the standard build.
 1. Start Ropy inside your Wayland session with `ropy --show`.
 2. Configure activation using the portal, Hyprland integration or a manual
    `ropy --show` binding described below. A tray icon is not required for this path.
-3. On tiling desktops, configure a floating rule if you want a popup-sized window.
+3. Hyprland 0.55+ floats the popup automatically. On other tiling desktops,
+   configure a floating rule if you want a popup-sized window.
 4. Copy text in another native Wayland application, search for it in Ropy and
    confirm it. Verify clipboard capture and paste separately from window activation.
 
@@ -104,7 +105,21 @@ not attempt X11 global-key grabs in a Wayland session.
 
 The native window uses `xdg_toplevel` with application ID `com.ropy.app`. Wayland
 leaves placement, floating and stacking to the compositor. A tiling compositor
-may tile the window unless configured otherwise. For a floating Sway popup:
+may tile the window unless configured otherwise.
+
+On Hyprland 0.55+ with the Lua API, Ropy installs a runtime rule before creating
+each native window. It matches only the `com.ropy.app` Wayland app ID and requests
+a centered, floating 400 × 550 logical-pixel window. This avoids briefly tiling
+the popup and rearranging other windows. Reopening after a configuration reload
+restores the rule. Activating an existing pinned window reuses that window and
+requests focus, including activation through `ropy --show` or the tray. The rule
+handle is reused and disabled on normal application exit.
+A crash can leave it active until a compositor reload or the next normal Ropy
+exit. No user configuration files are changed. Unsupported Lua APIs or IPC
+failures are logged and leave placement to the compositor; older Hyprland
+versions still need a manual floating rule. X11 behavior is unchanged.
+
+For a floating Sway popup:
 
 ```ini
 for_window [app_id="^com\\.ropy\\.app$"] floating enable
@@ -163,3 +178,39 @@ cargo test --bin ropy test_live_hyprland_activation_reload_and_cleanup -- --igno
 
 It injects the shortcut before and after a configuration reload and verifies
 cleanup and reuse. Run it only in an isolated test session.
+
+For the native Hyprland floating regression, use a disposable session with no
+Ropy window rules and private XDG configuration/data directories. With `DISPLAY`
+unset, `wtype` and `foot` installed, and that session's `WAYLAND_DISPLAY`,
+`HYPRLAND_INSTANCE_SIGNATURE` and `XDG_RUNTIME_DIR` exported, run:
+
+```sh
+python3 scripts/tests/hyprland_popup_fixture.py /absolute/path/to/ropy
+```
+
+The fixture checks hidden startup, floating geometry, unchanged peer tiling,
+keyboard focus, dismissal, pinning, reconstruction, configuration reload,
+shortcut-event activation and normal-exit rule cleanup. The separate live Rust
+shortcut test above checks keyboard-chord delivery; the GUI fixture injects the
+registered event to avoid synthetic letter-keymap differences. It reloads the
+test compositor configuration; do not run it on your normal desktop.
+
+The rule lifecycle can also be tested without launching a GUI:
+
+```sh
+cargo test --bin ropy test_live_hyprland_popup_rule_reuse_reload_and_cleanup -- --ignored
+```
+
+Use the same isolated session. This checks handle reuse, disable/re-enable on
+restart and restoration after a compositor configuration reload.
+
+The October 18, 2026 development regression passed on x86-64 Omarchy 4.0.5,
+Hyprland 0.56.2, with private XDG directories and `DISPLAY` unset. A 1280×960
+output at 100% and a second 1920×1080 output at 150% both retained 400×550 logical
+popup geometry and unchanged peer tiling. Pin/focus-loss, `--show` reactivation,
+reconstruction, reload and normal-exit cleanup passed, as did both live Rust
+tests. The nested session required clearing inherited host keyboard modifiers
+before virtual input. The GUI fixture verifies the registered shortcut event;
+the separate live keyboard test uses Ctrl+Shift+F12. This does not certify the
+default letter chord on every keyboard layout, physical monitor transitions,
+other compositors or packaged-release clipboard/paste behavior.
