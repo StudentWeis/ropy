@@ -7,7 +7,6 @@ use gpui_kit::{
         IndexPath, h_flex,
         select::{SelectDelegate, SelectEvent, SelectItem, SelectState},
         separator::Separator,
-        v_flex,
     },
     div, rgb,
 };
@@ -76,18 +75,23 @@ pub(crate) struct ThemeOption {
 impl ThemeOption {
     fn content(&self) -> AnyElement {
         if self.id == ThemeChoice::Customize {
-            return v_flex()
+            // Keep the separator out of the row's line box so it cannot push
+            // the command label below the other menu items' vertical center.
+            return h_flex()
                 .w_full()
-                .gap_2()
-                .child(Separator::horizontal())
+                .relative()
+                .justify_center()
                 // Balance the Select row's trailing checkmark gutter.
+                .pl_4()
                 .child(
                     div()
-                        .w_full()
-                        .pl_4()
-                        .text_center()
-                        .child(self.title.clone()),
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .child(Separator::horizontal()),
                 )
+                .child(self.title.clone())
                 .into_any_element();
         }
         // These are palette samples (data colors), not colors of the surrounding control.
