@@ -175,6 +175,14 @@ pub(crate) fn show_with_token(token: Option<&str>, cx: &mut App) {
                 tracing::warn!(%error, "failed to apply Wayland activation token");
             }
         });
+        #[cfg(target_os = "linux")]
+        if cx.has_global::<crate::linux::hyprland::PopupRules>() {
+            cx.background_executor()
+                .spawn(async {
+                    crate::linux::hyprland::focus_popup();
+                })
+                .detach();
+        }
     }
 }
 
@@ -197,17 +205,8 @@ pub(crate) fn initialize(window: &Window) -> Result<(), Box<dyn std::error::Erro
 }
 
 /// Preserve the compositor focus request associated with a global shortcut.
-/// Other activation sources retain their existing native activation behavior.
 pub(crate) fn activate_from_hotkey(cx: &AsyncApp, token: Option<&str>) {
     cx.update(|cx| show_with_token(token, cx));
-    #[cfg(target_os = "linux")]
-    if crate::linux::hyprland::is_session() {
-        cx.background_executor()
-            .spawn(async {
-                crate::linux::hyprland::focus_popup();
-            })
-            .detach();
-    }
 }
 
 /// Dismiss the active popup. Wayland destroys the native window; resident

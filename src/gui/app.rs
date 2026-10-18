@@ -28,6 +28,9 @@ use crate::{
 
 pub(crate) const MAIN_WINDOW_TITLE: &str = "Ropy";
 
+#[cfg(target_os = "linux")]
+impl gpui_kit::Global for crate::linux::hyprland::PopupRules {}
+
 #[derive(RustEmbed)]
 #[folder = "assets"]
 #[exclude = "locales/*"]
@@ -86,6 +89,12 @@ fn open_window(
     build_board: impl FnOnce(&mut Window, &mut App) -> Entity<RopyBoard>,
 ) -> gpui_kit::Result<WindowHandle<Root>> {
     let bounds = Bounds::centered(None, default_window_size(), cx);
+    #[cfg(target_os = "linux")]
+    if let Some(rules) = cx.try_global::<crate::linux::hyprland::PopupRules>()
+        && let Err(error) = rules.prepare(bounds.size.width.into(), bounds.size.height.into())
+    {
+        tracing::warn!(%error, "failed to prepare Hyprland floating popup");
+    }
     let window_opacity_percent = GlobalSettings::read(cx, |s| s.window.opacity_percent);
     cx.open_window(
         WindowOptions {
