@@ -331,6 +331,16 @@ impl RopyBoard {
         active_window(window, cx);
     }
 
+    pub(crate) fn dismiss_from_hotkey(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
+            return;
+        }
+        self.cancel_shortcut_recording(cx);
+        self.ui_state.hide_preview();
+        self.invalidate_copy_confirmation();
+        self.dismiss_popup(window, cx);
+    }
+
     pub(crate) fn on_hide_action(
         &mut self,
         _: &Hide,
@@ -384,13 +394,16 @@ impl RopyBoard {
             window.focus(&self.focus_handle, cx);
             return;
         }
-        // Clear search input when hiding the window
+        self.dismiss_popup(window, cx);
+    }
+
+    fn dismiss_popup(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.clear_search(window, cx);
-        hide_window(window, cx, self.pinned);
         if self.pinned {
             self.set_window_pinned(window, false);
             cx.notify();
         }
+        hide_window(window, cx, false);
     }
 
     #[expect(clippy::unused_self)]
