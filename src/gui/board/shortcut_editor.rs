@@ -1,5 +1,5 @@
 use gpui_kit::{
-    App, Context, SharedString, Subscription, Window,
+    App, Context, FocusHandle, ScrollHandle, SharedString, Subscription, Window,
     component::{WindowExt, button::ButtonVariant, dialog::DialogButtonProps},
 };
 use rust_i18n::t;
@@ -18,6 +18,8 @@ pub(crate) struct Recording {
 }
 
 pub(crate) struct ShortcutEditor {
+    pub(crate) scroll: ScrollHandle,
+    pub(crate) row_focus: std::collections::HashMap<String, FocusHandle>,
     baseline: KeybindingSettings,
     pub(crate) draft: KeybindingSettings,
     pub(crate) error: Option<KeybindingError>,
@@ -27,9 +29,16 @@ pub(crate) struct ShortcutEditor {
 }
 
 impl ShortcutEditor {
-    fn new(settings: KeybindingSettings, return_panel: ActivePanel) -> Self {
+    fn new(settings: KeybindingSettings, return_panel: ActivePanel, cx: &App) -> Self {
         let error = compile_history_bindings(&settings).err();
+        let scroll = ScrollHandle::new();
+        let row_focus = super::actions::shortcuts::history_shortcuts()
+            .into_iter()
+            .map(|shortcut| (shortcut.id, cx.focus_handle()))
+            .collect();
         Self {
+            scroll,
+            row_focus,
             baseline: settings.clone(),
             draft: settings,
             error,
@@ -56,6 +65,15 @@ impl ShortcutEditor {
         keys
     }
 
+    pub(crate) fn is_modified(&self, shortcut: &HistoryShortcut) -> bool {
+        let normalize = |keys: Vec<String>| -> std::collections::HashSet<String> {
+            keys.into_iter()
+                .map(|key| gpui_kit::Keystroke::parse(&key).map_or(key, |key| key.unparse()))
+                .collect()
+        };
+        normalize(self.keys(shortcut)) != normalize(shortcut.default_keys())
+    }
+
     pub(crate) fn edit(&mut self, edit: impl FnOnce(&mut KeybindingSettings)) {
         self.recording = None;
         self.save_error = None;
@@ -79,7 +97,7 @@ impl RopyBoard {
             editor.return_panel = self.active_panel;
             editor.recording = None;
         } else {
-            self.shortcut_editor = Some(ShortcutEditor::new(settings, self.active_panel));
+            self.shortcut_editor = Some(ShortcutEditor::new(settings, self.active_panel, cx));
         }
         self.active_panel = ActivePanel::Shortcuts;
         window.focus(&self.focus_handle, cx);

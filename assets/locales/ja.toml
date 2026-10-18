@@ -193,3 +193,6 @@ shortcuts_discard_title = "キー設定の変更を破棄しますか？"
 shortcuts_discard_description = "まだ適用されていません。戻ると変更は失われます。"
 shortcuts_discard = "変更を破棄"
 shortcuts_continue = "編集を続ける"
+
+shortcuts_modified = "変更済み"
+shortcuts_locate_action = "%{action}へ移動"
