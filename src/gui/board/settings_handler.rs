@@ -20,6 +20,7 @@ mod layout;
 mod storage;
 mod theme;
 mod update;
+mod user_themes;
 
 const SETTINGS_NOTIFICATION_MAX_WIDTH_PX: f32 = 280.0;
 

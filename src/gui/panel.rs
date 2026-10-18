@@ -7,3 +7,5 @@ pub mod help;
 pub mod settings;
 /// History shortcut editor presentation.
 pub mod shortcuts;
+
+pub mod themes;

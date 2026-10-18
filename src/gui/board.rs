@@ -17,6 +17,7 @@ mod settings_editor;
 mod settings_handler;
 /// Draft state and interactions for the history shortcut editor.
 pub mod shortcut_editor;
+pub mod theme_workspace;
 mod updater_ui;
 
 #[cfg(test)]
@@ -63,6 +64,7 @@ pub(crate) enum ActivePanel {
     About,
     Help,
     Shortcuts,
+    Themes,
 }
 
 pub(super) fn search_query_changed(previous_query: &str, next_query: &str) -> bool {
@@ -178,6 +180,7 @@ pub(crate) struct RopyBoard {
     pub(crate) focus_handle: FocusHandle,
     pub(crate) window_activation_subscription: Subscription,
     window_appearance_subscription: Subscription,
+    theme_catalog_subscription: Subscription,
     pub(crate) search_input_subscription: Subscription,
     pub(crate) search_input: Entity<InputState>,
     pub(crate) last_search_query: String,
@@ -195,6 +198,8 @@ pub(crate) struct RopyBoard {
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
     pub(crate) settings_editor: SettingsEditor,
+    pub(crate) theme_files: theme_workspace::ThemeFileState,
+    pub(crate) theme_workspace: Option<theme_workspace::ThemeWorkspace>,
     pub(crate) shortcut_editor: Option<shortcut_editor::ShortcutEditor>,
     _shortcut_recording_subscription: Subscription,
     pub(crate) confirm_mode: ConfirmMode,
@@ -350,12 +355,23 @@ impl RopyBoard {
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.window_activation_subscription = Self::observe_activation(window, cx);
         self.window_appearance_subscription = Self::observe_appearance(window, cx);
+        self.theme_catalog_subscription = Self::observe_themes(window, cx);
         self.search_input = cx.new(|cx| InputState::new(window, cx));
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
         self.settings_editor = SettingsEditor::new(window, cx);
+        if let Some(draft) = self
+            .theme_workspace
+            .as_mut()
+            .and_then(|workspace| workspace.draft.as_mut())
+        {
+            draft.attach_window(window, cx);
+        }
         self.last_search_query.clear();
         self.invalidate_copy_confirmation();
-        if self.active_panel != ActivePanel::Shortcuts {
+        if !matches!(
+            self.active_panel,
+            ActivePanel::Shortcuts | ActivePanel::Themes
+        ) {
             self.active_panel = ActivePanel::ClipboardList;
         }
         self.cancel_shortcut_recording(cx);
@@ -391,6 +407,18 @@ impl RopyBoard {
                     hide_window(window, cx, this.pinned);
                 }
             }
+        })
+    }
+
+    fn observe_themes(window: &Window, cx: &mut Context<'_, Self>) -> Subscription {
+        cx.observe_global_in::<crate::gui::theme::ThemeCatalog>(window, |board, window, cx| {
+            board.settings_editor.theme.sync(window, cx);
+            crate::gui::app::apply_current_theme(
+                window,
+                cx,
+                board.settings_editor.window_opacity_percent,
+            );
+            cx.notify();
         })
     }
 
@@ -432,6 +460,7 @@ impl RopyBoard {
 
         let window_activation_subscription = Self::observe_activation(window, cx);
         let window_appearance_subscription = Self::observe_appearance(window, cx);
+        let theme_catalog_subscription = Self::observe_themes(window, cx);
 
         let settings = GlobalSettings::read(cx, Clone::clone);
         let layout_mode = settings.layout.mode;
@@ -467,6 +496,7 @@ impl RopyBoard {
             focus_handle,
             window_activation_subscription,
             window_appearance_subscription,
+            theme_catalog_subscription,
             search_input_subscription,
             search_input,
             last_search_query: String::new(),
@@ -485,6 +515,8 @@ impl RopyBoard {
             active_panel: ActivePanel::default(),
             settings_editor,
             shortcut_editor: None,
+            theme_workspace: None,
+            theme_files: theme_workspace::ThemeFileState::default(),
             _shortcut_recording_subscription: shortcut_recording_subscription,
             confirm_mode,
             layout_mode,
