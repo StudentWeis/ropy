@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-10-19
+
+### 🚀 Features
+- Toggle popup from the global hotkey (#279) by @StudentWeis in [#279](https://github.com/StudentWeis/ropy/pull/279)
+- Add custom theme editing and previews (#275) by @StudentWeis in [#275](https://github.com/StudentWeis/ropy/pull/275)
+- Show modified shortcuts and locate conflicts (#273) by @StudentWeis in [#273](https://github.com/StudentWeis/ropy/pull/273)
+- Add history shortcut editor (#271) by @StudentWeis in [#271](https://github.com/StudentWeis/ropy/pull/271)
+- Support configurable history shortcuts (#269) by @StudentWeis in [#269](https://github.com/StudentWeis/ropy/pull/269)
+- Keep macos dock hidden throughout startup (#241) by @StudentWeis in [#241](https://github.com/StudentWeis/ropy/pull/241)
+- Follow system appearance with paired themes (#236) by @StudentWeis in [#236](https://github.com/StudentWeis/ropy/pull/236)
+- Support native wayland popup lifecycle (#234) by @StudentWeis in [#234](https://github.com/StudentWeis/ropy/pull/234)
+- Support wayland sessions and hyprland shortcuts (#218) by @StudentWeis in [#218](https://github.com/StudentWeis/ropy/pull/218)
+- Support self-hosted homebrew cask distribution (#221) by @StudentWeis in [#221](https://github.com/StudentWeis/ropy/pull/221)
+- Add a minimal release benchmark baseline (#212) by @StudentWeis in [#212](https://github.com/StudentWeis/ropy/pull/212)
+
+### 🐛 Bug Fixes
+- Float hyprland popups before mapping (#277) by @StudentWeis in [#277](https://github.com/StudentWeis/ropy/pull/277)
+- Address repository audit findings (#263) by @StudentWeis in [#263](https://github.com/StudentWeis/ropy/pull/263)
+- Replace linux appindicator tray with ksni (#257) by @StudentWeis in [#257](https://github.com/StudentWeis/ropy/pull/257)
+- Resolve repository audit findings (#255) by @StudentWeis in [#255](https://github.com/StudentWeis/ropy/pull/255)
+- Resolve audit findings and retire legacy size collection (#253) by @StudentWeis in [#253](https://github.com/StudentWeis/ropy/pull/253)
+- Apply consistent opacity and isolate promo presentation (#248) by @StudentWeis in [#248](https://github.com/StudentWeis/ropy/pull/248)
+- Preserve clipboard confirmation lifecycle (#247) by @StudentWeis in [#247](https://github.com/StudentWeis/ropy/pull/247)
+- Align checks and contributor contracts (#249) by @StudentWeis in [#249](https://github.com/StudentWeis/ropy/pull/249)
+- Enable native window dragging on linux (#243) by @StudentWeis in [#243](https://github.com/StudentWeis/ropy/pull/243)
+- Address audit findings and simplify settings state (#231) by @StudentWeis in [#231](https://github.com/StudentWeis/ropy/pull/231)
+- Protect recovery history and report clipboard failures (#228) by @StudentWeis in [#228](https://github.com/StudentWeis/ropy/pull/228)
+- Preserve audited failure and artifact boundaries (#216) by @StudentWeis in [#216](https://github.com/StudentWeis/ropy/pull/216)
+- Clean failed captures and refresh history in background (#208) by @StudentWeis in [#208](https://github.com/StudentWeis/ropy/pull/208)
+
+### 🚜 Refactor
+- Unify board actions and shortcut bindings (#267) by @StudentWeis in [#267](https://github.com/StudentWeis/ropy/pull/267)
+- Pin rust 1.99.1 and adopt recent std idioms (#265) by @StudentWeis in [#265](https://github.com/StudentWeis/ropy/pull/265)
+- Remove cargo-machete (#251) by @StudentWeis in [#251](https://github.com/StudentWeis/ropy/pull/251)
+- Replace custom localization with rust-i18n (#238) by @StudentWeis in [#238](https://github.com/StudentWeis/ropy/pull/238)
+- Centralize native popup control (#232) by @StudentWeis in [#232](https://github.com/StudentWeis/ropy/pull/232)
+- Borrow small images for thumbnails (#210) by @StudentWeis in [#210](https://github.com/StudentWeis/ropy/pull/210)
+- Remove repository-local maintenance skills (#206) by @StudentWeis in [#206](https://github.com/StudentWeis/ropy/pull/206)
+
+### 📚 Documentation
+- Clarify native wayland support and validation (#235) by @StudentWeis in [#235](https://github.com/StudentWeis/ropy/pull/235)
+
+### ⚙️ Miscellaneous Tasks
+- Use stable rustfmt for all formatting checks (#261) by @StudentWeis in [#261](https://github.com/StudentWeis/ropy/pull/261)
+- Enforce delivery gates and unify verification (#259) by @StudentWeis in [#259](https://github.com/StudentWeis/ropy/pull/259)
+- Add manual desktop test artifacts (#242) by @StudentWeis in [#242](https://github.com/StudentWeis/ropy/pull/242)
+- Sync wei-tools gitignore template (#240) by @StudentWeis in [#240](https://github.com/StudentWeis/ropy/pull/240)
+- Upgrade gpui-kit to 0.7.3 (#226) by @StudentWeis in [#226](https://github.com/StudentWeis/ropy/pull/226)
+
 ## [0.5.7] - 2026-10-09
 
 ### 🚀 Features
