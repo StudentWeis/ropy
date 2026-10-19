@@ -1,60 +1,218 @@
-# Entity state management
+# Entity State Management
 
-**Contents:** [Ownership](#ownership) · [Access](#access) · [Re-entrancy](#re-entrancy) · [References](#references)
+**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Core Principles](#core-principles) · [Common Use Cases](#common-use-cases) · [Extended References](#reference-documentation)
 
-## Ownership
+## Overview
 
-Entity<T> is a strong handle to retained state; cloning it shares that state.
-WeakEntity<T> does not keep the state alive. Create retained state once in the
-owning constructor and keep a strong handle in the owner. A parent normally
-owns its children strongly; a child's back-reference should not create a
-strong ownership cycle. Making every relationship weak can instead release
-state while the UI still needs it.
+An `Entity<T>` is a handle to state of type `T`, providing safe access and updates.
 
-A Render method builds a fresh element description from those entities.
-Input/Select state and subscriptions belong to the owning view, not a local
-variable recreated and dropped by render. Follow the normative
-[state ownership guide](../coding-guides.md#state-ownership).
+**Key Methods:**
+- `entity.read(cx)` → `&T` - Read-only access
+- `entity.read_with(cx, |state, cx| ...)` → `R` - Read with closure
+- `entity.update(cx, |state, cx| ...)` → `R` - Mutable update
+- `entity.downgrade()` → `WeakEntity<T>` - Create weak reference
+- `entity.entity_id()` → `EntityId` - Unique identifier
 
-## Access
+**Entity Types:**
+- **`Entity<T>`**: Strong reference (increases ref count)
+- **`WeakEntity<T>`**: Weak reference (doesn't prevent cleanup, returns `Result`)
 
-For `gpui-pre` 0.3.9, used by the locked `gpui-kit` 0.7.3:
+## Quick Start
 
-| Operation | Result |
-| --- | --- |
-| `Entity::read(&App)` | Borrowed `&T` |
-| `Entity::read_with(cx, closure)` | Closure result `R` |
-| `Entity::update(cx, closure)` | Closure result `R` |
-| `WeakEntity::upgrade()` | `Option<Entity<T>>` |
-| `WeakEntity::read_with` / `update` | `Result<R>` |
+### Creating and Using Entities
 
-These updates are synchronous, including when called from AsyncApp. Await only
-a future/Task returned by the closure, not the update itself. Use the inner
-context supplied by the update, and call notify after a coherent mutation
-that changes the rendered state. See the [versioned entity source](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/entity_map.rs).
+```rust
+// Create entity
+let counter = cx.new(|cx| Counter { count: 0 });
 
-## Re-entrancy
+// Read state
+let count = counter.read(cx).count;
 
-An entity cannot be read or updated through its handle while that same entity
-is mutably borrowed by an update/render/listener. Use the direct `&mut T`
-provided to the callback. Accessing a different entity is allowed, but a
-callback cycle back into the first entity still panics.
+// Update state
+counter.update(cx, |state, cx| {
+    state.count += 1;
+    cx.notify(); // Trigger re-render
+});
 
-Context::defer_in borrows the owning entity again when the deferred closure
-runs. It does not bypass this rule. In a list delegate callback, use the list
-state already supplied; do not reach back to it via a parent entity that owns
-that same list. See the [defer_in implementation](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs).
+// Weak reference (for closures/callbacks)
+let weak = counter.downgrade();
+let _ = weak.update(cx, |state, cx| {
+    state.count += 1;
+    cx.notify();
+});
+```
 
-Render may read other entities when the ownership/borrow path permits it.
-When a delegate callback would read an owner that is already borrowed, keep a
-plain presentation snapshot and refresh it through the mutation/event path
-before rendering. Do not create a blanket ban on all external entity reads or
-all nested updates; trace the actual cycle.
+### In Components
 
-## References
+```rust
+struct MyComponent {
+    shared_state: Entity<SharedData>,
+}
 
-- [API details](entity-api.md): weak operations, window access, lifecycle.
-- [Patterns](entity-patterns.md): model/view, observations and owner callbacks.
-- [Review checklist](entity-best-practices.md): cycles, subscriptions and notification.
-- [Advanced state](entity-advanced.md): collections, debounce, snapshots and transitions.
-- [Testing](test-reference.md): real interaction and asynchronous outcomes.
+impl MyComponent {
+    fn new(cx: &mut App) -> Entity<Self> {
+        let shared = cx.new(|_| SharedData::default());
+
+        cx.new(|cx| Self {
+            shared_state: shared,
+        })
+    }
+
+    fn update_shared(&mut self, cx: &mut Context<Self>) {
+        self.shared_state.update(cx, |state, cx| {
+            state.value = 42;
+            cx.notify();
+        });
+    }
+}
+```
+
+### Async Operations
+
+When calling `cx.spawn` from `Context<Self>`, the closure receives `(WeakEntity<Self>, &mut AsyncApp)`:
+
+```rust
+impl MyComponent {
+    fn fetch_data(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let data = fetch_from_api().await;
+
+            // Update entity safely via the weak reference
+            let _ = this.update(cx, |state, cx| {
+                state.data = Some(data);
+                cx.notify();
+            });
+        }).detach();
+    }
+}
+```
+
+## Core Principles
+
+### Always Use Weak References in Closures
+
+```rust
+// ✅ Good: Weak reference prevents retain cycles
+let weak = cx.entity().downgrade();
+callback(move || {
+    let _ = weak.update(cx, |state, cx| cx.notify());
+});
+
+// ❌ Bad: Strong reference may cause memory leak
+let strong = cx.entity();
+callback(move || {
+    strong.update(cx, |state, cx| cx.notify());
+});
+```
+
+### Use Inner Context
+
+```rust
+// ✅ Good: Use inner cx from closure
+entity.update(cx, |state, inner_cx| {
+    inner_cx.notify(); // Correct
+});
+
+// ❌ Bad: Use outer cx (multiple borrow error)
+entity.update(cx, |state, inner_cx| {
+    cx.notify(); // Wrong!
+});
+```
+
+### Avoid Nested Entity Updates
+
+Nested `entity.update(cx, …)` calls are dangerous. The default posture is: **do not nest them**. The sub-cases below clarify when a panic is guaranteed vs. merely possible.
+
+**Same entity → always panics.**  
+GPUI locks an entity for the entire duration of its update or render pass. Re-entering that same lock panics immediately:
+
+```
+cannot update … while it is already being updated
+```
+
+```rust
+// ❌ Panic: updating entity_a from inside entity_a's own update
+entity_a.update(cx, |state, cx| {
+    entity_a.update(cx, |_, _| {}); // PANIC — same lock
+});
+```
+
+**Different entity → generally safe, but indirect cycles still panic.**  
+Each entity has its own lock, so updating `entity_b` from within `entity_a`'s update normally succeeds. However, if `entity_b`'s callback reaches back into `entity_a` — directly or through a chain — GPUI will attempt to re-acquire `entity_a`'s lock and panic.
+
+```rust
+// ✅ Usually fine: different entities, no cycle
+entity_a.update(cx, |_, cx| {
+    entity_b.update(cx, |_, _| {}); // OK — different lock
+});
+
+// ❌ Panic: indirect cycle back to entity_a
+entity_a.update(cx, |_, cx| {
+    entity_b.update(cx, |_, cx| {
+        entity_a.update(cx, |_, _| {}); // PANIC — entity_a is still locked
+    });
+});
+```
+
+When in doubt, flatten the call sequence rather than nesting: finish the outer update, then update the second entity from outside.
+
+**`defer_in` does not bypass the lock.** `cx.defer_in(window, callback)` schedules `callback` to run on the current entity — meaning GPUI re-acquires the entity's lock to execute it. The re-entrancy rules apply equally inside the deferred callback:
+
+```rust
+// ❌ Panic: defer_in re-locks entity_a; calling entity_a.update inside re-enters
+impl SomeDelegate for MyAdapter {
+    fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<ListState<Self>>) {
+        cx.defer_in(window, |list_state, window, cx| {
+            // list_state is locked for this callback!
+            parent.update(cx, |this, cx| {
+                this.list.update(cx, |_, _| {}); // PANIC — list is already locked above
+            });
+        });
+    }
+}
+
+// ✅ Fix: use the direct &mut reference the callback provides
+impl SomeDelegate for MyAdapter {
+    fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<ListState<Self>>) {
+        cx.defer_in(window, |list_state, window, cx| {
+            // Access list data directly — no entity lock needed
+            list_state.delegate_mut().some_hook();
+
+            // Update the *parent* entity — different lock, safe
+            parent.update(cx, |this, cx| { /* … */ });
+
+            // Sync list state directly after parent update
+            list_state.delegate_mut().update_snapshot(new_val);
+        });
+    }
+}
+```
+
+**Snapshot pattern for render callbacks.** `render_item` (and any other rendering hook) runs inside the entity's render pass. It must never call `entity.read(cx)` or `entity.update(cx, …)` on any external entity. Instead, keep a plain `snapshot` field updated eagerly from *outside* render after every mutation:
+
+```rust
+// ❌ Panic in render_item — ListState is already locked
+fn render_item(&mut self, ix: IndexPath, window: &mut Window, cx: &mut Context<ListState<Self>>) -> … {
+    let checked = parent_entity.read(cx).selection.contains(&ix); // PANIC
+}
+
+// ✅ Read from a plain snapshot field — no entity access
+fn render_item(&mut self, ix: IndexPath, window: &mut Window, cx: &mut Context<ListState<Self>>) -> … {
+    let checked = self.selection_snapshot.iter().any(|(sel_ix, _)| sel_ix == &ix);
+}
+```
+
+## Common Use Cases
+
+1. **Component State**: Internal state that needs reactivity
+2. **Shared State**: State shared between multiple components
+3. **Parent-Child**: Coordinating between related components (use weak refs)
+4. **Async State**: Managing state that changes from async operations
+5. **Observations**: Reacting to changes in other entities
+
+## Reference Documentation
+
+- **API**: See [entity-api.md](entity-api.md) — entity types, methods, lifecycle, error handling
+- **Patterns**: See [entity-patterns.md](entity-patterns.md) — model-view, cross-entity communication, observer
+- **Best Practices**: See [entity-best-practices.md](entity-best-practices.md) — pitfalls, memory, performance, async
+- **Advanced**: See [entity-advanced.md](entity-advanced.md) — collections, registry, debounce, state machines

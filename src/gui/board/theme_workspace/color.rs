@@ -154,10 +154,10 @@ impl Render for ColorEditor {
                                         h_flex()
                                             .justify_between()
                                             .text_sm()
-                                            .child(label)
+                                            .child(label.clone())
                                             .child(format!("{:.0}", slider.read(cx).value().end())),
                                     )
-                                    .child(Slider::new(slider))
+                                    .child(Slider::new(slider).accessibility_label(label))
                             }),
                     )
             });

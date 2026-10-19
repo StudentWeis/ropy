@@ -14,6 +14,9 @@ hooks {
   }
 }
 
+// Preserve the vendored official skill snapshots byte-for-byte.
+local officialSkills = List(".agents/skills/gpui-kit/**", ".agents/skills/gpui-kit-design-guides/**")
+
 steps {
   ["check-yaml"] {
     glob = List("**/*.yaml", "**/*.yml")
@@ -31,8 +34,8 @@ steps {
   ["check-merge-conflict"] = Builtins.check_merge_conflict
   ["check-case-conflict"] = (Builtins.check_case_conflict) { allow_binary = true }
   ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
-  ["trailing-whitespace"] = Builtins.trailing_whitespace
-  ["end-of-file-fixer"] = Builtins.newlines
-  ["mixed-line-ending"] = Builtins.mixed_line_ending
-  ["fix-byte-order-marker"] = Builtins.byte_order_marker
+  ["trailing-whitespace"] = (Builtins.trailing_whitespace) { exclude = officialSkills }
+  ["end-of-file-fixer"] = (Builtins.newlines) { exclude = officialSkills }
+  ["mixed-line-ending"] = (Builtins.mixed_line_ending) { exclude = officialSkills }
+  ["fix-byte-order-marker"] = (Builtins.byte_order_marker) { exclude = officialSkills }
 }
