@@ -19,10 +19,13 @@ impl Drop for ParentGuard {
     }
 }
 
-fn wait_until(mut condition: impl FnMut() -> bool) {
+fn wait_until(stage: &str, mut condition: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(20);
     while !condition() {
-        assert!(Instant::now() < deadline, "updater subprocess timed out");
+        assert!(
+            Instant::now() < deadline,
+            "updater subprocess timed out: {stage}"
+        );
         thread::sleep(Duration::from_millis(20));
     }
 }
@@ -91,30 +94,51 @@ fn run_handoff(fail_startup: bool) {
     if fail_startup {
         fs::write(root.join("fail-startup"), "fail").expect("failure scenario");
     }
+    let process_log = fs::File::create(root.join("process.log")).expect("process log");
     let mut parent = ParentGuard(
         Command::new(binary)
             .arg("parent")
             .arg(env!("CARGO_BIN_EXE_ropy"))
             .arg(&root)
+            .stdout(process_log.try_clone().expect("clone process log"))
+            .stderr(process_log)
             .spawn()
             .expect("start parent fixture"),
     );
-    wait_until(|| root.join("parent-ready").exists());
+    wait_until("parent ready", || {
+        let status = parent.0.try_wait().expect("parent status");
+        assert!(
+            status.is_none(),
+            "parent exited before ready: {status:?}; log: {}",
+            fs::read_to_string(root.join("process.log")).unwrap_or_default()
+        );
+        root.join("parent-ready").exists()
+    });
     assert!(!root.join("new-started").exists());
     assert!(!root.join("backup").exists());
     assert!(root.join("staged").exists());
     fs::write(root.join("exit-parent"), "exit").expect("request parent exit");
     assert!(parent.0.wait().expect("wait for parent exit").success());
     if fail_startup {
-        wait_until(|| root.join("old-started").exists());
+        wait_until("rollback startup", || root.join("old-started").exists());
         assert!(root.join("rolled-back").exists());
     } else {
-        wait_until(|| root.join("healthy").exists() && !root.join("backup").exists());
+        wait_until("healthy startup and backup cleanup", || {
+            assert!(
+                !root.join("rolled-back").exists(),
+                "healthy fixture rolled back; new_started={}; log: {}",
+                root.join("new-started").exists(),
+                fs::read_to_string(root.join("process.log")).unwrap_or_default()
+            );
+            root.join("healthy").exists() && !root.join("backup").exists()
+        });
         assert!(!root.join("old-started").exists());
     }
     assert!(root.join("new-started").exists());
     assert!(!root.join("staged").exists());
     assert!(target.is_file());
     // On Windows an executing image cannot be removed until its process exits.
-    wait_until(|| fs::remove_file(&target).is_ok());
+    wait_until("updated executable release", || {
+        fs::remove_file(&target).is_ok()
+    });
 }

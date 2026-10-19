@@ -20,13 +20,19 @@ Shared vocabulary used throughout the flow below: `<type>` and `<scope>` placeho
 
 ### 1. Open the Issue
 
-Pick the appropriate issue template from `.github/ISSUE_TEMPLATE/` — using a template is **mandatory**. Fill it into `/tmp/issue-body.md`, then:
+Pick the appropriate issue template from `.github/ISSUE_TEMPLATE/` — using a template is **mandatory**. Allocate a private body file for this task:
 
 ```bash
-gh issue create --title "<type>: ..." --label "<appropriate label>" --body-file /tmp/issue-body.md
+issue_body=$(mktemp "${TMPDIR:-/tmp}/ropy-issue.XXXXXX")
 ```
 
-Capture the returned number as `<N>`.
+Fill the template into the returned file, then use that same path:
+
+```bash
+gh issue create --title "<type>: ..." --label "<appropriate label>" --body-file "$issue_body"
+```
+
+Capture the returned number as `<N>`. After successful creation, remove only this task's body file. If creation fails, retain the file for retry. When commands run in separate shells, carry the returned absolute path forward explicitly.
 
 > **Skipping the Issue**: only when the user explicitly asks. Proceed to Step 2 with a descriptive branch name and note the skip in the PR description.
 
@@ -67,14 +73,20 @@ Multiple commits are fine — they are squashed on merge.
 
 ### 6. Push & Open the PR
 
-Fill in the PR template from `.github/PULL_REQUEST_TEMPLATE.md` into `/tmp/pr-body.md` — using the template is **mandatory**. Then:
+Use `.github/PULL_REQUEST_TEMPLATE.md` — using the template is **mandatory**. Allocate another private body file:
+
+```bash
+pr_body=$(mktemp "${TMPDIR:-/tmp}/ropy-pr.XXXXXX")
+```
+
+Fill the template into the returned file, then:
 
 ```bash
 git push -u origin HEAD
-gh pr create --base main --title "<type>(<scope>): ..." --body-file /tmp/pr-body.md
+gh pr create --base main --title "<type>(<scope>): ..." --body-file "$pr_body"
 ```
 
-Report the PR URL back to the user.
+Report the PR URL back to the user. After successful creation, remove only this task's PR body file; retain it on failure and carry its absolute path across separate shells as needed.
 
 ### 7. Iterate on review
 

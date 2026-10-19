@@ -435,6 +435,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_delayed_image_persistence_preserves_capture_order() {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(1)));
+        let pending = fixture.image_rx.try_recv().expect("image capture");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        fixture.text("copied after image");
+        let text = fixture
+            .rx
+            .try_recv()
+            .expect("text capture")
+            .persist(&fixture.repo)
+            .expect("text");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let image = pending
+            .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
+            .expect("encode")
+            .persist(&fixture.repo)
+            .expect("image");
+        assert!(image.created_at < text.created_at);
+        assert_eq!(
+            fixture.repo.get_display_records(1).expect("history")[0].id,
+            text.id
+        );
+    }
+
     #[rstest]
     #[case(ClipboardPayloadKind::Text)]
     #[case(ClipboardPayloadKind::Files)]

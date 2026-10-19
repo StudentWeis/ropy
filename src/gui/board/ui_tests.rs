@@ -326,6 +326,34 @@ fn test_board_grid_navigation_aliases_share_actions(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn test_board_masonry_horizontal_navigation_stays_at_edges(cx: &mut TestAppContext) {
+    let mut image = record(4);
+    image.content_type = crate::repository::ContentType::Image;
+    let mut settings = Settings::default();
+    settings.layout.mode = crate::config::LayoutMode::Grid;
+    let (handle, board, _) =
+        open_board_with_settings(cx, vec![image, record(3), record(2), record(1)], settings);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.selected_index = 2;
+            window.focus(&board.focus_handle, cx);
+        });
+        window.render_frame(cx);
+        let bounds = &board.read(cx).grid_scroll_handle;
+        assert!(
+            bounds.bounds_for_item(2).unwrap().left() > bounds.bounds_for_item(3).unwrap().left()
+        );
+        window.press("right", cx);
+        assert_eq!(board.read(cx).selected_index, 2);
+        window.press("left", cx);
+        assert_eq!(board.read(cx).selected_index, 3);
+        window.press("left", cx);
+        assert_eq!(board.read(cx).selected_index, 3);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn test_board_help_reflects_registered_shortcuts(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {

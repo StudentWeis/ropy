@@ -51,6 +51,7 @@ impl CopyTracker {
             tracker: shared.clone(),
             generation,
             committed: false,
+            captured_at: chrono::Local::now(),
         })
     }
 
@@ -70,6 +71,7 @@ pub(super) struct CopyAttempt {
     tracker: Arc<Mutex<CopyTracker>>,
     generation: Arc<()>,
     committed: bool,
+    captured_at: chrono::DateTime<chrono::Local>,
 }
 
 impl Drop for CopyAttempt {
@@ -100,15 +102,18 @@ impl ClipboardCapture {
         repo: &ClipboardRepository<B>,
     ) -> Result<ClipboardRecord, RepositoryError> {
         let Self { event, mut attempt } = self;
+        let captured_at = attempt.captured_at;
         let record = match event {
-            ClipboardEvent::Text(text) => repo.save_text(text),
-            ClipboardEvent::Image(image) => repo.save_pending_image(image),
-            ClipboardEvent::Files(paths) => repo.save_files(&paths),
+            ClipboardEvent::Text(text) => {
+                repo.save_at(text, crate::repository::ContentType::Text, captured_at)
+            }
+            ClipboardEvent::Image(image) => repo.save_pending_image_at(image, captured_at),
+            ClipboardEvent::Files(paths) => repo.save_files_at(&paths, captured_at),
             ClipboardEvent::RichText {
                 plain_text,
                 html,
                 rtf,
-            } => repo.save_rich_text(plain_text, html.as_deref(), rtf.as_deref()),
+            } => repo.save_rich_text_at(plain_text, html.as_deref(), rtf.as_deref(), captured_at),
         }?;
         attempt.committed = true;
         Ok(record)

@@ -5,7 +5,7 @@ mod keysym;
 #[cfg(target_os = "linux")]
 mod portal;
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 #[cfg(target_os = "linux")]
@@ -57,6 +57,24 @@ pub(crate) fn request_hotkey_update(
 struct HotkeyListenerState<Manager> {
     current_hotkey: String,
     manager: Option<Manager>,
+}
+
+impl<Manager> HotkeyListenerState<Manager> {
+    fn needs_registration(&self, hotkey: &str) -> bool {
+        !hotkey.is_empty() && (!same_hotkey(hotkey, &self.current_hotkey) || self.manager.is_none())
+    }
+}
+
+fn persist_hotkey(hotkey: &str, cx: &AsyncApp) -> Result<(), HotkeyUpdateError> {
+    cx.update(|cx| {
+        let mut settings = GlobalSettings::read(cx, Clone::clone);
+        settings.hotkey.activation_key = hotkey.to_string();
+        settings
+            .save()
+            .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))?;
+        cx.set_global(GlobalSettings::new(settings));
+        Ok(())
+    })
 }
 
 /// Start a global hotkey listener in a foreground task with a custom callback.
@@ -119,29 +137,40 @@ where
         let manager = register_native_hotkey(&initial_hotkey);
         state.borrow_mut().manager = manager;
 
-        while let Ok(message) = message_rx.recv().await {
+        let mut pending_updates = VecDeque::new();
+        while let Some(message) = match pending_updates.pop_front() {
+            Some(request) => Some(ListenerMessage::UpdateHotkey(request)),
+            None => message_rx.recv().await.ok(),
+        } {
             if message_rx.is_closed() {
                 break;
             }
-            let needs_registration = if let ListenerMessage::UpdateHotkey(request) = &message {
-                let state = state.borrow();
-                !request.hotkey.is_empty()
-                    && (!same_hotkey(&request.hotkey, &state.current_hotkey)
-                        || state.manager.is_none())
-            } else {
-                false
-            };
+            let needs_registration = matches!(&message, ListenerMessage::UpdateHotkey(request)
+                if state.borrow().needs_registration(&request.hotkey));
             let mut candidate = if let ListenerMessage::UpdateHotkey(request) = &message
                 && needs_registration
             {
                 #[cfg(target_os = "linux")]
-                let registration = register_linux_hotkey(
-                    request.hotkey.clone(),
-                    t!("settings_activation_key").into_owned(),
-                    cancelled.clone(),
-                    &cleanups,
-                    message_tx.clone(),
-                    async_app.background_executor().clone(),
+                let registration = await_registration(
+                    register_linux_hotkey(
+                        request.hotkey.clone(),
+                        t!("settings_activation_key").into_owned(),
+                        cancelled.clone(),
+                        &cleanups,
+                        message_tx.clone(),
+                        async_app.background_executor().clone(),
+                    ),
+                    &message_rx,
+                    &mut pending_updates,
+                    |message| {
+                        process_listener_message(
+                            &mut state.borrow_mut(),
+                            message,
+                            &mut |_| None,
+                            &mut |_| Ok(()),
+                            &mut |token| on_hotkey(async_app, token),
+                        );
+                    },
                 )
                 .await;
                 #[cfg(not(target_os = "linux"))]
@@ -157,17 +186,7 @@ where
                 &mut state.borrow_mut(),
                 message,
                 &mut |_| candidate.take(),
-                &mut |hotkey| {
-                    async_app.update(|cx| {
-                        let mut settings = GlobalSettings::read(cx, Clone::clone);
-                        settings.hotkey.activation_key = hotkey.to_string();
-                        settings
-                            .save()
-                            .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))?;
-                        cx.set_global(GlobalSettings::new(settings));
-                        Ok(())
-                    })
-                },
+                &mut |hotkey| persist_hotkey(hotkey, async_app),
                 &mut |token| on_hotkey(async_app, token),
             );
         }
@@ -175,6 +194,35 @@ where
     .detach();
 
     tx
+}
+
+#[cfg(any(target_os = "linux", test))]
+async fn await_registration<Manager>(
+    registration: impl Future<Output = Option<Manager>>,
+    messages: &async_channel::Receiver<ListenerMessage>,
+    pending_updates: &mut VecDeque<HotkeyUpdate>,
+    mut on_event: impl FnMut(ListenerMessage),
+) -> Option<Manager> {
+    let mut registration = std::pin::pin!(registration);
+    loop {
+        if messages.is_closed() {
+            return None;
+        }
+        let mut message = std::pin::pin!(messages.recv());
+        let next = std::future::poll_fn(|cx| {
+            if let std::task::Poll::Ready(candidate) = registration.as_mut().poll(cx) {
+                return std::task::Poll::Ready(Ok(candidate));
+            }
+            message.as_mut().poll(cx).map(Err)
+        })
+        .await;
+        match next {
+            Ok(candidate) => return candidate,
+            Err(Ok(ListenerMessage::UpdateHotkey(request))) => pending_updates.push_back(request),
+            Err(Ok(event)) => on_event(event),
+            Err(Err(_)) => return None,
+        }
+    }
 }
 
 fn install_hotkey_shutdown(
@@ -402,6 +450,102 @@ mod tests {
             hotkey: hotkey.to_string(),
             completion,
         })
+    }
+
+    #[gpui_kit::test]
+    fn test_pending_registration_dispatches_existing_hotkey_before_completion(
+        cx: &gpui_kit::TestAppContext,
+    ) {
+        let (sender, messages) = async_channel::unbounded();
+        let (finish, registration) = async_channel::bounded::<()>(1);
+        let (result, completed) = async_channel::bounded(1);
+        let activations = Rc::new(Cell::new(0));
+        let observed = activations.clone();
+        let hotkey = "ctrl+shift+a".parse::<HotKey>().expect("hotkey");
+        let task = cx.spawn(async move |_| {
+            let mut state = HotkeyListenerState {
+                current_hotkey: "ctrl+shift+a".into(),
+                manager: Some("old"),
+            };
+            let mut queued = VecDeque::new();
+            let candidate = await_registration(
+                async {
+                    let _ = registration.recv().await;
+                    None::<&str>
+                },
+                &messages,
+                &mut queued,
+                |message| {
+                    process_listener_message(
+                        &mut state,
+                        message,
+                        &mut |_| None,
+                        &mut |_| Ok(()),
+                        &mut |_| observed.set(observed.get() + 1),
+                    );
+                },
+            )
+            .await;
+            assert!(candidate.is_none());
+            assert_eq!(state.manager, Some("old"));
+            result
+                .try_send(
+                    queued
+                        .into_iter()
+                        .map(|request| request.hotkey)
+                        .collect::<Vec<_>>(),
+                )
+                .expect("result");
+        });
+        sender
+            .try_send(update_message("ctrl+shift+c"))
+            .expect("queued update");
+        sender
+            .try_send(update_message("ctrl+shift+d"))
+            .expect("second queued update");
+        sender
+            .try_send(ListenerMessage::HotkeyEvent(GlobalHotKeyEvent {
+                id: hotkey.id,
+                state: HotKeyState::Pressed,
+            }))
+            .expect("activation");
+        cx.run_until_parked();
+        assert_eq!(
+            activations.get(),
+            1,
+            "existing shortcut must work while authorization is pending"
+        );
+        assert!(completed.is_empty());
+        finish.try_send(()).expect("reject registration");
+        cx.run_until_parked();
+        assert_eq!(
+            completed.try_recv().expect("completed"),
+            vec!["ctrl+shift+c", "ctrl+shift+d"]
+        );
+        assert_eq!(activations.get(), 1, "no delayed duplicate activation");
+        drop(task);
+    }
+
+    #[gpui_kit::test]
+    fn test_pending_registration_stops_when_listener_closes(cx: &gpui_kit::TestAppContext) {
+        let (sender, messages) = async_channel::unbounded();
+        let (result, completed) = async_channel::bounded(1);
+        let task = cx.spawn(async move |_| {
+            let candidate = await_registration(
+                std::future::pending::<Option<()>>(),
+                &messages,
+                &mut VecDeque::new(),
+                |_| {},
+            )
+            .await;
+            result.try_send(candidate).expect("result");
+        });
+        cx.run_until_parked();
+        assert!(completed.is_empty());
+        sender.close();
+        cx.run_until_parked();
+        assert!(completed.try_recv().expect("cancelled").is_none());
+        drop(task);
     }
 
     #[cfg(target_os = "linux")]

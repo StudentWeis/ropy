@@ -6,7 +6,7 @@ use std::{
     sync::{Mutex, MutexGuard},
 };
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 
 use super::{
     backend::{
@@ -185,6 +185,18 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         &self,
         image: PendingImage,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        self.save_pending_image_at(image, Local::now())
+    }
+
+    /// Commit an encoded image using its capture time, not encoding completion time.
+    ///
+    /// # Errors
+    /// Returns an error if payload installation or the record transaction fails.
+    pub fn save_pending_image_at(
+        &self,
+        image: PendingImage,
+        captured_at: DateTime<Local>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let _operation = self.lock_operation();
         let id = image.hash();
         let key = id.to_be_bytes();
@@ -199,9 +211,9 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let path = destination.to_string_lossy().into_owned();
         let is_new = existing.is_none();
         let mut record = existing.unwrap_or_else(|| {
-            ClipboardRecord::new(id, path.clone(), Local::now(), ContentType::Image)
+            ClipboardRecord::new(id, path.clone(), captured_at, ContentType::Image)
         });
-        record.created_at = Local::now();
+        record.created_at = record.created_at.max(captured_at);
         // Repair the canonical cache for an existing image as well. Other record
         // paths remain authoritative (including repositories opened by consumers).
         if (is_new || (record.content_type == ContentType::Image && record.content == path))
@@ -233,15 +245,27 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         content: String,
         content_type: ContentType,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        self.save_at(content, content_type, Local::now())
+    }
+
+    /// Insert or refresh content at its capture time. Late captures cannot move time backward.
+    ///
+    /// # Errors
+    /// Returns an error if record decoding, encoding or the index transaction fails.
+    pub fn save_at(
+        &self,
+        content: String,
+        content_type: ContentType,
+        captured_at: DateTime<Local>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let _operation = self.lock_operation();
         let id = content_hash(&content, &content_type);
         let key = id.to_be_bytes();
-        let now = Local::now();
 
         if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            record.created_at = now;
+            record.created_at = record.created_at.max(captured_at);
             self.put_indexed_record(&key, &record)?;
             return Ok(record);
         }
@@ -249,7 +273,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let record = ClipboardRecord {
             id,
             content,
-            created_at: now,
+            created_at: captured_at,
             content_type,
             pinned: false,
             rich_text_meta: None,
@@ -311,6 +335,18 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// # Errors
     /// Returns an error for an empty file list, serialization failure or failed index transaction.
     pub fn save_files(&self, paths: &[String]) -> Result<ClipboardRecord, RepositoryError> {
+        self.save_files_at(paths, Local::now())
+    }
+
+    /// Normalize and persist a file list using its capture time.
+    ///
+    /// # Errors
+    /// Returns an error for an empty list, serialization failure or failed index transaction.
+    pub fn save_files_at(
+        &self,
+        paths: &[String],
+        captured_at: DateTime<Local>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let normalized = normalize_file_paths(paths);
         if normalized.is_empty() {
             return Err(RepositoryError::Query("file list is empty".to_string()));
@@ -319,7 +355,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let content = serialize_file_paths(&normalized)
             .map_err(|error| RepositoryError::Serialization(error.to_string()))?;
 
-        self.save(content, ContentType::FilePath)
+        self.save_at(content, ContentType::FilePath, captured_at)
     }
 
     /// Persist rich-text representations and atomically replace their record metadata.
@@ -332,10 +368,23 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         html: Option<&str>,
         rtf: Option<&str>,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        self.save_rich_text_at(plain_text, html, rtf, Local::now())
+    }
+
+    /// Persist rich text at capture time, preserving a newer same-content capture.
+    ///
+    /// # Errors
+    /// Returns an error if payload staging or the record/index transaction fails.
+    pub fn save_rich_text_at(
+        &self,
+        plain_text: String,
+        html: Option<&str>,
+        rtf: Option<&str>,
+        captured_at: DateTime<Local>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let _operation = self.lock_operation();
         let id = content_hash(&plain_text, &ContentType::RichText);
         let key = id.to_be_bytes();
-        let now = Local::now();
         let existing = self.get_raw(&key)?;
         let existing: Option<ClipboardRecord> = existing
             .map(|bytes| {
@@ -343,10 +392,15 @@ impl<B: StorageBackend> ClipboardRepository<B> {
                     .map_err(|error| RepositoryError::Deserialization(error.to_string()))
             })
             .transpose()?;
+        if let Some(record) = &existing
+            && record.created_at > captured_at
+        {
+            return Ok(record.clone());
+        }
         let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root())?;
 
         if let Some(mut record) = existing {
-            record.created_at = now;
+            record.created_at = captured_at;
             let previous_meta = record.rich_text_meta.clone();
             if let Some(meta) = rich_text_meta.as_ref() {
                 record.rich_text_meta = Some(meta.clone());
@@ -366,7 +420,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let record = ClipboardRecord {
             id,
             content: plain_text,
-            created_at: now,
+            created_at: captured_at,
             content_type: ContentType::RichText,
             pinned: false,
             rich_text_meta,
