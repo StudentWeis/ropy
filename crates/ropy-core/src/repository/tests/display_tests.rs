@@ -9,6 +9,58 @@ use crate::repository::{
     test_helpers::{create_test_repo, load_display_records},
 };
 
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_same_millisecond_limit_and_cleanup_keep_newest(#[case] cleanup: bool) {
+    use crate::repository::backend::{KvTree, RECORDS_TREE, StorageBackend, memory::MemoryBackend};
+
+    let directory = tempfile::tempdir().unwrap();
+    let backend = MemoryBackend::new();
+    let images = directory.path().join("images");
+    drop(ClipboardRepository::from_backend(backend.clone(), images.clone()).unwrap());
+    let records = backend.open_tree(RECORDS_TREE).unwrap();
+    // Reverse ID order deliberately: hashes must not decide capture chronology.
+    for (id, nanos) in [(10_u64, 100), (1, 200)] {
+        let captured_at = chrono::DateTime::from_timestamp(1_790_000_000, nanos)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        let record = ClipboardRecord::new(id, id.to_string(), captured_at, ContentType::Text);
+        records
+            .insert(&id.to_be_bytes(), &postcard::to_allocvec(&record).unwrap())
+            .unwrap();
+    }
+    let repo = ClipboardRepository::from_backend(backend, images).unwrap();
+    if cleanup {
+        assert_eq!(repo.cleanup_old_records(1).unwrap(), 1);
+        assert_eq!(repo.count(), 1);
+        assert!(repo.get_by_id(10).unwrap().is_none());
+    }
+    let selected = repo.get_display_records(1).unwrap();
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0].id, 1);
+}
+
+#[test]
+fn test_late_rich_text_capture_preserves_newer_payload() {
+    let repo = create_test_repo();
+    let newer = chrono::Local::now();
+    let older = newer - chrono::Duration::seconds(1);
+    let original = repo
+        .save_rich_text_at("same".into(), Some("<b>new</b>"), None, newer)
+        .unwrap();
+    repo.save_rich_text_at("same".into(), Some("<i>old</i>"), None, older)
+        .unwrap();
+    let stored = repo.get_by_id(original.id).unwrap().unwrap();
+    assert_eq!(stored.created_at, newer);
+    assert_eq!(stored.rich_text_meta, original.rich_text_meta);
+    assert_eq!(
+        crate::repository::assets::load_rich_text_html(stored.rich_text_meta.as_ref().unwrap())
+            .unwrap(),
+        "<b>new</b>"
+    );
+}
+
 #[test]
 fn test_get_display_records() {
     let repo = create_test_repo();

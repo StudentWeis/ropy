@@ -96,7 +96,26 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             return Ok(0);
         }
 
-        let candidates = self.time_index.oldest_unpinned(total)?;
+        let mut candidates = self.time_index.oldest_unpinned(total)?;
+        // Index keys have millisecond precision. Resolve ties before deciding
+        // which ordinary records to delete, without changing the stored format.
+        for bucket in candidates.chunk_by_mut(|(left, _), (right, _)| left[..8] == right[..8]) {
+            if bucket.len() < 2 {
+                continue;
+            }
+            let mut timed = Vec::with_capacity(bucket.len());
+            for entry in bucket.iter().copied() {
+                let captured_at = self
+                    .get_raw(&entry.1.to_be_bytes())?
+                    .and_then(|value| postcard::from_bytes::<ClipboardRecord>(&value).ok())
+                    .map(|record| record.created_at);
+                timed.push((entry, captured_at));
+            }
+            timed.sort_by_key(|(_, captured_at)| *captured_at);
+            for (entry, (ordered, _)) in bucket.iter_mut().zip(timed) {
+                *entry = ordered;
+            }
+        }
         let mut removed = 0;
 
         for (ti_key, id) in candidates {

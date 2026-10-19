@@ -123,8 +123,8 @@ impl Settings {
         Ok(Self::config_dir()?.join("config.toml"))
     }
 
-    /// Load settings, layering the on-disk `config.toml` over the
-    /// `Default` instance so partial files keep working across upgrades,
+    /// Load settings with Serde defaults for omitted fields so partial
+    /// files keep working across upgrades,
     /// and clamping storage limits and opacity to their supported ranges.
     /// The application must validate native shortcut syntax before registration.
     ///
@@ -165,11 +165,7 @@ impl Settings {
     }
 
     fn from_config_content(config_content: &str) -> Result<Self, SettingsError> {
-        let mut default_config = toml::Value::try_from(Self::default())?;
-        let file_config = toml::Value::Table(toml::from_str(config_content)?);
-        Self::merge_config_values(&mut default_config, file_config);
-
-        let settings: Self = default_config.try_into()?;
+        let settings: Self = toml::from_str(config_content)?;
         Ok(settings.validated())
     }
 
@@ -218,23 +214,6 @@ impl Settings {
                 source: error.error,
             })?;
         Ok(())
-    }
-
-    fn merge_config_values(default_config: &mut toml::Value, file_config: toml::Value) {
-        match (default_config, file_config) {
-            (toml::Value::Table(default_table), toml::Value::Table(file_table)) => {
-                for (key, file_value) in file_table {
-                    if let Some(default_value) = default_table.get_mut(&key) {
-                        Self::merge_config_values(default_value, file_value);
-                    } else {
-                        default_table.insert(key, file_value);
-                    }
-                }
-            }
-            (default_value, file_value) => {
-                *default_value = file_value;
-            }
-        }
     }
 
     fn validated(mut self) -> Self {
@@ -855,68 +834,6 @@ max_history_records = 100
         );
         assert_eq!(settings.confirm.mode, ConfirmMode::CopyToClipboard);
         assert_eq!(settings.theme.code(), "ropy-light");
-    }
-
-    #[test]
-    fn test_merge_config_values_recursively_overlays_tables() {
-        let mut default_config = toml::Value::Table(
-            toml::from_str(
-                r"
-[storage]
-max_history_records = 100
-max_storage_records = 200
-
-[window]
-opacity_percent = 100
-
-[preview]
-hover_preview_enabled = true
-space_preview_enabled = true
-",
-            )
-            .expect("Failed to parse default config"),
-        );
-        let file_config = toml::Value::Table(
-            toml::from_str(
-                r"
-[storage]
-max_history_records = 50
-unknown_storage = 7
-
-[window]
-opacity_percent = 72
-
-[new_section]
-enabled = true
-",
-            )
-            .expect("Failed to parse file config"),
-        );
-        let expected_config = toml::Value::Table(
-            toml::from_str(
-                r"
-[storage]
-max_history_records = 50
-max_storage_records = 200
-unknown_storage = 7
-
-[window]
-opacity_percent = 72
-
-[preview]
-hover_preview_enabled = true
-space_preview_enabled = true
-
-[new_section]
-enabled = true
-",
-            )
-            .expect("Failed to parse expected config"),
-        );
-
-        Settings::merge_config_values(&mut default_config, file_config);
-
-        assert_eq!(default_config, expected_config);
     }
 
     // ── ConfirmMode Tests ─────────────────────────────────────────

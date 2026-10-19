@@ -159,24 +159,24 @@ impl RopyBoard {
             .map(|index| self.grid_scroll_handle.bounds_for_item(index))
             .collect::<Option<Vec<_>>>();
 
-        let next_index = item_bounds
-            .as_deref()
-            .and_then(|bounds| {
-                horizontal_grid_target_index(
-                    self.selected_index,
-                    bounds,
-                    move_right,
-                    self.layout_mode,
-                )
-            })
-            .or_else(|| {
+        let next_index = item_bounds.as_deref().map_or_else(
+            || {
                 fallback_horizontal_grid_target_index(
                     self.selected_index,
                     count,
                     move_right,
                     self.layout_mode,
                 )
-            });
+            },
+            |bounds| {
+                horizontal_grid_target_index(
+                    self.selected_index,
+                    bounds,
+                    move_right,
+                    self.layout_mode,
+                )
+            },
+        );
         let Some(next_index) = next_index else {
             return;
         };

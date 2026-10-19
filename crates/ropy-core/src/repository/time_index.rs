@@ -138,7 +138,8 @@ impl<T: KvTree> TimeIndex<T> {
     ///
     /// Pinned records are always included first. Among unpinned records, all
     /// favorited records are included without consuming the ordinary `limit`,
-    /// and up to `limit` ordinary records are appended in newest-first order.
+    /// and ordinary records through the `limit` boundary millisecond are included.
+    /// The caller must sort that boundary by full capture time before truncating.
     pub(super) fn select_display_ids(
         &self,
         limit: usize,
@@ -147,6 +148,7 @@ impl<T: KvTree> TimeIndex<T> {
         let mut pinned = Vec::new();
         let mut selected_unpinned = Vec::new();
         let mut ordinary_count = 0;
+        let mut boundary_timestamp = None;
 
         self.entries.scan_descending(&mut |key, value| {
             let Some(entry) = Self::decode_entry(key, value) else {
@@ -157,9 +159,12 @@ impl<T: KvTree> TimeIndex<T> {
                 pinned.push(entry.id);
             } else if favorite_ids.contains(&entry.id) {
                 selected_unpinned.push(entry.id);
-            } else if ordinary_count < limit {
+            } else if ordinary_count < limit || boundary_timestamp.as_deref() == Some(&key[..8]) {
                 selected_unpinned.push(entry.id);
                 ordinary_count += 1;
+                if ordinary_count == limit {
+                    boundary_timestamp = Some(key[..8].to_vec());
+                }
             }
             true
         })?;
