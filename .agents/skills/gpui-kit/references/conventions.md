@@ -59,10 +59,10 @@ The footer supplies layout only: attach the save action to the Button. Form does
 
 Components live in their component modules. Common capabilities may be extension traits, not inherent methods: import `ButtonVariants` for button variants, `Sizable` for size tiers, `Disableable` for supported disabled builders, `ActiveTheme` for theme access, and `WindowExt` for window overlays. Do not infer that every component supports every trait.
 
-Use the [pinned upstream application recipes](recipes.md) for imports, retained ownership, initialization, Root, and overlay layers. For a narrow task, load its component page and the relevant section of the coding/design guides; a component catalog is not a required reading sequence.
+Use the [complete application recipe](recipes.md) for imports, retained ownership, initialization, Root, and overlay layers. For a narrow task, load its component page and the relevant section of the coding/design guides; a component catalog is not a required reading sequence.
 
 ## Verify the convention transfer
 
 When transferring a pattern to another family member, check that it compiles, receives the expected requested value, preserves controlled state after redraw, and behaves correctly when disabled. For Form, check label orientation independently of column count and keep footer geometry outside the field grid's individual cells.
 
-In the [GPUI Kit upstream checkout](recipes.md), `cargo test -p gpui-kit-recipes` and `script/check-ai rust` are recipe and control-family checks. They are not available in Ropy. Here, use `./scripts/precheck.sh` and the commands in [docs/TESTING.md](../../../../docs/TESTING.md); the local gate does not validate upstream recipes.
+In this repository, `cargo test -p gpui-kit-recipes` compiles the external-style consumer and runs its interaction tests, and `script/check-ai rust` runs the control-family event and compatibility tests and Form geometry tests. These are deterministic contract checks, not measured AI first-attempt success rates.

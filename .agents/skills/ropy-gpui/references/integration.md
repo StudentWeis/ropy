@@ -4,14 +4,14 @@
 
 Checked against [GPUI Kit v0.8.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.8.0), commit `1676826d9d49b90f4d7b6808b69924f58796f6f1`. The upstream default branch matched this release when checked on 2026-10-19. Normal and development dependencies use 0.8.0; the default engine remains `gpui-pre` 0.3.9. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
 
-Use this skill with `gpui-kit-design-guides` for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy's local API corrections, pinned recipe links and test commands when refreshing upstream material. Upstream `script/check-ai` commands do not run in this repository.
+Use the official `gpui-kit` and `gpui-kit-design-guides` skills alongside the `ropy-gpui` adapter for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy-specific guidance in `ropy-gpui`; replace the two official skill directories only with an unmodified upstream snapshot. Upstream `script/check-ai` commands do not run in this repository.
 
 This reference adapts [GPUI Kit documentation](https://gpui-kit.com) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adding Ropy-specific scope, verification and recommendations. Code examples retain their upstream Apache-2.0 terms.
 
 ## Adopted integration
 
 - `Slider::accessibility_label` names the opacity slider and each RGB channel using existing localized labels. The settings UI integration test queries the opacity label through `TestQueryExt` and checks that it identifies a slider.
-- `TestQueryExt` provides accessible-label and role queries. `TestEventExt` supports individual pointer/key transitions. `TestInput` exercises an explicitly supplied input handler's composition protocol. See [Testing](gpui/test.md) for their contracts and limits.
+- `TestQueryExt` provides accessible-label and role queries. `TestEventExt` supports individual pointer/key transitions. `TestInput` exercises an explicitly supplied input handler's composition protocol. See [Testing](../../gpui-kit/references/gpui/test.md) for their contracts and limits.
 - Input caret/reflow, Select keyboard reconciliation, Popover keyboard activation and Tooltip dismissal fixes arrive through the component upgrade. They do not require duplicate application workarounds.
 - Keep all accessible names localized in Ropy, even though the upstream design guide now permits English-only accessibility strings.
 

@@ -1,68 +1,225 @@
-# Async work and task lifetime
+# Async & Background Tasks
 
-**Contents:** [Spawn contexts](#spawn-contexts) · [Updating entities](#updating-entities) · [Cancellation and ordering](#cancellation-and-ordering)
+**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Core Patterns](#core-patterns) · [Common Pitfalls](#common-pitfalls)
 
-## Spawn contexts
+## Overview
 
-These contracts are from `gpui-pre` 0.3.9, used by this repository's
-`gpui-kit` 0.8.0. The spelling `cx.spawn` alone does not identify its callback:
+GPUI provides integrated async runtime for foreground UI updates and background computation.
 
-| Receiver | Async closure parameters |
-| --- | --- |
-| `App` | `&mut AsyncApp` |
-| `Context<T>` | `WeakEntity<T>, &mut AsyncApp` |
-| `Context<T>::spawn_in(window, ...)` | `WeakEntity<T>, &mut AsyncWindowContext` |
-| `Window::spawn(cx, ...)` | `&mut AsyncWindowContext` |
+**Key Concepts:**
 
-See [Context spawn and spawn_in](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs),
-[App spawn](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app.rs), and
-[Window spawn](https://docs.rs/crate/gpui-pre/0.3.9/source/src/window.rs).
-These foreground tasks may await work; their entity mutations remain on the
-application thread. `background_spawn` takes an owned `Send + 'static` future.
-Move computation/I/O inputs into it, then apply its result from the foreground.
-Do not move a borrowed `Window`, `App`, or `Context` into a task.
+- **Foreground tasks**: UI thread, can update entities (`cx.spawn`)
+- **Background tasks**: Worker threads, CPU-intensive work (`cx.background_spawn`)
+- All entity updates happen on foreground thread
 
-## Updating entities
+## Quick Start
 
-`WeakEntity::update` and `update_in` are synchronous and return `Result<R>`.
-They do not become futures inside an async closure. Await the I/O or Task,
-then perform the update. This fragment belongs inside an entity method with
-an application-defined `load_data` function and `data` field:
+### Foreground Tasks (UI Updates)
+
+When spawned from `Context<Self>`, the closure receives `(WeakEntity<Self>, &mut AsyncApp)`:
 
 ```rust
-cx.spawn(async move |this, cx| {
-    let data = load_data().await;
-    if this.update(cx, |state, cx| {
-        state.data = data;
+impl MyComponent {
+    fn fetch_data(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            // Runs on UI thread, can await and update entities
+            let data = fetch_from_api().await;
+
+            this.update(cx, |state, cx| {
+                state.data = Some(data);
+                cx.notify();
+            }).ok();
+        }).detach();
+    }
+}
+```
+
+When spawned from `&mut App` (not inside an entity), the closure receives only `(cx: &mut AsyncApp)`:
+
+```rust
+cx.spawn(async move |cx: &mut AsyncApp| {
+    // No entity reference
+}).detach();
+```
+
+### Spawn with Window Context (spawn_in)
+
+Use `spawn_in` when the task also needs window access (`update_in`):
+
+```rust
+impl MyComponent {
+    fn animate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, cx| {
+            // cx here is AsyncWindowContext
+            this.update_in(cx, |state, window, cx| {
+                // Can access window here
+                state.frame += 1;
+                cx.notify();
+            }).ok();
+        }).detach();
+    }
+}
+```
+
+### Background Tasks (Heavy Work)
+
+```rust
+impl MyComponent {
+    fn process_file(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            // Runs on background thread, CPU-intensive
+            let result = cx
+                .background_spawn(async move { heavy_computation() })
+                .await;
+
+            // Back on the foreground to update UI
+            this.update(cx, |state, cx| {
+                state.result = result;
+                cx.notify();
+            }).ok();
+        })
+        .detach();
+    }
+}
+```
+
+### Task Management
+
+```rust
+struct MyView {
+    _task: Task<()>,  // Prefix with _ if stored but not accessed
+}
+
+impl MyView {
+    fn new(cx: &mut Context<Self>) -> Self {
+        let _task = cx.spawn(async move |this, cx: &mut AsyncApp| {
+            // Task automatically cancelled when dropped
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+
+                this.update(cx, |state, cx| {
+                    state.tick();
+                    cx.notify();
+                }).ok();
+            }
+        });
+
+        Self { _task }
+    }
+}
+```
+
+## Core Patterns
+
+### 1. Async Data Fetching (from Context<Self>)
+
+```rust
+cx.spawn(async move |this, cx: &mut AsyncApp| {
+    let data = fetch_data().await?;
+    this.update(cx, |state, cx| {
+        state.data = Some(data);
         cx.notify();
-    }).is_err() {
-        return; // The owner was released.
+    })?;
+    Ok::<_, anyhow::Error>(())
+}).detach();
+```
+
+### 2. Background Computation + UI Update
+
+```rust
+cx.spawn(async move |this, cx: &mut AsyncApp| {
+    let result = cx.background_spawn(async move { heavy_work() }).await;
+    this.update(cx, |state, cx| {
+        state.result = result;
+        cx.notify();
+    }).ok();
+})
+.detach();
+```
+
+### 3. Periodic Tasks
+
+```rust
+cx.spawn(async move |this, cx: &mut AsyncApp| {
+    loop {
+        cx.background_executor().timer(Duration::from_secs(5)).await;
+
+        this.update(cx, |state, cx| {
+            state.tick();
+            cx.notify();
+        }).ok();
     }
 }).detach();
 ```
 
-If the result needs a window, use `spawn_in` and `update_in`, handling a closed
-window or released entity. A strong `Entity::update` returns the closure's `R`
-directly; do not add `.ok()` or `.await` unless that closure itself returns a
-Result or future. See the [entity implementations](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/entity_map.rs).
+### 4. Task Cancellation
 
-## Cancellation and ordering
+Tasks are automatically cancelled when dropped. Store in struct to keep alive.
 
-A Task is cancelled when dropped. Retain it in the owning entity when replacing
-or dropping that owner should cancel the work; detach only when that lifetime
-is intentional. For periodic work, stop after a weak update fails instead of
-leaving a detached loop alive after the view closes. Await background Tasks
-inside the foreground task; there is no `Task::then` continuation API here.
+## Common Pitfalls
 
-Start work from a command or lifecycle method, not unconditionally from render.
-Use request identity/revisions to reject stale results. Debouncing needs retained
-pending state and a replaceable Task, not a closure capturing `&mut self`.
-Use GPUI executor timers unless the application has deliberately installed
-another runtime; a Tokio timer does not acquire a runtime merely because GPUI
-is running.
+### ❌ Don't: Use `defer_in` and then update the same entity through its handle
 
-`defer_in` is a deferred entity update, not an escape from borrowing rules: its
-callback already holds that entity mutably. See [re-entrancy](entity.md#re-entrancy)
-and [test scheduling](test-reference.md#async-and-timers). The normative
-[async guide](../coding-guides.md#async-work-and-side-effects) covers loading,
-error, and stale-result presentation.
+`cx.defer_in(window, callback)` schedules `callback` to run **on the current entity** — GPUI re-acquires that entity's lock to execute it. Calling `entity.update(cx, …)` on the *same* entity from within the deferred callback re-enters the lock and panics:
+
+```
+cannot update … while it is already being updated
+```
+
+```rust
+// ❌ Panic: list entity is locked for the defer_in; calling list.update re-enters
+fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<ListState<Self>>) {
+    cx.defer_in(window, |list_state, window, cx| {
+        parent.update(cx, |this, cx| {
+            this.inner_list.update(cx, |_, _| {}); // PANIC if inner_list == the deferred entity
+        });
+    });
+}
+```
+
+```rust
+// ✅ Correct: use the direct &mut reference — no lock needed
+fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<ListState<Self>>) {
+    cx.defer_in(window, |list_state, window, cx| {
+        // Access list data directly through the &mut reference
+        list_state.delegate_mut().some_method();
+
+        // Update a *different* entity — fine, different lock
+        parent.update(cx, |this, cx| { /* … */ });
+
+        // Sync list state directly after parent update — no lock needed
+        list_state.delegate_mut().update_snapshot(new_val);
+    });
+}
+```
+
+The rule: inside a `defer_in` callback, **never call `entity.update(cx, …)` or `entity.read(cx)` on the entity the `defer_in` was scheduled on**. Use the `&mut Entity` direct reference the callback provides instead.
+
+### ❌ Don't: Update entities from background tasks
+
+```rust
+// ❌ Wrong: Can't update entities from background thread
+cx.background_spawn(async move {
+    entity.update(cx, |state, cx| { // Compile error!
+        state.data = data;
+    });
+});
+```
+
+### ✅ Do: Await the background task inside a foreground task
+
+```rust
+// ✅ Correct: the foreground task awaits the background result
+cx.spawn(async move |this, cx| {
+    let data = cx.background_spawn(async move { load_data() }).await;
+    this.update(cx, |state, cx| {
+        state.data = data;
+        cx.notify();
+    }).ok();
+})
+.detach();
+```
+
+GPUI has no `Task::then`. Await the background task inside `cx.spawn`. The
+closure receives `(WeakEntity<Self>, &mut AsyncApp)`, not the background result.
+

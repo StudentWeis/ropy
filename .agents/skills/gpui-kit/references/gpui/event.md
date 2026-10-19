@@ -1,51 +1,238 @@
-# Events and subscriptions
+# Events & Subscriptions
 
-**Contents:** [Choose the signal](#choose-the-signal) · [Callback contracts](#callback-contracts) · [Lifetime and ordering](#lifetime-and-ordering)
+**Contents:** [Overview](#overview) · [Quick Start](#quick-start) · [Common Patterns](#common-patterns) · [subscribe_in](#subscribe_in--subscription-with-window-access) · [observe_window_activation](#observe_window_activation) · [observe_global](#observe_global) · [Subscription Lifetime](#subscription-lifetime) · [Best Practices](#best-practices)
 
-## Choose the signal
+## Overview
 
-Use Context::notify to invalidate an entity and inform its observers. Use
-Context::emit for a semantic event, with `impl EventEmitter<Event> for Owner {}`
-on the emitting type. Deriving Clone on the event does not supply that trait.
-An observer rereads state; an event subscriber receives the typed event.
+GPUI provides event system for component coordination:
 
-These are the locked `gpui-pre` 0.3.9 contracts used by `gpui-kit` 0.8.0.
-See [Context::emit, observe, and subscribe](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs).
-For window commands, use [Actions](action.md) instead of inventing an event bus.
+**Event Mechanisms:**
+- **Custom Events**: Define and emit type-safe events
+- **Observations**: React to entity state changes
+- **Subscriptions**: Listen to events from other entities
+- **Global Events**: App-wide event handling
 
-## Callback contracts
+## Quick Start
 
-From an owning `Context<T>`:
+### Define and Emit Events
 
-| API | Callback parameters |
-| --- | --- |
-| `observe(&entity, ...)` | `&mut T, Entity<Observed>, &mut Context<T>` |
-| `subscribe(&entity, ...)` | `&mut T, Entity<Emitter>, &Event, &mut Context<T>` |
-| `subscribe_in(&entity, window, ...)` | `&mut T, &Entity<Emitter>, &Event, &mut Window, &mut Context<T>` |
-| `subscribe_self(...)` | `&mut T, &Event, &mut Context<T>` |
-| `observe_global::<G>(...)` | `&mut T, &mut Context<T>` |
-| `observe_window_activation(window, ...)` | `&mut T, &mut Window, &mut Context<T>` |
+```rust
+#[derive(Clone)]
+enum MyEvent {
+    DataUpdated(String),
+    ActionTriggered,
+}
 
-App-level callbacks have different arity; in particular App::observe_global
-receives only `&mut App`. Do not copy it into an entity method unchanged.
-Use `window.is_window_active()` for activation and [focus subscriptions](focus-handle.md)
-for an individual focus target.
+impl MyComponent {
+    fn update_data(&mut self, data: String, cx: &mut Context<Self>) {
+        self.data = data.clone();
 
-## Lifetime and ordering
+        // Emit event
+        cx.emit(MyEvent::DataUpdated(data));
+        cx.notify();
+    }
+}
+```
 
-Each of these registrations returns a Subscription. Store it on the owner
-when cancellation should follow that owner; dropping a local registration
-immediately unregisters it. Detach intentionally when the registration should
-outlive that handle. Context subscriptions already use a weak subscriber;
-that does not mean every captured strong handle is harmless or every
-subscription should be detached. See the [Subscription implementation](https://docs.rs/crate/gpui-pre/0.3.9/source/src/subscription.rs).
+### Subscribe to Events
 
-Register in construction/lifecycle code rather than every render. Keep one
-source of truth, avoid mutual event/notification loops, and check
-[re-entrancy](entity.md#re-entrancy) through owner/delegate callbacks. An emitted
-event is processed through GPUI's effects; do not assume it is an immediate
-synchronous call or that it automatically redraws the emitter.
+```rust
+impl Listener {
+    fn new(source: Entity<MyComponent>, cx: &mut App) -> Entity<Self> {
+        cx.new(|cx| {
+            // Subscribe to events
+            cx.subscribe(&source, |this, emitter, event: &MyEvent, cx| {
+                match event {
+                    MyEvent::DataUpdated(data) => {
+                        this.handle_update(data.clone(), cx);
+                    }
+                    MyEvent::ActionTriggered => {
+                        this.handle_action(cx);
+                    }
+                }
+            }).detach();
 
-Use typed entities and events rather than an unsupported `WeakEntity<dyn Trait>`
-collection. Test the actual producer/consumer path, retain the registration,
-and assert the outcome and event count after the appropriate update/frame.
+            Self { source }
+        })
+    }
+}
+```
+
+### Observe Entity Changes
+
+```rust
+impl Observer {
+    fn new(target: Entity<Target>, cx: &mut App) -> Entity<Self> {
+        cx.new(|cx| {
+            // Observe entity for any changes
+            cx.observe(&target, |this, observed, cx| {
+                // Called when observed.update() calls cx.notify()
+                println!("Target changed");
+                cx.notify();
+            }).detach();
+
+            Self { target }
+        })
+    }
+}
+```
+
+## Common Patterns
+
+### 1. Parent-Child Communication
+
+```rust
+// Parent emits events
+impl Parent {
+    fn notify_children(&mut self, cx: &mut Context<Self>) {
+        cx.emit(ParentEvent::Updated);
+        cx.notify();
+    }
+}
+
+// Children subscribe
+impl Child {
+    fn new(parent: Entity<Parent>, cx: &mut App) -> Entity<Self> {
+        cx.new(|cx| {
+            cx.subscribe(&parent, |this, parent, event, cx| {
+                this.handle_parent_event(event, cx);
+            }).detach();
+
+            Self { parent }
+        })
+    }
+}
+```
+
+### 2. Global Event Broadcasting
+
+```rust
+struct EventBus {
+    listeners: Vec<WeakEntity<dyn Listener>>,
+}
+
+impl EventBus {
+    fn broadcast(&mut self, event: GlobalEvent, cx: &mut Context<Self>) {
+        self.listeners.retain(|weak| {
+            weak.update(cx, |listener, cx| {
+                listener.on_event(&event, cx);
+            }).is_ok()
+        });
+    }
+}
+```
+
+### 3. Observer Pattern
+
+```rust
+cx.observe(&entity, |this, observed, cx| {
+    // React to any state change
+    let state = observed.read(cx);
+    this.sync_with_state(state, cx);
+}).detach();
+```
+
+## subscribe_in — Subscription with Window Access
+
+Use when the subscription callback needs `&mut Window`:
+
+```rust
+// Store subscriptions to keep them alive
+struct MyComponent {
+    _subscriptions: Vec<Subscription>,
+}
+
+impl MyComponent {
+    fn new(input: &Entity<InputState>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let _subscriptions = vec![
+            cx.subscribe_in(input, window, |this, state, event, window, cx| {
+                match event {
+                    InputEvent::PressEnter { .. } => this.on_submit(window, cx),
+                    InputEvent::Change => {
+                        let val = state.read(cx).value();
+                        this.on_change(val, cx);
+                    }
+                    _ => {}
+                }
+            }),
+        ];
+        Self { _subscriptions }
+    }
+}
+```
+
+`subscribe` vs `subscribe_in`:
+- `cx.subscribe(&entity, |this, source, event, cx|)` — no window
+- `cx.subscribe_in(&entity, window, |this, source, event, window, cx|)` — window access
+
+## observe_window_activation
+
+```rust
+let _sub = cx.observe_window_activation(window, |this, window, cx| {
+    if window.is_window_active() {
+        this.start_polling(cx);
+    } else {
+        this.stop_polling(cx);
+    }
+});
+```
+
+## observe_global
+
+```rust
+cx.observe_global::<Theme>(|cx| {
+    cx.notify(); // Re-render when theme changes
+});
+```
+
+## Subscription Lifetime
+
+Subscriptions are cancelled when dropped. Two ways to keep alive:
+
+```rust
+// 1. .detach() — lives until entity is dropped
+cx.subscribe(&entity, |this, _, event, cx| {
+    // ...
+}).detach();
+
+// 2. Store in struct — cancelled when struct drops
+struct MyView {
+    _subscriptions: Vec<Subscription>,
+}
+// _subscriptions.push(cx.subscribe(...));
+```
+
+Use `.detach()` for permanent subscriptions; store in struct for subscriptions that should stop when the component unmounts.
+
+## Best Practices
+
+### ✅ Detach Subscriptions
+
+```rust
+// ✅ Detach to keep alive
+cx.subscribe(&entity, |this, source, event, cx| {
+    // Handle event
+}).detach();
+```
+
+### ✅ Clean Event Types
+
+```rust
+#[derive(Clone)]
+enum AppEvent {
+    DataChanged { id: usize, value: String },
+    ActionPerformed(ActionType),
+    Error(String),
+}
+```
+
+### ❌ Avoid Event Loops
+
+```rust
+// ❌ Don't create mutual subscriptions
+entity1.subscribe(entity2) → emits event
+entity2.subscribe(entity1) → emits event → infinite loop!
+```
+
+## Reference Documentation
+
