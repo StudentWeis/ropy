@@ -1,6 +1,6 @@
 [package]
 name = "ropy"
-version = "0.5.7"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.99"
 description = "A clipboard manager built with Rust and GPUI."
@@ -180,7 +180,7 @@ info_plist_exts = ["assets/macos/accessory.plist"]
 
 [package.metadata.bundle.bin.ropy]
 name = "Ropy"
-version = "0.5.7"
+version = "0.6.0"
 copyright = "Copyright 2026 Ropy Team"
 category = "Productivity"
 short_description = "A clipboard manager"
