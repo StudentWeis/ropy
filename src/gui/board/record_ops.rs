@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use gpui_kit::{AppContext, Context, ReadGlobal};
 
@@ -13,6 +10,73 @@ use super::{
     },
     search::ContentFilter,
 };
+
+use crate::{
+    clipboard::{CopyTracker, delete_tracked_record},
+    gui::{repository::GlobalRepository, settings::GlobalSettings},
+    repository::{ClipboardRepository, errors::RepositoryError},
+    utils::{lock_or_recover, read_or_recover, write_or_recover},
+};
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum HistoryMutation {
+    ClearAll,
+    ClearOrdinary,
+    Delete(u64),
+    ToggleFavorite(u64),
+    TogglePin(u64),
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(super) enum HistoryMutationState {
+    #[default]
+    Idle,
+    Running,
+    Failed(HistoryMutation),
+}
+
+impl HistoryMutationState {
+    pub(super) const fn is_running(self) -> bool {
+        matches!(self, Self::Running)
+    }
+}
+
+impl HistoryMutation {
+    pub(super) fn error_message(self) -> gpui_kit::SharedString {
+        match self {
+            Self::ClearAll | Self::ClearOrdinary => rust_i18n::t!("history_clear_failed"),
+            Self::Delete(_) => rust_i18n::t!("history_delete_failed"),
+            Self::ToggleFavorite(_) => rust_i18n::t!("history_favorite_failed"),
+            Self::TogglePin(_) => rust_i18n::t!("history_pin_failed"),
+        }
+        .into()
+    }
+
+    fn run(
+        self,
+        repo: &ClipboardRepository,
+        tracker: &Mutex<CopyTracker>,
+    ) -> Result<(), RepositoryError> {
+        match self {
+            Self::ClearAll => {
+                repo.clear()?;
+                lock_or_recover(tracker).clear();
+            }
+            Self::ClearOrdinary => {
+                repo.clear_ordinary_records()?;
+                lock_or_recover(tracker).clear();
+            }
+            Self::Delete(id) => {
+                delete_tracked_record(repo, id, tracker)?;
+            }
+            Self::ToggleFavorite(id) => {
+                repo.toggle_favorite(id)?;
+            }
+            Self::TogglePin(id) => repo.toggle_pin(id)?,
+        }
+        Ok(())
+    }
+}
 
 /// Serialize cleanup/query work without holding request state during I/O.
 #[derive(Debug, Default)]
@@ -56,12 +120,6 @@ impl HistoryRefresh {
         Some(operation(trim_to_limit))
     }
 }
-
-use crate::{
-    clipboard::delete_tracked_record,
-    gui::{repository::GlobalRepository, settings::GlobalSettings},
-    utils::{lock_or_recover, read_or_recover, write_or_recover},
-};
 
 impl RopyBoard {
     pub(crate) fn sync_filtered_records(&mut self, cx: &Context<'_, Self>) {
@@ -122,6 +180,10 @@ impl RopyBoard {
             return;
         };
         let revision = self.history_refresh.request(trim_to_limit);
+        if self.is_history_mutation_running() {
+            // Keep pending trims, but never apply a snapshot from before the mutation.
+            return;
+        }
         let history_refresh = self.history_refresh.clone();
         let (max_history, max_storage, recovery_required) = GlobalSettings::read(cx, |settings| {
             (
@@ -193,39 +255,57 @@ impl RopyBoard {
         self.list_state.scroll_to(scroll_position);
     }
 
-    /// Wipe everything — including pinned and favorited records — used by
-    /// the "clear all" path. Most callers want
-    /// [`Self::clear_ordinary_history`] instead.
-    pub(crate) fn clear_history(&mut self, cx: &Context<'_, Self>) {
-        GlobalRepository::read(cx, |repo| {
-            if let Some(repo) = repo {
-                if let Err(e) = repo.clear() {
-                    tracing::warn!(error = %e, "failed to clear clipboard history");
-                } else {
-                    self.history_refresh.next_revision();
-                    self.history_refresh_task = None;
-                    {
-                        let mut guard = write_or_recover(&self.records);
-                        guard.clear();
-                    }
-                    self.favorite_ids = Arc::new(HashSet::new());
-                    self.sync_filtered_records(cx);
-                }
-            }
-        });
+    pub(crate) const fn is_history_mutation_running(&self) -> bool {
+        self.history_mutation.is_running()
     }
 
-    /// Default "clear history" path: pinned and favorited records survive.
-    pub(crate) fn clear_ordinary_history(&mut self, cx: &Context<'_, Self>) {
-        GlobalRepository::read(cx, |repo| {
-            if let Some(repo) = repo {
-                if let Err(e) = repo.clear_ordinary_records() {
-                    tracing::warn!(error = %e, "failed to clear ordinary clipboard records");
-                } else {
-                    self.refresh_records_from_repository(cx);
-                }
-            }
-        });
+    fn mutate_history(&mut self, operation: HistoryMutation, cx: &mut Context<'_, Self>) {
+        if self.is_history_mutation_running() {
+            return;
+        }
+        let Some(repo) = GlobalRepository::global(cx).cloned() else {
+            self.history_mutation = HistoryMutationState::Failed(operation);
+            cx.notify();
+            return;
+        };
+        self.history_mutation = HistoryMutationState::Running;
+        self.history_refresh.next_revision();
+        self.history_refresh_task = None;
+        let tracker = self.last_copy.clone();
+        let task = cx.background_spawn(async move { operation.run(&repo, &tracker) });
+        // A submitted storage operation must finish even when its popup is closed.
+        // Only its UI completion depends on the weak owner still being alive.
+        cx.spawn(async move |board, cx| {
+            let result = task.await;
+            let _ = board.update(cx, |board, cx| {
+                board.history_mutation = match result {
+                    Ok(()) => {
+                        if matches!(operation, HistoryMutation::Delete(_)) {
+                            board.ui_state.deletion = super::DeletionState::Deleting;
+                        }
+                        HistoryMutationState::Idle
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, ?operation, "history operation failed");
+                        HistoryMutationState::Failed(operation)
+                    }
+                };
+                // Ordinary cleanup can commit some deletions before failing.
+                // Refresh on both outcomes to reconcile the actual stored state.
+                board.refresh_records_from_repository(cx);
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub(crate) fn clear_history(&mut self, cx: &mut Context<'_, Self>) {
+        self.mutate_history(HistoryMutation::ClearAll, cx);
+    }
+
+    pub(crate) fn clear_ordinary_history(&mut self, cx: &mut Context<'_, Self>) {
+        self.mutate_history(HistoryMutation::ClearOrdinary, cx);
     }
 
     pub(in crate::gui) fn open_clear_confirm(
@@ -234,39 +314,24 @@ impl RopyBoard {
         window: &mut gpui_kit::Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if self.is_history_mutation_running() {
+            return;
+        }
         self.clear_confirm_action = action;
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Visible;
         super::clear_confirm::open(action, window, cx);
         cx.notify();
     }
 
-    pub(crate) fn confirm_clear_action(&mut self, cx: &Context<'_, Self>) {
+    pub(crate) fn confirm_clear_action(&mut self, cx: &mut Context<'_, Self>) {
         match self.clear_confirm_action {
             ClearConfirmAction::AllHistory => self.clear_history(cx),
             ClearConfirmAction::OrdinaryRecords => self.clear_ordinary_history(cx),
         }
-
-        self.clear_last_copy_state();
     }
 
-    /// Reset the dedup gate so the next copy — even if identical to the
-    /// just-cleared content — is recaptured by the listener.
-    pub(crate) fn clear_last_copy_state(&self) {
-        let mut guard = lock_or_recover(&self.last_copy);
-        guard.clear();
-    }
-
-    pub(crate) fn delete_record(&mut self, id: u64, cx: &Context<'_, Self>) {
-        GlobalRepository::read(cx, |repo| {
-            if let Some(repo) = repo {
-                if let Err(e) = delete_tracked_record(repo, id, &self.last_copy) {
-                    tracing::warn!(error = %e, "failed to delete clipboard record");
-                } else {
-                    self.ui_state.deletion = crate::gui::board::DeletionState::Deleting;
-                    self.refresh_records_from_repository(cx);
-                }
-            }
-        });
+    pub(crate) fn delete_record(&mut self, id: u64, cx: &mut Context<'_, Self>) {
+        self.mutate_history(HistoryMutation::Delete(id), cx);
     }
 
     /// Returns true if the record is pinned or favorited (i.e. non-ordinary).
@@ -286,6 +351,9 @@ impl RopyBoard {
         window: &mut gpui_kit::Window,
         cx: &mut Context<'_, Self>,
     ) -> bool {
+        if self.is_history_mutation_running() {
+            return false;
+        }
         if self.is_record_special(id) {
             self.pending_delete_id = Some(id);
             self.ui_state.delete_confirm = crate::gui::board::DeleteConfirmState::Visible;
@@ -315,33 +383,12 @@ impl RopyBoard {
         cx.notify();
     }
 
-    pub(crate) fn toggle_record_favorite(&mut self, id: u64, cx: &Context<'_, Self>) {
-        GlobalRepository::read(cx, |repo| {
-            let Some(repo) = repo else {
-                return;
-            };
-            match repo.toggle_favorite(id) {
-                Ok(_) => {
-                    self.refresh_records_from_repository(cx);
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to toggle favorite on clipboard record");
-                }
-            }
-        });
+    pub(crate) fn toggle_record_favorite(&mut self, id: u64, cx: &mut Context<'_, Self>) {
+        self.mutate_history(HistoryMutation::ToggleFavorite(id), cx);
     }
 
-    pub(crate) fn toggle_record_pin(&mut self, id: u64, cx: &Context<'_, Self>) {
-        GlobalRepository::read(cx, |repo| {
-            let Some(repo) = repo else {
-                return;
-            };
-            if let Err(e) = repo.toggle_pin(id) {
-                tracing::warn!(error = %e, "failed to toggle pin on clipboard record");
-                return;
-            }
-            self.refresh_records_from_repository(cx);
-        });
+    pub(crate) fn toggle_record_pin(&mut self, id: u64, cx: &mut Context<'_, Self>) {
+        self.mutate_history(HistoryMutation::TogglePin(id), cx);
     }
 
     /// Click-to-toggle behavior: re-clicking the active filter clears it

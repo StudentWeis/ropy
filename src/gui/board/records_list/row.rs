@@ -3,7 +3,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use gpui_kit::{
     AnyElement, AnyView, App, Context, Window, anchored,
     component::{
-        ActiveTheme, Icon, Sizable,
+        ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonVariants},
         h_flex, v_flex,
     },
@@ -21,6 +21,7 @@ use super::{
         RopyBoard,
         color::{ClipboardColor, parse_clipboard_color},
         preview,
+        record_ops::HistoryMutationState,
     },
     metrics::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
@@ -326,6 +327,7 @@ pub(super) struct RenderContext<'a> {
     flags: RenderFlags,
     layout_mode: LayoutMode,
     overlay_visible: bool,
+    history_mutation: HistoryMutationState,
     view: &'a gpui_kit::WeakEntity<RopyBoard>,
 }
 
@@ -338,6 +340,7 @@ pub(super) struct RecordsListState {
     show_preview: bool,
     hover_preview_enabled: bool,
     overlay_visible: bool,
+    history_mutation: HistoryMutationState,
     pub(super) view: gpui_kit::WeakEntity<RopyBoard>,
 }
 
@@ -354,6 +357,7 @@ impl RecordsListState {
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
                 && !overlay_visible,
             overlay_visible,
+            history_mutation: board.history_mutation,
             view: context.weak_entity(),
         }
     }
@@ -408,6 +412,7 @@ impl RecordsListState {
             },
             layout_mode: self.layout_mode,
             overlay_visible: self.overlay_visible,
+            history_mutation: self.history_mutation,
             view: &self.view,
         }
     }
@@ -547,29 +552,26 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
     };
     let delete_label = t!("record_delete", locale = language.code());
 
-    let favorite_button = {
-        let button = Button::new(("favorite-btn", record_id));
-        let button = if ctx.flags.is_favorite() {
-            button.primary().label("★")
-        } else {
-            button.ghost().label("☆")
-        };
-        button
-            .xsmall()
-            .accessibility_label(favorite_label.clone())
-            .tooltip(favorite_label)
-            .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
+    let button = Button::new(("favorite-btn", record_id));
+    let favorite_button = if ctx.flags.is_favorite() {
+        button.primary().label("★")
+    } else {
+        button.ghost().label("☆")
+    }
+    .xsmall()
+    .disabled(ctx.history_mutation.is_running())
+    .accessibility_label(favorite_label.clone())
+    .tooltip(favorite_label)
+    .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+        cx.stop_propagation();
+    })
+    .on_click(move |_event, _window, cx| {
+        view_favorite
+            .update(cx, |this, cx| {
+                this.toggle_record_favorite(record_id, cx);
             })
-            .on_click(move |_event, _window, cx| {
-                view_favorite
-                    .update(cx, |this, cx| {
-                        this.toggle_record_favorite(record_id, cx);
-                        cx.notify();
-                    })
-                    .ok();
-            })
-    };
+            .ok();
+    });
 
     let pin_button = {
         let button = if ctx.record.pinned {
@@ -579,6 +581,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
+            .disabled(ctx.history_mutation.is_running())
             .accessibility_label(pin_label.clone())
             .tooltip(pin_label)
             .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
@@ -588,7 +591,6 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
                 view_pin
                     .update(cx, |this, cx| {
                         this.toggle_record_pin(record_id, cx);
-                        cx.notify();
                     })
                     .ok();
             })
@@ -598,6 +600,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
         .xsmall()
         .ghost()
         .label("×")
+        .disabled(ctx.history_mutation.is_running())
         .accessibility_label(delete_label.clone())
         .tooltip(delete_label)
         .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {

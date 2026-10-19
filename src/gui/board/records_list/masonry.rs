@@ -1,9 +1,15 @@
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
+
 use gpui_kit::{
-    App, RenderOnce, ScrollHandle, Window,
+    App, Bounds, Pixels, RenderOnce, ScrollHandle, Window,
+    base::TestSupportExt,
     component::scroll::{Scrollbar, ScrollbarMode},
-    div,
+    div, point,
     prelude::{InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled},
-    px,
+    px, size,
 };
 
 use super::{
@@ -11,12 +17,11 @@ use super::{
     render_records_scrollbar,
     row::{RecordsListState, render_list_item_with_grid_height},
 };
-use crate::utils::read_or_recover;
+use crate::{gui::SharedRecords, utils::read_or_recover};
 
 const GRID_COLUMN_GAP: f32 = 6.0;
 const GRID_ROW_GAP: f32 = 6.0;
 const GRID_OVERSCAN_PX: f32 = 240.0;
-const BOARD_HORIZONTAL_PADDING: f32 = 32.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MasonryPlacement {
@@ -28,9 +33,11 @@ struct MasonryPlacement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct MasonryLayout {
+pub(in crate::gui::board) struct MasonryLayout {
     placements: Vec<MasonryPlacement>,
     total_height: f32,
+    max_height: f32,
+    pub(in crate::gui::board) bounds: Vec<Bounds<Pixels>>,
 }
 
 fn build_masonry_layout(
@@ -77,17 +84,100 @@ fn build_masonry_layout(
         (column_heights.into_iter().fold(0.0, f32::max) - row_gap).max(0.0)
     };
 
+    let bounds = placements
+        .iter()
+        .map(|placement| {
+            Bounds::new(
+                point(px(placement.left), px(placement.top)),
+                size(px(column_width), px(placement.height)),
+            )
+        })
+        .collect();
     MasonryLayout {
         placements,
         total_height,
+        max_height: item_heights.iter().copied().fold(0.0, f32::max),
+        bounds,
     }
 }
 
-pub(super) fn grid_available_width(window: &Window) -> gpui_kit::Pixels {
-    (window.bounds().size.width - px(BOARD_HORIZONTAL_PADDING)).max(px(1.0))
+struct CachedLayout {
+    indices: Arc<Vec<usize>>,
+    width: Pixels,
+    rem_size: Pixels,
+    layout: Arc<MasonryLayout>,
 }
 
-fn grid_card_width(available_width: gpui_kit::Pixels) -> gpui_kit::Pixels {
+/// The board replaces its filtered-index Arc whenever records or filters change.
+/// That identity, width and rem size own layout invalidation; scrolling does not.
+#[derive(Default)]
+pub(in crate::gui::board) struct MasonryState {
+    geometry: Cell<(Pixels, Pixels)>,
+    cached: RefCell<Option<CachedLayout>>,
+}
+
+impl MasonryState {
+    pub(in crate::gui::board) fn set_geometry(&self, width: Pixels, rem_size: Pixels) {
+        self.geometry.set((width, rem_size));
+    }
+
+    pub(in crate::gui::board) fn layout(
+        &self,
+        indices: &Arc<Vec<usize>>,
+        records: &SharedRecords,
+    ) -> Arc<MasonryLayout> {
+        let (width, rem_size) = self.geometry.get();
+        let mut cached = self.cached.borrow_mut();
+        if let Some(cached) = cached.as_ref()
+            && Arc::ptr_eq(&cached.indices, indices)
+            && cached.width == width
+            && cached.rem_size == rem_size
+        {
+            return cached.layout.clone();
+        }
+        let heights = {
+            let records = read_or_recover(records);
+            indices
+                .iter()
+                .filter_map(|ix| records.get(*ix))
+                .map(estimated_grid_card_height)
+                .collect::<Vec<_>>()
+        };
+        let layout = Arc::new(build_masonry_layout(
+            &heights,
+            GRID_COLUMN_COUNT,
+            grid_card_width(width).into(),
+            GRID_COLUMN_GAP,
+            GRID_ROW_GAP,
+        ));
+        *cached = Some(CachedLayout {
+            indices: indices.clone(),
+            width,
+            rem_size,
+            layout: layout.clone(),
+        });
+        layout
+    }
+}
+
+impl MasonryLayout {
+    fn visible_placements(&self, top: f32, bottom: f32) -> impl Iterator<Item = &MasonryPlacement> {
+        // Shortest-column placement produces monotonically increasing tops.
+        let start = self
+            .placements
+            .partition_point(|placement| placement.top + self.max_height < top);
+        self.placements[start..]
+            .iter()
+            .take_while(move |placement| placement.top <= bottom)
+            .filter(move |placement| masonry_placement_is_visible(placement, top, bottom))
+    }
+}
+
+pub(super) fn grid_available_width(window: &Window) -> Pixels {
+    (window.bounds().size.width - window.rem_size() * 2.0).max(px(1.0))
+}
+
+fn grid_card_width(available_width: Pixels) -> Pixels {
     ((available_width - px(GRID_COLUMN_GAP)) / GRID_COLUMN_COUNT_F32).max(px(1.0))
 }
 
@@ -133,95 +223,81 @@ fn masonry_placement_is_visible(
 pub(super) struct GridMasonry {
     state: RecordsListState,
     scroll_handle: ScrollHandle,
-    available_width: gpui_kit::Pixels,
+    layout: Arc<MasonryLayout>,
 }
 
 impl GridMasonry {
     pub(super) const fn new(
         state: RecordsListState,
         scroll_handle: ScrollHandle,
-        available_width: gpui_kit::Pixels,
+        layout: Arc<MasonryLayout>,
     ) -> Self {
         Self {
             state,
             scroll_handle,
-            available_width,
+            layout,
         }
     }
 }
 
 impl RenderOnce for GridMasonry {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let card_width = grid_card_width(self.available_width);
-        let estimated_heights = {
-            let records = read_or_recover(&self.state.records);
-            self.state
-                .filtered_record_indices
-                .iter()
-                .filter_map(|record_index| records.get(*record_index))
-                .map(estimated_grid_card_height)
-                .collect::<Vec<_>>()
-        };
-
-        let layout = build_masonry_layout(
-            &estimated_heights,
-            GRID_COLUMN_COUNT,
-            Into::<f32>::into(card_width),
-            GRID_COLUMN_GAP,
-            GRID_ROW_GAP,
-        );
-
+        let layout = self.layout;
         let (visible_top, visible_bottom) =
             masonry_visible_window(&self.scroll_handle, window, layout.total_height);
 
-        let mut children = Vec::with_capacity(layout.placements.len());
+        let mut children = Vec::new();
         let records = read_or_recover(&self.state.records);
 
-        for placement in layout.placements {
+        for placement in layout.visible_placements(visible_top, visible_bottom) {
             let mut child = div()
                 .absolute()
                 .top(px(placement.top))
                 .left(px(placement.left))
-                .w(card_width)
+                .w(layout.bounds[placement.index].size.width)
                 .min_w_0();
 
-            if masonry_placement_is_visible(&placement, visible_top, visible_bottom) {
-                if let Some(record_index) = self
-                    .state
-                    .filtered_record_indices
-                    .get(placement.index)
-                    .copied()
-                    && let Some(record) = records.get(record_index)
-                {
-                    let ctx = self.state.render_context(placement.index, record);
-                    child = child.child(render_list_item_with_grid_height(
-                        &ctx,
-                        window,
-                        cx,
-                        Some(placement.height),
-                    ));
-                } else {
-                    child = child.h(px(placement.height));
-                }
-            } else {
-                child = child.h(px(placement.height));
+            if let Some(record_index) = self
+                .state
+                .filtered_record_indices
+                .get(placement.index)
+                .copied()
+                && let Some(record) = records.get(record_index)
+            {
+                let ctx = self.state.render_context(placement.index, record);
+                child = child.child(render_list_item_with_grid_height(
+                    &ctx,
+                    window,
+                    cx,
+                    Some(placement.height),
+                ));
             }
 
             children.push(child.into_any_element());
         }
+        drop(records);
 
         div()
             .relative()
             .w_full()
             .flex_1()
+            .min_h_0()
             .child(
                 div()
                     .id("records-grid-scroll")
+                    .test_support()
                     .relative()
                     .size_full()
                     .track_scroll(&self.scroll_handle)
                     .overflow_y_scroll()
-                    .children(children),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .flex_shrink_0()
+                            .h(px(layout.total_height))
+                            .children(children),
+                    ),
             )
             .child(render_records_scrollbar(
                 Scrollbar::vertical(&self.scroll_handle).mode(ScrollbarMode::Scrolling),
@@ -235,6 +311,67 @@ mod tests {
         super::metrics::GRID_COLUMN_COUNT, MasonryPlacement, build_masonry_layout,
         compute_masonry_visible_window, masonry_placement_is_visible,
     };
+
+    #[test]
+    fn test_masonry_visible_range_keeps_crossing_cards_and_bounds_large_history() {
+        let heights = (0..10_000)
+            .map(|ix| if ix % 3 == 0 { 144. } else { 96. })
+            .collect::<Vec<_>>();
+        let layout = build_masonry_layout(&heights, 2, 180., 6., 6.);
+        for top in [0., 123., 52_000., layout.total_height - 600.] {
+            let visible = layout
+                .visible_placements(top, top + 600.)
+                .collect::<Vec<_>>();
+            assert!(
+                visible.len() < 20,
+                "only viewport cards should be constructed"
+            );
+            let expected = layout
+                .placements
+                .iter()
+                .filter(|p| p.top <= top + 600. && p.top + p.height >= top)
+                .collect::<Vec<_>>();
+            assert_eq!(visible, expected);
+        }
+    }
+
+    #[test]
+    fn test_masonry_cache_reuses_layout_and_invalidates_snapshot_and_geometry() {
+        use crate::repository::{ClipboardRecord, ContentType};
+        use gpui_kit::px;
+        use std::sync::{Arc, RwLock};
+
+        let state = super::MasonryState::default();
+        let records = Arc::new(RwLock::new(vec![ClipboardRecord::new(
+            1,
+            "short".into(),
+            chrono::Local::now(),
+            ContentType::Text,
+        )]));
+        let indices = Arc::new(vec![0]);
+        state.set_geometry(px(400.), px(16.));
+        let first = state.layout(&indices, &records);
+        assert!(
+            Arc::ptr_eq(&first, &state.layout(&indices, &records)),
+            "scrolling should reuse measured geometry"
+        );
+        crate::utils::write_or_recover(&records)[0].content_type = ContentType::Image;
+        let indices = Arc::new(vec![0]);
+        let updated = state.layout(&indices, &records);
+        assert!(
+            updated.bounds[0].size.height > first.bounds[0].size.height,
+            "same-length snapshots must invalidate old record heights"
+        );
+        state.set_geometry(px(600.), px(16.));
+        let resized = state.layout(&indices, &records);
+        assert!(resized.bounds[0].size.width > updated.bounds[0].size.width);
+        state.set_geometry(px(600.), px(20.));
+        assert!(
+            !Arc::ptr_eq(&resized, &state.layout(&indices, &records)),
+            "rem changes must invalidate layout"
+        );
+        assert_eq!(state.layout(&Arc::new(vec![]), &records).bounds, []);
+    }
 
     #[test]
     fn test_grid_layout_remains_two_columns() {

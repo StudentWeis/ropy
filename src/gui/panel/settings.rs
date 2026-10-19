@@ -1,7 +1,7 @@
 use gpui_kit::{
     Context, StatefulInteractiveElement,
     component::{
-        ActiveTheme, Icon, IndexPath, Sizable, StyledExt,
+        ActiveTheme, Disableable, Icon, IndexPath, Sizable, StyledExt,
         button::{Button, ButtonVariants},
         h_flex,
         input::Input,
@@ -133,7 +133,7 @@ pub(crate) fn render_settings_content(
         vec![
             render_max_history_row(board, cx).into_any_element(),
             render_max_storage_row(board, cx).into_any_element(),
-            render_clear_history_row(cx).into_any_element(),
+            render_clear_history_row(board, cx).into_any_element(),
         ],
         cx,
     );
@@ -481,7 +481,7 @@ fn render_space_preview_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
     settings_row(t!("settings_space_preview"), toggle, cx)
 }
 
-fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+fn render_clear_history_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     settings_row(
         t!("settings_clear_history"),
         h_flex()
@@ -489,6 +489,7 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
             .gap_2()
             .child(
                 Button::new("clear-ordinary-history-button")
+                    .disabled(board.is_history_mutation_running())
                     .small()
                     .ghost()
                     .border_1()
@@ -501,6 +502,7 @@ fn render_clear_history_row(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
             )
             .child(
                 Button::new("clear-history-button")
+                    .disabled(board.is_history_mutation_running())
                     .small()
                     .danger()
                     .label(t!("clear_all"))

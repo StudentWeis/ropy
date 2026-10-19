@@ -112,10 +112,7 @@ This preserves the existing pipeline and channel policies:
    Failure, disconnection or timeout keeps the popup open and shows a localized
    notification; stale completions cannot affect a dismissed or reopened board.
 
-The application retains the current application-lifetime detached tasks and
-watcher behavior. This refactor does not introduce a new shutdown protocol or
-change executor/thread placement. A shutdown redesign must account for the
-blocking native watcher and in-flight writes separately.
+Native watcher and clipboard writer tasks retain their application-lifetime ownership and executor placement. Background history work does not introduce a new shutdown protocol. A shutdown redesign must account for the blocking native watcher and in-flight writes separately.
 
 History cleanup and display queries run on the background executor. The initial
 board starts empty and requests history through the same refresh path. The
@@ -135,6 +132,10 @@ The repository is authoritative for persisted history. The board's shared record
 list is a presentation snapshot; selection, filters, scroll position and focus
 remain owned by the board. A failed refresh must not become a second history
 store.
+
+Explicit history mutations (clear, delete, favorite and pin) also run on the background executor. The board owns one pending mutation, disables duplicate submissions and shows localized progress or failure feedback. Starting a mutation invalidates old refresh completions; refresh requests received during it retain any pending storage-limit trim. Completion requests a fresh snapshot even on failure, because ordinary-history cleanup can have committed some deletions. Copy deduplication is reset only after the relevant storage operation succeeds. Submitted writes finish independently of popup visibility, and their UI completion uses a weak board handle.
+
+The masonry grid retains layout geometry keyed by the filtered snapshot identity, available width and rem size. Scroll frames reuse that geometry and construct only cards in the viewport plus overscan. One content extent preserves the full scroll range; keyboard navigation and selection reveal use model coordinates, including for cards that have no rendered element.
 
 ## Settings and presentation
 
@@ -244,6 +245,4 @@ controlled before/after measurement.
 - Give long-lived native services explicit stop/completion ownership if restart
   or shutdown requirements need it.
 
-The remaining native-service lifecycle change requires its own behavioral
-validation. Database initialization and explicit record mutations still run
-synchronously; background refresh does not introduce a shutdown protocol.
+The remaining native-service lifecycle change requires its own behavioral validation. Database initialization still runs synchronously; background history operations do not introduce a shutdown protocol.
