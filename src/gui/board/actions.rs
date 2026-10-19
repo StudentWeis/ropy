@@ -155,11 +155,12 @@ fn fallback_horizontal_grid_target_index(
 impl RopyBoard {
     fn move_grid_horizontal(&mut self, move_right: bool, cx: &mut Context<'_, Self>) {
         let count = self.filtered_record_len();
-        let item_bounds = (0..count)
-            .map(|index| self.grid_scroll_handle.bounds_for_item(index))
-            .collect::<Option<Vec<_>>>();
+        let layout = self
+            .grid_layout
+            .layout(&self.filtered_record_indices, &self.records);
+        let item_bounds = (layout.bounds.len() == count).then_some(layout.bounds.as_slice());
 
-        let next_index = item_bounds.as_deref().map_or_else(
+        let next_index = item_bounds.map_or_else(
             || {
                 fallback_horizontal_grid_target_index(
                     self.selected_index,

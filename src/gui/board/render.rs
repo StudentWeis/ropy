@@ -61,6 +61,8 @@ impl Render for RopyBoard {
             );
         }
 
+        base = base.children(self.render_history_feedback(cx));
+
         if self.active_panel != ActivePanel::Shortcuts
             && let Some(message) = super::actions::keybinding_error_message(cx)
         {
@@ -112,5 +114,42 @@ impl Render for RopyBoard {
         };
 
         body
+    }
+}
+
+impl RopyBoard {
+    fn render_history_feedback(&self, cx: &Context<'_, Self>) -> Option<AnyElement> {
+        match self.history_mutation {
+            super::record_ops::HistoryMutationState::Running => {
+                let message = gpui_kit::SharedString::from(t!("history_operation_pending"));
+                Some(
+                    gpui_kit::component::h_flex()
+                        .id("history-operation-pending")
+                        .test_support()
+                        .role(gpui_kit::Role::Status)
+                        .aria_label(message.clone())
+                        .gap_2()
+                        .py_2()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(gpui_kit::component::spinner::Spinner::new())
+                        .child(message)
+                        .into_any_element(),
+                )
+            }
+            super::record_ops::HistoryMutationState::Failed(operation) => {
+                let message = operation.error_message();
+                Some(
+                    gpui_kit::div()
+                        .id("history-operation-error")
+                        .test_support()
+                        .aria_label(message.clone())
+                        .py_2()
+                        .child(Alert::error("history-operation-alert", message))
+                        .into_any_element(),
+                )
+            }
+            super::record_ops::HistoryMutationState::Idle => None,
+        }
     }
 }

@@ -24,6 +24,176 @@ use crate::{
 mod shortcut_editor;
 mod user_themes;
 
+#[gpui_kit::test]
+fn test_grid_large_history_uses_one_extent_and_reveals_distant_selection(cx: &mut TestAppContext) {
+    let mut settings = Settings::default();
+    settings.layout.mode = crate::config::LayoutMode::Grid;
+    let (handle, board, _) =
+        open_board_with_settings(cx, (1..=10_000).map(record).collect(), settings);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            board
+                .read(cx)
+                .grid_scroll_handle
+                .bounds_for_item(0)
+                .is_some()
+        );
+        assert!(
+            board
+                .read(cx)
+                .grid_scroll_handle
+                .bounds_for_item(1)
+                .is_none(),
+            "the scroll owner should contain one extent, not one placeholder per history record"
+        );
+        board.update(cx, |board, cx| {
+            board.selected_index = 9_999;
+            board.reveal_selected_record();
+            window.focus(&board.focus_handle, cx);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(
+            board.read(cx).grid_scroll_handle.offset().y < gpui_kit::px(-100_000.),
+            "offset {:?}, viewport {:?}, extent {:?}",
+            board.read(cx).grid_scroll_handle.offset(),
+            board.read(cx).grid_scroll_handle.bounds(),
+            board.read(cx).grid_scroll_handle.bounds_for_item(0)
+        );
+        let selected_id = board.read(cx).filtered_record_id_at(9_999).unwrap();
+        assert!(window.find(("delete-btn", selected_id)).visible());
+        window.press("up", cx);
+        let selected_id = board
+            .read(cx)
+            .filtered_record_id_at(board.read(cx).selected_index)
+            .unwrap();
+        assert!(window.find(("delete-btn", selected_id)).visible());
+        let offset_before_wheel = board.read(cx).grid_scroll_handle.offset().y;
+        window.scroll(
+            "records-grid-scroll",
+            gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(200.))),
+            cx,
+        );
+        assert!(board.read(cx).grid_scroll_handle.offset().y > offset_before_wheel);
+        board.update(cx, |board, cx| {
+            board
+                .search_input
+                .update(cx, |input, cx| input.set_value("record 10000", window, cx));
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(board.read(cx).filtered_record_len(), 1);
+        assert!(window.find(("delete-btn", 10_000_u64)).visible());
+        assert_eq!(
+            board.read(cx).grid_scroll_handle.offset().y,
+            gpui_kit::px(0.)
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_history_mutation_duplicate_favorite_does_not_toggle_back(cx: &TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    let record = repo.save_text("favorite once".into()).unwrap();
+    let (_, board, _) = open_board(cx, vec![record.clone()]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| {
+            board.toggle_record_favorite(record.id, cx);
+            board.toggle_record_favorite(record.id, cx);
+            assert!(
+                repo.favorite_ids().unwrap().is_empty(),
+                "UI handlers must return before storage work runs"
+            );
+        });
+    });
+    cx.run_until_parked();
+    assert!(repo.favorite_ids().unwrap().contains(&record.id));
+    cx.update(|cx| assert!(board.read(cx).favorite_ids.contains(&record.id)));
+}
+
+#[gpui_kit::test]
+fn test_history_clear_confirmation_reports_failure_and_retry_clears(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    let saved = repo.save_text("clear me".into()).unwrap();
+    let (handle, board, _) = open_board(cx, vec![saved]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
+        });
+        window.render_frame(cx);
+        window.click("ok", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("history-operation-error").visible());
+        assert_eq!(board.read(cx).filtered_record_len(), 1);
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| {
+            board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
+        });
+        window.render_frame(cx);
+        window.click("ok", cx);
+        assert_eq!(repo.count(), 1, "clear must not run on the event thread");
+        assert!(window.find("history-operation-pending").visible());
+        let id = board.read(cx).filtered_record_id_at(0).unwrap();
+        assert_eq!(window.find(("delete-btn", id)).disabled(), Some(true));
+        assert_eq!(window.find(("favorite-btn", id)).disabled(), Some(true));
+        assert_eq!(window.find(("pin-btn", id)).disabled(), Some(true));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(repo.count(), 0);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(board.read(cx).filtered_record_len(), 0);
+        assert!(window.try_find("history-operation-error").is_none());
+        assert!(window.try_find("history-operation-pending").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_history_mutation_failure_is_visible_and_retry_succeeds(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalRepository::new(Some(repo.clone())));
+        board.update(cx, |board, cx| board.toggle_record_pin(123, cx));
+    });
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("history-operation-error").visible());
+    })
+    .unwrap();
+    let record = repo.save_text("retry".into()).unwrap();
+    cx.update(|cx| board.update(cx, |board, cx| board.toggle_record_pin(record.id, cx)));
+    cx.run_until_parked();
+    assert!(repo.get_by_id(record.id).unwrap().unwrap().pinned);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("history-operation-error").is_none());
+    })
+    .unwrap();
+}
+
 fn open_board(
     cx: &TestAppContext,
     records: Vec<ClipboardRecord>,
@@ -341,10 +511,11 @@ fn test_board_masonry_horizontal_navigation_stays_at_edges(cx: &mut TestAppConte
             window.focus(&board.focus_handle, cx);
         });
         window.render_frame(cx);
-        let bounds = &board.read(cx).grid_scroll_handle;
-        assert!(
-            bounds.bounds_for_item(2).unwrap().left() > bounds.bounds_for_item(3).unwrap().left()
-        );
+        let view = board.read(cx);
+        let layout = view
+            .grid_layout
+            .layout(&view.filtered_record_indices, &view.records);
+        assert!(layout.bounds[2].left() > layout.bounds[3].left());
         window.press("right", cx);
         assert_eq!(board.read(cx).selected_index, 2);
         window.press("left", cx);

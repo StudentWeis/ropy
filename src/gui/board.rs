@@ -186,6 +186,7 @@ pub(crate) struct RopyBoard {
     pub(crate) last_search_query: String,
     pub(crate) list_state: ListState,
     pub(crate) grid_scroll_handle: ScrollHandle,
+    grid_layout: records_list::MasonryState,
     pub(crate) ui_state: UiState,
     pub(crate) selected_index: usize,
     pub(super) copy_in_progress: bool,
@@ -194,6 +195,7 @@ pub(crate) struct RopyBoard {
     history_refresh: Arc<record_ops::HistoryRefresh>,
     /// Replacing or closing the board cancels its previous refresh task.
     history_refresh_task: Option<gpui_kit::Task<()>>,
+    history_mutation: record_ops::HistoryMutationState,
     pub(crate) copy_tx: async_channel::Sender<crate::clipboard::CopyRequest>,
     pub(crate) last_copy: Arc<Mutex<CopyTracker>>,
     pub(crate) active_panel: ActivePanel,
@@ -241,28 +243,30 @@ impl RopyBoard {
     }
 
     fn reveal_selected_grid_item(&self) {
-        let viewport_bounds = self.grid_scroll_handle.bounds();
-        if viewport_bounds.size.width > gpui_kit::px(0.0)
-            && viewport_bounds.size.height > gpui_kit::px(0.0)
-            && let Some(item_bounds) = self.grid_scroll_handle.bounds_for_item(self.selected_index)
+        let viewport = self.grid_scroll_handle.bounds();
+        if viewport.size.width <= gpui_kit::px(0.0) || viewport.size.height <= gpui_kit::px(0.0) {
+            return;
+        }
+        let layout = self
+            .grid_layout
+            .layout(&self.filtered_record_indices, &self.records);
+        if let Some(bounds) = layout.bounds.get(self.selected_index)
             && let Some(offset) = grid_reveal_offset(
-                viewport_bounds,
-                item_bounds,
+                Bounds::new(
+                    gpui_kit::point(gpui_kit::px(0.0), gpui_kit::px(0.0)),
+                    viewport.size,
+                ),
+                *bounds,
                 self.grid_scroll_handle.offset(),
             )
         {
             self.grid_scroll_handle.set_offset(offset);
-            return;
         }
-
-        self.grid_scroll_handle.scroll_to_item(self.selected_index);
     }
 
     /// Scrolls the active layout's viewport so the currently selected record is
-    /// visible. Idempotent when the selection is already on screen: both
-    /// `ListState::scroll_to_reveal_item` and `ScrollHandle::scroll_to_item`
-    /// (with the default `FirstVisible` strategy) leave the viewport untouched
-    /// when the target is already inside it.
+    /// visible. Model coordinates keep offscreen grid records reachable.
+    /// An already visible selection leaves the viewport unchanged.
     pub(crate) fn reveal_selected_record(&self) {
         if self.filtered_record_indices.is_empty() {
             return;
@@ -501,6 +505,7 @@ impl RopyBoard {
             search_input,
             last_search_query: String::new(),
             grid_scroll_handle: ScrollHandle::new(),
+            grid_layout: records_list::MasonryState::default(),
             ui_state: UiState::default(),
             selected_index: 0,
             last_copy,
@@ -512,6 +517,7 @@ impl RopyBoard {
             copy_generation: 0,
             history_refresh: Arc::default(),
             history_refresh_task: None,
+            history_mutation: record_ops::HistoryMutationState::Idle,
             active_panel: ActivePanel::default(),
             settings_editor,
             shortcut_editor: None,

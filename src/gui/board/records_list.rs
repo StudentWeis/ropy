@@ -8,6 +8,7 @@ use gpui_kit::{
     div, list,
     prelude::{IntoElement, ParentElement, Styled},
 };
+pub(super) use masonry::MasonryState;
 use masonry::{GridMasonry, grid_available_width};
 pub(super) use metrics::{list_row_for_selected_index, visible_list_len};
 use row::RecordsListState;
@@ -34,10 +35,13 @@ impl RopyBoard {
         context: &Context<'_, Self>,
     ) -> AnyElement {
         if self.layout_mode == LayoutMode::Grid {
+            self.grid_layout
+                .set_geometry(grid_available_width(window), window.rem_size());
             return GridMasonry::new(
                 RecordsListState::from_board(self, context),
                 self.grid_scroll_handle.clone(),
-                grid_available_width(window),
+                self.grid_layout
+                    .layout(&self.filtered_record_indices, &self.records),
             )
             .into_any_element();
         }
