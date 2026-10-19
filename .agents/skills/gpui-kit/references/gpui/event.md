@@ -9,7 +9,7 @@ Context::emit for a semantic event, with `impl EventEmitter<Event> for Owner {}`
 on the emitting type. Deriving Clone on the event does not supply that trait.
 An observer rereads state; an event subscriber receives the typed event.
 
-These are the locked `gpui-pre` 0.3.9 contracts used by `gpui-kit` 0.7.3.
+These are the locked `gpui-pre` 0.3.9 contracts used by `gpui-kit` 0.8.0.
 See [Context::emit, observe, and subscribe](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/context.rs).
 For window commands, use [Actions](action.md) instead of inventing an event bus.
 

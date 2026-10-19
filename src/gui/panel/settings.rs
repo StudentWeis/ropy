@@ -217,6 +217,7 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
             .gap_2()
             .child(
                 Slider::new(&board.settings_editor.settings_window_opacity_slider)
+                    .accessibility_label(t!("settings_window_opacity"))
                     .flex_1()
                     .bg(cx.theme().accent)
                     .text_color(cx.theme().accent_foreground)

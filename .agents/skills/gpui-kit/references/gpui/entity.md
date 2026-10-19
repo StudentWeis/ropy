@@ -18,7 +18,7 @@ variable recreated and dropped by render. Follow the normative
 
 ## Access
 
-For `gpui-pre` 0.3.9, used by the locked `gpui-kit` 0.7.3:
+For `gpui-pre` 0.3.9, used by the locked `gpui-kit` 0.8.0:
 
 | Operation | Result |
 | --- | --- |

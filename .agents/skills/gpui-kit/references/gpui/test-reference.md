@@ -53,7 +53,7 @@ construction test or a should_panic test does not show that the interaction
 avoids a borrow cycle. Assert the committed model value and visible outcome
 after the deferred work, plus an appropriate negative path.
 
-The [locked Select implementation](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/select.rs)
+The [locked Select implementation](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/select.rs)
 commits through defer_in while its list state is borrowed. Its on_will_change
 hook edits the proposed selection directly; effects needing a GPUI context
 belong in the subsequent owner/confirmation path. Do not access the same list

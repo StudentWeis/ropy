@@ -12,7 +12,7 @@ See the normative [events, actions, and focus guide](../coding-guides.md#events-
 
 ## Handler contract
 
-For the repository's `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 dependency,
+For the repository's `gpui-kit` 0.8.0 / `gpui-pre` 0.3.9 dependency,
 `Context<T>::listener` accepts
 `Fn(&mut T, &E, &mut Window, &mut Context<T>) + 'static` and returns an element
 callback accepting `(&E, &mut Window, &mut App)`. A method passed to

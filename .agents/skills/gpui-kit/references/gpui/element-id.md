@@ -1,7 +1,7 @@
 # Element identity
 
 Follow [Stable identity](../coding-guides.md#stable-identity). Ropy locks
-`gpui-kit` 0.7.3, with `gpui-pre` 0.3.9 as its default engine. See the
+`gpui-kit` 0.8.0, with `gpui-pre` 0.3.9 as its default engine. See the
 [versioned ElementId definition and conversions](https://docs.rs/crate/gpui-pre/0.3.9/source/src/window.rs).
 
 An `ElementId` identifies a node within its parent's identity scope. GPUI
@@ -43,8 +43,8 @@ Input::new(&self.search_input).id("search-input")
 Select::new(&self.country_select).id("country-select")
 ```
 
-These are render fragments, not standalone programs. See the verified 0.7.3
-[Input constructor](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/input/input.rs) and
-[Select constructor](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/select.rs), and
+These are render fragments, not standalone programs. See the verified 0.8.0
+[Input constructor](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/input/input.rs) and
+[Select constructor](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/select.rs), and
 [component conventions](../conventions.md) for state ownership. Allocate the
 state once in the owning view's constructor, not on every render.

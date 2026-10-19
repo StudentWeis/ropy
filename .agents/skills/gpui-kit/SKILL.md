@@ -15,8 +15,10 @@ Start with [component-family conventions](references/conventions.md) to choose t
 For upstream source examples with retained state, subscriptions, and overlay
 layers, read [the pinned application recipes](references/recipes.md). Their
 upstream verification commands do not exist in Ropy. This checkout locks
-`gpui-kit` 0.7.3 (default engine `gpui-pre` 0.3.9); the lockfile and installed
+`gpui-kit` 0.8.0 (default engine `gpui-pre` 0.3.9); the lockfile and installed
 source take precedence over newer website examples for exact signatures.
+
+For the 0.8.0 upgrade, new test helpers and Ropy-specific optimization choices, read [Ropy integration notes](references/ropy-integration.md). Upstream was checked at release commit `1676826d9d49b90f4d7b6808b69924f58796f6f1`; preserve the local API corrections and repository-specific verification commands when refreshing this skill.
 
 ## Read the Guides First
 

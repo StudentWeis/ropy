@@ -5,7 +5,7 @@
 ## Trait and wrappers
 
 The authoritative API is the [gpui-pre 0.3.9 Element source](https://docs.rs/crate/gpui-pre/0.3.9/source/src/element.rs),
-selected by this repository's `gpui-kit` 0.7.3 dependency. Element has **two**
+selected by this repository's `gpui-kit` 0.8.0 dependency. Element has **two**
 associated types, RequestLayoutState and PrepaintState. Its required methods
 are id, source_location, request_layout, prepaint, and paint; it also supplies
 optional hooks such as accessibility behavior. IntoElement is a separate

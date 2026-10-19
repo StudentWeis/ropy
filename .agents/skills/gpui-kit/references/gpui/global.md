@@ -12,7 +12,7 @@ and Clone is not required by the Global trait.
 The [Global trait](https://docs.rs/crate/gpui-pre/0.3.9/source/src/global.rs),
 [App storage](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app.rs), and
 [BorrowAppContext operations](https://docs.rs/crate/gpui-pre/0.3.9/source/src/gpui.rs)
-are fixed to gpui-pre 0.3.9, used by the repository's gpui-kit 0.7.3 dependency.
+are fixed to gpui-pre 0.3.9, used by the repository's gpui-kit 0.8.0 dependency.
 
 ## Mutation and observation
 

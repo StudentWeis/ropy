@@ -6,7 +6,7 @@
 
 Use the [gpui-pre 0.3.9 entity source](https://docs.rs/crate/gpui-pre/0.3.9/source/src/app/entity_map.rs)
 for exact bounds and return types. This is the core selected by the repository's
-`gpui-kit` 0.7.3 dependency.
+`gpui-kit` 0.8.0 dependency.
 
 Strong `Entity<T>::update` takes an AppContext and
 `FnOnce(&mut T, &mut Context<T>) -> R`, returning R directly. `read_with` takes

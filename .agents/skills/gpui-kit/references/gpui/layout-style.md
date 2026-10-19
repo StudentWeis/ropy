@@ -3,7 +3,7 @@
 Follow the normative [theme and styling](../coding-guides.md#theme-and-styling)
 and [layout and measurement](../coding-guides.md#layout-measurement-and-scrolling)
 rules, plus the [Design Guides](../../../gpui-kit-design-guides/references/design-guides.md).
-This page describes the locked Kit 0.7.3 / GPUI 0.3.9 mechanisms; it does not
+This page describes the locked Kit 0.8.0 / GPUI 0.3.9 mechanisms; it does not
 supply an alternate visual system.
 
 ## Composition and units
@@ -66,9 +66,9 @@ creating ad-hoc paint-order workarounds.
 ## Versioned source
 
 - [GPUI Styled helpers](https://docs.rs/crate/gpui-pre/0.3.9/source/src/styled.rs)
-- [Kit styling extensions](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/styled.rs)
-- [Kit scroll extensions](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/scroll/scrollable.rs)
-- [Kit theme](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/theme)
+- [Kit styling extensions](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/styled.rs)
+- [Kit scroll extensions](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/scroll/scrollable.rs)
+- [Kit theme](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/theme)
 
 The fragment above was checked against these APIs; it is not a standalone
 application or evidence of rendered layout quality. Test actual controls,

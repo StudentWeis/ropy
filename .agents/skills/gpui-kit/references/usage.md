@@ -1,6 +1,6 @@
 # GPUI Kit usage in Ropy
 
-This reference targets the locked `gpui-kit` 0.7.3 API. See
+This reference targets the locked `gpui-kit` 0.8.0 API. See
 [component conventions](conventions.md), the normative [Coding Guides](coding-guides.md),
 and the [pinned upstream recipes](recipes.md) for complete source context.
 The snippets below are fragments for an existing view, not standalone programs.
@@ -17,7 +17,7 @@ That root owns dialogs, sheets and notifications; application renderers do
 not mount another set of overlay layers.
 
 For a full application entry point, use the
-[0.7.3 upstream bootstrap](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/examples/ai_recipes/src/bootstrap.rs).
+[0.8.0 upstream bootstrap](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/examples/ai_recipes/src/bootstrap.rs).
 The current [Getting Started](https://gpui-kit.com/docs/getting-started.md)
 guide explains new-project setup. Upstream examples and verification commands
 are not files or commands in Ropy; see [recipes](recipes.md) for that boundary.
@@ -40,8 +40,8 @@ Input::new(&self.search_input).id("search-input")
 `Select::new(&self.country_select)` likewise receives an
 `Entity<SelectState<D>>`. `Input::new("id")` and `Select::new("id")` are not
 valid constructors. See the versioned
-[Input source](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/input/input.rs)
-and [Select source](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/component/src/select.rs).
+[Input source](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/input/input.rs)
+and [Select source](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/component/src/select.rs).
 
 Read text through `self.search_input.read(cx).value()`. Subscribe to
 `InputEvent` using `cx.subscribe_in(&self.search_input, window, ...)` when the
@@ -78,7 +78,7 @@ uses an optional selected index, which the application maps to domain identity.
 - `Form::new()` and `Field::new()` are value-like layout parts. Label orientation
   and column count are independent; see [conventions](conventions.md).
 - `TabBar::new("tabs")` owns a collection of `Tab::new().label(...)` parts.
-  `Tab::new` takes no ID argument in 0.7.3; do not infer constructors from Button.
+  `Tab::new` takes no ID argument in 0.8.0; do not infer constructors from Button.
 - Use `ActiveTheme` to read `cx.theme()` semantic tokens, and `Theme::update`
   for global edits so color/token projections stay synchronized.
 - `h_flex()` centers its children across the row; full-height columns may need
@@ -87,7 +87,7 @@ uses an optional selected index, which the application maps to domain identity.
   `push_notification`. Retain owner state and restore focus on dismissal.
 
 Use the [current component catalog](https://gpui-kit.com/llms.txt) to locate a
-component page, then check signatures in the installed 0.7.3 source before
+component page, then check signatures in the installed 0.8.0 source before
 copying newer documentation. For layout, state and lifecycle rules follow the
 normative guides; for verification in this repository follow
 [docs/TESTING.md](../../../../docs/TESTING.md) and `./scripts/precheck.sh`.

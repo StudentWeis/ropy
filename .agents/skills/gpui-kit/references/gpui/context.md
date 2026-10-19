@@ -4,7 +4,7 @@
 
 ## Choose the context
 
-The following describes the locked `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 APIs.
+The following describes the locked `gpui-kit` 0.8.0 / `gpui-pre` 0.3.9 APIs.
 Contexts are capabilities supplied for an operation, not an inheritance tree.
 
 | Context | Responsibility |

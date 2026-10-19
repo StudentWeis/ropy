@@ -31,7 +31,7 @@ coverage rather than claiming all platform behavior is simulated.
 
 ## Framework examples
 
-The pinned upstream [Kit UI integration example](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/crates/kit/tests/ui.rs)
+The pinned upstream [Kit UI integration example](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/crates/kit/tests/ui.rs)
 shows retained Input state, real input, focus, geometry, and owner-result
 assertions. Its supporting files and commands belong to the GPUI Kit checkout;
 [Testing](test.md) explains application adaptation. Read

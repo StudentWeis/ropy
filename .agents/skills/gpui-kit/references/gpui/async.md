@@ -5,7 +5,7 @@
 ## Spawn contexts
 
 These contracts are from `gpui-pre` 0.3.9, used by this repository's
-`gpui-kit` 0.7.3. The spelling `cx.spawn` alone does not identify its callback:
+`gpui-kit` 0.8.0. The spelling `cx.spawn` alone does not identify its callback:
 
 | Receiver | Async closure parameters |
 | --- | --- |

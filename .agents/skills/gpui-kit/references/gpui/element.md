@@ -10,7 +10,7 @@ only when layout, measurement, or painting cannot be expressed by existing
 components. A custom canvas can provide small drawing hooks without duplicating
 an entire Element implementation.
 
-These notes describe the locked `gpui-kit` 0.7.3 / `gpui-pre` 0.3.9 sources.
+These notes describe the locked `gpui-kit` 0.8.0 / `gpui-pre` 0.3.9 sources.
 They replace illustrative implementations that were not runnable applications.
 Read the normative [choice of unit](../coding-guides.md#choose-the-right-unit)
 and [layout guide](../coding-guides.md#layout-measurement-and-scrolling) first.

@@ -7,7 +7,9 @@ use std::{
 
 use gpui_kit::{
     AnyWindowHandle, AppContext, Entity, Focusable, InputEvent, KeyDownEvent, KeyUpEvent,
-    Keystroke, TestAppContext, component::WindowExt, test::TestWindowExt,
+    Keystroke, TestAppContext,
+    component::WindowExt,
+    test::{TestQueryExt, TestWindowExt},
 };
 use rust_i18n::t;
 
@@ -635,6 +637,12 @@ fn test_board_controls_expose_localized_accessible_names(cx: &mut TestAppContext
             assert_eq!(window.find(id).label(), Some(label.as_ref()), "{id}");
         }
         let editor = &board.read(cx).settings_editor;
+        assert_eq!(
+            window
+                .find_by_label(t!("settings_window_opacity").as_ref())
+                .role(),
+            Some(gpui_kit::Role::Slider)
+        );
         for (input, label) in [
             (
                 &editor.settings_max_history_input,

@@ -1,11 +1,11 @@
 # Upstream application recipes
 
 The application recipes belong to the **GPUI Kit upstream repository**, not
-Ropy. Use the sources pinned to the revision published as `gpui-kit` 0.7.3:
+Ropy. Use the sources pinned to the revision published as `gpui-kit` 0.8.0:
 
-- [Bootstrap](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/examples/ai_recipes/src/bootstrap.rs): installs assets, initializes Kit, opens a window and implements a minimal `Render` view.
-- [Settings view](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/examples/ai_recipes/src/settings.rs): retains an input entity and its subscription, handles controlled values, and opens a dialog through `WindowExt`.
-- [Recipe package](https://github.com/longbridge/gpui-kit/blob/67265a36e260ffe03c5aaebdcd8d654dbf892eab/examples/ai_recipes): complete crate context and its tests.
+- [Bootstrap](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/examples/ai_recipes/src/bootstrap.rs): installs assets, initializes Kit, opens a window and implements a minimal `Render` view.
+- [Settings view](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/examples/ai_recipes/src/settings.rs): retains an input entity and its subscription, handles controlled values, and opens a dialog through `WindowExt`.
+- [Recipe package](https://github.com/longbridge/gpui-kit/blob/1676826d9d49b90f4d7b6808b69924f58796f6f1/examples/ai_recipes): complete crate context and its tests.
 
 In the settings recipe, state and subscriptions live in the view. Rendering
 creates only elements. The window's `Root` owns the dialog, sheet and

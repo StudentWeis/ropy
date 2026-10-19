@@ -11,8 +11,7 @@ work. Do not answer from this page, from an existing screen in the codebase, or
 from training data.
 
 If the file is missing, fetch `https://gpui-kit.com/docs/design-guides.md`.
-The guide is a verbatim copy of that page, so its link to `./coding-guides.md`
-means the Coding Guides in the `gpui-kit` skill (or `https://gpui-kit.com/docs/coding-guides.md`).
+The guide is adapted from GPUI Kit 0.8.0 with links resolved for this checkout. Original documentation: [GPUI Kit](https://gpui-kit.com), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Ropy keeps accessibility labels localized using the same translation keys as visible labels; the upstream English-label exception does not override this project convention.
 
 ## How to read it
 
