@@ -7,7 +7,7 @@ use crate::repository::test_helpers::{create_test_repo, load_display_records};
 
 #[test]
 fn test_toggle_pin() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let record = repo
         .save_text("Pin me".to_string())
         .expect("Failed to save");
@@ -31,7 +31,7 @@ fn test_toggle_pin() {
 
 #[test]
 fn test_pinned_records_appear_first() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("First".to_string()).expect("Failed to save");
     thread::sleep(Duration::from_millis(10));
@@ -51,7 +51,7 @@ fn test_pinned_records_appear_first() {
 
 #[test]
 fn test_multiple_pinned_ordering() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo.save_text("Alpha".to_string()).expect("Failed to save");
     thread::sleep(Duration::from_millis(10));
@@ -70,7 +70,7 @@ fn test_multiple_pinned_ordering() {
 
 #[test]
 fn test_cleanup_skips_pinned() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo
         .save_text("Old pinned".to_string())
@@ -97,7 +97,7 @@ fn test_cleanup_skips_pinned() {
 
 #[test]
 fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo.save_text("A".to_string()).expect("Failed to save");
     thread::sleep(Duration::from_millis(10));
@@ -118,7 +118,7 @@ fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
 
 #[test]
 fn test_toggle_pin_nonexistent() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = repo.toggle_pin(999_999_999);
     assert!(result.is_err());
@@ -129,7 +129,7 @@ fn test_toggle_pin_nonexistent() {
 
 #[test]
 fn test_double_toggle_pin() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let record = repo.save_text("Test".to_string()).expect("Failed to save");
     assert!(!record.pinned);

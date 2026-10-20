@@ -31,7 +31,7 @@ fn create_failure_injecting_repo() -> (
 
 #[test]
 fn test_dedup_same_content() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo
         .save_text("duplicate".to_string())
@@ -48,7 +48,7 @@ fn test_dedup_same_content() {
 
 #[test]
 fn test_dedup_aba_pattern() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("A".to_string()).expect("Failed to save");
     thread::sleep(Duration::from_millis(10));
@@ -65,7 +65,7 @@ fn test_dedup_aba_pattern() {
 
 #[test]
 fn test_content_hash_deterministic() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo
         .save_text("stable hash".to_string())
@@ -111,7 +111,7 @@ fn test_cleanup_old_records_memory() {
 
 #[test]
 fn test_cleanup_old_records_zero_keep() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("Test".to_string()).expect("Failed to save");
 
@@ -122,7 +122,7 @@ fn test_cleanup_old_records_zero_keep() {
 
 #[test]
 fn test_cleanup_old_records_greater_than_total() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("Test".to_string()).expect("Failed to save");
 
@@ -133,7 +133,7 @@ fn test_cleanup_old_records_greater_than_total() {
 
 #[test]
 fn test_cleanup_old_records_equal_to_total() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("Test".to_string()).expect("Failed to save");
 
@@ -146,7 +146,7 @@ fn test_cleanup_old_records_equal_to_total() {
 #[case(10)]
 #[case(50)]
 fn test_cleanup_old_records_if_needed_at_threshold_preserves_records(#[case] keep_count: usize) {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
 
     save_numbered_records(&repo, threshold);
@@ -165,7 +165,7 @@ fn test_cleanup_old_records_if_needed_at_threshold_preserves_records(#[case] kee
 fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
     #[case] keep_count: usize,
 ) {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
 
     save_numbered_records(&repo, threshold + 1);
@@ -186,7 +186,7 @@ fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
 
 #[test]
 fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_records() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let favorite = repo
         .save_text("Old favorite".to_string())
@@ -213,7 +213,7 @@ fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_r
 
 #[test]
 fn test_favorite_toggle_record_updates_membership() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let record = repo
         .save_text("Favorite me".to_string())
         .expect("Failed to save");
@@ -243,7 +243,7 @@ fn test_favorite_toggle_record_updates_membership() {
 
 #[test]
 fn test_delete_favorite_record_removes_membership() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let record = repo
         .save_text("Favorite delete".to_string())
         .expect("Failed to save");
@@ -265,7 +265,7 @@ fn test_delete_favorite_record_removes_membership() {
 
 #[test]
 fn test_delete() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let record = repo
         .save_text("To be deleted".to_string())
@@ -357,7 +357,7 @@ fn test_cleanup_when_database_batch_fails_preserves_record_and_sidecars() {
 
 #[test]
 fn test_delete_nonexistent() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = repo.delete(999_999_999).expect("Failed to delete");
     assert!(!result);
@@ -365,7 +365,7 @@ fn test_delete_nonexistent() {
 
 #[test]
 fn test_clear() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("One".to_string()).expect("Failed to save");
     repo.save_text("Two".to_string()).expect("Failed to save");
@@ -403,7 +403,7 @@ fn test_clear_when_database_batch_fails_preserves_records_and_sidecars() {
 
 #[test]
 fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let pinned = repo
         .save_text("Pinned".to_string())
@@ -472,7 +472,7 @@ fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
 
 #[test]
 fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let pinned = repo
         .save_text("Pinned".to_string())
@@ -506,7 +506,7 @@ fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
 
 #[test]
 fn test_clear_empty_repo() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.clear().expect("Failed to clear empty repo");
     assert_eq!(repo.count(), 0);

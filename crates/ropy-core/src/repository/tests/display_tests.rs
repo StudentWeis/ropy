@@ -43,7 +43,7 @@ fn test_same_millisecond_limit_and_cleanup_keep_newest(#[case] cleanup: bool) {
 
 #[test]
 fn test_late_rich_text_capture_preserves_newer_payload() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let newer = chrono::Local::now();
     let older = newer - chrono::Duration::seconds(1);
     let original = repo
@@ -63,7 +63,7 @@ fn test_late_rich_text_capture_preserves_newer_payload() {
 
 #[test]
 fn test_get_display_records() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     for i in 1..=5 {
         repo.save_text(format!("Record {i}"))
@@ -80,7 +80,7 @@ fn test_get_display_records() {
 
 #[test]
 fn test_get_display_records_when_favorites_present_keep_default_time_order() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let favorite_and_pinned = repo
         .save_text("Favorite pinned".to_string())
@@ -127,7 +127,7 @@ fn test_get_display_records_when_favorites_present_keep_default_time_order() {
 
 #[test]
 fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_returns_41() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let first = repo
         .save_text("Record 1".to_string())
@@ -164,7 +164,7 @@ fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_r
 
 #[test]
 fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_returns_43() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let first = repo
         .save_text("Record 1".to_string())
@@ -201,7 +201,7 @@ fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_r
 
 #[test]
 fn test_get_display_records_when_newest_records_are_favorited_still_returns_43() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let pinned = repo
         .save_text("Pinned".to_string())
@@ -247,7 +247,7 @@ fn test_get_display_records_when_newest_records_are_favorited_still_returns_43()
 
 #[test]
 fn test_get_display_records_zero_limit() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("Test".to_string()).expect("Failed to save");
 
@@ -257,7 +257,7 @@ fn test_get_display_records_zero_limit() {
 
 #[test]
 fn test_get_display_records_large_limit() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     for i in 1..=3 {
         repo.save_text(format!("Record {i}"))
@@ -271,7 +271,7 @@ fn test_get_display_records_large_limit() {
 
 #[test]
 fn test_get_display_records_empty_repo() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = load_display_records(&repo, 10);
     assert_eq!(result, []);
@@ -279,7 +279,7 @@ fn test_get_display_records_empty_repo() {
 
 #[test]
 fn test_get_display_records_with_pinned_and_limit() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     for i in 1..=5 {
         repo.save_text(format!("Unpinned {i}"))
@@ -303,7 +303,7 @@ fn test_get_display_records_with_pinned_and_limit() {
 
 #[test]
 fn test_get_by_id_nonexistent() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = repo.get_by_id(999_999_999).expect("Failed to get by id");
     assert!(result.is_none());
@@ -311,7 +311,7 @@ fn test_get_by_id_nonexistent() {
 
 #[test]
 fn test_get_by_id_zero() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = repo.get_by_id(0).expect("Failed to get by id");
     assert!(result.is_none());
@@ -319,7 +319,7 @@ fn test_get_by_id_zero() {
 
 #[test]
 fn test_get_by_id_u64_max() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let result = repo.get_by_id(u64::MAX).expect("Failed to get by id");
     assert!(result.is_none());
@@ -327,7 +327,7 @@ fn test_get_by_id_u64_max() {
 
 #[test]
 fn test_count_empty() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     assert_eq!(repo.count(), 0);
 }
@@ -395,7 +395,7 @@ fn test_sort_for_display_all_same_pinned_state() {
 
 #[test]
 fn test_multiple_operations_sequence() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let r1 = repo.save_text("First".to_string()).expect("Failed to save");
     thread::sleep(Duration::from_millis(10));
@@ -424,7 +424,7 @@ fn test_multiple_operations_sequence() {
 
 #[test]
 fn test_concurrent_saves_then_deletes_remove_selected_records() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let repo = std::sync::Arc::new(repo);
     let mut handles = vec![];
 

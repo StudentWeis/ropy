@@ -9,7 +9,7 @@ use gpui_kit::{
         h_flex,
         input::{Input, InputEvent, InputState},
         popover::Popover,
-        slider::{Slider, SliderEvent, SliderState},
+        slider::{Slider, SliderState},
         v_flex,
     },
     div, rgb,
@@ -73,22 +73,22 @@ impl ColorEditor {
             },
         )];
         for (slider, shift) in sliders.iter().zip([16, 8, 0]) {
-            subscriptions.push(cx.subscribe_in(
-                slider,
-                window,
-                move |editor, _, event: &SliderEvent, window, cx| {
-                    if let SliderEvent::Change(value) = event {
-                        let value = slider_byte(value.end());
-                        editor.value =
-                            (editor.value & !(0xff << shift)) | (u32::from(value) << shift);
-                        editor.input.update(cx, |input, cx| {
-                            input.set_value(format!("#{:06X}", editor.value), window, cx);
-                        });
-                        cx.emit(ColorEdited);
-                        cx.notify();
+            // Observe the value itself: GPUI 0.8 accessibility actions notify
+            // the slider without emitting SliderEvent::Change.
+            subscriptions.push(
+                cx.observe_in(slider, window, move |editor, slider, window, cx| {
+                    let value = slider_byte(slider.read(cx).value().end());
+                    if value == channel(editor.value, shift) {
+                        return;
                     }
-                },
-            ));
+                    editor.value = (editor.value & !(0xff << shift)) | (u32::from(value) << shift);
+                    editor.input.update(cx, |input, cx| {
+                        input.set_value(format!("#{:06X}", editor.value), window, cx);
+                    });
+                    cx.emit(ColorEdited);
+                    cx.notify();
+                }),
+            );
         }
         Self {
             input,
@@ -201,7 +201,36 @@ const fn slider_byte(value: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_hex;
+    use super::*;
+
+    #[gpui_kit::test]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "test setup and window updates must succeed"
+    )]
+    fn test_rgb_slider_state_change_without_change_event_updates_color(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        cx.update(gpui_kit::init);
+        let (handle, editor) = cx.update(|cx| {
+            gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ColorEditor::new(ColorRole::Background, 0x0012_3456, None, window, cx))
+            })
+            .unwrap()
+        });
+        cx.update_window(handle, |_, window, cx| {
+            let red = editor.read(cx).sliders[0].clone();
+            // Use the same public setter as the locked Slider accessibility action.
+            red.update(cx, |slider, cx| slider.set_value(19., window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.read(|cx| {
+            assert_eq!(editor.read(cx).preview(), 0x0013_3456);
+            assert_eq!(editor.read(cx).value(cx), Some(0x0013_3456));
+        });
+    }
+
     #[test]
     fn test_rgb_input_accepts_exact_color_and_rejects_alpha() {
         assert_eq!(parse_hex("#123456"), Some(0x0012_3456));

@@ -121,7 +121,7 @@ mod tests {
     #[test]
     #[expect(clippy::expect_used)]
     fn test_display_snapshot_limit_keeps_favorites_and_pins_with_membership() {
-        let repo = crate::repository::test_helpers::create_test_repo();
+        let (_temp_dir, repo) = crate::repository::test_helpers::create_test_repo();
         let favorite = repo.save_text("favorite".into()).expect("favorite");
         repo.toggle_favorite(favorite.id).expect("mark favorite");
         let pinned = repo.save_text("pinned".into()).expect("pinned");

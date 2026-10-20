@@ -26,9 +26,25 @@ pub(super) fn create_test_repo_with<B: StorageBackend>(
     (temp_dir, repo)
 }
 
-pub(super) fn create_test_repo() -> MemoryClipboardRepository {
-    let (_temp_dir, repo) = create_test_repo_with(memory_backend_factory);
-    repo
+pub(super) fn create_test_repo() -> (tempfile::TempDir, MemoryClipboardRepository) {
+    create_test_repo_with(memory_backend_factory)
+}
+
+#[test]
+fn test_memory_fixture_keeps_sidecars_until_teardown() {
+    let (temp_dir, repo) = create_test_repo();
+    let root = temp_dir.path().to_path_buf();
+    assert!(root.is_dir());
+    let record = repo
+        .save_rich_text("fixture".into(), Some("<b>fixture</b>"), None)
+        .unwrap();
+    assert_eq!(
+        super::assets::load_rich_text_html(record.rich_text_meta.as_ref().unwrap()).unwrap(),
+        "<b>fixture</b>"
+    );
+    drop(repo);
+    drop(temp_dir);
+    assert!(!root.exists());
 }
 
 pub(super) fn load_display_records<B: StorageBackend>(

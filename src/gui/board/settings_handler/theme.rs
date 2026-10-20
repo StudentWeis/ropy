@@ -7,6 +7,28 @@ use super::RopyBoard;
 use crate::gui::settings::GlobalSettings;
 
 impl RopyBoard {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the opacity slider is bounded to integer percentages in 0..=100"
+    )]
+    pub(crate) fn preview_window_opacity(
+        &mut self,
+        value: f32,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) -> bool {
+        let opacity_percent = value.round() as u8;
+        if self.settings_editor.window_opacity_percent == opacity_percent {
+            return false;
+        }
+        self.settings_editor.window_opacity_percent = opacity_percent;
+        crate::gui::app::apply_current_theme(window, cx, opacity_percent);
+        crate::gui::app::apply_window_opacity(window, opacity_percent);
+        cx.notify();
+        true
+    }
+
     pub(crate) fn save_selected_theme(
         &self,
         target: super::settings_editor::theme::ThemeTarget,
