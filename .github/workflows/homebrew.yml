@@ -22,7 +22,7 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Read latest stable release checksums
@@ -31,7 +31,7 @@ jobs:
         run: |
           # Always resolve latest stable, so a delayed older event cannot downgrade the tap.
           gh release view --repo StudentWeis/ropy --json tagName,isDraft,isPrerelease,assets > "$RUNNER_TEMP/homebrew-release.json"
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: StudentWeis/homebrew-tap
           path: homebrew-tap

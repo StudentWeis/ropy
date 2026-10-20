@@ -4,6 +4,7 @@ use ashpd::desktop::{
     CreateSessionOptions,
     global_shortcuts::{BindShortcutsOptions, GlobalShortcuts, NewShortcut},
 };
+use ashpd::zbus;
 use futures_lite::{StreamExt, future};
 use global_hotkey::hotkey::{HotKey, Modifiers};
 use gpui_kit::{BackgroundExecutor, Task};

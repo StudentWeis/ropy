@@ -320,7 +320,10 @@ mod tests {
     async fn verify_dbus_tray_menu() -> Result<(), Box<dyn std::error::Error>> {
         use std::{collections::HashMap, time::Duration};
 
-        use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
+        use ashpd::zbus::{
+            self,
+            zvariant::{OwnedObjectPath, OwnedValue, Value},
+        };
 
         let connection = zbus::Connection::session().await?;
         let bus = zbus::fdo::DBusProxy::new(&connection).await?;
