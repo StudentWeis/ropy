@@ -3,6 +3,8 @@
 The v1 suite is informational: it records size, three core storage operations,
 and isolated hidden-desktop RSS. It does not block PRs or releases.
 
+For production history filtering, use `make bench-search`. The independent [search benchmark and optimization plan](SEARCH_PERFORMANCE.md) defines its fixtures, correctness contracts, measurement boundaries and before/after procedure; it does not change the storage/RSS v1 suite.
+
 ## Run on the reference Mac
 
 Use Python 3.11+, the pinned Rust toolchain, and an unlocked macOS desktop.

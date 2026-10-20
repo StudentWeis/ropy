@@ -2,7 +2,7 @@
 
 CARGO ?= cargo
 
-.PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean bench bench-compare bench-record
+.PHONY: help setup build build-release run check test fmt fmt-check clippy doc precheck clean bench bench-compare bench-record bench-search
 
 help: ## Show available development commands
 	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-18s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -55,3 +55,6 @@ bench-compare: ## Compare with the repository baseline (optional BASELINE=... CU
 
 bench-record: ## Save CURRENT (default latest version result) in docs/benchmarks for the PR
 	python3 scripts/bench.py record $(if $(CURRENT),--current "$(CURRENT)",)
+
+bench-search: ## Benchmark production history filtering (SEARCH_BENCH_ARGS for Criterion options)
+	$(CARGO) bench --locked -p ropy-core --bench search -- --noplot $(SEARCH_BENCH_ARGS)

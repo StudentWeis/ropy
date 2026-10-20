@@ -28,6 +28,7 @@ image.workspace = true
 seahash.workspace = true
 tempfile.workspace = true
 tracing.workspace = true
+memchr = "2.8.3"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false }
@@ -44,4 +45,8 @@ dist = false
 
 [[bench]]
 name = "repository"
+harness = false
+
+[[bench]]
+name = "search"
 harness = false

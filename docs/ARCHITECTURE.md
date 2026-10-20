@@ -4,8 +4,7 @@ Ropy is a two-package Cargo workspace:
 
 - The root `ropy` package owns the desktop executable, GPUI, native clipboard
   integration, resources, updater and packaging.
-- `crates/ropy-core` owns history persistence and portable configuration. It has
-  no GPUI, native clipboard, hotkey, tray or GTK dependency.
+- `crates/ropy-core` owns history persistence, literal search and portable configuration. It has no GPUI, native clipboard, hotkey, tray or GTK dependency.
 
 The root package is the default member, so existing `cargo run`, bundle paths
 and application version metadata still refer to the desktop application. Use
@@ -23,6 +22,8 @@ flowchart TD
     App --> Repository[repository: history and payload persistence]
     App --> Config[config/settings and identifiers]
     GUI --> Repository
+    GUI --> Search[search: pure record filtering]
+    Search --> Repository
     GUI --> Config
     GUI --> Clipboard
     Clipboard --> Repository
@@ -35,6 +36,7 @@ serialization. Being independent of GPUI does not imply being free of I/O.
 | Owner | Responsibility | Boundary |
 | --- | --- | --- |
 | `repository` | Records, ordering, favorites, indexes, hashes, file-list encoding, payload files and cleanup | No dependency on GPUI, clipboard I/O, configuration, or application utilities |
+| `search` | Literal text matching, word boundaries and content/favorite filtering | Reads immutable records and returns source indices; no GUI state, database I/O or retained index |
 | `config/settings.rs`, `config/*_id.rs` | TOML format, defaults, validation, recovery protection, theme and locale identifiers | No GUI context, bundled resource discovery, or translated labels |
 | `clipboard` | OS clipboard reads/writes, format preference, capture deduplication and persistence acknowledgement | No GPUI context or executor; application schedules its work |
 | `gui/repository.rs` | Optional shared repository exposed as a GPUI global | Wraps `Arc<ClipboardRepository>`; storage initialization failure remains representable |
@@ -132,6 +134,8 @@ The repository is authoritative for persisted history. The board's shared record
 list is a presentation snapshot; selection, filters, scroll position and focus
 remain owned by the board. A failed refresh must not become a second history
 store.
+
+History matching lives in the core `search` module. The board owns the query and options, calls the pure filter and applies display ordering and selection updates. The search benchmark calls that same filter directly; it excludes database access, sorting and rendering. See [Search benchmark and optimization plan](SEARCH_PERFORMANCE.md) for the preserved semantics and measured workloads.
 
 Explicit history mutations (clear, delete, favorite and pin) also run on the background executor. The board owns one pending mutation, disables duplicate submissions and shows localized progress or failure feedback. Starting a mutation invalidates old refresh completions; refresh requests received during it retain any pending storage-limit trim. Completion requests a fresh snapshot even on failure, because ordinary-history cleanup can have committed some deletions. Copy deduplication is reset only after the relevant storage operation succeeds. Submitted writes finish independently of popup visibility, and their UI completion uses a weak board handle.
 
