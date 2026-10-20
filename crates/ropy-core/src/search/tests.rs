@@ -16,7 +16,7 @@ fn test_whole_word_overlapping_matches_check_every_start(
     assert_eq!(
         text_matches_query(
             content,
-            query,
+            &Finder::new(query),
             SearchOptions {
                 case_sensitive: true,
                 whole_word: true,

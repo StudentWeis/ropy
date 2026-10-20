@@ -2,6 +2,8 @@
 
 use std::{borrow::Cow, collections::HashSet, hash::BuildHasher};
 
+use memchr::memmem::Finder;
+
 use crate::repository::{ClipboardRecord, ContentType, deserialize_file_paths};
 
 /// Content type filter for the clipboard history view.
@@ -54,30 +56,27 @@ fn normalized_text(text: &str, case_sensitive: bool) -> Cow<'_, str> {
     }
 }
 
-fn text_matches_query(content: &str, query: &str, options: SearchOptions) -> bool {
-    if query.is_empty() {
-        return true;
+// The caller normalizes the nonempty query once for the entire record set.
+fn text_matches_query(content: &str, query: &Finder<'_>, options: SearchOptions) -> bool {
+    let content = normalized_text(content, options.case_sensitive);
+    if !options.whole_word {
+        return query.find(content.as_bytes()).is_some();
     }
 
-    let normalized_content = normalized_text(content, options.case_sensitive);
-    let normalized_query = normalized_text(query, options.case_sensitive);
-
-    if options.whole_word {
-        // Non-overlapping matches can skip a valid word after an invalid prefix.
-        normalized_content.char_indices().any(|(start, _)| {
-            normalized_content[start..].starts_with(normalized_query.as_ref())
-                && has_word_boundaries(
-                    normalized_content.as_ref(),
-                    start,
-                    start + normalized_query.len(),
-                )
-        })
-    } else {
-        normalized_content.contains(normalized_query.as_ref())
+    let mut offset = 0;
+    while let Some(relative) = query.find(&content.as_bytes()[offset..]) {
+        let start = offset + relative;
+        // A nonempty UTF-8 needle can only match at UTF-8 character boundaries.
+        if has_word_boundaries(&content, start, start + query.needle().len()) {
+            return true;
+        }
+        // Advance one character, not one match, so overlapping candidates survive.
+        offset = content.ceil_char_boundary(start + 1);
     }
+    false
 }
 
-fn file_paths_match_query(content: &str, query: &str, options: SearchOptions) -> bool {
+fn file_paths_match_query(content: &str, query: &Finder<'_>, options: SearchOptions) -> bool {
     deserialize_file_paths(content)
         .iter()
         .any(|path| text_matches_query(path, query, options))
@@ -105,6 +104,13 @@ pub fn filter_records_by_query<S: BuildHasher>(
     favorite_ids: &HashSet<u64, S>,
     favorites_only: bool,
 ) -> Vec<usize> {
+    // Image-only filtering ignores text; do not lowercase a query it never uses.
+    let normalized_query = normalized_text(
+        query,
+        options.case_sensitive || filter == ContentFilter::Image,
+    );
+    let finder = (!query.is_empty() && filter != ContentFilter::Image)
+        .then(|| Finder::new(normalized_query.as_bytes()));
     records
         .iter()
         .enumerate()
@@ -126,15 +132,10 @@ pub fn filter_records_by_query<S: BuildHasher>(
                 return false;
             }
 
-            // Image-only filter: ignore query entirely (images cannot be text-searched)
-            if filter == ContentFilter::Image {
+            // An absent matcher means either an empty query or image-only filtering.
+            let Some(query) = &finder else {
                 return true;
-            }
-
-            // Text/All filter: apply text search on text records
-            if query.is_empty() {
-                return true;
-            }
+            };
 
             match record.content_type {
                 ContentType::Text | ContentType::RichText => {

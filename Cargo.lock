@@ -6336,6 +6336,7 @@ dependencies = [
  "criterion",
  "dirs 7.0.0",
  "image",
+ "memchr",
  "postcard",
  "redb",
  "rstest",

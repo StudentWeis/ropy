@@ -1,4 +1,4 @@
-//! Clipboard history persistence and portable configuration for Ropy.
+//! Clipboard history persistence, literal search and portable configuration for Ropy.
 //!
 //! This library has no desktop runtime or native clipboard dependency. The
 //! application owns scheduling, platform shortcut validation and presentation.
