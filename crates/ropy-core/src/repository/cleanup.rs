@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_old_records_when_all_favorited_removes_none() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record_one = repo.save_text("One".to_string()).expect("Failed to save");
         thread::sleep(Duration::from_millis(10));
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_old_records_when_mixed_pinned_and_favorited_preserves_both() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let pinned = repo
             .save_text("Pinned".to_string())
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_below_trigger_skips_retention_record_reads() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
         let record = repo.save_text("Favorite".into()).expect("save");
         repo.toggle_favorite(record.id).expect("favorite");
         repo.records.fail_next_get();
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_old_records_if_needed_when_below_trigger_removes_none() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         // keep_count=10, buffer=1, trigger=11. Save exactly 11 records.
         save_numbered_records(&repo, 11);
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_old_records_if_needed_when_above_trigger_trims_to_keep_count() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         // keep_count=10, buffer=1, trigger=11. Save 12 records to exceed trigger.
         save_numbered_records(&repo, 12);
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn test_cleanup_old_records_if_needed_when_favorited_records_present_excludes_from_ordinary_count()
      {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         // Save 12 records, favorite 2 of them.
         // ordinary_total = 12 - 2 = 10, trigger for keep=10 is 11, so no cleanup.
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn test_clear_ordinary_records_when_empty_repo_returns_zero() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let removed = repo.clear_ordinary_records().expect("Failed to clear");
 
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_clear_ordinary_records_when_all_ordinary_removes_all() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
         save_numbered_records(&repo, 5);
 
         let removed = repo.clear_ordinary_records().expect("Failed to clear");

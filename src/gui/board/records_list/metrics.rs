@@ -77,33 +77,41 @@ impl TruncateOptions {
 /// at most `options.max_lines` lines. Appends an ellipsis when either bound
 /// causes the result to drop trailing content.
 pub(super) fn truncate(content: &str, char_limit: usize, options: TruncateOptions) -> String {
-    let Some(max_lines) = options.max_lines else {
-        return if content.chars().count() > char_limit {
-            format!(
-                "{}...",
-                content.chars().take(char_limit).collect::<String>()
-            )
-        } else {
-            content.to_string()
-        };
-    };
-
-    let lines: Vec<&str> = content.lines().take(max_lines).collect();
-    let line_limited_content = lines.join("\n");
-
-    if line_limited_content.chars().count() > char_limit {
-        format!(
-            "{}...",
-            line_limited_content
-                .chars()
-                .take(char_limit)
-                .collect::<String>()
-        )
-    } else if content.lines().count() > max_lines {
-        format!("{line_limited_content}...")
-    } else {
-        line_limited_content
+    if options.max_lines == Some(0) {
+        return if content.is_empty() { "" } else { "..." }.into();
     }
+
+    let mut chars = content.chars().peekable();
+    let mut result = String::new();
+    let mut char_count = 0;
+    let mut line_count = 1;
+    while let Some(mut ch) = chars.next() {
+        if let Some(max_lines) = options.max_lines {
+            // Match str::lines().join("\n"): normalize CRLF and omit the
+            // final line terminator, without copying or scanning a whole line.
+            if ch == '\r' && chars.peek() == Some(&'\n') {
+                chars.next();
+                ch = '\n';
+            }
+            if ch == '\n' {
+                if chars.peek().is_none() {
+                    break;
+                }
+                if line_count == max_lines {
+                    result.push_str("...");
+                    break;
+                }
+                line_count += 1;
+            }
+        }
+        if char_count == char_limit {
+            result.push_str("...");
+            break;
+        }
+        result.push(ch);
+        char_count += 1;
+    }
+    result
 }
 
 fn estimated_text_units(content: &str) -> f32 {
@@ -286,6 +294,32 @@ mod tests {
         let options = TruncateOptions::with_max_lines(GRID_CONTENT_PREVIEW_MAX_LINES);
 
         assert_eq!(truncate(content, 120, options), "1\n2\n3\n4...");
+    }
+
+    #[rstest::rstest]
+    #[case("你好🙂世界", 3, Some(2), "你好🙂...")]
+    #[case("a\r\nb\r\n", 3, Some(2), "a\nb")]
+    #[case("a\r\nb\r\nc", 3, Some(2), "a\nb...")]
+    #[case("a\r\nb", 4, None, "a\r\nb")]
+    #[case("a\rb", 3, Some(2), "a\rb")]
+    #[case("abc\n", 3, Some(1), "abc")]
+    #[case("abc\n\n", 3, Some(1), "abc...")]
+    #[case("\n\n", 1, Some(2), "\n")]
+    #[case("\n", 0, Some(1), "")]
+    #[case("\n", 0, None, "...")]
+    #[case("abc", 0, Some(1), "...")]
+    #[case("abc", 3, Some(0), "...")]
+    #[case("", 0, Some(0), "")]
+    fn test_truncate_preserves_unicode_and_line_boundaries(
+        #[case] content: &str,
+        #[case] limit: usize,
+        #[case] max_lines: Option<usize>,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            truncate(content, limit, TruncateOptions { max_lines }),
+            expected
+        );
     }
 
     #[test]

@@ -160,7 +160,7 @@ fn test_save_rich_text_persists_meta_and_sidecar_files() {
 
 #[test]
 fn test_save_empty_content() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let record = repo.save_text(String::new()).expect("Failed to save");
     assert_eq!(record.content, "");
@@ -174,7 +174,7 @@ fn test_save_empty_content() {
 
 #[test]
 fn test_save_very_long_content() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let long_content = "x".repeat(100_000);
     let record = repo
@@ -191,7 +191,7 @@ fn test_save_very_long_content() {
 
 #[test]
 fn test_save_unicode_content() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let contents = vec![
         "Hello 世界 🌍",
@@ -213,7 +213,7 @@ fn test_save_unicode_content() {
 
 #[test]
 fn test_save_different_content_types() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let text_record = repo
         .save("text content".to_string(), ContentType::Text)
@@ -230,7 +230,7 @@ fn test_save_different_content_types() {
 
 #[test]
 fn test_repository_save_files_normalizes_and_persists_file_payload() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let record = repo
         .save_files(&[
@@ -248,7 +248,7 @@ fn test_repository_save_files_normalizes_and_persists_file_payload() {
 
 #[test]
 fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     let first = repo
         .save_files(&["file:///tmp/demo%20file.txt".to_string()])
@@ -263,7 +263,7 @@ fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
 
 #[test]
 fn test_save_image_from_path_basic() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let images = tempfile::tempdir().expect("Failed to create image fixtures");
 
     let path = images
@@ -284,7 +284,7 @@ fn test_save_image_from_path_basic() {
 
 #[test]
 fn test_save_image_from_path_dedup() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let images = tempfile::tempdir().expect("Failed to create image fixtures");
 
     let path1 = images.path().join("image1.png");
@@ -318,7 +318,7 @@ fn test_save_image_from_path_dedup() {
 
 #[test]
 fn test_save_after_clear() {
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
 
     repo.save_text("Before clear".to_string())
         .expect("Failed to save");
@@ -335,7 +335,7 @@ fn test_save_after_clear() {
 fn test_binary_serialization_round_trip() {
     use crate::repository::{backend::KvTree, test_helpers::load_display_records};
 
-    let repo = create_test_repo();
+    let (_temp_dir, repo) = create_test_repo();
     let now = chrono::Local::now();
     let record = ClipboardRecord {
         id: 1000_u64,

@@ -834,6 +834,151 @@ fn test_board_controls_expose_localized_accessible_names(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn test_opacity_slider_state_change_without_pointer_events_is_saved(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalSettings::at_path(
+            Settings::default(),
+            Some(directory.path().join("config.toml")),
+        ));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.open_settings_panel(window, cx));
+        // GPUI 0.8 accessibility increment/decrement calls set_value without
+        // emitting SliderEvent::Change or a pointer-release event.
+        let slider = board
+            .read(cx)
+            .settings_editor
+            .settings_window_opacity_slider
+            .clone();
+        slider.update(cx, |slider, cx| slider.set_value(99., window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.read(|cx| {
+        assert_eq!(board.read(cx).settings_editor.window_opacity_percent, 99);
+        assert_eq!(
+            GlobalSettings::read(cx, |settings| settings.window.opacity_percent),
+            99
+        );
+    });
+    assert_eq!(
+        Settings::load_from_dir(directory.path())
+            .unwrap()
+            .window
+            .opacity_percent,
+        99
+    );
+}
+
+#[gpui_kit::test]
+fn test_opacity_pointer_preview_waits_for_release_outside_slider(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        cx.set_global(GlobalSettings::at_path(
+            Settings::default(),
+            Some(directory.path().join("config.toml")),
+        ));
+    });
+    cx.simulate_window_resize(
+        handle,
+        gpui_kit::size(gpui_kit::px(600.), gpui_kit::px(1200.)),
+    );
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| board.open_settings_panel(window, cx));
+        window.simulate_next_frame(cx);
+        window.render_frame(cx);
+        let bounds = window
+            .find_by_label(t!("settings_window_opacity").as_ref())
+            .bounds();
+        window.dispatch_event(
+            gpui_kit::MouseDownEvent {
+                button: gpui_kit::MouseButton::Left,
+                position: gpui_kit::point(
+                    bounds.left() + bounds.size.width / 2.,
+                    bounds.center().y,
+                ),
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.read(|cx| {
+        assert!(board.read(cx).settings_editor.window_opacity_percent < 100);
+        assert_eq!(
+            GlobalSettings::read(cx, |settings| settings.window.opacity_percent),
+            100
+        );
+    });
+    assert!(!directory.path().join("config.toml").exists());
+    cx.update_window(handle, |_, window, cx| {
+        window.dispatch_event(
+            gpui_kit::MouseUpEvent {
+                button: gpui_kit::MouseButton::Left,
+                position: gpui_kit::point(gpui_kit::px(1.), gpui_kit::px(1.)),
+                ..Default::default()
+            }
+            .to_platform_input(),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let preview = cx.read(|cx| board.read(cx).settings_editor.window_opacity_percent);
+    assert_eq!(
+        Settings::load_from_dir(directory.path())
+            .unwrap()
+            .window
+            .opacity_percent,
+        preview
+    );
+}
+
+#[gpui_kit::test]
+fn test_opacity_slider_save_failure_restores_state_and_preview(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update(|cx| {
+        // A directory at the file destination makes replacement fail.
+        cx.set_global(GlobalSettings::at_path(
+            Settings::default(),
+            Some(directory.path().to_path_buf()),
+        ));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        let slider = board
+            .read(cx)
+            .settings_editor
+            .settings_window_opacity_slider
+            .clone();
+        slider.update(cx, |slider, cx| slider.set_value(99., window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let editor = &board.read(cx).settings_editor;
+        assert_eq!(editor.window_opacity_percent, 100);
+        assert_eq!(
+            editor
+                .settings_window_opacity_slider
+                .read(cx)
+                .value()
+                .start(),
+            100.
+        );
+        assert_eq!(
+            GlobalSettings::read(cx, |settings| settings.window.opacity_percent),
+            100
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn test_settings_controls_share_aligned_frames(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![]);
     let directory = tempfile::tempdir().unwrap();

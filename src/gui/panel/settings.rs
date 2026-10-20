@@ -240,18 +240,6 @@ fn render_window_opacity_row(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> 
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .child(format!("{}%", board.settings_editor.window_opacity_percent)),
-            )
-            .on_mouse_up(
-                gpui_kit::MouseButton::Left,
-                cx.listener(|board, _, window, cx| {
-                    board.save_window_opacity(window, cx);
-                }),
-            )
-            .on_mouse_up_out(
-                gpui_kit::MouseButton::Left,
-                cx.listener(|board, _, window, cx| {
-                    board.save_window_opacity(window, cx);
-                }),
             ),
         cx,
     )

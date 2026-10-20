@@ -64,7 +64,7 @@ pub(crate) struct SettingsEditor {
 
 pub(super) fn build_window_opacity_slider(
     opacity_percent: u8,
-    window: &Window,
+    window: &mut Window,
     cx: &mut Context<'_, RopyBoard>,
 ) -> Entity<SliderState> {
     let slider = cx.new(|_| {
@@ -82,22 +82,25 @@ pub(super) fn build_window_opacity_slider(
     cx.subscribe_in(
         &slider,
         window,
-        |this, _, event: &SliderEvent, window, cx| {
-            let SliderEvent::Change(value) = event else {
-                return;
-            };
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "slider value is bounded by MIN/MAX_OPACITY_PERCENT (0..=100)"
-            )]
-            let opacity_percent = value.start().round() as u8;
-            this.settings_editor.window_opacity_percent = opacity_percent;
-            crate::gui::app::apply_current_theme(window, cx, opacity_percent);
-            crate::gui::app::apply_window_opacity(window, opacity_percent);
-            cx.notify();
+        |this, _, event: &SliderEvent, window, cx| match event {
+            SliderEvent::Change(value) => {
+                this.preview_window_opacity(value.start(), window, cx);
+            }
+            SliderEvent::Release(_) => this.save_window_opacity(window, cx),
         },
     )
+    .detach();
+
+    // GPUI 0.8 accessibility actions notify SliderState without emitting slider
+    // events. Wait for queued pointer Change events before checking for a value
+    // they did not preview, so dragging still saves only on Release.
+    cx.observe_in(&slider, window, |_, slider, window, cx| {
+        cx.defer_in(window, move |this, window, cx| {
+            if this.preview_window_opacity(slider.read(cx).value().start(), window, cx) {
+                this.save_window_opacity(window, cx);
+            }
+        });
+    })
     .detach();
 
     slider

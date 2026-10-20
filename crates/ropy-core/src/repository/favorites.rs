@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_favorite_ids_when_empty_returns_empty_vec() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let ids = repo.favorite_ids().expect("Failed to get favorite ids");
 
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_favorite_ids_returns_sorted_ids() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record_a = repo.save_text("A".to_string()).expect("Failed to save");
         thread::sleep(Duration::from_millis(10));
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_toggle_favorite_when_record_not_found_returns_error() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let result = repo.toggle_favorite(999);
 
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_toggle_favorite_twice_returns_to_unfavorited() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record = repo
             .save_text("Toggle me".to_string())
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_favorite_id_set_filters_stale_entries() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record_a = repo.save_text("A".to_string()).expect("Failed to save");
         thread::sleep(Duration::from_millis(10));
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_remove_favorite_removes_entry() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record = repo
             .save_text("Removable".to_string())
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_remove_favorite_when_not_favorited_succeeds_silently() {
-        let repo = create_test_repo();
+        let (_temp_dir, repo) = create_test_repo();
 
         let record = repo
             .save_text("Not favorited".to_string())
