@@ -3,7 +3,7 @@
 //! chronological queries without full record deserialization.
 //!
 //! ## Key format (16 bytes)
-//! `timestamp_millis(i64 BE, 8B) ++ record_id(u64 BE, 8B)`
+//! `sign-bit-flipped timestamp_millis(i64 BE, 8B) ++ record_id(u64 BE, 8B)`
 //!
 //! ## Value format (2 bytes)
 //! `pinned(u8) ++ content_type_tag(u8)`
@@ -47,9 +47,11 @@ impl<T: KvTree> TimeIndex<T> {
             .transpose()
     }
 
-    /// Repair indexes left behind by older, independently committed tree writes.
+    /// Repair indexes, including legacy keys with an unflipped timestamp sign bit.
     ///
     /// The record store is authoritative and is never cleared by this repair.
+    /// Expected keys are rebuilt from records in one transaction, so upgrades and
+    /// downgrades can each repair the other's derived index without a schema wipe.
     pub(super) fn repair(
         &self,
         records: &impl KvTree,
@@ -226,7 +228,8 @@ impl<T: KvTree> TimeIndex<T> {
 
     pub(crate) fn encode_key(timestamp_millis: i64, id: u64) -> [u8; 16] {
         let mut key = [0u8; 16];
-        key[..8].copy_from_slice(&timestamp_millis.to_be_bytes());
+        // Lexicographic byte order must match signed chronology across the epoch.
+        key[..8].copy_from_slice(&(timestamp_millis ^ i64::MIN).to_be_bytes());
         key[8..].copy_from_slice(&id.to_be_bytes());
         key
     }
@@ -334,7 +337,7 @@ mod tests {
         // Verify key is 16 bytes
         assert_eq!(key.len(), 16);
         // Verify timestamp is in first 8 bytes (big-endian)
-        assert_eq!(&key[..8], &1_234_567_890_123_i64.to_be_bytes());
+        assert_eq!(&key[..8], &0x8000_011f_71fb_04cb_u64.to_be_bytes());
         // Verify id is in last 8 bytes (big-endian)
         assert_eq!(&key[8..], &9_876_543_210_u64.to_be_bytes());
     }
@@ -344,14 +347,14 @@ mod tests {
         // Negative timestamp (before epoch)
         let key = MemoryTimeIndex::encode_key(-1_i64, 1_u64);
         assert_eq!(key.len(), 16);
-        // First byte should be 0xFF for negative numbers in two's complement
-        assert_eq!(key[0], 0xFF);
+        // Flipping the sign bit puts negative timestamps before epoch and later times.
+        assert_eq!(key[0], 0x7F);
     }
 
     #[test]
     fn test_encode_key_zero_values() {
         let key = MemoryTimeIndex::encode_key(0_i64, 0_u64);
-        assert_eq!(key, [0u8; 16]);
+        assert_eq!(key, [0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     #[test]
@@ -645,7 +648,7 @@ mod tests {
         // Verify the returned key is correctly encoded
         let (key, returned_id) = &result[0];
         assert_eq!(*returned_id, id);
-        assert_eq!(&key[..8], &timestamp.to_be_bytes());
+        assert_eq!(&key[..8], &(timestamp ^ i64::MIN).to_be_bytes());
         assert_eq!(&key[8..], &id.to_be_bytes());
     }
 

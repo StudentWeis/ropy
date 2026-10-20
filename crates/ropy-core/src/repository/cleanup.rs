@@ -176,12 +176,10 @@ impl ClipboardRepository<RedbBackend> {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
-
     use rstest::rstest;
 
     use super::*;
-    use crate::repository::test_helpers::{create_test_repo, save_numbered_records};
+    use crate::repository::test_helpers::{create_test_repo, save_numbered_records, save_text_at};
 
     #[rstest]
     #[case(0, 1)]
@@ -223,11 +221,9 @@ mod tests {
     fn test_cleanup_old_records_when_all_favorited_removes_none() {
         let (_temp_dir, repo) = create_test_repo();
 
-        let record_one = repo.save_text("One".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let record_two = repo.save_text("Two".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let record_three = repo.save_text("Three".to_string()).expect("Failed to save");
+        let record_one = save_text_at(&repo, "One", 1);
+        let record_two = save_text_at(&repo, "Two", 2);
+        let record_three = save_text_at(&repo, "Three", 3);
 
         repo.toggle_favorite(record_one.id)
             .expect("Failed to favorite");
@@ -246,14 +242,8 @@ mod tests {
     fn test_cleanup_old_records_when_mixed_pinned_and_favorited_preserves_both() {
         let (_temp_dir, repo) = create_test_repo();
 
-        let pinned = repo
-            .save_text("Pinned".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let favorited = repo
-            .save_text("Favorited".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        let pinned = save_text_at(&repo, "Pinned", -2);
+        let favorited = save_text_at(&repo, "Favorited", -1);
         save_numbered_records(&repo, 5);
 
         repo.toggle_pin(pinned.id).expect("Failed to pin");
@@ -318,12 +308,8 @@ mod tests {
 
         // Save 12 records, favorite 2 of them.
         // ordinary_total = 12 - 2 = 10, trigger for keep=10 is 11, so no cleanup.
-        let first = repo.save_text("First".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-        let second = repo
-            .save_text("Second".to_string())
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        let first = save_text_at(&repo, "First", -2);
+        let second = save_text_at(&repo, "Second", -1);
         save_numbered_records(&repo, 10);
 
         repo.toggle_favorite(first.id).expect("Failed to favorite");

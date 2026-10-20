@@ -1,8 +1,6 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used, clippy::panic))]
 //! Tests for deduplication, cleanup, favorites, delete, and clear.
 
-use std::{thread, time::Duration};
-
 use rstest::rstest;
 
 use crate::repository::{
@@ -14,6 +12,7 @@ use crate::repository::{
     repo::ClipboardRepository,
     test_helpers::{
         create_test_repo, create_test_repo_with, load_display_records, save_numbered_records,
+        save_text_at,
     },
 };
 
@@ -33,13 +32,8 @@ fn create_failure_injecting_repo() -> (
 fn test_dedup_same_content() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let r1 = repo
-        .save_text("duplicate".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let r2 = repo
-        .save_text("duplicate".to_string())
-        .expect("Failed to save");
+    let r1 = save_text_at(&repo, "duplicate", 1);
+    let r2 = save_text_at(&repo, "duplicate", 2);
 
     assert_eq!(r1.id, r2.id);
     assert_eq!(repo.count(), 1);
@@ -50,11 +44,9 @@ fn test_dedup_same_content() {
 fn test_dedup_aba_pattern() {
     let (_temp_dir, repo) = create_test_repo();
 
-    repo.save_text("A".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("B".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let a2 = repo.save_text("A".to_string()).expect("Failed to save");
+    save_text_at(&repo, "A", 1);
+    save_text_at(&repo, "B", 2);
+    let a2 = save_text_at(&repo, "A", 3);
 
     assert_eq!(repo.count(), 2);
     let recent = load_display_records(&repo, 2);
@@ -81,11 +73,7 @@ fn test_content_hash_deterministic() {
 fn assert_cleanup_old_records_with<B: StorageBackend>(factory: BackendFactory<B>) {
     let (_temp_dir, repo) = create_test_repo_with(factory);
 
-    for i in 1..=10 {
-        repo.save_text(format!("Record {i}"))
-            .unwrap_or_else(|error| panic!("Failed to save: {error}"));
-        thread::sleep(Duration::from_millis(10));
-    }
+    save_numbered_records(&repo, 10);
     assert_eq!(repo.count(), 10);
 
     let removed = repo
@@ -188,14 +176,9 @@ fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
 fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_records() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let favorite = repo
-        .save_text("Old favorite".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
+    let favorite = save_text_at(&repo, "Old favorite", 1);
     for index in 2..=6 {
-        repo.save_text(format!("Record {index}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Record {index}"), index);
     }
 
     repo.toggle_favorite(favorite.id)
@@ -405,25 +388,11 @@ fn test_clear_when_database_batch_fails_preserves_records_and_sidecars() {
 fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let pinned = repo
-        .save_text("Pinned".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let favorite = repo
-        .save_text("Favorite".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let pinned_and_favorite = repo
-        .save_text("Pinned Favorite".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let ordinary_one = repo
-        .save_text("Ordinary One".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let ordinary_two = repo
-        .save_text("Ordinary Two".to_string())
-        .expect("Failed to save");
+    let pinned = save_text_at(&repo, "Pinned", 1);
+    let favorite = save_text_at(&repo, "Favorite", 2);
+    let pinned_and_favorite = save_text_at(&repo, "Pinned Favorite", 3);
+    let ordinary_one = save_text_at(&repo, "Ordinary One", 4);
+    let ordinary_two = save_text_at(&repo, "Ordinary Two", 5);
 
     repo.toggle_pin(pinned.id).expect("Failed to pin record");
     repo.toggle_favorite(favorite.id)
@@ -474,13 +443,8 @@ fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
 fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let pinned = repo
-        .save_text("Pinned".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let favorite = repo
-        .save_text("Favorite".to_string())
-        .expect("Failed to save");
+    let pinned = save_text_at(&repo, "Pinned", 1);
+    let favorite = save_text_at(&repo, "Favorite", 2);
 
     repo.toggle_pin(pinned.id).expect("Failed to pin record");
     repo.toggle_favorite(favorite.id)

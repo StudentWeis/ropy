@@ -68,6 +68,14 @@ class ThemeTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("theme_name", result.stdout)
 
+    def test_theme_blank_name_fails_like_runtime(self):
+        for name in ('""', '"  "', '"\\t"'):
+            with self.subTest(name=name):
+                source = VALID_THEME.replace('theme_name = "Ropy Light"', f'theme_name = {name}')
+                result = self.check_theme(source)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("theme_name", result.stdout)
+
     def test_theme_extra_keys_remain_rejected(self):
         result = self.check_theme(VALID_THEME + 'unexpected = "#123456"\n')
         self.assertNotEqual(result.returncode, 0, result.stdout)

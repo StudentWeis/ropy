@@ -234,6 +234,110 @@ fn test_reopen_unreadable_record_preserves_other_history() {
 }
 
 #[test]
+fn test_redb_reopen_legacy_time_index_preserves_history_and_repairs_chronology() {
+    use crate::repository::{ContentType, assets::load_rich_text_html};
+
+    let directory = tempfile::tempdir().expect("fixture directory");
+    let database = directory.path().join("history.redb");
+    let images = directory.path().join("images");
+    let repo = ClipboardRepository::open(&database, images.clone()).expect("repository");
+    let older = repo
+        .save_rich_text_at(
+            "old".into(),
+            Some("<b>old</b>"),
+            None,
+            "1969-12-31T23:59:59+00:00".parse().expect("timestamp"),
+        )
+        .expect("old record");
+    let newer = repo
+        .save_at(
+            "new".into(),
+            ContentType::Text,
+            "2023-11-14T22:13:20+00:00".parse().expect("timestamp"),
+        )
+        .expect("new record");
+    let protected = repo
+        .save_rich_text_at(
+            "protected".into(),
+            Some("<i>keep</i>"),
+            None,
+            "1969-12-31T23:59:58+00:00".parse().expect("timestamp"),
+        )
+        .expect("protected record");
+    repo.toggle_pin(protected.id).expect("pin");
+    repo.toggle_favorite(protected.id).expect("favorite");
+    let protected = repo.get_by_id(protected.id).expect("read").expect("record");
+    let expected = [older, newer, protected];
+    let entries = repo.backend.open_tree(TIME_INDEX_TREE).expect("index");
+    entries.clear().expect("replace with legacy index");
+    for record in &expected {
+        // Previous clients stored signed BE timestamps without flipping the sign bit.
+        let key = [
+            record.created_at.timestamp_millis().to_be_bytes(),
+            record.id.to_be_bytes(),
+        ]
+        .concat();
+        entries
+            .insert(
+                &key,
+                &[u8::from(record.pinned), record.content_type.as_tag()],
+            )
+            .expect("legacy entry");
+    }
+    drop(entries);
+    drop(repo);
+
+    let reopened = ClipboardRepository::open(&database, images).expect("repair legacy index");
+    for record in &expected {
+        assert_eq!(
+            reopened.get_by_id(record.id).expect("read").as_ref(),
+            Some(record)
+        );
+    }
+    assert_eq!(
+        reopened.favorite_ids().expect("favorites"),
+        vec![expected[2].id]
+    );
+    for (record, html) in [(&expected[0], "<b>old</b>"), (&expected[2], "<i>keep</i>")] {
+        assert_eq!(
+            record
+                .rich_text_meta
+                .as_ref()
+                .and_then(load_rich_text_html)
+                .as_deref(),
+            Some(html)
+        );
+    }
+    let displayed = reopened.get_display_records(1).expect("display");
+    assert_eq!(
+        displayed.iter().map(|record| record.id).collect::<Vec<_>>(),
+        [expected[2].id, expected[1].id]
+    );
+    assert_eq!(reopened.cleanup_old_records(1).expect("cleanup"), 1);
+    assert!(
+        reopened
+            .get_by_id(expected[0].id)
+            .expect("old record")
+            .is_none()
+    );
+    assert_eq!(
+        reopened
+            .get_by_id(expected[1].id)
+            .expect("new record")
+            .as_ref(),
+        Some(&expected[1])
+    );
+    assert_eq!(
+        expected[2]
+            .rich_text_meta
+            .as_ref()
+            .and_then(load_rich_text_html)
+            .as_deref(),
+        Some("<i>keep</i>")
+    );
+}
+
+#[test]
 fn test_redb_reopen_inconsistent_indexes_repairs_without_losing_pin_or_favorite() {
     use crate::repository::{
         backend::{TIME_INDEX_LOOKUP_TREE, redb::redb_backend_factory},

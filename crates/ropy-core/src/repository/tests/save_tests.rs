@@ -2,15 +2,13 @@
 //! Tests for `save*` paths: text, files, images, rich-text, and serialization
 //! round-trips.
 
-use std::{thread, time::Duration};
-
 use crate::repository::{
     assets::{PendingImage, thumb_path_for},
     backend::{
         BackendFactory, StorageBackend, memory::memory_backend_factory, redb::redb_backend_factory,
     },
     models::{ClipboardRecord, ContentType},
-    test_helpers::{create_test_repo, create_test_repo_with},
+    test_helpers::{capture_time, create_test_repo, create_test_repo_with},
 };
 
 #[test]
@@ -297,18 +295,20 @@ fn test_save_image_from_path_dedup() {
     let hash = 12345_u64;
 
     let r1 = repo
-        .save_image_from_path(path1.to_string_lossy().into_owned(), hash)
+        .save_image_from_path_with_clock(path1.to_string_lossy().into_owned(), hash, || {
+            capture_time(1)
+        })
         .expect("Failed to save first");
 
-    thread::sleep(Duration::from_millis(10));
-
     let r2 = repo
-        .save_image_from_path(path2.to_string_lossy().into_owned(), hash)
+        .save_image_from_path_with_clock(path2.to_string_lossy().into_owned(), hash, || {
+            capture_time(2)
+        })
         .expect("Failed to save second");
 
     assert_eq!(r1.id, r2.id);
     assert_eq!(repo.count(), 1);
-    assert!(r2.created_at > r1.created_at);
+    assert_eq!(r2.created_at, capture_time(2));
     assert_eq!(r2.content, r1.content);
     assert!(path1.exists());
     assert!(thumb1.exists());
@@ -336,7 +336,7 @@ fn test_binary_serialization_round_trip() {
     use crate::repository::{backend::KvTree, test_helpers::load_display_records};
 
     let (_temp_dir, repo) = create_test_repo();
-    let now = chrono::Local::now();
+    let now = capture_time(0);
     let record = ClipboardRecord {
         id: 1000_u64,
         content: "binary record".to_string(),

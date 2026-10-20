@@ -293,15 +293,24 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         file_path: String,
         image_content_hash: u64,
     ) -> Result<ClipboardRecord, RepositoryError> {
+        self.save_image_from_path_with_clock(file_path, image_content_hash, Local::now)
+    }
+
+    pub(super) fn save_image_from_path_with_clock(
+        &self,
+        file_path: String,
+        image_content_hash: u64,
+        capture_time: impl FnOnce() -> DateTime<Local>,
+    ) -> Result<ClipboardRecord, RepositoryError> {
         let _operation = self.lock_operation();
         let id = image_content_hash;
         let key = id.to_be_bytes();
-        let now = Local::now();
+        let captured_at = capture_time();
 
         if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            record.created_at = now;
+            record.created_at = captured_at;
             self.put_indexed_record(&key, &record)?;
             if record.content != file_path {
                 remove_image_files(&file_path);
@@ -312,7 +321,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let record = ClipboardRecord {
             id,
             content: file_path,
-            created_at: now,
+            created_at: captured_at,
             content_type: ContentType::Image,
             pinned: false,
             rich_text_meta: None,

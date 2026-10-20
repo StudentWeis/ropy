@@ -31,7 +31,7 @@ fn main() {
         fs::write(root.join("new-started"), "started").unwrap();
         if root.join("fail-startup").exists() { std::process::exit(1); }
         fs::write(root.join("healthy"), "healthy").unwrap();
-        thread::sleep(Duration::from_secs(1));
+        // Acknowledgement is durable even if the user immediately quits.
         return;
     }
     let exe = env::current_exe().unwrap();

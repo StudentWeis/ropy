@@ -26,11 +26,13 @@ REQUIRED_KEYS = {"theme_name", "mode", *COLOR_KEYS}
 def validate_theme(theme: dict[str, object]) -> list[str]:
     """Return schema errors after TOML syntax has been checked by tomllib."""
     errors = [f"MISSING {key}" for key in sorted(REQUIRED_KEYS - theme.keys())]
-    # Runtime serde ignores unknown keys; the repository gate intentionally
-    # retains its stricter typo/extra-key check.
+    # Runtime serde and the resource gate both reject unknown keys.
     errors.extend(f"EXTRA {key}" for key in sorted(theme.keys() - REQUIRED_KEYS))
-    if "theme_name" in theme and not isinstance(theme["theme_name"], str):
-        errors.append("INVALID theme_name: expected a string")
+    if "theme_name" in theme:
+        if not isinstance(theme["theme_name"], str):
+            errors.append("INVALID theme_name: expected a string")
+        elif not theme["theme_name"].strip():
+            errors.append("INVALID theme_name: expected a nonempty name")
     if "mode" in theme and theme["mode"] not in ("light", "dark"):
         errors.append("INVALID mode: expected 'light' or 'dark'")
     for key in COLOR_KEYS:

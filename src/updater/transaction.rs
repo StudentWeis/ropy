@@ -339,17 +339,21 @@ fn run_helper(root: &Path, pid: u32) -> Result<(), UpdateError> {
     if let Ok(mut child) = launch {
         let deadline = Instant::now() + Duration::from_secs(45);
         while Instant::now() < deadline {
-            if child.try_wait()?.is_some() {
+            if child.try_wait()?.is_some() || root.join("healthy").exists() {
                 break;
-            }
-            if root.join("healthy").exists() {
-                remove_if_exists(&transaction.backup())?;
-                return Ok(());
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        let _ = child.kill();
-        let _ = child.wait();
+        if !root.join("healthy").exists() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        // A normal exit, or an acknowledgement racing the timeout, must not
+        // roll back a healthy version. Recheck after the child has stopped.
+        if root.join("healthy").exists() {
+            remove_if_exists(&transaction.backup())?;
+            return Ok(());
+        }
     }
     restore_and_launch(&transaction)
 }
