@@ -94,7 +94,7 @@ The helper moves the old installation to `backup`, installs the staged payload
 on the same filesystem, and launches the new version. After its window and
 repository initialize and the UI event loop runs for two seconds, the new
 version acknowledges startup. The helper retains the backup until that
-acknowledgment. If launch fails or no acknowledgment arrives within 45 seconds,
+acknowledgment. Once acknowledged, a normal process exit before the helper's next poll does not roll the update back. If launch fails or no acknowledgment arrives within 45 seconds,
 it stops the new process, restores the backup and launches the old version.
 A rollback notice remains in About until the next manual check. A normal launch
 also resumes an interrupted transaction when a backup exists and no helper

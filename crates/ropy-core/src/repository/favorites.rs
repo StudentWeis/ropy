@@ -76,8 +76,6 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
-
     use crate::repository::{backend::KvTree, test_helpers::create_test_repo};
 
     #[test]
@@ -94,9 +92,7 @@ mod tests {
         let (_temp_dir, repo) = create_test_repo();
 
         let record_a = repo.save_text("A".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
         let record_b = repo.save_text("B".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
         let record_c = repo.save_text("C".to_string()).expect("Failed to save");
 
         // Favorite in non-sorted order
@@ -146,7 +142,6 @@ mod tests {
         let (_temp_dir, repo) = create_test_repo();
 
         let record_a = repo.save_text("A".to_string()).expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
         let record_b = repo.save_text("B".to_string()).expect("Failed to save");
 
         repo.toggle_favorite(record_a.id)

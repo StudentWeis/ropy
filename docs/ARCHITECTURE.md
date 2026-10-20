@@ -89,6 +89,8 @@ Keep these persistence contracts stable during structural changes:
 - Pinned/favorite ordering and retention exemptions.
 - Atomic payload writes, duplicate handling and cleanup after failures.
 
+Time-index keys flip the timestamp sign bit before big-endian encoding, so byte ordering follows signed capture time across the Unix epoch. The ID lookup still stores the original signed timestamp. Startup transactionally repairs derived keys from the authoritative records, including indexes written by older clients. This index repair does not change the record schema or delete payloads; earlier clients can rebuild their own index encoding on downgrade.
+
 A module move does not justify a schema migration. A format change needs its own
 compatibility design and tests.
 

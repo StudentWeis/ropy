@@ -1,9 +1,7 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Tests for pin behavior and pinned-aware cleanup.
 
-use std::{thread, time::Duration};
-
-use crate::repository::test_helpers::{create_test_repo, load_display_records};
+use crate::repository::test_helpers::{create_test_repo, load_display_records, save_text_at};
 
 #[test]
 fn test_toggle_pin() {
@@ -33,13 +31,9 @@ fn test_toggle_pin() {
 fn test_pinned_records_appear_first() {
     let (_temp_dir, repo) = create_test_repo();
 
-    repo.save_text("First".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let second = repo
-        .save_text("Second".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("Third".to_string()).expect("Failed to save");
+    save_text_at(&repo, "First", 1);
+    let second = save_text_at(&repo, "Second", 2);
+    save_text_at(&repo, "Third", 3);
 
     repo.toggle_pin(second.id).expect("Failed to toggle pin");
 
@@ -53,11 +47,9 @@ fn test_pinned_records_appear_first() {
 fn test_multiple_pinned_ordering() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let r1 = repo.save_text("Alpha".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("Beta".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let r3 = repo.save_text("Gamma".to_string()).expect("Failed to save");
+    let r1 = save_text_at(&repo, "Alpha", 1);
+    save_text_at(&repo, "Beta", 2);
+    let r3 = save_text_at(&repo, "Gamma", 3);
 
     repo.toggle_pin(r1.id).expect("Failed to toggle pin");
     repo.toggle_pin(r3.id).expect("Failed to toggle pin");
@@ -72,14 +64,9 @@ fn test_multiple_pinned_ordering() {
 fn test_cleanup_skips_pinned() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let r1 = repo
-        .save_text("Old pinned".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
+    let r1 = save_text_at(&repo, "Old pinned", 1);
     for i in 2..=6 {
-        repo.save_text(format!("Record {i}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Record {i}"), i);
     }
 
     repo.toggle_pin(r1.id).expect("Failed to toggle pin");
@@ -99,13 +86,10 @@ fn test_cleanup_skips_pinned() {
 fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let r1 = repo.save_text("A".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let r2 = repo.save_text("B".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let r3 = repo.save_text("C".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("D".to_string()).expect("Failed to save");
+    let r1 = save_text_at(&repo, "A", 1);
+    let r2 = save_text_at(&repo, "B", 2);
+    let r3 = save_text_at(&repo, "C", 3);
+    save_text_at(&repo, "D", 4);
 
     repo.toggle_pin(r1.id).expect("Failed to toggle pin");
     repo.toggle_pin(r2.id).expect("Failed to toggle pin");

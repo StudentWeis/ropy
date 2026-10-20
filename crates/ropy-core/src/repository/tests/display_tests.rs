@@ -1,12 +1,14 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Tests for display ordering, lookup, and multi-step sequences.
 
-use std::{thread, time::Duration};
+use std::thread;
 
 use crate::repository::{
     models::{ClipboardRecord, ContentType},
     repo::ClipboardRepository,
-    test_helpers::{create_test_repo, load_display_records},
+    test_helpers::{
+        capture_time, create_test_repo, load_display_records, save_numbered_records, save_text_at,
+    },
 };
 
 #[rstest::rstest]
@@ -41,10 +43,37 @@ fn test_same_millisecond_limit_and_cleanup_keep_newest(#[case] cleanup: bool) {
     assert_eq!(selected[0].id, 1);
 }
 
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_display_and_cleanup_across_epoch_keep_newest(#[case] cleanup: bool) {
+    let (_directory, repo) = create_test_repo();
+    let older = repo
+        .save_at(
+            "before epoch".into(),
+            ContentType::Text,
+            "1969-12-31T23:59:59+00:00".parse().unwrap(),
+        )
+        .unwrap();
+    let newer = repo
+        .save_at(
+            "modern".into(),
+            ContentType::Text,
+            "2023-11-14T22:13:20+00:00".parse().unwrap(),
+        )
+        .unwrap();
+    if cleanup {
+        assert_eq!(repo.cleanup_old_records(1).unwrap(), 1);
+        assert!(repo.get_by_id(older.id).unwrap().is_none());
+        assert!(repo.get_by_id(newer.id).unwrap().is_some());
+    }
+    assert_eq!(repo.get_display_records(1).unwrap()[0].id, newer.id);
+}
+
 #[test]
 fn test_late_rich_text_capture_preserves_newer_payload() {
     let (_temp_dir, repo) = create_test_repo();
-    let newer = chrono::Local::now();
+    let newer = capture_time(2);
     let older = newer - chrono::Duration::seconds(1);
     let original = repo
         .save_rich_text_at("same".into(), Some("<b>new</b>"), None, newer)
@@ -65,11 +94,7 @@ fn test_late_rich_text_capture_preserves_newer_payload() {
 fn test_get_display_records() {
     let (_temp_dir, repo) = create_test_repo();
 
-    for i in 1..=5 {
-        repo.save_text(format!("Record {i}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-    }
+    save_numbered_records(&repo, 5);
 
     let recent = load_display_records(&repo, 3);
     assert_eq!(recent.len(), 3);
@@ -82,22 +107,11 @@ fn test_get_display_records() {
 fn test_get_display_records_when_favorites_present_keep_default_time_order() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let favorite_and_pinned = repo
-        .save_text("Favorite pinned".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let favorite_only = repo
-        .save_text("Favorite only".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("Ordinary old".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("Ordinary new".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    repo.save_text("Ordinary newest".to_string())
-        .expect("Failed to save");
+    let favorite_and_pinned = save_text_at(&repo, "Favorite pinned", 1);
+    let favorite_only = save_text_at(&repo, "Favorite only", 2);
+    save_text_at(&repo, "Ordinary old", 3);
+    save_text_at(&repo, "Ordinary new", 4);
+    save_text_at(&repo, "Ordinary newest", 5);
 
     repo.toggle_favorite(favorite_and_pinned.id)
         .expect("Failed to favorite pinned record");
@@ -129,18 +143,9 @@ fn test_get_display_records_when_favorites_present_keep_default_time_order() {
 fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_returns_41() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let first = repo
-        .save_text("Record 1".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let second = repo
-        .save_text("Record 2".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let third = repo
-        .save_text("Record 3".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
+    let first = save_text_at(&repo, "Record 1", 1);
+    let second = save_text_at(&repo, "Record 2", 2);
+    let third = save_text_at(&repo, "Record 3", 3);
 
     repo.toggle_favorite(first.id)
         .expect("Failed to favorite first");
@@ -149,9 +154,7 @@ fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_r
     repo.toggle_pin(third.id).expect("Failed to pin third");
 
     for index in 4..=41 {
-        repo.save_text(format!("Record {index}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Record {index}"), index);
     }
 
     let display_records = repo
@@ -166,18 +169,9 @@ fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_r
 fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_returns_43() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let first = repo
-        .save_text("Record 1".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let second = repo
-        .save_text("Record 2".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let third = repo
-        .save_text("Record 3".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
+    let first = save_text_at(&repo, "Record 1", 1);
+    let second = save_text_at(&repo, "Record 2", 2);
+    let third = save_text_at(&repo, "Record 3", 3);
 
     repo.toggle_favorite(first.id)
         .expect("Failed to favorite first");
@@ -186,9 +180,7 @@ fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_r
     repo.toggle_pin(third.id).expect("Failed to pin third");
 
     for index in 4..=43 {
-        repo.save_text(format!("Record {index}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Record {index}"), index);
     }
 
     let display_records = repo
@@ -203,15 +195,10 @@ fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_r
 fn test_get_display_records_when_newest_records_are_favorited_still_returns_43() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let pinned = repo
-        .save_text("Pinned".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
+    let pinned = save_text_at(&repo, "Pinned", 1);
 
     for index in 2..=43 {
-        repo.save_text(format!("Record {index}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Record {index}"), index);
     }
 
     repo.toggle_pin(pinned.id).expect("Failed to pin");
@@ -259,11 +246,7 @@ fn test_get_display_records_zero_limit() {
 fn test_get_display_records_large_limit() {
     let (_temp_dir, repo) = create_test_repo();
 
-    for i in 1..=3 {
-        repo.save_text(format!("Record {i}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
-    }
+    save_numbered_records(&repo, 3);
 
     let result = load_display_records(&repo, 1000);
     assert_eq!(result.len(), 3);
@@ -282,9 +265,7 @@ fn test_get_display_records_with_pinned_and_limit() {
     let (_temp_dir, repo) = create_test_repo();
 
     for i in 1..=5 {
-        repo.save_text(format!("Unpinned {i}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(&repo, format!("Unpinned {i}"), i);
     }
 
     let recent = load_display_records(&repo, 5);
@@ -341,7 +322,7 @@ fn test_sort_for_display_empty() {
 
 #[test]
 fn test_sort_for_display_single() {
-    let now = chrono::Local::now();
+    let now = capture_time(0);
     let mut records = vec![ClipboardRecord {
         id: 1,
         content: "only".to_string(),
@@ -358,7 +339,7 @@ fn test_sort_for_display_single() {
 
 #[test]
 fn test_sort_for_display_all_same_pinned_state() {
-    let now = chrono::Local::now();
+    let now = capture_time(0);
     let mut records = vec![
         ClipboardRecord {
             id: 1,
@@ -397,13 +378,9 @@ fn test_sort_for_display_all_same_pinned_state() {
 fn test_multiple_operations_sequence() {
     let (_temp_dir, repo) = create_test_repo();
 
-    let r1 = repo.save_text("First".to_string()).expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let r2 = repo
-        .save_text("Second".to_string())
-        .expect("Failed to save");
-    thread::sleep(Duration::from_millis(10));
-    let _r3 = repo.save_text("Third".to_string()).expect("Failed to save");
+    let r1 = save_text_at(&repo, "First", 1);
+    let r2 = save_text_at(&repo, "Second", 2);
+    let _r3 = save_text_at(&repo, "Third", 3);
 
     assert_eq!(repo.count(), 3);
 

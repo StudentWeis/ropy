@@ -1,8 +1,7 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Shared test helpers for repository tests.
 
-use std::{thread, time::Duration};
-
+use chrono::{DateTime, Local};
 use tempfile::tempdir;
 
 use super::{
@@ -10,7 +9,7 @@ use super::{
         BackendFactory, StorageBackend,
         memory::{MemoryBackend, memory_backend_factory},
     },
-    models::ClipboardRecord,
+    models::{ClipboardRecord, ContentType},
     repo::ClipboardRepository,
 };
 
@@ -55,13 +54,30 @@ pub(super) fn load_display_records<B: StorageBackend>(
         .expect("Failed to get display records")
 }
 
+pub(super) fn capture_time(seconds: i64) -> DateTime<Local> {
+    DateTime::from_timestamp(1_700_000_000 + seconds, 0)
+        .expect("valid fixture timestamp")
+        .with_timezone(&Local)
+}
+
+pub(super) fn save_text_at<B: StorageBackend>(
+    repo: &ClipboardRepository<B>,
+    content: impl Into<String>,
+    seconds: i64,
+) -> ClipboardRecord {
+    repo.save_at(content.into(), ContentType::Text, capture_time(seconds))
+        .expect("Failed to save fixture text")
+}
+
 pub(super) fn save_numbered_records<B: StorageBackend>(
     repo: &ClipboardRepository<B>,
     count: usize,
 ) {
     for i in 1..=count {
-        repo.save_text(format!("Record {i}"))
-            .expect("Failed to save");
-        thread::sleep(Duration::from_millis(10));
+        save_text_at(
+            repo,
+            format!("Record {i}"),
+            i64::try_from(i).expect("fixture count fits i64"),
+        );
     }
 }
