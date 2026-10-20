@@ -55,7 +55,7 @@ impl Chord {
             (Modifiers::CONTROL, "CTRL", 4),
             (Modifiers::SHIFT, "SHIFT", 1),
             (Modifiers::ALT, "ALT", 8),
-            (Modifiers::SUPER, "SUPER", 64),
+            (Modifiers::META, "SUPER", 64),
         ] {
             if hotkey.mods.contains(modifier) {
                 parts.push(name);

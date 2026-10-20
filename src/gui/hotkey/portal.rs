@@ -38,7 +38,7 @@ fn preferred_trigger(input: &str) -> Option<String> {
         (Modifiers::CONTROL, "CTRL"),
         (Modifiers::SHIFT, "SHIFT"),
         (Modifiers::ALT, "ALT"),
-        (Modifiers::SUPER, "LOGO"),
+        (Modifiers::META, "LOGO"),
     ] {
         if hotkey.mods.contains(modifier) {
             parts.push(name);
