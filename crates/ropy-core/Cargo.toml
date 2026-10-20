@@ -45,3 +45,7 @@ dist = false
 [[bench]]
 name = "repository"
 harness = false
+
+[[bench]]
+name = "search"
+harness = false

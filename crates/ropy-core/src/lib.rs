@@ -7,3 +7,5 @@
 pub mod config;
 /// Clipboard records, payload files and transactional storage.
 pub mod repository;
+/// Literal history search and independent content/favorite filters.
+pub mod search;
