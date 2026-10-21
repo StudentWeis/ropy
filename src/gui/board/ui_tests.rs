@@ -793,6 +793,14 @@ fn test_board_controls_expose_localized_accessible_names(cx: &mut TestAppContext
                 .label(),
             Some(t!("search_records").as_ref())
         );
+        window.click("about-button", cx);
+        for (id, label) in [
+            ("github-button", t!("about_github_tooltip")),
+            ("xiaohongshu-button", t!("about_xiaohongshu_tooltip")),
+        ] {
+            assert_eq!(window.find(id).label(), Some(label.as_ref()), "{id}");
+        }
+        window.click("back-button", cx);
         window.click("settings-button", cx);
         for (id, label) in [
             ("cancel-button", t!("back")),

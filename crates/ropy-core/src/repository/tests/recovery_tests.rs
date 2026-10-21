@@ -29,26 +29,42 @@ fn test_display_record_read_failure_returns_error_and_preserves_history() {
     assert_eq!(repo.count(), 1);
 }
 
-#[test]
-fn test_display_corrupt_record_skips_only_bad_payload() {
-    use crate::repository::backend::RECORDS_TREE;
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+fn test_display_corrupt_record_fills_limit_with_readable_history(#[case] reopen: bool) {
+    use crate::repository::{backend::RECORDS_TREE, test_helpers::save_text_at};
     let dir = tempfile::tempdir().expect("fixture directory");
     let backend = MemoryBackend::new();
     let repo = ClipboardRepository::from_backend(backend.clone(), dir.path().join("images"))
         .expect("repository");
-    let good = repo.save_text("retained".into()).expect("save");
-    let bad = repo.save_text("corrupt".into()).expect("save");
+    let favorite = save_text_at(&repo, "favorite", -2);
+    repo.toggle_favorite(favorite.id).expect("favorite");
+    let pinned = save_text_at(&repo, "pinned", -1);
+    repo.toggle_pin(pinned.id).expect("pin");
+    let good = save_text_at(&repo, "retained", 1);
+    let bad = save_text_at(&repo, "corrupt", 2);
     backend
         .open_tree(RECORDS_TREE)
         .expect("tree")
         .insert(&bad.id.to_be_bytes(), b"broken")
         .expect("corrupt payload");
-    let records = repo
-        .get_display_records(10)
-        .expect("display readable records");
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].id, good.id);
-    assert_eq!(repo.count(), 2);
+    let repo = if reopen {
+        drop(repo);
+        ClipboardRepository::from_backend(backend, dir.path().join("images")).expect("reopen")
+    } else {
+        repo
+    };
+    let (records, favorites) = repo
+        .get_display_snapshot(1)
+        .expect("display readable records")
+        .into_parts();
+    assert_eq!(
+        records.iter().map(|record| record.id).collect::<Vec<_>>(),
+        [pinned.id, good.id, favorite.id]
+    );
+    assert_eq!(favorites, std::collections::HashSet::from([favorite.id]));
+    assert_eq!(repo.count(), 4);
 }
 
 #[test]

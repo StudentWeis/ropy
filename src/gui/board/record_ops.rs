@@ -12,7 +12,9 @@ use super::{
 };
 
 use crate::{
-    clipboard::{CopyTracker, delete_tracked_record},
+    clipboard::{
+        CopyTracker, clear_tracked_history, clear_tracked_ordinary_history, delete_tracked_record,
+    },
     gui::{repository::GlobalRepository, settings::GlobalSettings},
     repository::{ClipboardRepository, errors::RepositoryError},
     utils::{lock_or_recover, read_or_recover, write_or_recover},
@@ -59,12 +61,10 @@ impl HistoryMutation {
     ) -> Result<(), RepositoryError> {
         match self {
             Self::ClearAll => {
-                repo.clear()?;
-                lock_or_recover(tracker).clear();
+                clear_tracked_history(repo, tracker)?;
             }
             Self::ClearOrdinary => {
-                repo.clear_ordinary_records()?;
-                lock_or_recover(tracker).clear();
+                clear_tracked_ordinary_history(repo, tracker)?;
             }
             Self::Delete(id) => {
                 delete_tracked_record(repo, id, tracker)?;

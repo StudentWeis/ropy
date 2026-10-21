@@ -314,30 +314,6 @@ fn test_count_empty() {
 }
 
 #[test]
-fn test_sort_for_display_empty() {
-    let mut records: Vec<ClipboardRecord> = vec![];
-    ClipboardRepository::sort_for_display(&mut records);
-    assert_eq!(records, []);
-}
-
-#[test]
-fn test_sort_for_display_single() {
-    let now = capture_time(0);
-    let mut records = vec![ClipboardRecord {
-        id: 1,
-        content: "only".to_string(),
-        created_at: now,
-        content_type: ContentType::Text,
-        pinned: false,
-        rich_text_meta: None,
-    }];
-
-    ClipboardRepository::sort_for_display(&mut records);
-    assert_eq!(records.len(), 1);
-    assert!(!records[0].pinned);
-}
-
-#[test]
 fn test_sort_for_display_all_same_pinned_state() {
     let now = capture_time(0);
     let mut records = vec![

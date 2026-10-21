@@ -38,7 +38,7 @@ kill -0 "$pid"
 printf '%s\n' "$pid"
 ```
 
-If `ldd` reports missing libraries, classify the stock image as infrastructure-blocked or use an approved custom image containing the runtime equivalents of the repository's GTK3, X11, `libxdo`, and `libxkbcommon-x11` build dependencies. Do not install arbitrary packages silently into a supposedly reproducible compatibility image.
+If `ldd` reports missing libraries, classify the stock image as infrastructure-blocked or use an approved custom image containing the required runtime libraries. The current Linux build dependencies include `libxdo-dev` and `libxkbcommon-x11-dev`; the runtime image needs their shared libraries and X11 dependencies, as reported by `ldd`. The KSNI tray backend requires a D-Bus session and a StatusNotifierItem host for tray assertions; it does not require GTK3 or AppIndicator. Do not install arbitrary packages silently into a supposedly reproducible compatibility image.
 
 Discover an installed graphical text editor and use it for the shared marker scenario. Send `Control+Shift+D` to reveal Ropy. Use AgentBay screenshot, keyboard, application, and window tools rather than `xdotool` for the assertions unless a lower-level diagnostic is specifically required.
 

@@ -89,7 +89,7 @@ fn set_image(ctx: &ClipboardContext, path: &str) -> ClipboardWriteResult {
 fn set_files(ctx: &ClipboardContext, paths: &[String]) -> ClipboardWriteResult {
     write_files_with(
         paths,
-        |contents| ctx.set(contents).map_err(clipboard_error),
+        |contents| set_contents(ctx, contents),
         |files| ctx.set_files(files).map_err(clipboard_error),
     )
 }
@@ -142,6 +142,22 @@ fn set_rich_text(
     html: Option<String>,
     rtf: Option<String>,
 ) -> ClipboardWriteResult {
+    write_rich_text_with(
+        plain_text,
+        html,
+        rtf,
+        |contents| set_contents(ctx, contents),
+        |text| ctx.set_text(text).map_err(clipboard_error),
+    )
+}
+
+fn write_rich_text_with(
+    plain_text: String,
+    html: Option<String>,
+    rtf: Option<String>,
+    set_contents: impl FnOnce(Vec<ClipboardContent>) -> ClipboardWriteResult,
+    set_plain_text: impl FnOnce(String) -> ClipboardWriteResult,
+) -> ClipboardWriteResult {
     let mut contents = vec![ClipboardContent::Text(plain_text.clone())];
     if let Some(html_content) = html {
         contents.push(ClipboardContent::Html(html_content));
@@ -150,10 +166,93 @@ fn set_rich_text(
         contents.push(ClipboardContent::Rtf(rtf_content));
     }
 
-    if ctx.set(contents).is_ok() {
+    if set_contents(contents).is_ok() {
         return Ok(());
     }
-    ctx.set_text(plain_text).map_err(clipboard_error)
+    set_plain_text(plain_text)
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn write_contents_with<Guard>(
+    contents: Vec<ClipboardContent>,
+    open: impl FnOnce() -> Result<Guard, ClipboardWriteError>,
+    mut set_content: impl FnMut(ClipboardContent) -> ClipboardWriteResult,
+) -> ClipboardWriteResult {
+    let _clipboard = open()?;
+    for content in contents {
+        set_content(content)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn set_contents(ctx: &ClipboardContext, contents: Vec<ClipboardContent>) -> ClipboardWriteResult {
+    ctx.set(contents).map_err(clipboard_error)
+}
+
+#[cfg(target_os = "windows")]
+fn set_contents(_: &ClipboardContext, contents: Vec<ClipboardContent>) -> ClipboardWriteResult {
+    use clipboard_win::{options::NoClear, raw};
+
+    // clipboard-rs 0.3.5 ignores per-format failures on Windows. Keep the
+    // clipboard open for the whole batch and propagate every native error.
+    write_contents_with(
+        contents,
+        || {
+            let clipboard = clipboard_win::Clipboard::new_attempts(10).map_err(clipboard_error)?;
+            raw::empty().map_err(clipboard_error)?;
+            Ok(clipboard)
+        },
+        |content| {
+            let result = match content {
+                ClipboardContent::Text(text) => raw::set_string_with(&text, NoClear),
+                ClipboardContent::Files(paths) => raw::set_file_list_with(&paths, NoClear),
+                ClipboardContent::Html(html) => {
+                    let format = clipboard_win::formats::Html::new().ok_or_else(|| {
+                        clipboard_error("failed to register HTML clipboard format")
+                    })?;
+                    raw::set_without_clear(format.code(), windows_html(&html).as_bytes())
+                }
+                ClipboardContent::Rtf(rtf) => {
+                    let format =
+                        clipboard_win::register_format("Rich Text Format").ok_or_else(|| {
+                            clipboard_error("failed to register RTF clipboard format")
+                        })?;
+                    raw::set_without_clear(format.get(), rtf.as_bytes())
+                }
+                _ => return Err(clipboard_error("unsupported clipboard batch format")),
+            };
+            result.map_err(clipboard_error)
+        },
+    )
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_html(html: &str) -> String {
+    let header = |start_html, end_html, start_fragment, end_fragment| {
+        format!(
+            "Version:0.9\r\nStartHTML:{start_html:010}\r\nEndHTML:{end_html:010}\r\n\
+             StartFragment:{start_fragment:010}\r\nEndFragment:{end_fragment:010}\r\n"
+        )
+    };
+    // Match clipboard-rs's full-document handling so recopying captured HTML
+    // does not repeatedly wrap it in another HTML document.
+    let prefix = if html.starts_with("<html>") {
+        ""
+    } else {
+        "<html>\r\n<body>\r\n<!--StartFragment-->"
+    };
+    let suffix = if html.ends_with("</html>") {
+        ""
+    } else {
+        "<!--EndFragment-->\r\n</body>\r\n</html>"
+    };
+    let start_html = header(0, 0, 0, 0).len();
+    let start_fragment = start_html + prefix.len();
+    let end_fragment = start_fragment + html.len();
+    let end_html = end_fragment + suffix.len();
+    let header = header(start_html, end_html, start_fragment, end_fragment);
+    format!("{header}{prefix}{html}{suffix}")
 }
 
 fn notify_completion(
@@ -169,10 +268,112 @@ fn notify_completion(
 }
 
 #[cfg(test)]
+#[expect(clippy::expect_used)]
 mod tests {
     use std::assert_matches;
 
     use super::*;
+
+    #[test]
+    fn test_write_files_when_native_file_format_fails_reports_failure() {
+        let paths = vec!["report.txt".into()];
+        let fallback_called = std::cell::Cell::new(false);
+
+        let result = write_files_with(
+            &paths,
+            |contents| {
+                write_contents_with(
+                    contents,
+                    || Ok(()),
+                    |content| match content {
+                        ClipboardContent::Files(_) => Err(clipboard_error("file format failed")),
+                        _ => Ok(()),
+                    },
+                )
+            },
+            |_| {
+                fallback_called.set(true);
+                Err(clipboard_error("file fallback failed"))
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(fallback_called.get());
+    }
+
+    #[rstest::rstest]
+    #[case(true)]
+    #[case(false)]
+    fn test_write_rich_text_when_format_fails_uses_plain_text_fallback(
+        #[case] fallback_succeeds: bool,
+    ) {
+        let fallback_called = std::cell::Cell::new(false);
+        let result = write_rich_text_with(
+            "hello".into(),
+            Some("<b>hello</b>".into()),
+            Some("{\\rtf1 hello}".into()),
+            |contents| {
+                write_contents_with(
+                    contents,
+                    || Ok(()),
+                    |content| match content {
+                        ClipboardContent::Html(_) => Err(clipboard_error("HTML write failed")),
+                        _ => Ok(()),
+                    },
+                )
+            },
+            |text| {
+                fallback_called.set(true);
+                assert_eq!(text, "hello");
+                if fallback_succeeds {
+                    Ok(())
+                } else {
+                    Err(clipboard_error("text fallback failed"))
+                }
+            },
+        );
+
+        assert!(fallback_called.get());
+        assert_eq!(result.is_ok(), fallback_succeeds);
+    }
+
+    #[test]
+    fn test_write_contents_when_clipboard_cannot_open_does_not_write() {
+        let setter_called = std::cell::Cell::new(false);
+        let result = write_contents_with(
+            vec![ClipboardContent::Text("hello".into())],
+            || Err::<(), _>(clipboard_error("clipboard busy")),
+            |_| {
+                setter_called.set(true);
+                Ok(())
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!setter_called.get());
+    }
+
+    #[rstest::rstest]
+    #[case("<b>中文</b>")]
+    #[case("<html><body><b>中文</b></body></html>")]
+    fn test_windows_html_preserves_fragment_and_byte_offsets(#[case] html: &str) {
+        let encoded = windows_html(html);
+        let offset = |field: &str| -> usize {
+            encoded
+                .lines()
+                .find_map(|line| line.strip_prefix(field))
+                .expect("CF_HTML header contains every offset field")
+                .parse()
+                .expect("CF_HTML offsets contain decimal byte counts")
+        };
+        let fragment = &encoded[offset("StartFragment:")..offset("EndFragment:")];
+        let document = &encoded[offset("StartHTML:")..offset("EndHTML:")];
+
+        assert_eq!(fragment, html);
+        assert_eq!(document.matches("<html>").count(), 1);
+        assert_eq!(document.matches("</html>").count(), 1);
+        assert_eq!(offset("EndHTML:"), encoded.len());
+    }
 
     #[cfg(target_os = "linux")]
     #[rstest::rstest]

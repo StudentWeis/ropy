@@ -47,8 +47,9 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     pub fn get_display_snapshot(&self, limit: usize) -> Result<DisplaySnapshot, RepositoryError> {
         let _operation = self.lock_operation();
         let favorite_ids = self.favorite_id_set()?;
-        let selected_ids = self.time_index.select_display_ids(limit, &favorite_ids)?;
-        let mut records = self.load_records(&selected_ids)?;
+        let mut records = self
+            .time_index
+            .select_display_records(limit, &favorite_ids, |id| self.load_record(id))?;
         ClipboardRepository::<RedbBackend>::sort_for_display(&mut records);
         let mut ordinary_count = 0;
         records.retain(|record| {
@@ -211,10 +212,11 @@ mod tests {
 
     #[test]
     fn test_sort_for_display_single_record_unchanged() {
-        let mut records = vec![test_record("only", false, 10)];
+        let record = test_record("only", false, 10);
+        let mut records = vec![record.clone()];
 
         ClipboardRepository::sort_for_display(&mut records);
 
-        assert_eq!(records[0].content, "only");
+        assert_eq!(records, [record]);
     }
 }

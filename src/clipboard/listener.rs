@@ -447,17 +447,149 @@ mod tests {
             .try_recv()
             .expect("text capture")
             .persist(&fixture.repo)
+            .expect("persist text")
             .expect("text");
         std::thread::sleep(std::time::Duration::from_millis(2));
         let image = pending
             .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
             .expect("encode")
             .persist(&fixture.repo)
+            .expect("persist image")
             .expect("image");
         assert!(image.created_at < text.created_at);
         assert_eq!(
             fixture.repo.get_display_records(1).expect("history")[0].id,
             text.id
+        );
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_dispatch_clear_cancels_queued_text_and_delayed_image(#[case] ordinary_only: bool) {
+        let fixture = CaptureFixture::new();
+        fixture.dispatch(ClipboardPayload::Image(make_test_image(1)));
+        let image = fixture.image_rx.try_recv().expect("pending image");
+        fixture.text("before clear");
+        let text = fixture.rx.try_recv().expect("pending text");
+
+        if ordinary_only {
+            super::super::clear_tracked_ordinary_history(&fixture.repo, &fixture.tracker)
+                .expect("clear ordinary");
+        } else {
+            super::super::clear_tracked_history(&fixture.repo, &fixture.tracker)
+                .expect("clear all");
+        }
+
+        text.persist(&fixture.repo).expect("discard stale text");
+        image
+            .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
+            .expect("encode delayed image")
+            .persist(&fixture.repo)
+            .expect("discard stale image");
+        assert_eq!(
+            fixture.repo.count(),
+            0,
+            "old captures must not restore history"
+        );
+        assert_eq!(
+            std::fs::read_dir(fixture.repo.images_dir())
+                .expect("image directory")
+                .count(),
+            0,
+            "discarded images must not leave staged assets"
+        );
+        fixture.text("before clear");
+        fixture
+            .rx
+            .try_recv()
+            .expect("new capture")
+            .persist(&fixture.repo)
+            .expect("new copy");
+        assert_eq!(fixture.repo.count(), 1);
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_dispatch_delete_cancels_older_matching_capture_only(#[case] already_removed: bool) {
+        let fixture = CaptureFixture::new();
+        let record = fixture
+            .repo
+            .save_text("deleted".into())
+            .expect("stored record");
+        if already_removed {
+            fixture.repo.delete(record.id).expect("earlier cleanup");
+        }
+        fixture.text("deleted");
+        let deleted = fixture.rx.try_recv().expect("pending deleted content");
+        fixture.text("unrelated");
+        let unrelated = fixture.rx.try_recv().expect("pending unrelated content");
+        super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
+            .expect("delete record");
+
+        deleted
+            .persist(&fixture.repo)
+            .expect("discard stale capture");
+        unrelated
+            .persist(&fixture.repo)
+            .expect("persist unrelated capture");
+        assert!(fixture.repo.get_by_id(record.id).expect("lookup").is_none());
+        assert_eq!(fixture.repo.count(), 1);
+        fixture.text("deleted");
+        fixture
+            .rx
+            .try_recv()
+            .expect("recaptured")
+            .persist(&fixture.repo)
+            .expect("new copy");
+        assert_eq!(fixture.repo.count(), 2);
+    }
+
+    #[test]
+    fn test_dispatch_failed_clear_preserves_pending_capture_and_dedup() {
+        let fixture = CaptureFixture::new();
+        fixture.text("kept after failure");
+        let capture = fixture.rx.try_recv().expect("pending capture");
+        fixture.backend.fail_next_batch();
+        assert!(super::super::clear_tracked_history(&fixture.repo, &fixture.tracker).is_err());
+        assert!(capture.persist(&fixture.repo).expect("persist").is_some());
+        assert_eq!(fixture.repo.count(), 1);
+        fixture.text("kept after failure");
+        assert!(
+            fixture.rx.is_empty(),
+            "failed clear must preserve deduplication"
+        );
+    }
+
+    #[test]
+    fn test_dispatch_failed_ordinary_clear_cancels_pending_capture_and_allows_retry() {
+        let fixture = CaptureFixture::new();
+        fixture
+            .repo
+            .save_text("retry".into())
+            .expect("stored record");
+        fixture.text("retry");
+        let capture = fixture.rx.try_recv().expect("pending capture");
+        fixture.backend.fail_next_batch();
+        assert!(
+            super::super::clear_tracked_ordinary_history(&fixture.repo, &fixture.tracker).is_err()
+        );
+        assert!(
+            capture
+                .persist(&fixture.repo)
+                .expect("discard stale capture")
+                .is_none()
+        );
+        fixture.text("retry");
+        assert!(
+            fixture
+                .rx
+                .try_recv()
+                .expect("retry")
+                .persist(&fixture.repo)
+                .expect("persist")
+                .is_some()
         );
     }
 
@@ -475,7 +607,8 @@ mod tests {
             .try_recv()
             .expect("capture")
             .persist(&fixture.repo)
-            .expect("persist");
+            .expect("persist")
+            .expect("record");
         fixture.dispatch(fixture_payload(kind));
         assert!(fixture.rx.is_empty(), "committed duplicates are suppressed");
         super::super::delete_tracked_record(&fixture.repo, record.id, &fixture.tracker)
@@ -526,7 +659,8 @@ mod tests {
             .try_recv()
             .expect("capture")
             .persist(&fixture.repo)
-            .expect("persist");
+            .expect("persist")
+            .expect("record");
         super::super::delete_tracked_record(&fixture.repo, other.id, &fixture.tracker)
             .expect("unrelated deletion");
         fixture.backend.fail_next_batch();
@@ -640,7 +774,8 @@ mod tests {
             .encode(|image, hash| PendingImage::encode(image, hash, fixture.repo.images_dir()))
             .expect("encode")
             .persist(&fixture.repo)
-            .expect("persist image");
+            .expect("persist image")
+            .expect("record");
         let path = std::path::Path::new(&record.content);
         let thumbnail = crate::repository::assets::thumb_path_for(path);
         assert_eq!(path.parent(), Some(fixture.repo.images_dir()));

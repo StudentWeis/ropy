@@ -1028,16 +1028,4 @@ max_history_records = 100
         assert!(toml.contains("theme"), "Missing theme field");
         assert!(toml.contains("language"), "Missing language field");
     }
-
-    #[test]
-    fn test_settings_clone() {
-        let settings = Settings::default();
-        let cloned = settings.clone();
-
-        assert_eq!(
-            settings.storage.max_history_records,
-            cloned.storage.max_history_records
-        );
-        assert_eq!(settings.hotkey.activation_key, cloned.hotkey.activation_key);
-    }
 }

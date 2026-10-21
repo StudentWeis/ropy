@@ -3,7 +3,10 @@ use thiserror::Error;
 
 /// Capture acknowledgements and retryable deduplication.
 pub mod capture;
-pub(crate) use capture::{ClipboardCapture, CopyTracker, delete_tracked_record};
+pub(crate) use capture::{
+    ClipboardCapture, CopyTracker, clear_tracked_history, clear_tracked_ordinary_history,
+    delete_tracked_record,
+};
 
 /// Clipboard event monitoring and ingestion.
 pub mod listener;
