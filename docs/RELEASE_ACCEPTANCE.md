@@ -8,12 +8,9 @@ history or installed application.
 
 ## Select the artifact
 
-For branch testing, run **Desktop test artifacts** with a full commit SHA; its
-Linux x86-64 and Windows archives include checksums and the resolved revision.
-For macOS and Linux ARM64, use the matching Release workflow artifacts. A
-development build is useful for diagnosis but does not certify a distributed
-package. Download with `gh run download <run-id>` and verify the package SHA-256
-against its sidecar before launching it.
+For branch testing, run **Desktop test artifacts** with a full commit SHA; its Linux x86-64 and Windows archives include checksums and the resolved revision. For macOS and Linux ARM64, use the matching Release workflow artifacts. A development build is useful for diagnosis but does not certify a distributed package. Download with `gh run download <run-id>`.
+
+Verify archive checksums against their matching `.sha256` sidecars before launching. The macOS bundle job produces a sidecar for `ropy-<target>-app.tar.xz`; its DMG has no sidecar. Calculate and record the DMG's own SHA-256, and compare it with a publisher-provided DMG digest if available.
 
 Record the workflow run URL, commit SHA, artifact filename, size and SHA-256.
 Acceptance applies only to those bytes. If publishing rebuilds the package,

@@ -136,33 +136,51 @@ impl<T: KvTree> TimeIndex<T> {
         self.id_lookup.clear()
     }
 
-    /// Select record IDs for the default board view.
+    /// Load records selected for the default board view.
     ///
     /// Pinned records are always included first. Among unpinned records, all
     /// favorited records are included without consuming the ordinary `limit`,
-    /// and ordinary records through the `limit` boundary millisecond are included.
+    /// and readable ordinary records through the `limit` boundary millisecond
+    /// are included. Missing or unreadable records do not consume that limit.
     /// The caller must sort that boundary by full capture time before truncating.
-    pub(super) fn select_display_ids(
+    pub(super) fn select_display_records<R>(
         &self,
         limit: usize,
         favorite_ids: &HashSet<u64>,
-    ) -> Result<Vec<u64>, RepositoryError> {
+        mut load: impl FnMut(u64) -> Result<Option<R>, RepositoryError>,
+    ) -> Result<Vec<R>, RepositoryError> {
         let mut pinned = Vec::new();
         let mut selected_unpinned = Vec::new();
         let mut ordinary_count = 0;
         let mut boundary_timestamp = None;
+        let mut load_error = None;
 
         self.entries.scan_descending(&mut |key, value| {
             let Some(entry) = Self::decode_entry(key, value) else {
                 return true;
             };
 
+            let ordinary = !entry.is_pinned && !favorite_ids.contains(&entry.id);
+            if ordinary
+                && ordinary_count >= limit
+                && boundary_timestamp.as_deref() != Some(&key[..8])
+            {
+                return true;
+            }
+            let record = match load(entry.id) {
+                Ok(Some(record)) => record,
+                Ok(None) => return true,
+                Err(error) => {
+                    load_error = Some(error);
+                    return false;
+                }
+            };
             if entry.is_pinned {
-                pinned.push(entry.id);
-            } else if favorite_ids.contains(&entry.id) {
-                selected_unpinned.push(entry.id);
-            } else if ordinary_count < limit || boundary_timestamp.as_deref() == Some(&key[..8]) {
-                selected_unpinned.push(entry.id);
+                pinned.push(record);
+            } else {
+                selected_unpinned.push(record);
+            }
+            if ordinary {
                 ordinary_count += 1;
                 if ordinary_count == limit {
                     boundary_timestamp = Some(key[..8].to_vec());
@@ -171,6 +189,9 @@ impl<T: KvTree> TimeIndex<T> {
             true
         })?;
 
+        if let Some(error) = load_error {
+            return Err(error);
+        }
         pinned.extend(selected_unpinned);
         Ok(pinned)
     }
@@ -325,7 +346,7 @@ mod tests {
         limit: usize,
     ) -> Vec<u64> {
         index
-            .select_display_ids(limit, &HashSet::new())
+            .select_display_records(limit, &HashSet::new(), |id| Ok(Some(id)))
             .expect("Failed to select")
     }
 
@@ -558,7 +579,7 @@ mod tests {
 
         let favorite_ids = HashSet::from([2_u64]);
         let ids = index
-            .select_display_ids(1, &favorite_ids)
+            .select_display_records(1, &favorite_ids, |id| Ok(Some(id)))
             .expect("Failed to select");
 
         assert_eq!(ids, vec![4, 3, 2]);
@@ -574,7 +595,7 @@ mod tests {
 
         let favorite_ids = HashSet::from([2_u64]);
         let ids = index
-            .select_display_ids(0, &favorite_ids)
+            .select_display_records(0, &favorite_ids, |id| Ok(Some(id)))
             .expect("Failed to select");
 
         assert_eq!(ids, vec![3, 2]);

@@ -572,26 +572,20 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         self.backend.write_batch(&writes)
     }
 
-    /// Load records by id, dropping (with a warn log) any that fail to
-    /// deserialize so a single corrupt entry can't break list rendering.
+    /// Load a record by id, skipping (with a warn log) a failed deserialization
+    /// so a single corrupt entry can't break list rendering.
     /// Storage read failures invalidate the snapshot instead of hiding records.
-    pub(super) fn load_records(
-        &self,
-        ids: &[u64],
-    ) -> Result<Vec<ClipboardRecord>, RepositoryError> {
-        let mut out = Vec::with_capacity(ids.len());
-        for &id in ids {
-            let key = id.to_be_bytes();
-            if let Some(value) = self.get_raw(&key)? {
-                match postcard::from_bytes::<ClipboardRecord>(&value) {
-                    Ok(record) => out.push(record),
-                    Err(e) => {
-                        tracing::warn!(error = %e, "skipping record that failed to deserialize");
-                    }
-                }
+    pub(super) fn load_record(&self, id: u64) -> Result<Option<ClipboardRecord>, RepositoryError> {
+        let Some(value) = self.get_raw(&id.to_be_bytes())? else {
+            return Ok(None);
+        };
+        match postcard::from_bytes(&value) {
+            Ok(record) => Ok(Some(record)),
+            Err(error) => {
+                tracing::warn!(%error, id, "skipping record that failed to deserialize");
+                Ok(None)
             }
         }
-        Ok(out)
     }
 
     pub(super) fn rich_text_root(&self) -> &Path {

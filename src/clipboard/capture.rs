@@ -16,6 +16,8 @@ use crate::{
 #[derive(Debug, Default)]
 pub(crate) struct CopyTracker {
     last: Option<TrackedCopy>,
+    pending: Vec<(u64, Arc<()>)>,
+    operation: Arc<Mutex<()>>,
 }
 
 #[derive(Debug)]
@@ -46,6 +48,7 @@ impl CopyTracker {
                 record_id,
                 generation: generation.clone(),
             });
+            tracker.pending.push((record_id, generation.clone()));
         }
         Some(CopyAttempt {
             tracker: shared.clone(),
@@ -55,14 +58,16 @@ impl CopyTracker {
         })
     }
 
-    pub(crate) fn clear(&mut self) {
+    fn clear(&mut self) {
         self.last = None;
+        self.pending.clear();
     }
 
     fn invalidate_record(&mut self, id: u64) {
         if self.last.as_ref().is_some_and(|last| last.record_id == id) {
-            self.clear();
+            self.last = None;
         }
+        self.pending.retain(|(record_id, _)| *record_id != id);
     }
 }
 
@@ -76,16 +81,17 @@ pub(super) struct CopyAttempt {
 
 impl Drop for CopyAttempt {
     fn drop(&mut self) {
-        if self.committed {
-            return;
-        }
         let mut tracker = lock_or_recover(&self.tracker);
-        if tracker
-            .last
-            .as_ref()
-            .is_some_and(|last| Arc::ptr_eq(&last.generation, &self.generation))
+        tracker
+            .pending
+            .retain(|(_, generation)| !Arc::ptr_eq(generation, &self.generation));
+        if !self.committed
+            && tracker
+                .last
+                .as_ref()
+                .is_some_and(|last| Arc::ptr_eq(&last.generation, &self.generation))
         {
-            tracker.clear();
+            tracker.last = None;
         }
     }
 }
@@ -100,8 +106,20 @@ impl ClipboardCapture {
     pub(crate) fn persist<B: StorageBackend>(
         self,
         repo: &ClipboardRepository<B>,
-    ) -> Result<ClipboardRecord, RepositoryError> {
+    ) -> Result<Option<ClipboardRecord>, RepositoryError> {
         let Self { event, mut attempt } = self;
+        // Serialize persistence with history clear/delete without blocking
+        // new clipboard callbacks on storage I/O. Never wait for the operation
+        // lock while holding the tracker lock.
+        let operation = lock_or_recover(&attempt.tracker).operation.clone();
+        let _operation = lock_or_recover(&operation);
+        let valid = lock_or_recover(&attempt.tracker)
+            .pending
+            .iter()
+            .any(|(_, generation)| Arc::ptr_eq(generation, &attempt.generation));
+        if !valid {
+            return Ok(None);
+        }
         let captured_at = attempt.captured_at;
         let record = match event {
             ClipboardEvent::Text(text) => {
@@ -116,8 +134,32 @@ impl ClipboardCapture {
             } => repo.save_rich_text_at(plain_text, html.as_deref(), rtf.as_deref(), captured_at),
         }?;
         attempt.committed = true;
-        Ok(record)
+        Ok(Some(record))
     }
+}
+
+pub(crate) fn clear_tracked_history<B: StorageBackend>(
+    repo: &ClipboardRepository<B>,
+    tracker: &Mutex<CopyTracker>,
+) -> Result<(), RepositoryError> {
+    let operation = lock_or_recover(tracker).operation.clone();
+    let _operation = lock_or_recover(&operation);
+    repo.clear()?;
+    lock_or_recover(tracker).clear();
+    Ok(())
+}
+
+pub(crate) fn clear_tracked_ordinary_history<B: StorageBackend>(
+    repo: &ClipboardRepository<B>,
+    tracker: &Mutex<CopyTracker>,
+) -> Result<(), RepositoryError> {
+    let operation = lock_or_recover(tracker).operation.clone();
+    let _operation = lock_or_recover(&operation);
+    let result = repo.clear_ordinary_records();
+    // Ordinary cleanup can delete some records before returning an error.
+    // Invalidate pending captures even then so those deletions stay effective.
+    lock_or_recover(tracker).clear();
+    result.map(|_| ())
 }
 
 pub(crate) fn delete_tracked_record<B: StorageBackend>(
@@ -125,9 +167,11 @@ pub(crate) fn delete_tracked_record<B: StorageBackend>(
     id: u64,
     tracker: &Mutex<CopyTracker>,
 ) -> Result<bool, RepositoryError> {
+    let operation = lock_or_recover(tracker).operation.clone();
+    let _operation = lock_or_recover(&operation);
     let removed = repo.delete(id)?;
-    if removed {
-        lock_or_recover(tracker).invalidate_record(id);
-    }
+    // A retention cleanup may already have removed the selected record.
+    // A successful delete still cancels pending copies of that record.
+    lock_or_recover(tracker).invalidate_record(id);
     Ok(removed)
 }

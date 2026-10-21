@@ -6292,6 +6292,7 @@ dependencies = [
  "auto-launch",
  "chrono",
  "clipboard-rs",
+ "clipboard-win",
  "dirs 7.0.0",
  "enigo",
  "futures-lite",

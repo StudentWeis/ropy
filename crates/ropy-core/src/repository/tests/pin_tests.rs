@@ -4,30 +4,6 @@
 use crate::repository::test_helpers::{create_test_repo, load_display_records, save_text_at};
 
 #[test]
-fn test_toggle_pin() {
-    let (_temp_dir, repo) = create_test_repo();
-    let record = repo
-        .save_text("Pin me".to_string())
-        .expect("Failed to save");
-
-    assert!(!record.pinned);
-
-    repo.toggle_pin(record.id).expect("Failed to toggle pin");
-    let pinned = repo
-        .get_by_id(record.id)
-        .expect("Failed to get")
-        .expect("not found");
-    assert!(pinned.pinned);
-
-    repo.toggle_pin(record.id).expect("Failed to toggle pin");
-    let unpinned = repo
-        .get_by_id(record.id)
-        .expect("Failed to get")
-        .expect("not found");
-    assert!(!unpinned.pinned);
-}
-
-#[test]
 fn test_pinned_records_appear_first() {
     let (_temp_dir, repo) = create_test_repo();
 
@@ -112,7 +88,7 @@ fn test_toggle_pin_nonexistent() {
 }
 
 #[test]
-fn test_double_toggle_pin() {
+fn test_toggle_pin_repeatedly_updates_persisted_state() {
     let (_temp_dir, repo) = create_test_repo();
 
     let record = repo.save_text("Test".to_string()).expect("Failed to save");

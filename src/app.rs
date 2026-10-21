@@ -60,7 +60,7 @@ fn start_clipboard_event_handler(
             let result = event.persist(&bg_repository);
 
             match result {
-                Ok(_record) => {
+                Ok(Some(_record)) => {
                     // Use try_send: if the channel is already full a refresh
                     // is already pending, so dropping this notification is
                     // equivalent to coalescing it with the queued one.
@@ -76,6 +76,7 @@ fn start_clipboard_event_handler(
                         }
                     }
                 }
+                Ok(None) => {}
                 Err(e) => {
                     tracing::warn!(error = %e, "failed to save clipboard record");
                 }

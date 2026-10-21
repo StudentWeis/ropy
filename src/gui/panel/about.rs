@@ -33,6 +33,7 @@ fn render_social_link_button(
         Button::new(id)
             .ghost()
             .icon(icon)
+            .accessibility_label(tooltip.clone())
             .tooltip(tooltip)
             .on_click(move |_, _, cx| {
                 cx.open_url(url);
