@@ -4,7 +4,7 @@ use gpui_kit::{
     AnyElement, AnyView, App, Context, Window, anchored,
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
-        button::{Button, ButtonVariants},
+        button::{Button, ButtonCustomVariant, ButtonVariants},
         h_flex, v_flex,
     },
     deferred, div, img,
@@ -538,7 +538,6 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
     let record_id = ctx.record.id;
     let view_favorite = ctx.view.clone();
     let view_pin = ctx.view.clone();
-    let view_delete = ctx.view.clone();
     let language = GlobalSettings::read(cx, |settings| settings.language.clone());
     let favorite_label = if ctx.flags.is_favorite() {
         t!("record_remove_favorite", locale = language.code())
@@ -550,15 +549,24 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
     } else {
         t!("record_pin", locale = language.code())
     };
-    let delete_label = t!("record_delete", locale = language.code());
+    let action_foreground = if ctx.flags.is_selected() {
+        cx.theme().accent_foreground
+    } else {
+        cx.theme().foreground
+    };
+    let action_style = ButtonCustomVariant::new(cx)
+        .foreground(action_foreground)
+        .hover(action_foreground.opacity(0.10))
+        .active(action_foreground.opacity(0.18));
 
     let button = Button::new(("favorite-btn", record_id));
     let favorite_button = if ctx.flags.is_favorite() {
         button.primary().label("★")
     } else {
-        button.ghost().label("☆")
+        button.custom(action_style).label("☆")
     }
     .xsmall()
+    .w_5()
     .disabled(ctx.history_mutation.is_running())
     .accessibility_label(favorite_label.clone())
     .tooltip(favorite_label)
@@ -577,7 +585,9 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
         let button = if ctx.record.pinned {
             Button::new(("pin-btn", record_id)).xsmall().primary()
         } else {
-            Button::new(("pin-btn", record_id)).xsmall().ghost()
+            Button::new(("pin-btn", record_id))
+                .xsmall()
+                .custom(action_style)
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
@@ -596,23 +606,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
             })
     };
 
-    let delete_button = Button::new(("delete-btn", record_id))
-        .xsmall()
-        .ghost()
-        .label("×")
-        .disabled(ctx.history_mutation.is_running())
-        .accessibility_label(delete_label.clone())
-        .tooltip(delete_label)
-        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
-            cx.stop_propagation();
-        })
-        .on_click(move |_event, window, cx| {
-            view_delete
-                .update(cx, |this, cx| {
-                    this.request_delete_record(record_id, window, cx);
-                })
-                .ok();
-        });
+    let delete_button = render_record_delete_button(ctx, cx);
 
     if compact {
         h_flex()
@@ -636,6 +630,35 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
             .child(delete_button)
             .into_any_element()
     }
+}
+
+fn render_record_delete_button(ctx: &RenderContext<'_>, cx: &App) -> Button {
+    let record_id = ctx.record.id;
+    let view = ctx.view.clone();
+    let language = GlobalSettings::read(cx, |settings| settings.language.clone());
+    let label = t!("record_delete", locale = language.code());
+    let style = ButtonCustomVariant::new(cx)
+        .foreground(cx.theme().danger)
+        .hover(cx.theme().danger.opacity(0.12))
+        .active(cx.theme().danger.opacity(0.20));
+
+    Button::new(("delete-btn", record_id))
+        .xsmall()
+        .w_5()
+        .custom(style)
+        .label("×")
+        .disabled(ctx.history_mutation.is_running())
+        .accessibility_label(label.clone())
+        .tooltip(label)
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation();
+        })
+        .on_click(move |_event, window, cx| {
+            view.update(cx, |this, cx| {
+                this.request_delete_record(record_id, window, cx);
+            })
+            .ok();
+        })
 }
 
 fn render_selected_preview(
