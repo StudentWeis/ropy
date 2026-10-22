@@ -42,23 +42,6 @@ impl RopyBoard {
         current_hotkey.trim().to_string()
     }
 
-    pub(super) fn normalize_hotkey_for_save(
-        candidate_hotkey: &str,
-        current_hotkey: &str,
-    ) -> String {
-        let trimmed_candidate = candidate_hotkey.trim();
-        if !trimmed_candidate.is_empty() {
-            return trimmed_candidate.to_string();
-        }
-
-        let trimmed_current = current_hotkey.trim();
-        if !trimmed_current.is_empty() {
-            return trimmed_current.to_string();
-        }
-
-        Settings::default().hotkey.activation_key
-    }
-
     pub(crate) fn refresh_activation_key_placeholder(
         &self,
         window: &mut Window,
@@ -105,7 +88,7 @@ impl RopyBoard {
             candidate.trim()
         };
 
-        self.sync_activation_key_input(value, &current_hotkey, window, cx);
+        self.sync_activation_key_input(value, candidate, window, cx);
     }
 
     pub(crate) fn resolve_activation_key_input(&self, cx: &Context<'_, Self>) -> String {
@@ -128,7 +111,7 @@ impl RopyBoard {
         let current_hotkey = GlobalSettings::read(cx, |s| s.hotkey.activation_key.clone());
         let candidate_hotkey = self.resolve_activation_key_input(cx);
 
-        Self::normalize_hotkey_for_save(&candidate_hotkey, &current_hotkey) != current_hotkey
+        candidate_hotkey != current_hotkey
     }
 
     pub(crate) fn save_hotkey(&mut self, cx: &mut Context<'_, Self>, window: &mut Window) {
@@ -136,11 +119,7 @@ impl RopyBoard {
             Self::notify_settings_warning(window, cx, t!("settings_recovery_required"));
             return;
         }
-        let current_hotkey = GlobalSettings::read(cx, |s| s.hotkey.activation_key.clone());
-        let activation_key = Self::normalize_hotkey_for_save(
-            &self.resolve_activation_key_input(cx),
-            &current_hotkey,
-        );
+        let activation_key = self.resolve_activation_key_input(cx);
 
         if !activation_key.is_empty() && !Self::is_valid_hotkey_input(&activation_key) {
             Self::notify_settings_warning(window, cx, t!("settings_hotkey_invalid_warning"));

@@ -67,13 +67,10 @@ impl<Manager> HotkeyListenerState<Manager> {
 
 fn persist_hotkey(hotkey: &str, cx: &AsyncApp) -> Result<(), HotkeyUpdateError> {
     cx.update(|cx| {
-        let mut settings = GlobalSettings::read(cx, Clone::clone);
-        settings.hotkey.activation_key = hotkey.to_string();
-        settings
-            .save()
-            .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))?;
-        cx.set_global(GlobalSettings::new(settings));
-        Ok(())
+        GlobalSettings::persist(cx, |settings| {
+            settings.hotkey.activation_key = hotkey.to_string();
+        })
+        .map_err(|error| HotkeyUpdateError::Persistence(error.to_string()))
     })
 }
 
@@ -450,6 +447,101 @@ mod tests {
             hotkey: hotkey.to_string(),
             completion,
         })
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_clear_saves_and_remains_disabled_after_reload(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use std::sync::{Arc, Mutex, RwLock};
+
+        use gpui_kit::{AppContext, test::TestWindowExt};
+
+        use crate::{
+            clipboard::CopyTracker,
+            config::Settings,
+            gui::{board::RopyBoard, repository::GlobalRepository},
+        };
+
+        let directory = tempfile::tempdir().expect("settings directory");
+        let settings = Settings::default();
+        let initial_hotkey = settings.hotkey.activation_key.clone();
+        let (updates, requests) = async_channel::unbounded();
+        let (copy_tx, _copy_rx) = async_channel::unbounded();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            cx.set_reduce_motion(true);
+            cx.set_global(GlobalSettings::at_path(
+                settings,
+                Some(directory.path().join("config.toml")),
+            ));
+            cx.set_global(GlobalRepository::new(None));
+            crate::gui::board::bind_application_keys(cx);
+        });
+        let (handle, board) = cx
+            .update(|cx| {
+                gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
+                    cx.new(|cx| {
+                        let mut board = RopyBoard::new(
+                            Arc::new(RwLock::new(Vec::new())),
+                            Arc::new(Mutex::new(CopyTracker::default())),
+                            copy_tx,
+                            window,
+                            cx,
+                        );
+                        board.activated = true;
+                        board.pinned = true;
+                        board.set_hotkey_tx(updates);
+                        board
+                    })
+                })
+            })
+            .expect("open board");
+        cx.update_window(handle, |_, window, cx| {
+            board.update(cx, |board, cx| board.open_settings_panel(window, cx));
+            window.render_frame(cx);
+            window.click("hotkey-record-button", cx);
+            window.press("delete", cx);
+            board.update(cx, |board, cx| assert!(board.has_pending_hotkey(cx)));
+            window.click("hotkey-save-button", cx);
+        })
+        .expect("clear and save hotkey");
+
+        let request = requests.try_recv().expect("hotkey update request");
+        assert_eq!(request.hotkey, "");
+        let mut state = HotkeyListenerState {
+            current_hotkey: initial_hotkey,
+            manager: Some(()),
+        };
+        let async_app = cx.to_async();
+        let mut registered = false;
+        let mut activated = false;
+        process_listener_message(
+            &mut state,
+            ListenerMessage::UpdateHotkey(request),
+            &mut |_| {
+                registered = true;
+                Some(())
+            },
+            &mut |hotkey| persist_hotkey(hotkey, &async_app),
+            &mut |_| activated = true,
+        );
+        cx.run_until_parked();
+        assert!(!registered);
+        assert!(!activated);
+        assert!(state.manager.is_none());
+        assert_eq!(state.current_hotkey, "");
+        cx.update(|cx| {
+            assert_eq!(
+                GlobalSettings::read(cx, |settings| settings.hotkey.activation_key.clone()),
+                ""
+            );
+            board.update(cx, |board, cx| assert!(!board.has_pending_hotkey(cx)));
+        });
+
+        let mut reloaded = Settings::load_from_dir(directory.path()).expect("reload settings");
+        crate::gui::settings::validate_hotkey(&mut reloaded);
+        assert_eq!(reloaded.hotkey.activation_key, "");
     }
 
     #[gpui_kit::test]

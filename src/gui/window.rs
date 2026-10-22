@@ -6,7 +6,9 @@
 
 use std::cfg_select;
 
-use gpui_kit::{App, AsyncApp, Context, Entity, Global, Window, WindowHandle, component::Root};
+use gpui_kit::{
+    App, AppContext, AsyncApp, Context, Entity, Global, Window, WindowHandle, component::Root,
+};
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 #[cfg(target_os = "windows")]
@@ -160,8 +162,8 @@ pub(crate) fn show_with_token(token: Option<&str>, cx: &mut App) {
     #[cfg(not(target_os = "linux"))]
     let _ = token;
     if let Some(handle) = ensure_window(cx) {
-        let _ = handle.update(cx, |root, window, cx| {
-            if let Ok(board) = root.view().clone().downcast::<super::board::RopyBoard>() {
+        let _ = cx.update_window(handle.into(), |_, window, cx| {
+            if let Some(board) = board(cx) {
                 board.update(cx, |board, cx| {
                     board.on_active_action(&super::board::Active, window, cx);
                 });
@@ -202,19 +204,18 @@ pub(crate) fn activate_from_hotkey(cx: &AsyncApp, token: Option<&str>) {
     cx.update(|cx| {
         let handle = cx.try_global::<Popup>().and_then(|popup| popup.handle);
         let handled = handle.is_some_and(|handle| {
-            handle
-                .update(cx, |_, window, cx| {
-                    if !has_native_focus(window) {
-                        return false;
-                    }
-                    if let Some(board) = board(cx) {
-                        board.update(cx, |board, cx| {
-                            board.dismiss_from_hotkey(window, cx);
-                        });
-                    }
-                    true
-                })
-                .unwrap_or(false)
+            cx.update_window(handle.into(), |_, window, cx| {
+                if !has_native_focus(window) {
+                    return false;
+                }
+                if let Some(board) = board(cx) {
+                    board.update(cx, |board, cx| {
+                        board.dismiss_from_hotkey(window, cx);
+                    });
+                }
+                true
+            })
+            .unwrap_or(false)
         });
         if !handled {
             show_with_token(token, cx);
@@ -347,14 +348,16 @@ mod tests {
         sync::{Arc, Mutex, RwLock},
     };
 
-    use gpui_kit::{AppContext, TestAppContext, test::TestWindowExt};
+    use gpui_kit::{TestAppContext, component::WindowExt, test::TestWindowExt};
 
     use super::*;
     use crate::{
         clipboard::CopyTracker,
         config::Settings,
         gui::{
-            board::bind_application_keys, repository::GlobalRepository, settings::GlobalSettings,
+            board::{bind_application_keys, filtering::ClearConfirmAction},
+            repository::GlobalRepository,
+            settings::GlobalSettings,
         },
         repository::ClipboardRecord,
         updater::models::UpdateStatus,
@@ -418,26 +421,38 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn test_hotkey_refocuses_unfocused_pinned_popup(cx: &mut TestAppContext) {
+    fn test_popup_reactivation_preserves_dialog_focus_and_panel(cx: &mut TestAppContext) {
         install_hidden_test_popup(cx);
         activate_from_hotkey(&cx.to_async(), None);
         cx.run_until_parked();
         let handle = cx.update(|cx| ensure_window(cx).unwrap());
-        cx.update_window(handle.into(), |_, window, cx| {
-            board(cx).unwrap().update(cx, |board, _| {
-                board.set_window_pinned(window, true);
-            });
-        })
-        .unwrap();
+        let dialog_focus = cx
+            .update_window(handle.into(), |_, window, cx| {
+                board(cx).unwrap().update(cx, |board, cx| {
+                    board.set_window_pinned(window, true);
+                    board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
+                });
+                window.render_frame(cx);
+                window.focused(cx).expect("clear dialog focus")
+            })
+            .unwrap();
         gpui_kit::VisualTestContext::from_window(handle.into(), cx).deactivate_window();
         activate_from_hotkey(&cx.to_async(), None);
         cx.run_until_parked();
+        cx.update(crate::gui::tray::send_open_settings);
         cx.update_window(handle.into(), |_, window, cx| {
             assert!(
                 window.is_window_active(),
                 "unfocused pinned popup must regain focus"
             );
             assert!(board(cx).unwrap().read(cx).pinned);
+            assert!(window.has_active_dialog(cx));
+            assert_eq!(window.focused(cx), Some(dialog_focus));
+            assert!(board(cx).unwrap().read(cx).ui_state.clear_confirm_visible());
+            assert_eq!(
+                board(cx).unwrap().read(cx).active_panel,
+                crate::gui::board::ActivePanel::ClipboardList
+            );
         })
         .unwrap();
     }

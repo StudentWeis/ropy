@@ -85,10 +85,10 @@ pub(crate) fn language_display_name(language: &Language) -> SharedString {
     t!("language_name", locale = language.code()).into()
 }
 
-/// Validate hotkey and reset to default if invalid.
+/// Keep an explicitly disabled hotkey; reset invalid nonempty shortcuts to the default.
 pub(crate) fn validate_hotkey(settings: &mut Settings) {
-    if settings.hotkey.activation_key.is_empty()
-        || global_hotkey::hotkey::HotKey::from_str(&settings.hotkey.activation_key).is_err()
+    if !settings.hotkey.activation_key.is_empty()
+        && global_hotkey::hotkey::HotKey::from_str(&settings.hotkey.activation_key).is_err()
     {
         settings.hotkey.activation_key = Settings::default().hotkey.activation_key;
     }
@@ -232,18 +232,13 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_hotkey_empty() {
+    fn test_validate_hotkey_empty_preserves_disabled_shortcut() {
         let mut settings = Settings::default();
         settings.hotkey.activation_key = String::new();
 
         validate_hotkey(&mut settings);
 
-        // Empty hotkey should be reset to default
-        let default = Settings::default();
-        assert_eq!(
-            settings.hotkey.activation_key,
-            default.hotkey.activation_key
-        );
+        assert_eq!(settings.hotkey.activation_key, "");
     }
 
     #[test]

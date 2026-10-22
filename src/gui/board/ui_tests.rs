@@ -1201,13 +1201,21 @@ fn test_appearance_recovery_rejects_switch_and_theme_without_changing_palette(
 }
 
 #[gpui_kit::test]
-fn test_clear_dialog_keyboard_does_not_copy_background_record(cx: &mut TestAppContext) {
+fn test_clear_dialog_reactivation_keeps_keyboard_off_background_record(cx: &mut TestAppContext) {
     let (handle, board, rx) = open_board(cx, vec![record(1), record(2)]);
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| {
             board.open_clear_confirm(ClearConfirmAction::AllHistory, window, cx);
         });
         window.render_frame(cx);
+        let dialog_focus = window.focused(cx).expect("clear dialog focus");
+        board.update(cx, |board, cx| {
+            board.clear_search(window, cx);
+            board.on_active_action(&super::Active, window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.focused(cx), Some(dialog_focus));
+        assert!(board.read(cx).ui_state.clear_confirm_visible());
         window.press("shift-enter", cx);
         window.press("down", cx);
         assert_eq!(board.read(cx).selected_index, 0);
@@ -1219,9 +1227,7 @@ fn test_clear_dialog_keyboard_does_not_copy_background_record(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn test_delete_dialog_typing_d_keeps_record_and_escape_restores_search_focus(
-    cx: &mut TestAppContext,
-) {
+fn test_delete_dialog_reactivation_preserves_escape_and_search_focus(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, cx| {
@@ -1236,6 +1242,13 @@ fn test_delete_dialog_typing_d_keeps_record_and_escape_restores_search_focus(
                 .focus_handle(cx)
                 .is_focused(window)
         );
+        let dialog_focus = window.focused(cx).expect("delete dialog focus");
+        board.update(cx, |board, cx| {
+            board.clear_search(window, cx);
+            board.on_active_action(&super::Active, window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.focused(cx), Some(dialog_focus));
         window.input("d", cx);
         assert!(board.read(cx).ui_state.delete_confirm_visible());
         assert_eq!(board.read(cx).pending_delete_id, Some(1));
