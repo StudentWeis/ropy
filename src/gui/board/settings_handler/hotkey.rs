@@ -141,6 +141,8 @@ impl RopyBoard {
                 return;
             }
         };
+        let previous_hotkey =
+            GlobalSettings::read(cx, |settings| settings.hotkey.activation_key.clone());
         self.settings_editor.hotkey.saving = true;
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
@@ -148,20 +150,48 @@ impl RopyBoard {
                 .recv()
                 .await
                 .unwrap_or(Err(HotkeyUpdateError::Disconnected));
-            let _ = this.update_in(cx, |board, window, cx| {
+            // The board outlives its native popup; release the guard even if
+            // there is no current window for the visual completion below.
+            let _ = this.update(cx, |board, cx| {
                 board.settings_editor.hotkey.saving = false;
+                cx.notify();
+            });
+            let _ = this.update_in(cx, |board, window, cx| {
                 match result {
                     Ok(()) => {
-                        board.settings_editor.hotkey.recording = false;
-                        board
+                        // Persistence already published the new live hotkey. Resolve
+                        // against the old value to detect edits made while waiting.
+                        let input = board
                             .settings_editor
-                            .pending_hotkey
-                            .clone_from(&activation_key);
-                        board
-                            .settings_editor
-                            .hotkey_before_recording
-                            .clone_from(&activation_key);
-                        board.sync_activation_key_input("", &activation_key, window, cx);
+                            .settings_activation_key_input
+                            .read(cx)
+                            .value();
+                        let candidate = Self::resolve_hotkey_candidate_input(
+                            &input,
+                            &board.settings_editor.pending_hotkey,
+                            &previous_hotkey,
+                        );
+                        if !board.settings_editor.hotkey.recording && candidate == activation_key {
+                            board
+                                .settings_editor
+                                .pending_hotkey
+                                .clone_from(&activation_key);
+                            board
+                                .settings_editor
+                                .hotkey_before_recording
+                                .clone_from(&activation_key);
+                            board.sync_activation_key_input("", &activation_key, window, cx);
+                        } else {
+                            if !input.is_empty()
+                                && board.settings_editor.pending_hotkey == previous_hotkey
+                            {
+                                board
+                                    .settings_editor
+                                    .pending_hotkey
+                                    .clone_from(&activation_key);
+                            }
+                            board.refresh_activation_key_placeholder(window, cx);
+                        }
                         Self::notify_settings_success(window, cx, t!("settings_save_success"));
                     }
                     Err(error) => Self::notify_hotkey_update_failed(&error, window, cx),

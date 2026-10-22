@@ -36,17 +36,22 @@ fn normalize_file_path(path: &str) -> Option<String> {
         return None;
     }
 
-    let uri_path = path
-        .strip_prefix("file://localhost")
-        .or_else(|| path.strip_prefix("file://"));
-
-    // Percent escapes belong to URIs; decoding a filesystem path changes
-    // literal filenames and makes repeated normalization destructive.
-    // Whitespace in a nonempty filesystem path is part of its identity.
-    Some(uri_path.map_or_else(|| path.to_string(), decode_percent_encoded))
+    // Percent escapes belong to URIs; whitespace and percent characters in a
+    // filesystem path are part of its identity.
+    let Some(uri) = path.strip_prefix("file://") else {
+        return Some(path.to_string());
+    };
+    let path_start = uri.find('/')?;
+    let authority = &uri[..path_start];
+    if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
+        // A remote URI cannot be treated as a relative path on this machine.
+        return None;
+    }
+    Some(decode_percent_encoded(&uri[path_start..]))
 }
 
-/// Normalize file URIs while preserving literal filesystem percent characters.
+/// Decode local file URIs, ignoring remote authorities and blank entries.
+/// Literal filesystem whitespace and percent characters are preserved.
 #[must_use]
 pub fn normalize_file_paths(paths: &[String]) -> Vec<String> {
     paths
@@ -124,11 +129,28 @@ mod tests {
         let paths = vec![
             "file:///tmp/hello%20world.txt".to_string(),
             "file://localhost/tmp/demo.txt".to_string(),
+            "file://LOCALHOST/tmp/case.txt".to_string(),
         ];
 
         let normalized = normalize_file_paths(&paths);
 
-        assert_eq!(normalized, vec!["/tmp/hello world.txt", "/tmp/demo.txt"]);
+        assert_eq!(
+            normalized,
+            vec!["/tmp/hello world.txt", "/tmp/demo.txt", "/tmp/case.txt"]
+        );
+    }
+
+    #[rstest::rstest]
+    #[case("file://server/share/report.txt")]
+    #[case("file://localhost.example/tmp/report.txt")]
+    #[case("file://localhost")]
+    #[case("file://relative")]
+    fn test_normalize_file_paths_unsupported_authority_is_not_a_local_path(#[case] uri: &str) {
+        let paths = vec![uri.to_string()];
+        assert_eq!(normalize_file_paths(&paths), Vec::<String>::new());
+        let serialized = serde_json::to_string(&paths)
+            .unwrap_or_else(|error| panic!("serialize fixture: {error}"));
+        assert_eq!(deserialize_file_paths(&serialized), Vec::<String>::new());
     }
 
     #[test]

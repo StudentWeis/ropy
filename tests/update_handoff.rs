@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command},
     thread,
     time::{Duration, Instant},
@@ -31,39 +31,50 @@ fn wait_until(stage: &str, mut condition: impl FnMut() -> bool) {
 }
 
 #[expect(clippy::expect_used)]
-fn fixture(directory: &Path) -> PathBuf {
-    let binary = directory.join(if cfg!(windows) {
-        "fixture.exe"
-    } else {
-        "fixture"
-    });
+fn compile_fixture(binary: &Path, opt_level: u8) {
     let status = Command::new("rustc")
         .arg("--edition=2024")
+        .arg("-C")
+        .arg(format!("opt-level={opt_level}"))
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/update_process.rs"))
         .arg("-o")
-        .arg(&binary)
+        .arg(binary)
         .status()
         .expect("compile subprocess fixture");
     assert!(status.success());
-    binary
+}
+
+#[derive(Clone, Copy)]
+enum HandoffScenario {
+    Healthy,
+    FailedStartup,
+    StaleInstallation,
 }
 
 #[rstest::rstest]
-#[case(false)]
-#[case(true)]
-fn test_restart_handoff_waits_for_parent_and_recovers_failed_startup(#[case] fail_startup: bool) {
-    run_handoff(fail_startup);
+#[case(HandoffScenario::Healthy)]
+#[case(HandoffScenario::FailedStartup)]
+#[case(HandoffScenario::StaleInstallation)]
+fn test_restart_handoff_waits_for_parent_and_recovers_failed_startup(
+    #[case] scenario: HandoffScenario,
+) {
+    run_handoff(scenario);
 }
 
 #[expect(clippy::expect_used)]
-fn run_handoff(fail_startup: bool) {
+fn run_handoff(scenario: HandoffScenario) {
     let temporary = tempfile::tempdir().expect("temporary installation");
     let directory = temporary
         .path()
         .canonicalize()
         .expect("absolute installation path");
     let directory = directory.as_path();
-    let binary = fixture(directory);
+    let binary = directory.join(if cfg!(windows) {
+        "fixture.exe"
+    } else {
+        "fixture"
+    });
+    compile_fixture(&binary, 0);
     let target = directory.join(if cfg!(windows) { "ropy.exe" } else { "ropy" });
     let root = target.with_file_name(format!(
         ".{}-update",
@@ -91,7 +102,7 @@ fn run_handoff(fail_startup: bool) {
         .expect("serialize transaction"),
     )
     .expect("persist transaction");
-    if fail_startup {
+    if matches!(scenario, HandoffScenario::FailedStartup) {
         fs::write(root.join("fail-startup"), "fail").expect("failure scenario");
     }
     let process_log = fs::File::create(root.join("process.log")).expect("process log");
@@ -117,12 +128,19 @@ fn run_handoff(fail_startup: bool) {
     assert!(!root.join("new-started").exists());
     assert!(!root.join("backup").exists());
     assert!(root.join("staged").exists());
+    if matches!(scenario, HandoffScenario::StaleInstallation) {
+        // A different optimization level supplies a different fingerprint while
+        // retaining a valid native executable, including its macOS code signature.
+        compile_fixture(&target, 1);
+    }
     fs::write(root.join("exit-parent"), "exit").expect("request parent exit");
     assert!(parent.0.wait().expect("wait for parent exit").success());
-    if fail_startup {
-        wait_until("rollback startup", || root.join("old-started").exists());
-        assert!(root.join("rolled-back").exists());
-    } else {
+    assert_completed_handoff(&root, &target, scenario);
+}
+
+#[expect(clippy::expect_used)]
+fn assert_completed_handoff(root: &Path, target: &Path, scenario: HandoffScenario) {
+    if matches!(scenario, HandoffScenario::Healthy) {
         wait_until("healthy startup and backup cleanup", || {
             assert!(
                 !root.join("rolled-back").exists(),
@@ -133,12 +151,26 @@ fn run_handoff(fail_startup: bool) {
             root.join("healthy").exists() && !root.join("backup").exists()
         });
         assert!(!root.join("old-started").exists());
+    } else {
+        wait_until("rollback startup", || root.join("old-started").exists());
+        assert!(root.join("rolled-back").exists());
+        if matches!(scenario, HandoffScenario::StaleInstallation) {
+            let diagnostics = fs::read_to_string(root.join("process.log")).expect("helper stderr");
+            assert!(
+                diagnostics.contains("could not install staged update"),
+                "missing rollback diagnostic: {diagnostics}"
+            );
+            assert!(diagnostics.contains("staged update no longer matches"));
+        }
     }
-    assert!(root.join("new-started").exists());
+    assert_eq!(
+        root.join("new-started").exists(),
+        !matches!(scenario, HandoffScenario::StaleInstallation)
+    );
     assert!(!root.join("staged").exists());
     assert!(target.is_file());
     // On Windows an executing image cannot be removed until its process exits.
     wait_until("updated executable release", || {
-        fs::remove_file(&target).is_ok()
+        fs::remove_file(target).is_ok()
     });
 }

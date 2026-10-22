@@ -449,54 +449,62 @@ mod tests {
         })
     }
 
-    #[gpui_kit::test]
-    fn test_hotkey_clear_saves_and_remains_disabled_after_reload(
-        cx: &mut gpui_kit::TestAppContext,
+    fn open_hotkey_board(
+        cx: &gpui_kit::TestAppContext,
+        directory: &std::path::Path,
+        updates: async_channel::Sender<HotkeyUpdate>,
+    ) -> (
+        gpui_kit::AnyWindowHandle,
+        gpui_kit::Entity<crate::gui::board::RopyBoard>,
     ) {
-        use std::sync::{Arc, Mutex, RwLock};
-
-        use gpui_kit::{AppContext, test::TestWindowExt};
-
         use crate::{
             clipboard::CopyTracker,
             config::Settings,
             gui::{board::RopyBoard, repository::GlobalRepository},
         };
+        use gpui_kit::AppContext;
+        use std::sync::{Arc, Mutex, RwLock};
 
-        let directory = tempfile::tempdir().expect("settings directory");
-        let settings = Settings::default();
-        let initial_hotkey = settings.hotkey.activation_key.clone();
-        let (updates, requests) = async_channel::unbounded();
         let (copy_tx, _copy_rx) = async_channel::unbounded();
         cx.update(|cx| {
             gpui_kit::init(cx);
             cx.set_reduce_motion(true);
             cx.set_global(GlobalSettings::at_path(
-                settings,
-                Some(directory.path().join("config.toml")),
+                Settings::default(),
+                Some(directory.join("config.toml")),
             ));
             cx.set_global(GlobalRepository::new(None));
             crate::gui::board::bind_application_keys(cx);
-        });
-        let (handle, board) = cx
-            .update(|cx| {
-                gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
-                    cx.new(|cx| {
-                        let mut board = RopyBoard::new(
-                            Arc::new(RwLock::new(Vec::new())),
-                            Arc::new(Mutex::new(CopyTracker::default())),
-                            copy_tx,
-                            window,
-                            cx,
-                        );
-                        board.activated = true;
-                        board.pinned = true;
-                        board.set_hotkey_tx(updates);
-                        board
-                    })
+            gpui_kit::open_window(gpui_kit::WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    let mut board = RopyBoard::new(
+                        Arc::new(RwLock::new(Vec::new())),
+                        Arc::new(Mutex::new(CopyTracker::default())),
+                        copy_tx,
+                        window,
+                        cx,
+                    );
+                    board.activated = true;
+                    board.pinned = true;
+                    board.set_hotkey_tx(updates);
+                    board
                 })
             })
-            .expect("open board");
+            .expect("open board")
+        })
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_clear_saves_and_remains_disabled_after_reload(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use crate::config::Settings;
+        use gpui_kit::{AppContext, test::TestWindowExt};
+
+        let directory = tempfile::tempdir().expect("settings directory");
+        let initial_hotkey = Settings::default().hotkey.activation_key;
+        let (updates, requests) = async_channel::unbounded();
+        let (handle, board) = open_hotkey_board(cx, directory.path(), updates);
         cx.update_window(handle, |_, window, cx| {
             board.update(cx, |board, cx| board.open_settings_panel(window, cx));
             window.render_frame(cx);
@@ -542,6 +550,157 @@ mod tests {
         let mut reloaded = Settings::load_from_dir(directory.path()).expect("reload settings");
         crate::gui::settings::validate_hotkey(&mut reloaded);
         assert_eq!(reloaded.hotkey.activation_key, "");
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_save_completion_preserves_newer_draft_across_windows(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use crate::config::Settings;
+        use gpui_kit::AppContext;
+
+        for reopen in [false, true] {
+            let directory = tempfile::tempdir().expect("settings directory");
+            let (updates, requests) = async_channel::unbounded();
+            let (mut handle, board) = open_hotkey_board(cx, directory.path(), updates);
+            cx.update_window(handle, |_, window, cx| {
+                board.update(cx, |board, cx| {
+                    board.open_settings_panel(window, cx);
+                    board
+                        .settings_editor
+                        .settings_activation_key_input
+                        .update(cx, |input, cx| {
+                            input.set_value("ctrl+shift+v", window, cx);
+                        });
+                    board.save_hotkey(cx, window);
+                });
+            })
+            .expect("submit shortcut");
+            let request = requests.try_recv().expect("pending registration");
+            if reopen {
+                cx.update_window(handle, |_, window, _| window.remove_window())
+                    .expect("close window");
+                cx.run_until_parked();
+                handle = cx.update(|cx| {
+                    crate::gui::app::reopen_window(cx, board.clone())
+                        .expect("reopen board")
+                        .into()
+                });
+            }
+            cx.update_window(handle, |_, window, cx| {
+                board.update(cx, |board, cx| {
+                    board.open_settings_panel(window, cx);
+                    board
+                        .settings_editor
+                        .settings_activation_key_input
+                        .update(cx, |input, cx| {
+                            input.set_value("ctrl+alt+p", window, cx);
+                        });
+                    board.save_hotkey(cx, window);
+                });
+            })
+            .expect("edit next shortcut");
+            assert!(
+                requests.is_empty(),
+                "an in-flight save must block another submission after reopening"
+            );
+            let mut state = HotkeyListenerState {
+                current_hotkey: Settings::default().hotkey.activation_key,
+                manager: Some(()),
+            };
+            let async_app = cx.to_async();
+            process_listener_message(
+                &mut state,
+                ListenerMessage::UpdateHotkey(request),
+                &mut |_| Some(()),
+                &mut |key| persist_hotkey(key, &async_app),
+                &mut |_| {},
+            );
+            cx.run_until_parked();
+            cx.update(|cx| {
+                assert_eq!(
+                    GlobalSettings::read(cx, |s| s.hotkey.activation_key.clone()),
+                    "ctrl+shift+v"
+                );
+                board.update(cx, |board, cx| {
+                    assert_eq!(
+                        board.resolve_activation_key_input(cx),
+                        "ctrl+alt+p",
+                        "old completion replaced a newer draft (reopen={reopen})"
+                    );
+                    assert!(board.has_pending_hotkey(cx));
+                    assert!(!board.settings_editor.hotkey.saving);
+                });
+            });
+            assert_eq!(
+                Settings::load_from_dir(directory.path())
+                    .expect("reload settings")
+                    .hotkey
+                    .activation_key,
+                "ctrl+shift+v"
+            );
+            cx.update_window(handle, |_, window, cx| {
+                board.update(cx, |board, cx| {
+                    board
+                        .settings_editor
+                        .settings_activation_key_input
+                        .update(cx, |input, cx| {
+                            input.set_value("", window, cx);
+                        });
+                    assert!(
+                        !board.has_pending_hotkey(cx),
+                        "clearing a typed draft should restore the saved shortcut"
+                    );
+                });
+                window.remove_window();
+            })
+            .expect("clear draft and close fixture");
+            cx.run_until_parked();
+        }
+    }
+
+    #[gpui_kit::test]
+    fn test_hotkey_completion_while_closed_releases_submission_guard(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::AppContext;
+
+        let directory = tempfile::tempdir().expect("settings directory");
+        let (updates, requests) = async_channel::unbounded();
+        let (handle, board) = open_hotkey_board(cx, directory.path(), updates);
+        cx.update_window(handle, |_, window, cx| {
+            board.update(cx, |board, cx| {
+                board
+                    .settings_editor
+                    .settings_activation_key_input
+                    .update(cx, |input, cx| {
+                        input.set_value("ctrl+shift+v", window, cx);
+                    });
+                board.save_hotkey(cx, window);
+            });
+            window.remove_window();
+        })
+        .expect("submit and close window");
+        cx.run_until_parked();
+        let request = requests.try_recv().expect("pending registration");
+        let result = persist_hotkey(&request.hotkey, &cx.to_async());
+        assert!(result.is_ok());
+        request
+            .completion
+            .try_send(result)
+            .expect("complete registration");
+        cx.run_until_parked();
+        cx.update(|cx| assert!(!board.read(cx).settings_editor.hotkey.saving));
+        let handle = cx
+            .update(|cx| crate::gui::app::reopen_window(cx, board.clone()).expect("reopen board"));
+        cx.update_window(handle.into(), |_, window, cx| {
+            board.update(cx, |board, cx| {
+                assert_eq!(board.resolve_activation_key_input(cx), "ctrl+shift+v");
+                assert!(!board.has_pending_hotkey(cx));
+            });
+            window.remove_window();
+        })
+        .expect("saved shortcut after reopening");
     }
 
     #[gpui_kit::test]
