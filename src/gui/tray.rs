@@ -1,4 +1,4 @@
-use gpui_kit::{App, BorrowAppContext, Global, ReadGlobal};
+use gpui_kit::{App, AppContext, BorrowAppContext, Global, ReadGlobal, component::WindowExt};
 use rust_i18n::t;
 #[cfg(not(target_os = "linux"))]
 use tray_icon::TrayIconEvent;
@@ -189,9 +189,13 @@ fn open_panel(panel: super::board::ActivePanel, cx: &mut App) {
     let Some(window_handle) = super::window::ensure_window(cx) else {
         return;
     };
-    let _ = window_handle.update(cx, |root, window, cx| {
-        if let Ok(board) = root.view().clone().downcast::<super::board::RopyBoard>() {
+    let _ = cx.update_window(window_handle.into(), |_, window, cx| {
+        if let Some(board) = super::window::board(cx) {
             board.update(cx, |board, cx| {
+                if window.has_active_dialog(cx) {
+                    board.activate_popup(window, cx);
+                    return;
+                }
                 board.cancel_shortcut_recording(cx);
                 if board.settings_editor.hotkey.recording {
                     board.cancel_hotkey_recording(window, cx);

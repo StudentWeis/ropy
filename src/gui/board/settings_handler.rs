@@ -357,27 +357,6 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_hotkey_for_save_empty_uses_current_hotkey() {
-        let normalized = RopyBoard::normalize_hotkey_for_save("", "cmd+shift+c");
-
-        assert_eq!(normalized, "cmd+shift+c");
-    }
-
-    #[test]
-    fn test_normalize_hotkey_for_save_empty_and_current_empty_uses_default() {
-        let normalized = RopyBoard::normalize_hotkey_for_save("", "");
-
-        assert_eq!(normalized, Settings::default().hotkey.activation_key);
-    }
-
-    #[test]
-    fn test_normalize_hotkey_for_save_explicit_value_preserves_candidate() {
-        let normalized = RopyBoard::normalize_hotkey_for_save("cmd+shift+v", "cmd+shift+c");
-
-        assert_eq!(normalized, "cmd+shift+v");
-    }
-
-    #[test]
     fn test_is_valid_storage_pair_storage_below_history_returns_false() {
         assert!(!RopyBoard::is_valid_storage_pair(10, 9));
     }

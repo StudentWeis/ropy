@@ -9,7 +9,7 @@ Create a fresh AgentBay Linux Computer Use desktop with a reachable X server and
 - Inspect `uname -m` and select the matching GNU/Linux artifact. Use `x86_64-unknown-linux-gnu` for an x86-64 `linux_latest` image.
 - Use an ARM64 custom image for `aarch64-unknown-linux-gnu`; never execute it through implicit emulation.
 - Require a non-empty `DISPLAY` and verify the connection with `xdpyinfo` or an equivalent X11 query.
-- Accept XWayland only when the X11 connection is reachable and Ropy's window, hotkey, and clipboard behavior work. Do not claim native Wayland support.
+- Accept XWayland only when the X11 connection is reachable and Ropy's window, hotkey, and clipboard behavior work. Start test clients without `WAYLAND_DISPLAY` or `WAYLAND_SOCKET`; Ropy selects Wayland when `WAYLAND_DISPLAY` is set, even if `DISPLAY` is also available. Do not claim native Wayland support.
 - Check that a desktop window manager is running. Require a desktop panel and session bus only for tray-specific assertions.
 
 ## Transfer and launch
@@ -31,7 +31,9 @@ test -n "${DISPLAY:-}"
 xdpyinfo >/dev/null
 ldd "$exe" | tee "$root/ldd.txt"
 if grep -q 'not found' "$root/ldd.txt"; then exit 64; fi
-nohup "$exe" >"$root/ropy.stdout.log" 2>"$root/ropy.stderr.log" &
+nohup env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET \
+  XDG_SESSION_TYPE=x11 GDK_BACKEND=x11 \
+  "$exe" >"$root/ropy.stdout.log" 2>"$root/ropy.stderr.log" &
 pid=$!
 sleep 3
 kill -0 "$pid"
@@ -40,7 +42,7 @@ printf '%s\n' "$pid"
 
 If `ldd` reports missing libraries, classify the stock image as infrastructure-blocked or use an approved custom image containing the required runtime libraries. The current Linux build dependencies include `libxdo-dev` and `libxkbcommon-x11-dev`; the runtime image needs their shared libraries and X11 dependencies, as reported by `ldd`. The KSNI tray backend requires a D-Bus session and a StatusNotifierItem host for tray assertions; it does not require GTK3 or AppIndicator. Do not install arbitrary packages silently into a supposedly reproducible compatibility image.
 
-Discover an installed graphical text editor and use it for the shared marker scenario. Send `Control+Shift+D` to reveal Ropy. Use AgentBay screenshot, keyboard, application, and window tools rather than `xdotool` for the assertions unless a lower-level diagnostic is specifically required.
+Discover an installed graphical text editor, launch it with the same X11 environment shown above, and use it for the shared marker scenario. Send `Control+Shift+D` to reveal Ropy. Identify the popup's X11 window with `xwininfo -root -tree` or an equivalent X11 query, then verify that `xprop -id <window-id> _NET_WM_PID` matches the recorded Ropy PID. A reachable X server alone does not prove that Ropy uses it. Use AgentBay screenshot, keyboard, application, and window tools for the interaction assertions rather than `xdotool` unless a lower-level diagnostic is specifically required.
 
 ## Troubleshoot and clean up
 

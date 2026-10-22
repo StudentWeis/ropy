@@ -1,4 +1,6 @@
-use gpui_kit::{AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window};
+use gpui_kit::{
+    AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window, component::WindowExt,
+};
 
 /// History shortcut catalog, validation and registration.
 pub mod shortcuts;
@@ -19,13 +21,14 @@ use crate::{
 };
 
 impl RopyBoard {
-    /// Clear the search input content and blur it
+    /// Clear the search input without taking focus from an active dialog.
     pub(crate) fn clear_search(&self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.search_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
         });
-        // Blur the search input to remove focus
-        window.focus(&self.focus_handle, cx);
+        if !window.has_active_dialog(cx) {
+            window.focus(&self.focus_handle, cx);
+        }
     }
 }
 
@@ -308,6 +311,12 @@ impl RopyBoard {
             return;
         }
 
+        // A resident popup can be hidden and reopened with its dialog still alive.
+        if window.has_active_dialog(cx) {
+            self.activate_popup(window, cx);
+            return;
+        }
+
         self.selected_index = 0;
         self.ui_state.hide_preview();
         if self.active_panel == ActivePanel::Settings {
@@ -329,7 +338,9 @@ impl RopyBoard {
     pub(crate) fn activate_popup(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.invalidate_copy_confirmation();
         self.activated = true;
-        window.focus(&self.focus_handle, cx);
+        if !window.has_active_dialog(cx) {
+            window.focus(&self.focus_handle, cx);
+        }
         cx.notify();
         active_window(window, cx);
     }
