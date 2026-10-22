@@ -44,6 +44,11 @@ fn build_file_subscriber(
         .finish()
 }
 
+/// Capture startup and update-helper diagnostics without accessing user log files.
+pub(crate) fn with_stderr_logging<R>(operation: impl FnOnce() -> R) -> R {
+    tracing::subscriber::with_default(build_file_subscriber(std::io::stderr), operation)
+}
+
 /// Initialize JSON logging.
 ///
 /// - Enabled by default

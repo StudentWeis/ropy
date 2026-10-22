@@ -357,12 +357,27 @@ impl RopyBoard {
     // Input and selection controls retain window-bound subscriptions. Rebuild them
     // when a Wayland surface is reopened; keep history, tasks and update state alive.
     pub(crate) fn attach_window(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        // Native registration can outlive a Wayland surface. Keep its draft and
+        // submission guard until completion, even as window-bound inputs change.
+        let pending_hotkey_save = self
+            .settings_editor
+            .hotkey
+            .saving
+            .then(|| self.resolve_activation_key_input(cx));
         self.window_activation_subscription = Self::observe_activation(window, cx);
         self.window_appearance_subscription = Self::observe_appearance(window, cx);
         self.theme_catalog_subscription = Self::observe_themes(window, cx);
         self.search_input = cx.new(|cx| InputState::new(window, cx));
         self.search_input_subscription = Self::observe_search(&self.search_input, cx);
         self.settings_editor = SettingsEditor::new(window, cx);
+        if let Some(candidate) = pending_hotkey_save {
+            self.settings_editor.hotkey.saving = true;
+            self.settings_editor.pending_hotkey.clone_from(&candidate);
+            self.settings_editor
+                .hotkey_before_recording
+                .clone_from(&candidate);
+            self.sync_activation_key_input_from_candidate(&candidate, window, cx);
+        }
         if let Some(draft) = self
             .theme_workspace
             .as_mut()

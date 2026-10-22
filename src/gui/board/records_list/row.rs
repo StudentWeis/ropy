@@ -202,35 +202,6 @@ fn render_file_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Di
         .child(Icon::empty().path("icons/filter-files.svg").size(px(12.0)))
 }
 
-fn create_preview(
-    content_type: &ContentType,
-    record_content: &str,
-    window: &Window,
-    cx: &mut App,
-) -> AnyView {
-    match content_type {
-        ContentType::Image => preview::image_tooltip(record_content, window, cx),
-        ContentType::FilePath => preview::simple_tooltip(
-            truncate(
-                &file_preview_content(record_content),
-                TOOLTIP_CONTENT_PREVIEW_LIMIT,
-                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
-            ),
-            window,
-            cx,
-        ),
-        ContentType::Text | ContentType::RichText => preview::simple_tooltip(
-            truncate(
-                record_content,
-                TOOLTIP_CONTENT_PREVIEW_LIMIT,
-                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
-            ),
-            window,
-            cx,
-        ),
-    }
-}
-
 struct PreviewData {
     content_type: ContentType,
     record_content: String,
@@ -238,14 +209,30 @@ struct PreviewData {
 
 impl PreviewData {
     fn new(record: &ClipboardRecord) -> Self {
+        let truncate_preview = |content: &str| {
+            truncate(
+                content,
+                TOOLTIP_CONTENT_PREVIEW_LIMIT,
+                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
+            )
+        };
+        let record_content = match record.content_type {
+            ContentType::Image => record.content.clone(),
+            ContentType::FilePath => truncate_preview(&file_preview_content(&record.content)),
+            ContentType::Text | ContentType::RichText => truncate_preview(&record.content),
+        };
         Self {
             content_type: record.content_type.clone(),
-            record_content: record.content.clone(),
+            record_content,
         }
     }
 
     fn build(&self, window: &Window, cx: &mut App) -> AnyView {
-        create_preview(&self.content_type, &self.record_content, window, cx)
+        if self.content_type == ContentType::Image {
+            preview::image_tooltip(&self.record_content, window, cx)
+        } else {
+            preview::simple_tooltip(&self.record_content, window, cx)
+        }
     }
 }
 
@@ -367,17 +354,16 @@ impl RecordsListState {
     }
 
     fn render_list_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
-        let Some(record) = self.record_for_filtered_index(index) else {
+        let records = read_or_recover(&self.records);
+        let Some(record_index) = self.filtered_record_indices.get(index).copied() else {
             return div().into_any_element();
         };
-
-        render_list_item(&self.render_context(index, &record), window, cx)
-    }
-
-    fn record_for_filtered_index(&self, filtered_index: usize) -> Option<ClipboardRecord> {
-        let record_index = self.filtered_record_indices.get(filtered_index).copied()?;
-        let guard = read_or_recover(&self.records);
-        guard.get(record_index).cloned()
+        let Some(record) = records.get(record_index) else {
+            return div().into_any_element();
+        };
+        let item = render_list_item(&self.render_context(index, record), window, cx);
+        drop(records);
+        item
     }
 
     pub(super) fn render_context<'a>(
@@ -418,12 +404,7 @@ impl RecordsListState {
     }
 }
 
-fn render_record_body(
-    ctx: &RenderContext<'_>,
-    preview_data: &PreviewData,
-    styles: &ItemStyle,
-    cx: &App,
-) -> AnyElement {
+fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
     let mut content = div()
         .flex_1()
@@ -431,11 +412,8 @@ fn render_record_body(
         .id(("record-content", ctx.record.id));
 
     if !ctx.flags.preview_visible() && ctx.flags.hover_preview_enabled() {
-        let preview_content_type = preview_data.content_type.clone();
-        let preview_record_content = preview_data.record_content.clone();
-        content = content.tooltip(move |window, cx| {
-            create_preview(&preview_content_type, &preview_record_content, window, cx)
-        });
+        let preview_data = PreviewData::new(ctx.record);
+        content = content.tooltip(move |window, cx| preview_data.build(window, cx));
     }
 
     if compact {
@@ -735,7 +713,6 @@ pub(super) fn render_list_item_with_grid_height(
     grid_height_override: Option<f32>,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
-    let preview_data = PreviewData::new(ctx.record);
     let styles = ItemStyle::from_app(cx);
 
     let card = if compact {
@@ -755,7 +732,7 @@ pub(super) fn render_list_item_with_grid_height(
                     .w_full()
                     .gap_1()
                     .child(render_grid_record_header(ctx, &styles, cx))
-                    .child(render_record_body(ctx, &preview_data, &styles, cx)),
+                    .child(render_record_body(ctx, &styles, cx)),
             ),
             ctx,
             &styles,
@@ -767,7 +744,7 @@ pub(super) fn render_list_item_with_grid_height(
                     .justify_between()
                     .items_start()
                     .gap_2()
-                    .child(render_record_body(ctx, &preview_data, &styles, cx))
+                    .child(render_record_body(ctx, &styles, cx))
                     .child(render_record_actions(ctx, cx)),
             ),
             ctx,
@@ -782,7 +759,11 @@ pub(super) fn render_list_item_with_grid_height(
     };
 
     if should_render_selected_preview(ctx.flags) {
-        item = item.child(render_selected_preview(&preview_data, window, cx));
+        item = item.child(render_selected_preview(
+            &PreviewData::new(ctx.record),
+            window,
+            cx,
+        ));
     }
 
     item.into_any_element()
@@ -806,6 +787,50 @@ mod tests {
             preview,
             hover_preview,
         }
+    }
+
+    #[test]
+    fn test_preview_data_long_text_retains_only_visible_unicode_prefix() {
+        let record = crate::repository::ClipboardRecord::new(
+            1,
+            "界".repeat(1_000_000),
+            chrono::Local::now(),
+            crate::repository::ContentType::Text,
+        );
+        let preview = super::PreviewData::new(&record);
+        let expected = format!("{}...", "界".repeat(500));
+        assert!(
+            preview.record_content == expected,
+            "preview retained {} bytes",
+            preview.record_content.len()
+        );
+    }
+
+    #[rstest::rstest]
+    #[case(crate::repository::ContentType::Text, "short\ntext", "short\ntext")]
+    #[case(
+        crate::repository::ContentType::RichText,
+        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11",
+        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10..."
+    )]
+    #[case(
+        crate::repository::ContentType::FilePath,
+        r#"["file:///tmp/a%20b","/tmp/literal%20"]"#,
+        "/tmp/a b\n/tmp/literal%20"
+    )]
+    #[case(
+        crate::repository::ContentType::Image,
+        "/tmp/image.png",
+        "/tmp/image.png"
+    )]
+    fn test_preview_data_preserves_each_payload_presentation(
+        #[case] kind: crate::repository::ContentType,
+        #[case] content: &str,
+        #[case] expected: &str,
+    ) {
+        let record =
+            crate::repository::ClipboardRecord::new(1, content.into(), chrono::Local::now(), kind);
+        assert_eq!(super::PreviewData::new(&record).record_content, expected);
     }
 
     #[test]

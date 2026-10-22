@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    if updater::transaction::handle_startup()? {
+    if utils::logging::with_stderr_logging(updater::transaction::handle_startup)? {
         return Ok(());
     }
 
