@@ -13,10 +13,8 @@ use crate::{
     gui::{
         active_window,
         board::{ActivePanel, RopyBoard, search::next_content_filter},
-        constants::default_window_size,
         hide_window,
         panel::settings,
-        reset_window_geometry_for_activation,
     },
 };
 
@@ -310,7 +308,6 @@ impl RopyBoard {
             return;
         }
 
-        self.invalidate_copy_confirmation();
         self.selected_index = 0;
         self.ui_state.hide_preview();
         if self.active_panel == ActivePanel::Settings {
@@ -325,10 +322,15 @@ impl RopyBoard {
         }
         self.cancel_shortcut_recording(cx);
         self.ui_state.clear_confirm = crate::gui::board::ClearConfirmState::Hidden;
+        self.activate_popup(window, cx);
+    }
+
+    /// Finish activation after the caller has chosen its panel and reset policy.
+    pub(crate) fn activate_popup(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        self.invalidate_copy_confirmation();
         self.activated = true;
         window.focus(&self.focus_handle, cx);
         cx.notify();
-        reset_window_geometry_for_activation(window, default_window_size());
         active_window(window, cx);
     }
 

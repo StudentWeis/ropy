@@ -175,14 +175,6 @@ pub(crate) fn show_with_token(token: Option<&str>, cx: &mut App) {
                 tracing::warn!(%error, "failed to apply Wayland activation token");
             }
         });
-        #[cfg(target_os = "linux")]
-        if cx.has_global::<crate::linux::hyprland::PopupRules>() {
-            cx.background_executor()
-                .spawn(async {
-                    crate::linux::hyprland::focus_popup();
-                })
-                .detach();
-        }
     }
 }
 
@@ -277,9 +269,8 @@ pub(crate) fn hide_window<T>(window: &mut Window, cx: &Context<'_, T>, pinned: b
 /// the first time the user triggers the hotkey or the tray "Show" entry —
 /// on macOS this maps to `[NSWindow makeKeyAndOrderFront]`, which both
 /// orders the window front and gives it key status.
-#[expect(clippy::needless_pass_by_ref_mut)]
-#[cfg_attr(target_os = "linux", expect(unused_variables))]
 pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
+    super::reset_window_geometry_for_activation(window, super::constants::default_window_size());
     window.activate_window();
 
     cfg_select! {
@@ -307,6 +298,14 @@ pub(crate) fn active_window<T>(window: &mut Window, cx: &Context<'_, T>) {
             }
         }
         _ => {}
+    }
+    #[cfg(target_os = "linux")]
+    if cx.has_global::<crate::linux::hyprland::PopupRules>() {
+        cx.background_executor()
+            .spawn(async {
+                crate::linux::hyprland::focus_popup();
+            })
+            .detach();
     }
 }
 

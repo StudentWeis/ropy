@@ -142,7 +142,7 @@ impl RopyBoard {
         );
         let next_visible_len = self.visible_list_len(plan.indices.len());
 
-        let scroll_position = matches!(plan.list_update, FilteredRecordsUpdate::Splice { .. })
+        let scroll_position = matches!(plan.list_update, FilteredRecordsUpdate::Splice)
             .then(|| self.list_state.logical_scroll_top());
 
         self.filtered_record_indices = Arc::new(plan.indices);
@@ -150,10 +150,10 @@ impl RopyBoard {
 
         match plan.list_update {
             FilteredRecordsUpdate::None => {}
-            FilteredRecordsUpdate::Reset { .. } => {
+            FilteredRecordsUpdate::Reset => {
                 self.list_state.reset(next_visible_len);
             }
-            FilteredRecordsUpdate::Splice { .. } => {
+            FilteredRecordsUpdate::Splice => {
                 self.list_state
                     .splice(0..previous_visible_len, next_visible_len);
                 if let Some(scroll_position) = scroll_position {
@@ -234,21 +234,26 @@ impl RopyBoard {
     ) {
         // Selection, scrolling and filters are read at completion, so interaction
         // during I/O is not undone by the request's earlier presentation state.
-        let selected_id = self.filtered_record_id_at(self.selected_index);
+        let previous_selected_index = self.selected_index;
+        let selected_id = self.filtered_record_id_at(previous_selected_index);
         let scroll_position = self.list_state.logical_scroll_top();
         let (records, favorite_ids) = snapshot.into_parts();
         *write_or_recover(&self.records) = records;
         self.favorite_ids = Arc::new(favorite_ids);
 
         self.sync_filtered_records(cx);
-        if let Some(index) = selected_id.and_then(|id| {
-            let records = read_or_recover(&self.records);
-            self.filtered_record_indices
-                .iter()
-                .position(|&index| records.get(index).is_some_and(|record| record.id == id))
-        }) {
-            self.selected_index = index;
-        }
+        // A new snapshot can reuse every backing index for a different record.
+        // Resolve by domain ID, and use the old visible position only as fallback.
+        self.selected_index = selected_id
+            .and_then(|id| {
+                let records = read_or_recover(&self.records);
+                self.filtered_record_indices
+                    .iter()
+                    .position(|&index| records.get(index).is_some_and(|record| record.id == id))
+            })
+            .unwrap_or_else(|| {
+                previous_selected_index.min(self.filtered_record_len().saturating_sub(1))
+            });
         // Record content and order may change while positional indices stay equal.
         self.list_state
             .reset(self.visible_list_len(self.filtered_record_len()));

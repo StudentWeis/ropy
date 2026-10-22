@@ -6322,6 +6322,8 @@ dependencies = [
  "tray-icon",
  "wayland-client",
  "wayland-protocols",
+ "windows-registry 0.6.1",
+ "windows-result 0.4.1",
  "windows-sys 0.61.2",
  "winres",
  "x11rb 0.14.0",

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+DIST_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("dist-workspace.toml", "rb"))["dist"]["cargo-dist-version"])')"
 
 # Parser hooks use uv's isolated Python tool environments.
 if ! command -v uvx &>/dev/null; then
@@ -11,7 +15,7 @@ fi
 cargo install cargo-binstall
 
 # Other dependencies
-cargo binstall 'hk@^2.5' cargo-dist cargo-release git-cliff cargo-outdated
+cargo binstall 'hk@^2.5' "cargo-dist@$DIST_VERSION" cargo-release git-cliff cargo-outdated
 
 # For pre-commit hooks
 # Replace the previous hook script, including on Git with config-based hooks.

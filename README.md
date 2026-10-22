@@ -55,9 +55,10 @@ still blocks launch, review and allow Ropy in System Settings → Privacy & Secu
 After downloading the `.dmg` file and dragging Ropy.app to the Applications folder, you may need to remove the quarantine attribute to run the application without issues. Open Terminal and run the following commands:
 
 ```sh
-xattr -rc /Applications/Ropy.app
-sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
+xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
+
+If the command reports a permission error, repeat it with `sudo`.
 
 ### Windows
 
