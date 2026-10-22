@@ -6,8 +6,8 @@ use crate::repository::{ClipboardRecord, ClipboardRepository};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum FilteredRecordsUpdate {
     None,
-    Reset { new_len: usize },
-    Splice { old_len: usize, new_len: usize },
+    Reset,
+    Splice,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,21 +27,16 @@ pub(super) fn plan_filtered_records_sync(
     let list_update = if next_indices == previous_indices {
         FilteredRecordsUpdate::None
     } else if deleting_record {
-        FilteredRecordsUpdate::Splice {
-            old_len: previous_indices.len(),
-            new_len: next_indices.len(),
-        }
+        FilteredRecordsUpdate::Splice
     } else {
-        FilteredRecordsUpdate::Reset {
-            new_len: next_indices.len(),
-        }
+        FilteredRecordsUpdate::Reset
     };
 
-    let selected_index = if next_indices.is_empty() {
-        0
-    } else {
-        selected_index.min(next_indices.len() - 1)
-    };
+    // Backing indices identify records only within the current repository snapshot.
+    let selected_index = previous_indices
+        .get(selected_index)
+        .and_then(|selected| next_indices.iter().position(|index| index == selected))
+        .unwrap_or_else(|| selected_index.min(next_indices.len().saturating_sub(1)));
 
     FilteredRecordsSyncPlan {
         indices: next_indices,
@@ -99,13 +94,7 @@ mod tests {
 
         assert_eq!(plan.indices, vec![0, 2]);
         assert_eq!(plan.selected_index, 1);
-        assert_eq!(
-            plan.list_update,
-            FilteredRecordsUpdate::Splice {
-                old_len: 3,
-                new_len: 2,
-            }
-        );
+        assert_eq!(plan.list_update, FilteredRecordsUpdate::Splice);
         assert!(plan.clear_deleting_record);
     }
 
@@ -115,10 +104,7 @@ mod tests {
 
         assert_eq!(plan.indices, vec![1]);
         assert_eq!(plan.selected_index, 0);
-        assert_eq!(
-            plan.list_update,
-            FilteredRecordsUpdate::Reset { new_len: 1 }
-        );
+        assert_eq!(plan.list_update, FilteredRecordsUpdate::Reset);
         assert!(!plan.clear_deleting_record);
     }
 

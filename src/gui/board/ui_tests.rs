@@ -374,6 +374,56 @@ fn test_history_config_rebinds_quick_select_target(cx: &mut TestAppContext) {
     assert!(matches!(rx.try_recv().unwrap(), CopyRequest::Text { text, .. } if text == "record 1"));
 }
 
+#[gpui_kit::test]
+fn test_filter_content_preserves_selected_copy(cx: &mut TestAppContext) {
+    assert_filter_preserves_selected_copy(cx, "filter-text-btn");
+}
+
+#[gpui_kit::test]
+fn test_filter_favorites_preserves_selected_copy(cx: &mut TestAppContext) {
+    assert_filter_preserves_selected_copy(cx, "filter-favorites-btn");
+}
+
+#[gpui_kit::test]
+fn test_filter_query_preserves_selected_copy(cx: &mut TestAppContext) {
+    assert_filter_preserves_selected_copy(cx, "query");
+}
+
+fn assert_filter_preserves_selected_copy(cx: &mut TestAppContext, filter: &'static str) {
+    let mut excluded = record(3);
+    excluded.content = "other".into();
+    if filter == "filter-text-btn" {
+        excluded.content_type = crate::repository::ContentType::Image;
+    }
+    let (handle, board, rx) = open_board(cx, vec![record(1), record(2), excluded]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.favorite_ids = Arc::new([1, 2].into());
+            window.focus(&board.focus_handle, cx);
+        });
+        window.render_frame(cx);
+        window.press("down", cx);
+        assert_eq!(board.read(cx).filtered_record_id_at(1), Some(2));
+        if filter == "query" {
+            window.press("/", cx);
+            window.input("record", cx);
+        } else {
+            window.click(filter, cx);
+        }
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        assert_eq!(board.read(cx).filtered_record_len(), 2);
+        let view = board.read(cx);
+        assert_eq!(view.filtered_record_id_at(view.selected_index), Some(2));
+        window.press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(matches!(rx.try_recv().unwrap(), CopyRequest::Text { text, .. } if text == "record 2"));
+}
+
 fn record(id: u64) -> ClipboardRecord {
     // Keep newest-first ordering independent of the platform clock's resolution.
     let timestamp = 1_700_000_000 + i64::try_from(id).unwrap();
@@ -1459,6 +1509,49 @@ fn test_refresh_new_record_preserves_selected_identity(cx: &mut TestAppContext) 
         assert_eq!(
             board.filtered_record_id_at(board.selected_index),
             Some(original.id)
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn test_refresh_removed_selection_does_not_reuse_backing_index(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = Arc::new(
+        ClipboardRepository::open(&dir.path().join("db.redb"), dir.path().join("images")).unwrap(),
+    );
+    let fallback = repo.save_text("keep oldest".into()).unwrap();
+    let selected = repo.save_text("keep selected".into()).unwrap();
+    repo.save_text("keep newest".into()).unwrap();
+    repo.save_text("excluded".into()).unwrap();
+    let (handle, board, _) = open_board(cx, repo.get_display_records(100).unwrap());
+    cx.update(|cx| cx.set_global(GlobalRepository::new(Some(repo.clone()))));
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("/", cx);
+        window.input("keep", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.press("escape", cx);
+        window.press("down", cx);
+        let view = board.read(cx);
+        assert_eq!(
+            view.filtered_record_id_at(view.selected_index),
+            Some(selected.id)
+        );
+    })
+    .unwrap();
+    repo.delete(selected.id).unwrap();
+    repo.save_text("excluded latest".into()).unwrap();
+    cx.update(|cx| board.update(cx, |board, cx| board.refresh_records_from_repository(cx)));
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = board.read(cx);
+        assert_eq!(view.filtered_record_len(), 2);
+        assert_eq!(
+            view.filtered_record_id_at(view.selected_index),
+            Some(fallback.id)
         );
     });
 }

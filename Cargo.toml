@@ -24,7 +24,6 @@ thiserror.workspace = true
 toml.workspace = true
 image.workspace = true
 tray-icon = { version = "0.26.1", default-features = false }
-auto-launch = "0.6.0"
 raw-window-handle = "0.6.2"
 async-channel = "2.5.0"
 rust-i18n = "4.2.4"
@@ -47,11 +46,16 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "time",
 ] }
 
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+auto-launch = "0.6.0"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
+windows-registry = "0.6.1"
+windows-result = "0.4.1"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Graphics_Gdi",
     "Win32_System_Threading",

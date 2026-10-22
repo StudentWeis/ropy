@@ -57,11 +57,7 @@ focus for its own process after the popup maps. No configuration-file edits or
 extra activation process are needed. Changing or clearing the shortcut updates
 the runtime binding; configuration reloads restore it while Ropy is running.
 
-The adapter refuses conflicting bindings instead of replacing them. Save failures
-retain the previous shortcut. Letters, digits, F1–F24, navigation keys and common
-punctuation are supported; unsupported keys fail registration. Physical-keycode
-bindings with the same modifiers are conservatively treated as conflicts. Remove
-previous manual Ropy bindings before assigning the same chord in Ropy.
+The adapter refuses confirmed symbol-key and catch-all conflicts instead of replacing existing bindings. Save failures retain the previous shortcut. Letters, digits, F1–F24, navigation keys and common punctuation are supported; unsupported keys fail registration. Hyprland’s binding list does not include the keymap needed to resolve numeric physical keycodes, so a physical-keycode binding alone is not treated as a confirmed conflict. Check those bindings manually and remove previous manual Ropy bindings before assigning the same chord in Ropy.
 
 On shutdown, Ropy disables only its own Lua binding handle. Disabled handles are
 reused on later registration and removed by Hyprland's next configuration reload.

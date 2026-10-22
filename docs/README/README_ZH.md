@@ -56,9 +56,10 @@ Homebrew 管理。当前发布尚未签名，自建 Cask 会在安装后自动�
 下载 `.dmg` 文件并将 Ropy.app 拖到应用程序文件夹后，您可能需要移除隔离属性才能正常运行应用程序。打开终端并运行以下命令：
 
 ```sh
-xattr -rc /Applications/Ropy.app
-sudo xattr -r -d com.apple.quarantine /Applications/Ropy.app
+xattr -r -d com.apple.quarantine /Applications/Ropy.app
 ```
+
+如果命令提示权限不足，在同一命令前加上 `sudo` 后重试。
 
 ### Windows
 

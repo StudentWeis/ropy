@@ -178,52 +178,35 @@ pub(crate) fn start_tray_handler_inner(tx: async_channel::Sender<TrayEvent>) -> 
 }
 
 pub(crate) fn send_open_settings(cx: &mut App) {
+    open_panel(super::board::ActivePanel::Settings, cx);
+}
+
+pub(crate) fn send_open_about(cx: &mut App) {
+    open_panel(super::board::ActivePanel::About, cx);
+}
+
+fn open_panel(panel: super::board::ActivePanel, cx: &mut App) {
     let Some(window_handle) = super::window::ensure_window(cx) else {
         return;
     };
-    window_handle
-        .update(cx, |root, window: &mut gpui_kit::Window, cx| {
-            if let Ok(board) = root
-                .view()
-                .clone()
-                .downcast::<crate::gui::board::RopyBoard>()
-            {
-                board.update(cx, |board, cx| {
-                    board.active_panel = crate::gui::board::ActivePanel::Settings;
+    let _ = window_handle.update(cx, |root, window, cx| {
+        if let Ok(board) = root.view().clone().downcast::<super::board::RopyBoard>() {
+            board.update(cx, |board, cx| {
+                board.cancel_shortcut_recording(cx);
+                if board.settings_editor.hotkey.recording {
+                    board.cancel_hotkey_recording(window, cx);
+                }
+                board.active_panel = panel;
+                if panel == super::board::ActivePanel::Settings {
                     board
                         .settings_editor
                         .panel_state
                         .window_opacity_slider_visible = true;
-                    board.activated = true;
-                    window.focus(&board.focus_handle, cx);
-                    cx.notify();
-                });
-            }
-            super::active_window(window, cx);
-        })
-        .ok();
-}
-
-pub(crate) fn send_open_about(cx: &mut App) {
-    let Some(window_handle) = super::window::ensure_window(cx) else {
-        return;
-    };
-    window_handle
-        .update(cx, |root, window: &mut gpui_kit::Window, cx| {
-            if let Ok(board) = root
-                .view()
-                .clone()
-                .downcast::<crate::gui::board::RopyBoard>()
-            {
-                board.update(cx, |board, cx| {
-                    board.active_panel = crate::gui::board::ActivePanel::About;
-                    board.activated = true;
-                    cx.notify();
-                });
-            }
-            super::active_window(window, cx);
-        })
-        .ok();
+                }
+                board.activate_popup(window, cx);
+            });
+        }
+    });
 }
 
 fn spawn_tray_menu_event_forwarder(

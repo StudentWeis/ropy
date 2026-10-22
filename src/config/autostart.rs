@@ -5,8 +5,12 @@ use std::{env, path::Path};
 use auto_launch::MacOSLaunchMode;
 #[cfg(target_os = "windows")]
 use auto_launch::WindowsEnableMode;
+#[cfg(not(target_os = "linux"))]
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use thiserror::Error;
+
+#[cfg(any(target_os = "linux", test))]
+mod linux;
 
 #[derive(Debug, Error)]
 pub(crate) enum AutoStartError {
@@ -22,10 +26,12 @@ pub(crate) enum AutoStartError {
     StatusCheck(String),
 }
 
-/// Owns the platform `AutoLaunch` handle. The app always boots hidden into
-/// the tray, so no extra CLI flag is needed to differentiate a
-/// system-triggered launch from a user-triggered one.
+/// Manages the platform login registration. The app always boots hidden into
+/// the tray, so system-triggered launches need no additional CLI flag.
 pub(crate) struct AutoStartManager {
+    #[cfg(target_os = "linux")]
+    desktop_entry: linux::DesktopEntry,
+    #[cfg(not(target_os = "linux"))]
     auto_launch: AutoLaunch,
     #[cfg(target_os = "macos")]
     legacy_launch_agent: AutoLaunch,
@@ -35,20 +41,38 @@ impl AutoStartManager {
     pub(crate) fn new(app_name: &str) -> Result<Self, AutoStartError> {
         let app_path = Self::get_app_path()?;
 
-        let mut builder = AutoLaunchBuilder::new();
-        builder.set_app_name(app_name).set_app_path(&app_path);
+        #[cfg(target_os = "linux")]
+        let desktop_entry = linux::DesktopEntry::new(
+            &dirs::config_dir().ok_or_else(|| {
+                AutoStartError::Initialization("config directory not found".into())
+            })?,
+            app_name,
+            &app_path,
+        );
 
-        #[cfg(target_os = "macos")]
-        builder.set_macos_launch_mode(MacOSLaunchMode::AppleScript);
+        #[cfg(not(target_os = "linux"))]
+        let auto_launch = {
+            // Windows Run values are command lines, so quote the executable.
+            #[cfg(target_os = "windows")]
+            let app_path = format!("\"{app_path}\"");
+            let mut builder = AutoLaunchBuilder::new();
+            builder.set_app_name(app_name).set_app_path(&app_path);
 
-        #[cfg(target_os = "windows")]
-        builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
+            #[cfg(target_os = "macos")]
+            builder.set_macos_launch_mode(MacOSLaunchMode::AppleScript);
 
-        let auto_launch = builder.build().map_err(|e| {
-            AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
-        })?;
+            #[cfg(target_os = "windows")]
+            builder.set_windows_enable_mode(WindowsEnableMode::CurrentUser);
+
+            builder.build().map_err(|e| {
+                AutoStartError::Initialization(format!("Failed to build AutoLaunch: {e}"))
+            })?
+        };
 
         Ok(Self {
+            #[cfg(target_os = "linux")]
+            desktop_entry,
+            #[cfg(not(target_os = "linux"))]
             auto_launch,
             #[cfg(target_os = "macos")]
             legacy_launch_agent: Self::build_macos_legacy_launch_agent(app_name, &app_path)?,
@@ -100,40 +124,57 @@ impl AutoStartManager {
         })
     }
 
-    pub(crate) fn enable(&self) -> Result<(), AutoStartError> {
-        self.auto_launch
-            .enable()
-            .map_err(|e| AutoStartError::Enable(e.to_string()))
-    }
-
-    pub(crate) fn disable(&self) -> Result<(), AutoStartError> {
-        self.auto_launch
-            .disable()
-            .map_err(|e| AutoStartError::Disable(e.to_string()))
-    }
-
-    pub(crate) fn is_enabled(&self) -> Result<bool, AutoStartError> {
-        self.auto_launch
-            .is_enabled()
-            .map_err(|e| AutoStartError::StatusCheck(e.to_string()))
-    }
-
-    /// Make the system state match the user's preference, but skip the
-    /// platform call when it already matches — repeatedly toggling
-    /// Login Items / registry entries is unnecessary churn and (on
-    /// some Linux desktops) racy.
+    /// Reconcile the registered target as well as the enabled state. Matching
+    /// registrations are left intact to avoid unnecessary native writes.
     pub(crate) fn sync_state(&self, enabled: bool) -> Result<(), AutoStartError> {
-        let current_enabled = self.is_enabled()?;
-        match autostart_sync_action(enabled, current_enabled) {
-            AutoStartSyncAction::None => Ok(()),
-            AutoStartSyncAction::Enable => self.enable(),
-            AutoStartSyncAction::Disable => self.disable(),
-        }?;
+        #[cfg(target_os = "linux")]
+        {
+            self.desktop_entry.sync_state(enabled)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let current_enabled = self
+                .auto_launch
+                .is_enabled()
+                .map_err(|error| AutoStartError::StatusCheck(error.to_string()))?;
+            #[cfg(target_os = "windows")]
+            let target_matches = !enabled || !current_enabled || self.windows_target_matches()?;
+            #[cfg(not(target_os = "windows"))]
+            let target_matches = true;
 
-        #[cfg(target_os = "macos")]
-        self.disable_macos_legacy_launch_agent()?;
+            if enabled && (!current_enabled || !target_matches) {
+                self.auto_launch
+                    .enable()
+                    .map_err(|error| AutoStartError::Enable(error.to_string()))?;
+            } else if !enabled && current_enabled {
+                self.auto_launch
+                    .disable()
+                    .map_err(|error| AutoStartError::Disable(error.to_string()))?;
+            }
 
-        Ok(())
+            #[cfg(target_os = "macos")]
+            self.disable_macos_legacy_launch_agent()?;
+            Ok(())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn windows_target_matches(&self) -> Result<bool, AutoStartError> {
+        let registered = windows_registry::CURRENT_USER
+            .open(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run")
+            .and_then(|key| key.get_string(self.auto_launch.get_app_name()));
+        match registered {
+            Ok(command) => Ok(command.trim_end() == self.auto_launch.get_app_path()),
+            Err(error)
+                if error.code()
+                    == windows_result::HRESULT::from_win32(
+                        windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND,
+                    ) =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(AutoStartError::StatusCheck(error.to_string())),
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -141,27 +182,6 @@ impl AutoStartManager {
         self.legacy_launch_agent
             .disable()
             .map_err(|e| AutoStartError::Disable(e.to_string()))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum AutoStartSyncAction {
-    None,
-    Enable,
-    Disable,
-}
-
-const fn autostart_sync_action(enabled: bool, current_enabled: bool) -> AutoStartSyncAction {
-    if enabled {
-        if current_enabled {
-            AutoStartSyncAction::None
-        } else {
-            AutoStartSyncAction::Enable
-        }
-    } else if current_enabled {
-        AutoStartSyncAction::Disable
-    } else {
-        AutoStartSyncAction::None
     }
 }
 
@@ -256,27 +276,6 @@ mod tests {
         assert_eq!(
             macos_app_bundle_path(Path::new("/usr/local/bin/ropy")),
             None
-        );
-    }
-
-    #[test]
-    fn test_autostart_sync_action_enabled_preference_with_disabled_entry_enables() {
-        assert_eq!(
-            autostart_sync_action(true, false),
-            AutoStartSyncAction::Enable,
-        );
-    }
-
-    #[test]
-    fn test_autostart_sync_action_current_enabled_entry_is_noop() {
-        assert_eq!(autostart_sync_action(true, true), AutoStartSyncAction::None);
-    }
-
-    #[test]
-    fn test_autostart_sync_action_disabled_preference_disables_enabled_entry() {
-        assert_eq!(
-            autostart_sync_action(false, true),
-            AutoStartSyncAction::Disable,
         );
     }
 
