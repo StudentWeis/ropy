@@ -819,6 +819,54 @@ fn test_board_space_preview_deactivation_hides_preview_in_pinned_window(cx: &mut
 }
 
 #[gpui_kit::test]
+fn test_about_content_centers_in_body_and_update_row(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, _| {
+            board.update_manager.managed = true;
+            board.update_manager.status = crate::updater::models::UpdateStatus::UpToDate;
+        });
+        window.render_frame(cx);
+        window.click("about-button", cx);
+        let body = window.find("about-content").bounds();
+        let logo = window.find("about-logo").bounds();
+        let social = window.find("about-social-links").bounds();
+        let status = window.find("about-update-status").bounds();
+        let action = window.find("update-check-button").bounds();
+        assert!((logo.center().x - body.center().x).abs() < gpui_kit::px(1.));
+        assert!(((status.left() + action.right()) / 2. - body.center().x).abs() < gpui_kit::px(1.));
+        assert!(
+            ((logo.top() + social.bottom()) / 2. - body.center().y).abs() < gpui_kit::px(1.),
+            "content must be vertically centered below the header"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(
+        handle,
+        gpui_kit::size(gpui_kit::px(400.), gpui_kit::px(360.)),
+    );
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let body = window.find("about-content").bounds();
+        let logo = window.find("about-logo").bounds();
+        assert!(logo.top() >= body.top(), "overflow must not clip the logo");
+        window.scroll(
+            "about-content",
+            gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-1000.))),
+            cx,
+        );
+        let social = window.find("about-social-links").bounds();
+        assert!(social.top() >= body.top());
+        assert!(
+            social.bottom() <= body.bottom(),
+            "social links must remain reachable: body {body:?}, social {social:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn test_board_controls_expose_localized_accessible_names(cx: &mut TestAppContext) {
     let (handle, board, _) = open_board(cx, vec![]);
     cx.update_window(handle, |_, window, cx| {
