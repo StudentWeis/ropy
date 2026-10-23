@@ -1,3 +1,4 @@
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
     Context, ImageSource, Resource, StatefulInteractiveElement,
     component::{
@@ -61,71 +62,85 @@ pub(crate) fn render_about_content(
         cx,
     );
 
-    v_flex().size_full().child(header).child(
+    v_flex().w_full().flex_1().min_h_0().child(header).child(
         v_flex()
             .id("about-content")
+            .test_support()
             .overflow_y_scroll()
             .flex_1()
-            .items_center()
-            .gap_3()
-            // Logo
+            .min_h_0()
             .child(
-                img(ImageSource::Resource(Resource::Embedded("logo.png".into())))
-                    .w(px(80.0))
-                    .h(px(80.0))
-                    .rounded_md(),
-            )
-            // Version text
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().foreground)
-                    .font_weight(gpui_kit::FontWeight::MEDIUM)
-                    .child(t!("about_version", version = version)),
-            )
-            // Update section
-            .child(render_update_section(board, cx))
-            // Description
-            .child(
-                div()
-                    .px_8()
-                    .text_center()
-                    .text_sm()
-                    .text_color(cx.theme().foreground)
-                    .child(t!("about_description")),
-            )
-            // License
-            .child(
-                Button::new("license-button")
-                    .small()
-                    .ghost()
-                    .label(t!("about_license"))
-                    .on_click(|_, _, cx| {
-                        cx.open_url(LICENSE_URL);
-                    }),
-            )
-            // Social links with icons
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(render_social_link_button(
-                        "github-button",
-                        Icon::empty().path("icons/github.svg").size(px(32.0)),
-                        t!("about_github_tooltip").into_owned(),
-                        GITHUB_URL,
-                    ))
-                    .child(render_social_link_button(
-                        "xiaohongshu-button",
-                        Icon::empty().path("icons/xiaohongshu.svg").size(px(32.0)),
-                        t!("about_xiaohongshu_tooltip").into_owned(),
-                        XIAOHONGSHU_URL,
-                    )),
+                v_flex()
+                    .w_full()
+                    .flex_shrink_0()
+                    // Auto margins center when space permits without clipping the top on overflow.
+                    .my_auto()
+                    .py_4()
+                    .items_center()
+                    .gap_3()
+                    // Logo
+                    .child(
+                        img(ImageSource::Resource(Resource::Embedded("logo.png".into())))
+                            .id("about-logo")
+                            .test_support()
+                            .w(px(80.0))
+                            .h(px(80.0))
+                            .rounded_md(),
+                    )
+                    // Version text
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .font_weight(gpui_kit::FontWeight::MEDIUM)
+                            .child(t!("about_version", version = version)),
+                    )
+                    // Update section
+                    .child(render_update_section(board, cx))
+                    // Description
+                    .child(
+                        div()
+                            .px_8()
+                            .text_center()
+                            .text_sm()
+                            .text_color(cx.theme().foreground)
+                            .child(t!("about_description")),
+                    )
+                    // License
+                    .child(
+                        Button::new("license-button")
+                            .small()
+                            .ghost()
+                            .label(t!("about_license"))
+                            .on_click(|_, _, cx| {
+                                cx.open_url(LICENSE_URL);
+                            }),
+                    )
+                    // Social links with icons
+                    .child(
+                        h_flex()
+                            .id("about-social-links")
+                            .test_support()
+                            .gap_2()
+                            .child(render_social_link_button(
+                                "github-button",
+                                Icon::empty().path("icons/github.svg").size(px(32.0)),
+                                t!("about_github_tooltip").into_owned(),
+                                GITHUB_URL,
+                            ))
+                            .child(render_social_link_button(
+                                "xiaohongshu-button",
+                                Icon::empty().path("icons/xiaohongshu.svg").size(px(32.0)),
+                                t!("about_xiaohongshu_tooltip").into_owned(),
+                                XIAOHONGSHU_URL,
+                            )),
+                    ),
             ),
     )
 }
 
-fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    let status_text: gpui_kit::SharedString = match &board.update_manager.status {
+fn update_status_text(status: &UpdateStatus) -> gpui_kit::SharedString {
+    match status {
         UpdateStatus::Idle => t!("update_check_now").into(),
         UpdateStatus::Checking => t!("update_checking").into(),
         UpdateStatus::Available(info) => t!("update_available", version = &info.version).into(),
@@ -159,7 +174,11 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
             crate::updater::errors::UpdateFailure::Release => t!("update_error"),
         }
         .into(),
-    };
+    }
+}
+
+fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    let status_text = update_status_text(&board.update_manager.status);
     // Use `foreground` for every non-error status so the text stays legible
     // under dark themes when the window is in transparent mode, where
     // `muted_foreground` blends into the translucent background.
@@ -209,12 +228,24 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
     };
 
     v_flex()
+        .max_w_full()
+        .px_4()
+        .items_center()
+        .text_center()
         .gap_2()
         .child(
             h_flex()
                 .flex_wrap()
+                .justify_center()
                 .gap_2()
-                .child(div().text_xs().text_color(status_color).child(status_text))
+                .child(
+                    div()
+                        .id("about-update-status")
+                        .test_support()
+                        .text_xs()
+                        .text_color(status_color)
+                        .child(status_text),
+                )
                 .children(action_button),
         )
         .when(board.update_manager.managed, |this| {
