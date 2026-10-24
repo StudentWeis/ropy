@@ -26,7 +26,7 @@ fn test_display_record_read_failure_returns_error_and_preserves_history() {
     assert_eq!(records[0].id, record.id);
     assert!(records[0].pinned);
     assert!(favorites.is_empty());
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
 }
 
 #[rstest::rstest]
@@ -64,7 +64,7 @@ fn test_display_corrupt_record_fills_limit_with_readable_history(#[case] reopen:
         [pinned.id, good.id, favorite.id]
     );
     assert_eq!(favorites, std::collections::HashSet::from([favorite.id]));
-    assert_eq!(repo.count(), 4);
+    assert_eq!(repo.count().expect("count"), 4);
 }
 
 #[test]
@@ -157,9 +157,16 @@ fn test_redb_new_record_aborted_write_leaves_no_record_or_index(#[case] fail_aft
     let (dir, repo) = crate::repository::test_helpers::create_test_repo_with(redb_backend_factory);
     repo.backend.fail_write_after(fail_after);
     assert!(repo.save_text("new".into()).is_err());
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
     for tree in [TIME_INDEX_TREE, TIME_INDEX_LOOKUP_TREE] {
-        assert_eq!(repo.backend.open_tree(tree).expect("tree").len(), 0);
+        assert_eq!(
+            repo.backend
+                .open_tree(tree)
+                .expect("tree")
+                .len()
+                .expect("count"),
+            0
+        );
     }
     drop(repo);
     let reopened = ClipboardRepository::init(
@@ -168,7 +175,7 @@ fn test_redb_new_record_aborted_write_leaves_no_record_or_index(#[case] fail_aft
         redb_backend_factory,
     )
     .expect("reopen");
-    assert_eq!(reopened.count(), 0);
+    assert_eq!(reopened.count().expect("count"), 0);
 }
 
 #[test]
@@ -210,10 +217,17 @@ fn test_repository_concurrent_recopy_pin_delete_keeps_indexes_consistent() {
         barrier.wait();
         repo.delete(record.id).expect("delete");
         saver.join().expect("saver");
-        let count = repo.count();
+        let count = repo.count().expect("count");
         assert_eq!(repo.get_display_records(10).expect("display").len(), count);
         for tree in [TIME_INDEX_TREE, TIME_INDEX_LOOKUP_TREE] {
-            assert_eq!(repo.backend.open_tree(tree).expect("tree").len(), count);
+            assert_eq!(
+                repo.backend
+                    .open_tree(tree)
+                    .expect("tree")
+                    .len()
+                    .expect("count"),
+                count
+            );
         }
         repo.delete(record.id).expect("reset fixture");
     }
@@ -390,6 +404,14 @@ fn test_redb_reopen_inconsistent_indexes_repairs_without_losing_pin_or_favorite(
     assert!(display[0].pinned);
     assert_eq!(reopened.favorite_ids().expect("favorites"), vec![record.id]);
     for tree in [TIME_INDEX_TREE, TIME_INDEX_LOOKUP_TREE] {
-        assert_eq!(reopened.backend.open_tree(tree).expect("tree").len(), 1);
+        assert_eq!(
+            reopened
+                .backend
+                .open_tree(tree)
+                .expect("tree")
+                .len()
+                .expect("count"),
+            1
+        );
     }
 }

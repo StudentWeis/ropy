@@ -180,10 +180,10 @@ impl KvTree for MemoryTreeHandle {
         Ok(entries.remove(key).is_some())
     }
 
-    fn len(&self) -> usize {
+    fn len(&self) -> Result<usize, RepositoryError> {
         let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
-        entries.len()
+        Ok(entries.len())
     }
 
     #[cfg(test)]

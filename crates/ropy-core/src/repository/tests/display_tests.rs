@@ -35,7 +35,7 @@ fn test_same_millisecond_limit_and_cleanup_keep_newest(#[case] cleanup: bool) {
     let repo = ClipboardRepository::from_backend(backend, images).unwrap();
     if cleanup {
         assert_eq!(repo.cleanup_old_records(1).unwrap(), 1);
-        assert_eq!(repo.count(), 1);
+        assert_eq!(repo.count().expect("count"), 1);
         assert!(repo.get_by_id(10).unwrap().is_none());
     }
     let selected = repo.get_display_records(1).unwrap();
@@ -161,7 +161,7 @@ fn test_get_display_records_when_total_is_41_with_two_favorites_and_one_pinned_r
         .get_display_records(40)
         .expect("Failed to get display records");
 
-    assert_eq!(repo.count(), 41);
+    assert_eq!(repo.count().expect("count"), 41);
     assert_eq!(display_records.len(), 41);
 }
 
@@ -187,7 +187,7 @@ fn test_get_display_records_when_limit_is_40_with_two_favorites_and_one_pinned_r
         .get_display_records(40)
         .expect("Failed to get display records");
 
-    assert_eq!(repo.count(), 43);
+    assert_eq!(repo.count().expect("count"), 43);
     assert_eq!(display_records.len(), 43);
 }
 
@@ -228,7 +228,7 @@ fn test_get_display_records_when_newest_records_are_favorited_still_returns_43()
         .get_display_records(40)
         .expect("Failed to get display records");
 
-    assert_eq!(repo.count(), 43);
+    assert_eq!(repo.count().expect("count"), 43);
     assert_eq!(display_records.len(), 43);
 }
 
@@ -310,7 +310,7 @@ fn test_get_by_id_u64_max() {
 fn test_count_empty() {
     let (_temp_dir, repo) = create_test_repo();
 
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 }
 
 #[test]
@@ -358,13 +358,13 @@ fn test_multiple_operations_sequence() {
     let r2 = save_text_at(&repo, "Second", 2);
     let _r3 = save_text_at(&repo, "Third", 3);
 
-    assert_eq!(repo.count(), 3);
+    assert_eq!(repo.count().expect("count"), 3);
 
     repo.toggle_pin(r1.id).expect("Failed to pin");
 
     let deleted = repo.delete(r2.id).expect("Failed to delete");
     assert!(deleted);
-    assert_eq!(repo.count(), 2);
+    assert_eq!(repo.count().expect("count"), 2);
 
     let recent = load_display_records(&repo, 10);
     assert_eq!(recent.len(), 2);
@@ -372,7 +372,7 @@ fn test_multiple_operations_sequence() {
     assert_eq!(recent[1].content, "Third");
 
     repo.clear().expect("Failed to clear");
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 }
 
 #[test]
@@ -394,7 +394,7 @@ fn test_concurrent_saves_then_deletes_remove_selected_records() {
         ids.push(record.id);
     }
 
-    assert_eq!(repo.count(), 10);
+    assert_eq!(repo.count().expect("count"), 10);
 
     let repo2 = repo.clone();
     let ids_to_delete = ids[..5].to_vec();
@@ -405,5 +405,5 @@ fn test_concurrent_saves_then_deletes_remove_selected_records() {
     });
 
     handle.join().expect("Delete thread panicked");
-    assert_eq!(repo.count(), 5);
+    assert_eq!(repo.count().expect("count"), 5);
 }

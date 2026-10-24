@@ -27,7 +27,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Returns an error if selecting or deleting ordinary records fails.
     pub fn clear_ordinary_records(&self) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
-        let total = self.count();
+        let total = self.count()?;
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
 
@@ -41,7 +41,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Returns an error if querying retention exemptions or deleting old records fails.
     pub fn cleanup_old_records(&self, keep_count: usize) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
-        let total = self.count();
+        let total = self.count()?;
         let favorite_ids = self.favorite_id_set()?;
         let ordinary_total = self.ordinary_record_count(total, &favorite_ids)?;
         self.cleanup_old_records_with_ordinary_total(
@@ -64,7 +64,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         keep_count: usize,
     ) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
-        let total = self.count();
+        let total = self.count()?;
         let trigger = ClipboardRepository::<RedbBackend>::cleanup_trigger_record_count(keep_count);
         // Ordinary records cannot outnumber all records. Avoid reading retention
         // exemptions until even the total exceeds the buffered limit.
@@ -182,6 +182,40 @@ mod tests {
     use crate::repository::test_helpers::{create_test_repo, save_numbered_records, save_text_at};
 
     #[rstest]
+    #[case::clear(0)]
+    #[case::trim(1)]
+    #[case::buffered_trim(2)]
+    fn test_cleanup_count_failure_preserves_history_and_allows_retry(#[case] operation: u8) {
+        let (_directory, repo) = crate::repository::test_helpers::create_test_repo_with(
+            crate::repository::backend::redb::redb_backend_factory,
+        );
+        let record = repo
+            .save_rich_text("keep".into(), Some("<b>keep</b>"), None)
+            .unwrap();
+        let cleanup = || match operation {
+            0 => repo.clear_ordinary_records(),
+            1 => repo.cleanup_old_records(0),
+            _ => repo.cleanup_old_records_if_needed(0),
+        };
+        // Two records exceed the buffered limit, so a successful retry must delete both.
+        repo.save_text("other".into()).unwrap();
+        repo.records.fail_next_len();
+        assert!(matches!(cleanup(), Err(RepositoryError::Query(_))));
+        assert_eq!(repo.get_display_records(10).unwrap().len(), 2);
+        assert_eq!(
+            crate::repository::assets::load_rich_text_html(record.rich_text_meta.as_ref().unwrap())
+                .as_deref(),
+            Some("<b>keep</b>"),
+        );
+        assert_eq!(cleanup().unwrap(), 2);
+        assert_eq!(repo.get_display_records(10).unwrap(), []);
+        assert!(
+            crate::repository::assets::load_rich_text_html(record.rich_text_meta.as_ref().unwrap())
+                .is_none()
+        );
+    }
+
+    #[rstest]
     #[case(0, 1)]
     #[case(1, 1)]
     #[case(5, 1)]
@@ -235,7 +269,7 @@ mod tests {
         let removed = repo.cleanup_old_records(1).expect("Failed to cleanup");
 
         assert_eq!(removed, 0);
-        assert_eq!(repo.count(), 3);
+        assert_eq!(repo.count().expect("count"), 3);
     }
 
     #[test]
@@ -253,7 +287,7 @@ mod tests {
         let removed = repo.cleanup_old_records(2).expect("Failed to cleanup");
 
         assert_eq!(removed, 3);
-        assert_eq!(repo.count(), 4);
+        assert_eq!(repo.count().expect("count"), 4);
         assert!(repo.get_by_id(pinned.id).expect("query").is_some());
         assert!(repo.get_by_id(favorited.id).expect("query").is_some());
     }
@@ -283,7 +317,7 @@ mod tests {
             .expect("Failed to cleanup");
 
         assert_eq!(removed, 0);
-        assert_eq!(repo.count(), 11);
+        assert_eq!(repo.count().expect("count"), 11);
     }
 
     #[test]
@@ -298,7 +332,7 @@ mod tests {
             .expect("Failed to cleanup");
 
         assert_eq!(removed, 2);
-        assert_eq!(repo.count(), 10);
+        assert_eq!(repo.count().expect("count"), 10);
     }
 
     #[test]
@@ -320,7 +354,7 @@ mod tests {
             .expect("Failed to cleanup");
 
         assert_eq!(removed, 0);
-        assert_eq!(repo.count(), 12);
+        assert_eq!(repo.count().expect("count"), 12);
     }
 
     #[test]
@@ -330,7 +364,7 @@ mod tests {
         let removed = repo.clear_ordinary_records().expect("Failed to clear");
 
         assert_eq!(removed, 0);
-        assert_eq!(repo.count(), 0);
+        assert_eq!(repo.count().expect("count"), 0);
     }
 
     #[test]
@@ -341,6 +375,6 @@ mod tests {
         let removed = repo.clear_ordinary_records().expect("Failed to clear");
 
         assert_eq!(removed, 5);
-        assert_eq!(repo.count(), 0);
+        assert_eq!(repo.count().expect("count"), 0);
     }
 }

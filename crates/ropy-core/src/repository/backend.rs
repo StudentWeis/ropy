@@ -71,11 +71,17 @@ pub trait KvTree: Send + Sync {
     fn remove(&self, key: &[u8]) -> Result<bool, RepositoryError>;
 
     /// Return the number of entries currently visible in the tree.
-    fn len(&self) -> usize;
+    ///
+    /// # Errors
+    /// Returns an error if the backend cannot read the entry count.
+    fn len(&self) -> Result<usize, RepositoryError>;
 
     /// Whether this tree currently contains no entries.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
+    ///
+    /// # Errors
+    /// Returns an error if the backend cannot read the entry count.
+    fn is_empty(&self) -> Result<bool, RepositoryError> {
+        self.len().map(|count| count == 0)
     }
 
     /// Remove all entries from this test tree.

@@ -488,7 +488,7 @@ mod tests {
             .persist(&fixture.repo)
             .expect("discard stale image");
         assert_eq!(
-            fixture.repo.count(),
+            fixture.repo.count().expect("count"),
             0,
             "old captures must not restore history"
         );
@@ -506,7 +506,7 @@ mod tests {
             .expect("new capture")
             .persist(&fixture.repo)
             .expect("new copy");
-        assert_eq!(fixture.repo.count(), 1);
+        assert_eq!(fixture.repo.count().expect("count"), 1);
     }
 
     #[rstest]
@@ -535,7 +535,7 @@ mod tests {
             .persist(&fixture.repo)
             .expect("persist unrelated capture");
         assert!(fixture.repo.get_by_id(record.id).expect("lookup").is_none());
-        assert_eq!(fixture.repo.count(), 1);
+        assert_eq!(fixture.repo.count().expect("count"), 1);
         fixture.text("deleted");
         fixture
             .rx
@@ -543,7 +543,7 @@ mod tests {
             .expect("recaptured")
             .persist(&fixture.repo)
             .expect("new copy");
-        assert_eq!(fixture.repo.count(), 2);
+        assert_eq!(fixture.repo.count().expect("count"), 2);
     }
 
     #[test]
@@ -554,7 +554,7 @@ mod tests {
         fixture.backend.fail_next_batch();
         assert!(super::super::clear_tracked_history(&fixture.repo, &fixture.tracker).is_err());
         assert!(capture.persist(&fixture.repo).expect("persist").is_some());
-        assert_eq!(fixture.repo.count(), 1);
+        assert_eq!(fixture.repo.count().expect("count"), 1);
         fixture.text("kept after failure");
         assert!(
             fixture.rx.is_empty(),
@@ -620,7 +620,7 @@ mod tests {
             .expect("recaptured")
             .persist(&fixture.repo)
             .expect("persist retry");
-        assert_eq!(fixture.repo.count(), 1);
+        assert_eq!(fixture.repo.count().expect("count"), 1);
     }
 
     #[test]
@@ -643,7 +643,7 @@ mod tests {
             .expect("retry")
             .persist(&fixture.repo)
             .expect("persist retry");
-        assert_eq!(fixture.repo.count(), 1);
+        assert_eq!(fixture.repo.count().expect("count"), 1);
     }
 
     #[test]
@@ -717,7 +717,7 @@ mod tests {
             .expect("encode image");
         fixture.backend.fail_next_batch();
         assert!(capture.persist(&fixture.repo).is_err());
-        assert_eq!(fixture.repo.count(), 0);
+        assert_eq!(fixture.repo.count().expect("count"), 0);
         assert_eq!(
             std::fs::read_dir(fixture.repo.images_dir())
                 .expect("read images directory")

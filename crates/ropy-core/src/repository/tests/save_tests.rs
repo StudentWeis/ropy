@@ -47,7 +47,7 @@ fn test_pending_image_partial_install_failure_removes_new_payload() {
     let thumbnail = repo.images_dir().join("42_thumb.png");
     std::fs::create_dir(&thumbnail).unwrap();
     assert!(repo.save_pending_image(image).is_err());
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
     assert!(!repo.images_dir().join("42.png").exists());
     std::fs::remove_dir(thumbnail).unwrap();
     assert_eq!(std::fs::read_dir(repo.images_dir()).unwrap().count(), 0);
@@ -72,7 +72,7 @@ fn test_save_rich_text_sidecar_write_failure_preserves_committed_record(#[case] 
         repo.save_rich_text("same".into(), Some("<i>new</i>"), None)
             .is_err()
     );
-    assert_eq!(repo.count(), usize::from(existing));
+    assert_eq!(repo.count().expect("count"), usize::from(existing));
     std::fs::remove_file(&sidecars).unwrap();
     if let Some(original) = original {
         std::fs::rename(backup, sidecars).unwrap();
@@ -223,7 +223,7 @@ fn test_save_different_content_types() {
         .expect("Failed to save path");
     assert_eq!(path_record.content_type, ContentType::FilePath);
 
-    assert_eq!(repo.count(), 2);
+    assert_eq!(repo.count().expect("count"), 2);
 }
 
 #[test]
@@ -256,7 +256,7 @@ fn test_repository_save_files_when_equivalent_inputs_reuses_existing_record() {
         .expect("Failed to save second file record");
 
     assert_eq!(first.id, second.id);
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn test_save_image_from_path_dedup() {
         .expect("Failed to save second");
 
     assert_eq!(r1.id, r2.id);
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
     assert_eq!(r2.created_at, capture_time(2));
     assert_eq!(r2.content, r1.content);
     assert!(path1.exists());
@@ -327,7 +327,7 @@ fn test_save_after_clear() {
     let record = repo
         .save_text("After clear".to_string())
         .expect("Failed to save after clear");
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
     assert_eq!(record.content, "After clear");
 }
 

@@ -462,7 +462,10 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 
     /// Return the number of stored records.
-    pub fn count(&self) -> usize {
+    ///
+    /// # Errors
+    /// Returns an error if the backend cannot read the record count.
+    pub fn count(&self) -> Result<usize, RepositoryError> {
         self.records.len()
     }
 }

@@ -78,7 +78,7 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
         assert!(board.copy_tx.is_closed());
         let repository = GlobalRepository::global(cx).cloned().unwrap();
         assert_eq!(repository.images_dir(), fixture.path().join("images"));
-        assert_eq!(repository.count(), 0);
+        assert_eq!(repository.count().unwrap(), 0);
         assert_eq!(crate::utils::read_or_recover(&board.records).len(), 4);
         assert_eq!(board.layout_mode, LayoutMode::List);
         assert!(board.pinned);
