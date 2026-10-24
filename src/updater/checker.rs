@@ -261,27 +261,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_plain() {
-        let v = parse_version("1.2.3").unwrap();
-        assert_eq!(v, Version::new(1, 2, 3));
-    }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_with_v_prefix() {
-        let v = parse_version("v0.2.1").unwrap();
-        assert_eq!(v, Version::new(0, 2, 1));
-    }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_prerelease() {
-        let v = parse_version("v0.3.0-beta").unwrap();
-        assert!(!v.pre.is_empty());
-    }
-
-    #[test]
     fn test_expected_asset_name_macos() {
         let name = expected_asset_name("aarch64-apple-darwin");
         assert_eq!(name, "ropy-aarch64-apple-darwin.tar.xz");
@@ -363,110 +342,40 @@ mod tests {
         assert_matches!(result, Err(UpdateError::MissingChecksumAsset(_)));
     }
 
-    // ── parse_version Error Cases ─────────────────────────────────
-
-    #[test]
-    fn test_parse_version_empty_string() {
-        let result = parse_version("");
-        assert!(result.is_err());
+    #[rstest::rstest]
+    #[case("")]
+    #[case("   ")]
+    #[case("not-a-version")]
+    #[case("1")]
+    #[case("1.2")]
+    #[case("1.2.3.4.5")]
+    #[case("-1.2.3")]
+    #[case("@@@")]
+    #[case("v")]
+    #[case("V")]
+    #[case("version")]
+    #[case("1.2.3-rc.😀")]
+    #[case("1.2.3+build🔧")]
+    #[case("1.2.3-")]
+    #[case("1.2.3+")]
+    fn test_parse_version_invalid_tag_returns_parse_error(#[case] tag: &str) {
+        assert_matches!(parse_version(tag), Err(UpdateError::Parse(_)));
     }
 
-    #[test]
-    fn test_parse_version_whitespace_only() {
-        let result = parse_version("   ");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_invalid_chars() {
-        let result = parse_version("not-a-version");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_missing_components() {
-        // Only major version
-        let result = parse_version("1");
-        assert!(result.is_err());
-
-        // Only major.minor
-        let result = parse_version("1.2");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_too_many_components() {
-        let result = parse_version("1.2.3.4.5");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_negative_numbers() {
-        let result = parse_version("-1.2.3");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_gibberish() {
-        let invalid_versions = vec![
-            "@@@",
-            "v",
-            "V",
-            "version",
-            "1.2.3-rc.😀",   // Invalid unicode in pre-release
-            "1.2.3+build🔧", // Invalid unicode in build metadata
-        ];
-
-        for version in invalid_versions {
-            let result = parse_version(version);
-            assert!(result.is_err(), "Expected error for: {version}");
-        }
-    }
-
-    #[test]
-    fn test_parse_version_invalid_prerelease_format() {
-        // Invalid prerelease identifier
-        let result = parse_version("1.2.3-");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_version_invalid_build_metadata() {
-        // Valid version with build metadata should parse
-        let result = parse_version("1.2.3+build123");
-        assert!(result.is_ok());
-
-        // But this is invalid
-        let result = parse_version("1.2.3+");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_case_insensitive_v_prefix() {
-        // Both 'v' and 'V' should work
-        let v1 = parse_version("v1.2.3").unwrap();
-        let v2 = parse_version("V1.2.3").unwrap();
-        assert_eq!(v1, v2);
-    }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_with_build_metadata() {
-        let v = parse_version("1.2.3+build.123").unwrap();
-        assert_eq!(v.major, 1);
-        assert_eq!(v.minor, 2);
-        assert_eq!(v.patch, 3);
-    }
-
-    #[test]
-    #[expect(clippy::unwrap_used)]
-    fn test_parse_version_complex_prerelease() {
-        let v = parse_version("1.0.0-alpha.1+build.123").unwrap();
-        assert_eq!(v.major, 1);
-        assert_eq!(v.minor, 0);
-        assert_eq!(v.patch, 0);
-        assert!(!v.pre.is_empty());
+    #[rstest::rstest]
+    #[case("1.2.3", "1.2.3")]
+    #[case("v1.2.3", "1.2.3")]
+    #[case("V1.2.3", "1.2.3")]
+    #[case("v0.3.0-beta", "0.3.0-beta")]
+    #[case("1.2.3+build123", "1.2.3+build123")]
+    #[case("1.2.3+build.123", "1.2.3+build.123")]
+    #[case("1.0.0-alpha.1+build.123", "1.0.0-alpha.1+build.123")]
+    fn test_parse_version_valid_tag_preserves_version(
+        #[case] tag: &str,
+        #[case] expected: &str,
+    ) -> Result<(), UpdateError> {
+        assert_eq!(parse_version(tag)?.to_string(), expected);
+        Ok(())
     }
 
     // ── expected_asset_name Edge Cases ────────────────────────────

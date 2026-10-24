@@ -46,11 +46,11 @@ fn test_cleanup_skips_pinned() {
     }
 
     repo.toggle_pin(r1.id).expect("Failed to toggle pin");
-    assert_eq!(repo.count(), 6);
+    assert_eq!(repo.count().expect("count"), 6);
 
     let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
     assert_eq!(removed, 2);
-    assert_eq!(repo.count(), 4);
+    assert_eq!(repo.count().expect("count"), 4);
     let pinned = repo
         .get_by_id(r1.id)
         .expect("Failed to get")
@@ -73,7 +73,7 @@ fn test_cleanup_keeps_pinned_when_not_enough_unpinned() {
 
     let removed = repo.cleanup_old_records(2).expect("Failed to clean up");
     assert_eq!(removed, 0);
-    assert_eq!(repo.count(), 4);
+    assert_eq!(repo.count().expect("count"), 4);
 }
 
 #[test]

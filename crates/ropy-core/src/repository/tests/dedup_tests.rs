@@ -36,7 +36,7 @@ fn test_dedup_same_content() {
     let r2 = save_text_at(&repo, "duplicate", 2);
 
     assert_eq!(r1.id, r2.id);
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
     assert!(r2.created_at > r1.created_at);
 }
 
@@ -48,7 +48,7 @@ fn test_dedup_aba_pattern() {
     save_text_at(&repo, "B", 2);
     let a2 = save_text_at(&repo, "A", 3);
 
-    assert_eq!(repo.count(), 2);
+    assert_eq!(repo.count().expect("count"), 2);
     let recent = load_display_records(&repo, 2);
     assert_eq!(recent[0].content, "A");
     assert_eq!(recent[0].created_at, a2.created_at);
@@ -74,13 +74,13 @@ fn assert_cleanup_old_records_with<B: StorageBackend>(factory: BackendFactory<B>
     let (_temp_dir, repo) = create_test_repo_with(factory);
 
     save_numbered_records(&repo, 10);
-    assert_eq!(repo.count(), 10);
+    assert_eq!(repo.count().expect("count"), 10);
 
     let removed = repo
         .cleanup_old_records(5)
         .unwrap_or_else(|error| panic!("Failed to clean up: {error}"));
     assert_eq!(removed, 5);
-    assert_eq!(repo.count(), 5);
+    assert_eq!(repo.count().expect("count"), 5);
 
     let recent = load_display_records(&repo, 5);
     assert_eq!(recent[0].content, "Record 10");
@@ -105,7 +105,7 @@ fn test_cleanup_old_records_zero_keep() {
 
     let removed = repo.cleanup_old_records(0).expect("Failed to clean up");
     assert_eq!(removed, 1);
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn test_cleanup_old_records_greater_than_total() {
 
     let removed = repo.cleanup_old_records(100).expect("Failed to clean up");
     assert_eq!(removed, 0);
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn test_cleanup_old_records_equal_to_total() {
 
     let removed = repo.cleanup_old_records(1).expect("Failed to clean up");
     assert_eq!(removed, 0);
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
 }
 
 #[rstest]
@@ -144,7 +144,7 @@ fn test_cleanup_old_records_if_needed_at_threshold_preserves_records(#[case] kee
         .unwrap_or_else(|err| panic!("Failed to conditionally clean up: {err}"));
 
     assert_eq!(removed, 0);
-    assert_eq!(repo.count(), threshold);
+    assert_eq!(repo.count().expect("count"), threshold);
 }
 
 #[rstest]
@@ -163,7 +163,7 @@ fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
         .unwrap_or_else(|err| panic!("Failed to conditionally clean up: {err}"));
 
     assert_eq!(removed, threshold + 1 - keep_count);
-    assert_eq!(repo.count(), keep_count);
+    assert_eq!(repo.count().expect("count"), keep_count);
 
     let recent = repo
         .get_display_records(keep_count)
@@ -186,7 +186,7 @@ fn test_cleanup_old_records_when_favorited_record_present_counts_only_ordinary_r
 
     let removed = repo.cleanup_old_records(3).expect("Failed to clean up");
     assert_eq!(removed, 2);
-    assert_eq!(repo.count(), 4);
+    assert_eq!(repo.count().expect("count"), 4);
     assert!(
         repo.get_by_id(favorite.id)
             .expect("Failed to get by id")
@@ -253,11 +253,11 @@ fn test_delete() {
     let record = repo
         .save_text("To be deleted".to_string())
         .expect("Failed to save");
-    assert_eq!(repo.count(), 1);
+    assert_eq!(repo.count().expect("count"), 1);
 
     let deleted = repo.delete(record.id).expect("Failed to delete");
     assert!(deleted);
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 
     let deleted_again = repo.delete(record.id).expect("Failed to delete");
     assert!(!deleted_again);
@@ -353,10 +353,10 @@ fn test_clear() {
     repo.save_text("One".to_string()).expect("Failed to save");
     repo.save_text("Two".to_string()).expect("Failed to save");
     repo.save_text("Three".to_string()).expect("Failed to save");
-    assert_eq!(repo.count(), 3);
+    assert_eq!(repo.count().expect("count"), 3);
 
     repo.clear().expect("Failed to clear");
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 }
 
 #[test]
@@ -407,7 +407,7 @@ fn test_clear_ordinary_records_when_special_records_present_preserves_them() {
         .expect("Failed to clear ordinary records");
 
     assert_eq!(removed, 2);
-    assert_eq!(repo.count(), 3);
+    assert_eq!(repo.count().expect("count"), 3);
     assert!(
         repo.get_by_id(pinned.id)
             .expect("Failed to load pinned")
@@ -455,7 +455,7 @@ fn test_clear_ordinary_records_when_no_ordinary_records_returns_zero() {
         .expect("Failed to clear ordinary records");
 
     assert_eq!(removed, 0);
-    assert_eq!(repo.count(), 2);
+    assert_eq!(repo.count().expect("count"), 2);
     assert!(
         repo.get_by_id(pinned.id)
             .expect("Failed to load pinned")
@@ -473,5 +473,5 @@ fn test_clear_empty_repo() {
     let (_temp_dir, repo) = create_test_repo();
 
     repo.clear().expect("Failed to clear empty repo");
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().expect("count"), 0);
 }

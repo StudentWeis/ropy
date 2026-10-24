@@ -462,13 +462,13 @@ mod tests {
         index.insert_raw(2000, 2, true, &ContentType::Image);
         index.insert_raw(3000, 3, false, &ContentType::FilePath);
 
-        assert_eq!(index.entries.len(), 3);
-        assert_eq!(index.id_lookup.len(), 3);
+        assert_eq!(index.entries.len().expect("count"), 3);
+        assert_eq!(index.id_lookup.len().expect("count"), 3);
 
         index.clear().expect("Failed to clear");
 
-        assert_eq!(index.entries.len(), 0);
-        assert_eq!(index.id_lookup.len(), 0);
+        assert_eq!(index.entries.len().expect("count"), 0);
+        assert_eq!(index.id_lookup.len().expect("count"), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, Vec::<u64>::new());
     }
@@ -743,8 +743,8 @@ mod tests {
         let key = MemoryTimeIndex::encode_key(timestamp, 1);
         index.remove_raw(&key).expect("Failed to remove raw");
 
-        assert_eq!(index.entries.len(), 0);
-        assert_eq!(index.id_lookup.len(), 0);
+        assert_eq!(index.entries.len().expect("count"), 0);
+        assert_eq!(index.id_lookup.len().expect("count"), 0);
         let ids = select_display_ids_without_favorites(&index, 10);
         assert_eq!(ids, Vec::<u64>::new());
     }

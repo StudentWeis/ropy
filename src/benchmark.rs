@@ -51,7 +51,7 @@ pub(crate) fn run(ready: PathBuf) -> Result<(), BenchmarkError> {
     let records = repository.get_display_records(100)?;
     let readiness = format!(
         "{{\"stored_records\":{},\"loaded_records\":{}}}",
-        repository.count(),
+        repository.count()?,
         records.len()
     );
     let repository = Arc::new(repository);
@@ -109,14 +109,14 @@ mod tests {
         )
         .unwrap();
         fixture::seed(&repository).unwrap();
-        assert_eq!(repository.count(), 200);
+        assert_eq!(repository.count().unwrap(), 200);
         assert_eq!(repository.get_display_records(100).unwrap().len(), 100);
         for index in 0..200 {
             assert_eq!(fixture::text(index).len(), 1024);
         }
         repository.save_text(fixture::text(0)).unwrap();
-        assert_eq!(repository.count(), 200);
+        assert_eq!(repository.count().unwrap(), 200);
         repository.save_text(fixture::text(200)).unwrap();
-        assert_eq!(repository.count(), 201);
+        assert_eq!(repository.count().unwrap(), 201);
     }
 }

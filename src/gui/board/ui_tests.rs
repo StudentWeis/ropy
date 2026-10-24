@@ -147,7 +147,11 @@ fn test_history_clear_confirmation_reports_failure_and_retry_clears(cx: &mut Tes
         });
         window.render_frame(cx);
         window.click("ok", cx);
-        assert_eq!(repo.count(), 1, "clear must not run on the event thread");
+        assert_eq!(
+            repo.count().unwrap(),
+            1,
+            "clear must not run on the event thread"
+        );
         assert!(window.find("history-operation-pending").visible());
         let id = board.read(cx).filtered_record_id_at(0).unwrap();
         assert_eq!(window.find(("delete-btn", id)).disabled(), Some(true));
@@ -156,7 +160,7 @@ fn test_history_clear_confirmation_reports_failure_and_retry_clears(cx: &mut Tes
     })
     .unwrap();
     cx.run_until_parked();
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().unwrap(), 0);
     cx.update_window(handle, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(board.read(cx).filtered_record_len(), 0);
@@ -1343,7 +1347,7 @@ fn test_refresh_notification_preserves_pending_storage_limit_trim(cx: &TestAppCo
     });
     cx.run_until_parked();
     assert_eq!(
-        repo.count(),
+        repo.count().unwrap(),
         10,
         "notification must not downgrade a requested immediate trim to buffered cleanup"
     );
@@ -1366,7 +1370,7 @@ fn test_refresh_settings_recovery_preserves_history_until_repaired(cx: &TestAppC
     });
     cx.run_until_parked();
     assert_eq!(
-        repo.count(),
+        repo.count().unwrap(),
         231,
         "recovery defaults must not delete history"
     );
@@ -1376,7 +1380,7 @@ fn test_refresh_settings_recovery_preserves_history_until_repaired(cx: &TestAppC
     });
     cx.run_until_parked();
     assert_eq!(
-        repo.count(),
+        repo.count().unwrap(),
         231,
         "explicit trims must also respect recovery"
     );
@@ -1385,7 +1389,11 @@ fn test_refresh_settings_recovery_preserves_history_until_repaired(cx: &TestAppC
         board.update(cx, |board, cx| board.refresh_records_from_repository(cx));
     });
     cx.run_until_parked();
-    assert_eq!(repo.count(), 200, "valid settings restore normal retention");
+    assert_eq!(
+        repo.count().unwrap(),
+        200,
+        "valid settings restore normal retention"
+    );
 }
 
 #[gpui_kit::test]
@@ -1456,7 +1464,7 @@ fn test_refresh_clear_while_pending_does_not_restore_deleted_history(cx: &TestAp
     });
     cx.run_until_parked();
     cx.update(|cx| assert!(crate::utils::read_or_recover(&board.read(cx).records).is_empty()));
-    assert_eq!(repo.count(), 0);
+    assert_eq!(repo.count().unwrap(), 0);
 }
 
 #[gpui_kit::test]

@@ -176,6 +176,8 @@ pub struct RedbTree {
     db: Arc<Database>,
     name: String,
     write_lock: Mutex<()>,
+    #[cfg(test)]
+    fail_next_len: std::sync::atomic::AtomicBool,
 }
 
 impl RedbTree {
@@ -199,7 +201,15 @@ impl RedbTree {
             db,
             name,
             write_lock: Mutex::new(()),
+            #[cfg(test)]
+            fail_next_len: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_len(&self) {
+        self.fail_next_len
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     const fn table_definition(name: &str) -> RedbTableDefinition<'_> {
@@ -281,16 +291,19 @@ impl KvTree for RedbTree {
         Ok(removed)
     }
 
-    fn len(&self) -> usize {
+    fn len(&self) -> Result<usize, RepositoryError> {
         self.with_read_table(|table| {
+            #[cfg(test)]
+            if self
+                .fail_next_len
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(RepositoryError::Query("injected count read failure".into()));
+            }
             table
                 .len()
                 .map(|len| usize::try_from(len).unwrap_or(usize::MAX))
                 .map_err(|error| RepositoryError::Query(error.to_string()))
-        })
-        .unwrap_or_else(|error| {
-            tracing::warn!(error = %error, tree = %self.name, "failed to read tree length");
-            0
         })
     }
 
