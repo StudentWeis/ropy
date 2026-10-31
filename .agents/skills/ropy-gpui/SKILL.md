@@ -9,13 +9,13 @@ Read the official [GPUI Kit skill](../gpui-kit/SKILL.md), and the official [Desi
 
 ## Official snapshots
 
-Both official skill directories are unmodified copies of [GPUI Kit v0.8.0](https://github.com/longbridge/gpui-kit/tree/v0.8.0/skills), commit `1676826d9d49b90f4d7b6808b69924f58796f6f1`. Keep all local additions and corrections in this adapter, including changes to links and examples. Do not edit or add files inside either official directory. When upgrading, replace each complete directory from one upstream revision and record the new revision here.
+Both official skill directories are unmodified copies of [GPUI Kit v0.8.1](https://github.com/longbridge/gpui-kit/tree/v0.8.1/skills), commit `99576db58ec8103417c41a092e891b4022d24e7e`. Keep all local additions and corrections in this adapter, including changes to links and examples. Do not edit or add files inside either official directory. When upgrading, replace each complete directory from one upstream revision and record the new revision here.
 
 To verify against an extracted upstream checkout, run `diff -qr <upstream>/skills/gpui-kit .agents/skills/gpui-kit` and the equivalent command for `gpui-kit-design-guides`. Both must report no differences.
 
 ## Ropy contracts
 
-- Normal and development dependencies use `gpui-kit` 0.8.0, with the default `gpui-pre` 0.3.9 engine. Keep the existing feature set unless the task requires a change. Optional backend entries in Cargo.lock do not imply an active renderer switch.
+- Normal and development dependencies use `gpui-kit` 0.8.1, with the default `gpui-pre` 0.3.10 engine. Keep the existing feature set unless the task requires a change. Optional backend entries in Cargo.lock do not imply an active renderer switch.
 - Localize visible strings and accessible names with existing translation keys where appropriate. The official design guide's English-only accessibility-label exception does not override Ropy's localization convention.
 - The Coding Guides allow deliberately record-like configuration, theme tokens, geometry and serialized schemas to expose fields with `#[non_exhaustive]` and construction APIs. Follow that detailed rule instead of treating the official entrypoint's abbreviated “No pub fields” statement as an instruction to migrate unrelated types.
 - `gpui_kit::open_window` installs the window Root and returns the window handle and view entity. Do not mount duplicate dialog, sheet or notification layers. Existing setup is in [window.rs](../../../src/gui/window.rs).
@@ -25,7 +25,7 @@ To verify against an extracted upstream checkout, run `diff -qr <upstream>/skill
 ## Task-specific references
 
 - Before copying low-level examples, read [locked API notes](references/locked-api.md) for callback arity, entity return types, focus and Element lifecycle differences.
-- For 0.8.0 adoption and prioritized project opportunities, read [integration notes](references/integration.md).
+- For 0.8.1 adoption and prioritized project opportunities, read [integration notes](references/integration.md).
 - Production-view UI integration tests live in [ui_tests.rs](../../../src/gui/board/ui_tests.rs). Use the official testing reference for the new `TestQueryExt`, `TestEventExt` and `TestInput` APIs, checking signatures in the installed crate.
 
 Official site-relative links and diagrams remain unchanged in the upstream copies. Resolve them against `https://gpui-kit.com`; a missing file in Ropy does not authorize inventing a local counterpart.

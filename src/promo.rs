@@ -182,7 +182,7 @@ impl Render for PromoView {
                     .occlude()
                     .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
                     .capture_any_mouse_up(|_, _, cx| cx.stop_propagation())
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                    .on_scroll(|_, _, cx| cx.stop_propagation()),
             )
     }
 }

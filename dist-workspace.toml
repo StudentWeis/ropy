@@ -21,6 +21,10 @@ github-build-setup = "../dist-build-setup.yml"
 github-custom-job-permissions = { "release-update-manifest" = { contents = "read", actions = "read" } }
 global-artifacts-jobs = ["./release-update-manifest"]
 
+# Keep generated release checkout aligned with the other workflows.
+[dist.github-action-commits]
+"actions/checkout" = "v7"
+
 [dist.dependencies.apt]
 pkg-config = "*"
 libxdo-dev = "*"

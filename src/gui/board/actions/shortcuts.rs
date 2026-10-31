@@ -1,5 +1,5 @@
 use gpui_kit::{
-    Action, App, AsKeystroke, DummyKeyboardMapper, Global, KeyBinding, KeyContext, SharedString,
+    Action, App, AsKeystroke, Global, KeyBinding, KeyContext, OperatingSystem, SharedString,
 };
 use rust_i18n::t;
 use thiserror::Error;
@@ -41,8 +41,8 @@ impl HistoryShortcut {
         label: impl Into<SharedString>,
         group: ShortcutGroup,
         action: impl Action + Clone,
-        primary: &str,
-        aliases: &[&str],
+        primary: &'static str,
+        aliases: &[&'static str],
     ) -> Self {
         let aliases = aliases
             .iter()
@@ -57,10 +57,10 @@ impl HistoryShortcut {
         }
     }
 
-    pub(crate) fn default_keys(&self) -> Vec<String> {
+    pub(crate) fn default_keys(&self, os: OperatingSystem) -> Vec<String> {
         std::iter::once(&self.primary)
             .chain(&self.aliases)
-            .map(|binding| binding.keystrokes()[0].as_keystroke().unparse())
+            .map(|binding| binding.keystrokes()[0].as_keystroke().unparse(os))
             .collect()
     }
 }
@@ -187,13 +187,14 @@ pub(crate) fn history_shortcuts() -> Vec<HistoryShortcut> {
             &[],
         ),
     ];
-    shortcuts.extend((0..QUICK_SELECT_COUNT).map(|index| {
+    let quick_keys: [&str; QUICK_SELECT_COUNT] = ["1", "2", "3", "4", "5"];
+    shortcuts.extend(quick_keys.into_iter().enumerate().map(|(index, key)| {
         HistoryShortcut::new(
             format!("confirm_record_{}", index + 1),
             t!("shortcuts_quick_select", index = index + 1),
             QuickSelection,
             ConfirmRecord { index },
-            &(index + 1).to_string(),
+            key,
             &[],
         )
     }));
@@ -317,6 +318,7 @@ fn supported_key(key: &str) -> bool {
 
 pub(crate) fn compile_history_bindings(
     settings: &KeybindingSettings,
+    cx: &App,
 ) -> Result<Vec<KeyBinding>, KeybindingError> {
     let shortcuts = history_shortcuts();
     for action in settings.history.keys() {
@@ -331,7 +333,7 @@ pub(crate) fn compile_history_bindings(
     for shortcut in shortcuts {
         let bindings = if let Some(keys) = settings.history.get(&shortcut.id) {
             keys.iter()
-                .map(|key| parse_history_binding(&shortcut, key, &reserved))
+                .map(|key| parse_history_binding(&shortcut, key, &reserved, cx))
                 .collect::<Result<Vec<_>, _>>()?
         } else {
             std::iter::once(shortcut.primary)
@@ -350,7 +352,7 @@ pub(crate) fn compile_history_bindings(
                     key: binding
                         .keystrokes()
                         .iter()
-                        .map(|key| key.as_keystroke().unparse())
+                        .map(|key| key.as_keystroke().unparse(cx.platform_info().os))
                         .collect::<Vec<_>>()
                         .join(" "),
                     first: other.clone(),
@@ -367,6 +369,7 @@ fn parse_history_binding(
     shortcut: &HistoryShortcut,
     key: &str,
     reserved: &[KeyBinding],
+    cx: &App,
 ) -> Result<KeyBinding, KeybindingError> {
     let invalid = || KeybindingError::InvalidKey {
         action: shortcut.id.clone(),
@@ -378,7 +381,7 @@ fn parse_history_binding(
         shortcut.primary.predicate(),
         false,
         None,
-        &DummyKeyboardMapper,
+        cx,
     )
     .map_err(|_| invalid())?;
     let [stroke] = binding.keystrokes() else {
@@ -419,7 +422,7 @@ pub(crate) fn bind_application_keys(cx: &mut App) {
         return;
     }
     match GlobalSettings::read(cx, |settings| {
-        compile_history_bindings(&settings.keybindings)
+        compile_history_bindings(&settings.keybindings, cx)
     }) {
         Ok(bindings) => cx.bind_keys(bindings),
         Err(error) => {
@@ -484,6 +487,42 @@ mod tests {
 
     use super::*;
 
+    fn compile(settings: &KeybindingSettings) -> Result<Vec<KeyBinding>, KeybindingError> {
+        gpui_kit::TestAppContext::single().read(|cx| compile_history_bindings(settings, cx))
+    }
+
+    #[rstest]
+    #[case(OperatingSystem::Mac, "cmd-d")]
+    #[case(OperatingSystem::Windows, "ctrl-d")]
+    #[case(OperatingSystem::Linux, "ctrl-d")]
+    fn test_history_secondary_modifier_uses_runtime_host(
+        #[case] os: OperatingSystem,
+        #[case] expected: &str,
+    ) {
+        let mut cx = gpui_kit::TestAppContext::single();
+        cx.set_platform_info(gpui_kit::PlatformInfo {
+            os,
+            target: gpui_kit::PlatformTarget::Native,
+        });
+        cx.read(|cx| {
+            let settings = overrides("delete_record", &["secondary-d"]);
+            let bindings = compile_history_bindings(&settings, cx).unwrap();
+            let binding = bindings
+                .iter()
+                .find(|binding| binding.action().as_any().is::<DeleteRecord>())
+                .unwrap();
+            assert_eq!(binding.keystrokes()[0].as_keystroke().unparse(os), expected);
+            let mut settings = settings;
+            settings
+                .history
+                .insert("toggle_favorite".into(), vec![expected.into()]);
+            assert!(matches!(
+                compile_history_bindings(&settings, cx),
+                Err(KeybindingError::Conflict { .. })
+            ));
+        });
+    }
+
     fn overrides(action: &str, keys: &[&str]) -> KeybindingSettings {
         let mut settings = KeybindingSettings::default();
         settings.history.insert(
@@ -505,7 +544,7 @@ mod tests {
     fn test_history_invalid_key_returns_error(#[case] key: &str) {
         assert!(
             matches!(
-                compile_history_bindings(&overrides("delete_record", &[key])),
+                compile(&overrides("delete_record", &[key])),
                 Err(KeybindingError::InvalidKey { .. })
             ),
             "{key}"
@@ -518,7 +557,7 @@ mod tests {
     #[case("shift-tab")]
     fn test_history_reserved_key_returns_error(#[case] key: &str) {
         assert!(matches!(
-            compile_history_bindings(&overrides("delete_record", &[key])),
+            compile(&overrides("delete_record", &[key])),
             Err(KeybindingError::ReservedKey { .. })
         ));
     }
@@ -531,7 +570,7 @@ mod tests {
             "alt-f4"
         };
         assert!(matches!(
-            compile_history_bindings(&overrides("delete_record", &[key])),
+            compile(&overrides("delete_record", &[key])),
             Err(KeybindingError::ReservedKey { .. })
         ));
     }
@@ -539,7 +578,7 @@ mod tests {
     #[test]
     fn test_history_unknown_action_returns_error_even_when_disabled() {
         assert!(matches!(
-            compile_history_bindings(&overrides("delete_reocrd", &[])),
+            compile(&overrides("delete_reocrd", &[])),
             Err(KeybindingError::UnknownAction { .. })
         ));
     }
@@ -553,7 +592,7 @@ mod tests {
             .history
             .insert("toggle_favorite".into(), vec![second.into()]);
         assert!(matches!(
-            compile_history_bindings(&settings),
+            compile(&settings),
             Err(KeybindingError::Conflict { .. })
         ));
     }
@@ -562,17 +601,22 @@ mod tests {
     fn test_history_disabling_action_releases_keys_and_removing_override_restores_defaults() {
         let mut settings = overrides("delete_record", &["f", "f"]);
         assert!(matches!(
-            compile_history_bindings(&settings),
+            compile(&settings),
             Err(KeybindingError::Conflict { .. })
         ));
         settings.history.insert("toggle_favorite".into(), vec![]);
-        let bindings = compile_history_bindings(&settings).unwrap();
+        let bindings = compile(&settings).unwrap();
         let delete = bindings
             .iter()
             .filter(|binding| binding.action().as_any().is::<DeleteRecord>())
             .collect::<Vec<_>>();
         assert_eq!(delete.len(), 1);
-        assert_eq!(delete[0].keystrokes()[0].as_keystroke().unparse(), "f");
+        assert_eq!(
+            delete[0].keystrokes()[0]
+                .as_keystroke()
+                .unparse(OperatingSystem::Linux),
+            "f"
+        );
         assert!(
             !bindings
                 .iter()
@@ -580,11 +624,15 @@ mod tests {
         );
 
         settings.history.clear();
-        let bindings = compile_history_bindings(&settings).unwrap();
+        let bindings = compile(&settings).unwrap();
         let delete = bindings
             .iter()
             .filter(|binding| binding.action().as_any().is::<DeleteRecord>())
-            .map(|binding| binding.keystrokes()[0].as_keystroke().unparse())
+            .map(|binding| {
+                binding.keystrokes()[0]
+                    .as_keystroke()
+                    .unparse(OperatingSystem::Linux)
+            })
             .collect::<Vec<_>>();
         assert_eq!(delete, ["delete", "d"]);
         assert!(
