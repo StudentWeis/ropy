@@ -14,7 +14,7 @@ publish = false
 [dependencies]
 ropy-core = { path = "crates/ropy-core" }
 clipboard-rs = "0.3.5"
-gpui-kit = { version = "0.8.0", default-features = false, features = ["component", "assets"] }
+gpui-kit = { version = "0.8.1", default-features = false, features = ["component", "assets"] }
 global-hotkey = "0.9.0"
 serde.workspace = true
 serde_json.workspace = true
@@ -92,7 +92,7 @@ image = { version = "0.25.10", default-features = false, features = [
 
 [dev-dependencies]
 ropy-core = { path = "crates/ropy-core", features = ["test"] }
-gpui-kit = { version = "0.8.0", default-features = false, features = ["component", "test-support"] }
+gpui-kit = { version = "0.8.1", default-features = false, features = ["component", "test-support"] }
 rstest.workspace = true
 
 [lints]

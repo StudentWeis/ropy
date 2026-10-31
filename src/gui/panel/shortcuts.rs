@@ -127,10 +127,13 @@ fn unknown_shortcut_row(id: &str, disabled: bool, cx: &Context<'_, RopyBoard>) -
                 .disabled(disabled)
                 .on_click(cx.listener(move |board, _, _, cx| {
                     board.edit_shortcuts(
-                        |editor| {
-                            editor.edit(|draft| {
-                                draft.history.remove(&action);
-                            });
+                        |editor, cx| {
+                            editor.edit(
+                                |draft| {
+                                    draft.history.remove(&action);
+                                },
+                                cx,
+                            );
                         },
                         cx,
                     );
@@ -150,7 +153,7 @@ fn shortcut_row(
     let id = &shortcut.id;
     let recording = editor.recording.as_ref().is_some_and(|r| r.action == *id);
     let menu = shortcut_menu(shortcut, disabled || editor.recording.is_some(), cx);
-    let keys = editor.keys(shortcut);
+    let keys = editor.keys(shortcut, cx);
     let controls = shortcut_controls(shortcut, &keys, disabled || editor.recording.is_some(), cx);
     v_flex()
         .id(SharedString::from(format!("shortcuts-row-{id}")))
@@ -175,7 +178,7 @@ fn shortcut_row(
                         .text_sm()
                         .child(shortcut.label.clone()),
                 )
-                .when(editor.is_modified(shortcut), |header| {
+                .when(editor.is_modified(shortcut, cx), |header| {
                     header.child(
                         div()
                             .id(SharedString::from(format!("shortcuts-modified-{id}")))
@@ -310,7 +313,7 @@ fn shortcut_footer(
                         .disabled(disabled || recording)
                         .on_click(cx.listener(|board, _, _, cx| {
                             board.edit_shortcuts(
-                                |editor| editor.edit(|draft| draft.history.clear()),
+                                |editor, cx| editor.edit(|draft| draft.history.clear(), cx),
                                 cx,
                             );
                         })),
@@ -363,10 +366,13 @@ fn shortcut_menu(
                 PopupMenuItem::new(t!("shortcuts_restore")).on_click(move |_, _, cx| {
                     let _ = restore_owner.update(cx, |board, cx| {
                         board.edit_shortcuts(
-                            |editor| {
-                                editor.edit(|draft| {
-                                    draft.history.remove(&restore_id);
-                                });
+                            |editor, cx| {
+                                editor.edit(
+                                    |draft| {
+                                        draft.history.remove(&restore_id);
+                                    },
+                                    cx,
+                                );
                             },
                             cx,
                         );
@@ -377,10 +383,13 @@ fn shortcut_menu(
                 PopupMenuItem::new(t!("shortcuts_clear")).on_click(move |_, _, cx| {
                     let _ = clear_owner.update(cx, |board, cx| {
                         board.edit_shortcuts(
-                            |editor| {
-                                editor.edit(|draft| {
-                                    draft.history.insert(clear_id.clone(), Vec::new());
-                                });
+                            |editor, cx| {
+                                editor.edit(
+                                    |draft| {
+                                        draft.history.insert(clear_id.clone(), Vec::new());
+                                    },
+                                    cx,
+                                );
                             },
                             cx,
                         );
@@ -404,8 +413,8 @@ fn shortcut_controls(
         let remove_action = id.clone();
         let mut remaining = keys.to_vec();
         remaining.retain(|other| other != key);
-        let label =
-            gpui_kit::Keystroke::parse(key).map_or_else(|_| key.clone(), |key| Kbd::format(&key));
+        let label = gpui_kit::Keystroke::parse_with_os(key, cx.platform_info().os)
+            .map_or_else(|_| key.clone(), |key| Kbd::format(&key));
         let remove_label = t!("shortcuts_remove_key", key = label, action = shortcut.label);
         controls = controls.child(
             h_flex()
@@ -445,12 +454,15 @@ fn shortcut_controls(
                         .disabled(disabled)
                         .on_click(cx.listener(move |board, _, _, cx| {
                             board.edit_shortcuts(
-                                |editor| {
-                                    editor.edit(|draft| {
-                                        draft
-                                            .history
-                                            .insert(remove_action.clone(), remaining.clone());
-                                    });
+                                |editor, cx| {
+                                    editor.edit(
+                                        |draft| {
+                                            draft
+                                                .history
+                                                .insert(remove_action.clone(), remaining.clone());
+                                        },
+                                        cx,
+                                    );
                                 },
                                 cx,
                             );

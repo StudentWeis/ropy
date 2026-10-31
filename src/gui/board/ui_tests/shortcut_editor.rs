@@ -83,12 +83,12 @@ fn test_shortcuts_apply_persists_alias_removal_and_refreshes_help(cx: &mut TestA
             cx.key_bindings().borrow().bindings().len(),
             original_count - 1
         );
-        assert!(
-            cx.key_bindings()
-                .borrow()
-                .bindings()
-                .any(|binding| binding.keystrokes()[0].as_keystroke().unparse() == "f12")
-        );
+        assert!(cx.key_bindings().borrow().bindings().any(|binding| {
+            binding.keystrokes()[0]
+                .as_keystroke()
+                .unparse(cx.platform_info().os)
+                == "f12"
+        }));
         window.click("shortcuts-back", cx);
         let label = window
             .find("board::DeleteRecord")

@@ -30,7 +30,7 @@ pub(crate) struct ShortcutEditor {
 
 impl ShortcutEditor {
     fn new(settings: KeybindingSettings, return_panel: ActivePanel, cx: &App) -> Self {
-        let error = compile_history_bindings(&settings).err();
+        let error = compile_history_bindings(&settings, cx).err();
         let scroll = ScrollHandle::new();
         let row_focus = super::actions::shortcuts::history_shortcuts()
             .into_iter()
@@ -52,38 +52,41 @@ impl ShortcutEditor {
         self.draft != self.baseline
     }
 
-    pub(crate) fn keys(&self, shortcut: &HistoryShortcut) -> Vec<String> {
+    pub(crate) fn keys(&self, shortcut: &HistoryShortcut, cx: &App) -> Vec<String> {
         let mut keys = self
             .draft
             .history
             .get(&shortcut.id)
             .cloned()
-            .unwrap_or_else(|| shortcut.default_keys());
+            .unwrap_or_else(|| shortcut.default_keys(cx.platform_info().os));
         // A manually edited file may repeat a key; show one removable control.
         let mut seen = std::collections::HashSet::new();
         keys.retain(|key| seen.insert(key.clone()));
         keys
     }
 
-    pub(crate) fn is_modified(&self, shortcut: &HistoryShortcut) -> bool {
+    pub(crate) fn is_modified(&self, shortcut: &HistoryShortcut, cx: &App) -> bool {
+        let os = cx.platform_info().os;
         let normalize = |keys: Vec<String>| -> std::collections::HashSet<String> {
             keys.into_iter()
-                .map(|key| gpui_kit::Keystroke::parse(&key).map_or(key, |key| key.unparse()))
+                .map(|key| {
+                    gpui_kit::Keystroke::parse_with_os(&key, os).map_or(key, |key| key.unparse(os))
+                })
                 .collect()
         };
-        normalize(self.keys(shortcut)) != normalize(shortcut.default_keys())
+        normalize(self.keys(shortcut, cx)) != normalize(shortcut.default_keys(os))
     }
 
-    pub(crate) fn edit(&mut self, edit: impl FnOnce(&mut KeybindingSettings)) {
+    pub(crate) fn edit(&mut self, edit: impl FnOnce(&mut KeybindingSettings), cx: &App) {
         self.recording = None;
         self.save_error = None;
         edit(&mut self.draft);
-        self.error = compile_history_bindings(&self.draft).err();
+        self.error = compile_history_bindings(&self.draft, cx).err();
     }
 
-    pub(crate) fn revert(&mut self) {
+    pub(crate) fn revert(&mut self, cx: &App) {
         let baseline = self.baseline.clone();
-        self.edit(|draft| *draft = baseline);
+        self.edit(|draft| *draft = baseline, cx);
     }
 }
 
@@ -106,11 +109,11 @@ impl RopyBoard {
 
     pub(crate) fn edit_shortcuts(
         &mut self,
-        edit: impl FnOnce(&mut ShortcutEditor),
+        edit: impl FnOnce(&mut ShortcutEditor, &App),
         cx: &mut Context<'_, Self>,
     ) {
         if let Some(editor) = &mut self.shortcut_editor {
-            edit(editor);
+            edit(editor, cx);
             cx.notify();
         }
     }
@@ -161,8 +164,8 @@ impl RopyBoard {
                         .into_iter()
                         .find(|s| s.id == recording.action);
                     if let Some(shortcut) = shortcut {
-                        let mut keys = editor.keys(&shortcut);
-                        let key = event.keystroke.unparse();
+                        let mut keys = editor.keys(&shortcut, cx);
+                        let key = event.keystroke.unparse(cx.platform_info().os);
                         if let Some(index) = recording
                             .previous
                             .as_ref()
@@ -172,9 +175,12 @@ impl RopyBoard {
                         } else {
                             keys.push(key);
                         }
-                        editor.edit(|draft| {
-                            draft.history.insert(recording.action, keys);
-                        });
+                        editor.edit(
+                            |draft| {
+                                draft.history.insert(recording.action, keys);
+                            },
+                            cx,
+                        );
                     }
                 }
                 cx.notify();
@@ -189,7 +195,7 @@ impl RopyBoard {
         if editor.recording.is_some() || !editor.is_dirty() {
             return;
         }
-        let bindings = match compile_history_bindings(&editor.draft) {
+        let bindings = match compile_history_bindings(&editor.draft, cx) {
             Ok(bindings) => bindings,
             Err(error) => {
                 editor.error = Some(error);
