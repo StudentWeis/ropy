@@ -828,10 +828,22 @@ fn test_about_content_centers_in_body_and_update_row(cx: &mut TestAppContext) {
     cx.update_window(handle, |_, window, cx| {
         board.update(cx, |board, _| {
             board.update_manager.managed = true;
-            board.update_manager.status = crate::updater::models::UpdateStatus::UpToDate;
+            board.update_manager.status = crate::updater::models::UpdateStatus::Idle;
         });
         window.render_frame(cx);
         window.click("about-button", cx);
+        assert!(
+            window.try_find("about-update-status").is_none(),
+            "idle must show only the check button, not a duplicate command label"
+        );
+        let body = window.find("about-content").bounds();
+        let action = window.find("update-check-button").bounds();
+        assert!((action.center().x - body.center().x).abs() < gpui_kit::px(1.));
+
+        board.update(cx, |board, _| {
+            board.update_manager.status = crate::updater::models::UpdateStatus::UpToDate;
+        });
+        window.render_frame(cx);
         let body = window.find("about-content").bounds();
         let logo = window.find("about-logo").bounds();
         let social = window.find("about-social-links").bounds();
