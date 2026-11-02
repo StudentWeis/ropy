@@ -238,13 +238,18 @@ fn render_update_section(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
                 .flex_wrap()
                 .justify_center()
                 .gap_2()
-                .child(
-                    div()
-                        .id("about-update-status")
-                        .test_support()
-                        .text_xs()
-                        .text_color(status_color)
-                        .child(status_text),
+                .when(
+                    !matches!(board.update_manager.status, UpdateStatus::Idle),
+                    |row| {
+                        row.child(
+                            div()
+                                .id("about-update-status")
+                                .test_support()
+                                .text_xs()
+                                .text_color(status_color)
+                                .child(status_text),
+                        )
+                    },
                 )
                 .children(action_button),
         )
