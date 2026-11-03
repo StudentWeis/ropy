@@ -1,18 +1,26 @@
-# Ropy integration with GPUI Kit 0.8.1
+# Ropy integration with GPUI Kit 0.9.0
 
 ## Source and refresh policy
 
-Checked against [GPUI Kit v0.8.1](https://github.com/longbridge/gpui-kit/releases/tag/v0.8.1), commit `99576db58ec8103417c41a092e891b4022d24e7e`. Normal and development dependencies use 0.8.1; the default engine remains `gpui-pre` 0.3.10. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
+Checked against [GPUI Kit v0.9.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0), commit `7591a35eced761e3613c01e71ff04c10129dae1a`. Normal and development dependencies use 0.9.0; the default engine is `gpui-pre` 0.3.11. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
 
 Use the official `gpui-kit` and `gpui-kit-design-guides` skills alongside the `ropy-gpui` adapter for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy-specific guidance in `ropy-gpui`; replace the two official skill directories only with an unmodified upstream snapshot. Upstream `script/check-ai` commands do not run in this repository.
 
 This reference adapts [GPUI Kit documentation](https://gpui-kit.com) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adding Ropy-specific scope, verification and recommendations. Code examples retain their upstream Apache-2.0 terms.
 
-## 0.8.1 migration
+## 0.9.0 migration
+
+Public upstream theme structs are now `#[non_exhaustive]`. Construct them with their existing constructors or `Default::default()`, then assign fields; struct literals with `..Default::default()` are no longer supported. Ropy's existing theme construction already follows this pattern.
+
+`Window::text_system()` now returns `&Rc<WindowTextSystem>` rather than `&Arc<WindowTextSystem>`, and the text system is no longer Send/Sync. Animation timing now follows the executor clock; headless tests should advance that clock rather than sleep on the wall clock. No application-side API migration was needed for these changes.
+
+The official skill directories in v0.9.0 are byte-for-byte identical to the previously recorded v0.8.1 snapshot. Their recorded source revision advances with the dependency.
+
+## Previous migration
 
 Dynamic shortcut loading uses `KeyBinding::load` with the application context. Parsing and formatting use `cx.platform_info().os`; this keeps shortcut validation, recording and display consistent with the runtime host. Static default bindings use string literals. The input-blocking promotion overlay uses the renamed `on_scroll` handler.
 
-The official skill directories in v0.8.1 are byte-for-byte identical to v0.8.0. Their recorded source revision still advances with the dependency. Existing UI integration tests cover shortcut editing, persistence and focus; host-parameterized binding tests cover `secondary` normalization and conflicts on macOS, Windows and Linux.
+Existing UI integration tests cover shortcut editing, persistence and focus; host-parameterized binding tests cover `secondary` normalization and conflicts on macOS, Windows and Linux.
 
 ## Adopted integration
 
