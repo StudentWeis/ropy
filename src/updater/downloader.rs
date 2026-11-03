@@ -409,6 +409,63 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "windows")]
+    #[rstest::rstest]
+    #[case(zip::CompressionMethod::Stored)]
+    #[case(zip::CompressionMethod::Deflated)]
+    #[expect(clippy::unwrap_used)]
+    fn test_extract_zip_supported_compression_preserves_binary(
+        #[case] compression: zip::CompressionMethod,
+    ) {
+        use std::io::Write;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let archive_path = tmp.path().join("update.zip");
+        let file = std::fs::File::create(&archive_path).unwrap();
+        let mut archive = zip::ZipWriter::new(file);
+        archive
+            .start_file(
+                "ropy-windows/ropy.exe",
+                zip::write::SimpleFileOptions::default().compression_method(compression),
+            )
+            .unwrap();
+        archive.write_all(b"ropy update fixture").unwrap();
+        archive.finish().unwrap();
+        let out_dir = tmp.path().join("extracted");
+        std::fs::create_dir(&out_dir).unwrap();
+
+        let binary = extract_binary(&archive_path, &out_dir).unwrap();
+
+        assert_eq!(binary, out_dir.join("ropy-windows/ropy.exe"));
+        assert_eq!(std::fs::read(binary).unwrap(), b"ropy update fixture");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_extract_zip_parent_path_rejects_before_writing() {
+        use std::io::Write;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let archive_path = tmp.path().join("update.zip");
+        let file = std::fs::File::create(&archive_path).unwrap();
+        let mut archive = zip::ZipWriter::new(file);
+        archive
+            .start_file("../escape.exe", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(b"outside destination").unwrap();
+        archive.finish().unwrap();
+        let out_dir = tmp.path().join("extracted");
+        std::fs::create_dir(&out_dir).unwrap();
+
+        assert_matches!(
+            extract_binary(&archive_path, &out_dir),
+            Err(UpdateError::Extract(_))
+        );
+        assert!(!tmp.path().join("escape.exe").exists());
+        assert_eq!(std::fs::read_dir(out_dir).unwrap().count(), 0);
+    }
+
     #[test]
     #[expect(clippy::unwrap_used)]
     fn test_find_binary_in_dir() {

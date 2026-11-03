@@ -12,10 +12,6 @@ pub(crate) struct LoggingGuard {
     _file_guard: tracing_appender::non_blocking::WorkerGuard,
 }
 
-fn default_env_filter() -> tracing_subscriber::EnvFilter {
-    tracing_subscriber::EnvFilter::new("info")
-}
-
 fn default_log_dir() -> PathBuf {
     let base = Settings::config_dir()
         .ok()
@@ -34,7 +30,7 @@ fn build_file_subscriber(
     writer: impl for<'a> fmt::MakeWriter<'a> + Send + Sync + 'static,
 ) -> impl tracing::Subscriber + Send + Sync {
     fmt()
-        .with_env_filter(default_env_filter())
+        .with_max_level(tracing::Level::INFO)
         .json()
         .flatten_event(true)
         .with_timer(fmt::time::UtcTime::rfc_3339())
@@ -103,11 +99,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_subscriber_does_not_panic() {
-        let subscriber = build_file_subscriber(std::io::sink);
+    #[expect(clippy::unwrap_used, reason = "test I/O and JSON output must be valid")]
+    fn test_file_subscriber_filters_and_preserves_json_context() {
+        use std::io::{Read, Seek};
+
+        let mut output = tempfile::tempfile().unwrap();
+        let writer = output.try_clone().unwrap();
+        let subscriber = build_file_subscriber(move || writer.try_clone().unwrap());
         tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!("operation", request_id = 7);
+            let _entered = span.enter();
+            tracing::trace!("hidden trace");
+            tracing::debug!("hidden debug");
             tracing::info!(answer = 42, "test log");
+            tracing::warn!("test warning");
+            tracing::error!("test error");
         });
+
+        output.rewind().unwrap();
+        let mut json = String::new();
+        output.read_to_string(&mut json).unwrap();
+        let events: Vec<serde_json::Value> = json
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(events.len(), 3);
+        for (event, level) in events.iter().zip(["INFO", "WARN", "ERROR"]) {
+            assert_eq!(event["level"], level);
+            let timestamp = event["timestamp"].as_str().unwrap();
+            assert!(chrono::DateTime::parse_from_rfc3339(timestamp).is_ok());
+            assert_eq!(event["span"]["name"], "operation");
+            assert_eq!(event["span"]["request_id"], 7);
+            assert_eq!(event["spans"][0], event["span"]);
+        }
+        assert_eq!(events[0]["message"], "test log");
+        assert_eq!(events[0]["answer"], 42);
     }
 
     #[test]

@@ -167,9 +167,10 @@ impl AutoStartManager {
             Ok(command) => Ok(command.trim_end() == self.auto_launch.get_app_path()),
             Err(error)
                 if error.code()
-                    == windows_result::HRESULT::from_win32(
+                    == windows_result::WIN32_ERROR(
                         windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND,
-                    ) =>
+                    )
+                    .to_hresult() =>
             {
                 Ok(false)
             }
