@@ -39,7 +39,6 @@ tracing.workspace = true
 tracing-appender = "0.2.5"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
-    "env-filter",
     "fmt",
     "json",
     "std",
@@ -49,13 +48,10 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 auto-launch = "0.6.0"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.5"
-
 [target.'cfg(target_os = "windows")'.dependencies]
-clipboard-win = "5.4.1"
-windows-registry = "0.6.1"
-windows-result = "0.4.1"
+clipboard-win = "5.4.3"
+windows-registry = "0.100.0"
+windows-result = "0.100.0"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Graphics_Gdi",
     "Win32_System_Threading",
@@ -64,7 +60,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_UI_Input_KeyboardAndMouse",
 ] }
 # Release ZIPs use Deflate; the updater does not need encryption or other codecs.
-zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "9.2.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13.13", default-features = false, features = ["async-io", "global_shortcuts"] }
@@ -210,4 +206,4 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 seahash = "4.1.0"
 tempfile = "3.27.0"
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
-rstest = "0.28.0"
+rstest = { version = "0.28.0", default-features = false }
