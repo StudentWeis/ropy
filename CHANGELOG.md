@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-11-03
+
+### 🐛 Bug Fixes
+- Remove duplicate idle update label on about page (#314) by @StudentWeis in [#314](https://github.com/StudentWeis/ropy/pull/314)
+- Propagate history count failures (#309) by @StudentWeis in [#309](https://github.com/StudentWeis/ropy/pull/309)
+- Center about page content (#307) by @StudentWeis in [#307](https://github.com/StudentWeis/ropy/pull/307)
+- Resolve hotkey, file uri and updater audit findings (#305) by @StudentWeis in [#305](https://github.com/StudentWeis/ropy/pull/305)
+- Preserve disabled hotkeys and confirmation focus (#303) by @StudentWeis in [#303](https://github.com/StudentWeis/ropy/pull/303)
+- Preserve selection and reconcile automatic startup (#301) by @StudentWeis in [#301](https://github.com/StudentWeis/ropy/pull/301)
+- Resolve repository audit findings (#299) by @StudentWeis in [#299](https://github.com/StudentWeis/ropy/pull/299)
+- Add visible hover feedback to record actions (#297) by @StudentWeis in [#297](https://github.com/StudentWeis/ropy/pull/297)
+- Address history ordering and update audit findings (#295) by @StudentWeis in [#295](https://github.com/StudentWeis/ropy/pull/295)
+- Correct slider state, text previews, and test lifetimes (#289) by @StudentWeis in [#289](https://github.com/StudentWeis/ropy/pull/289)
+- Keep history mutations responsive and virtualize grid (#287) by @StudentWeis in [#287](https://github.com/StudentWeis/ropy/pull/287)
+- Preserve capture order and responsive desktop interactions (#283) by @StudentWeis in [#283](https://github.com/StudentWeis/ropy/pull/283)
+
+### ⚡ Performance
+- Benchmark and optimize history matching (#293) by @StudentWeis in [#293](https://github.com/StudentWeis/ropy/pull/293)
+
+### ⚙️ Miscellaneous Tasks
+- Upgrade gpui-kit to 0.9.0 (#316) by @StudentWeis in [#316](https://github.com/StudentWeis/ropy/pull/316)
+- Upgrade gpui-kit to 0.8.0 (#285) by @StudentWeis in [#285](https://github.com/StudentWeis/ropy/pull/285)
+
 ## [0.6.0] - 2026-10-19
 
 ### 🚀 Features
