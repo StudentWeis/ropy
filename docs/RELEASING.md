@@ -134,6 +134,8 @@ and cargo-dist `dist = false`; its version is independent of the application.
 the same package explicitly. Root application metadata, updater version lookup,
 resource paths and archive names remain unchanged.
 
+Windows resource generation requires a Windows host. The build script rejects cross-OS combinations where only the host or only the target is Windows, rather than silently omitting resources or invoking the Windows resource compiler for another OS. Use a native Windows runner for Windows packages. This guard does not reject same-OS cross-architecture builds, which still require the matching target toolchain and system dependencies.
+
 ## Self-hosted Homebrew Cask
 
 `StudentWeis/homebrew-tap` distributes `Casks/ropy.rb`. The initial Cask snapshot
