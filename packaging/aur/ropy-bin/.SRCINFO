@@ -4,7 +4,6 @@ pkgbase = ropy-bin
 	pkgrel = 1
 	url = https://github.com/StudentWeis/ropy
 	arch = x86_64
-	arch = aarch64
 	license = MIT
 	depends = glibc
 	depends = gcc-libs
@@ -24,7 +23,5 @@ pkgbase = ropy-bin
 	sha256sums = 4246519d23a0b2b6399674d56690ed6b703f5f03671b31463441ebe63caa27ec
 	source_x86_64 = ropy-0.6.1-x86_64.tar.xz::https://github.com/StudentWeis/ropy/releases/download/0.6.1/ropy-x86_64-unknown-linux-gnu.tar.xz
 	sha256sums_x86_64 = 1d21b71dd34135a8977683d5b84b75b66b512bbd55088bf16a664d9e8c900777
-	source_aarch64 = ropy-0.6.1-aarch64.tar.xz::https://github.com/StudentWeis/ropy/releases/download/0.6.1/ropy-aarch64-unknown-linux-gnu.tar.xz
-	sha256sums_aarch64 = adf0c965747d7fd4f5c4b8dbcefa962223ef146ec88eea796c86f1af785acb7d
 
 pkgname = ropy-bin
