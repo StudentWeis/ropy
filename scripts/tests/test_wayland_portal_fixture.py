@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -74,6 +75,22 @@ class PortalFixtureTests(unittest.TestCase):
         report = json.loads(output.call_args.args[0])
         self.assertEqual(report["status"], "failed")
         return report
+
+    def test_portal_fixture_relative_output_passes_absolute_isolated_config(self):
+        self.environment.write_text("DISPLAY=:1\nWAYLAND_DISPLAY=wayland-fixture\nDBUS_SESSION_BUS_ADDRESS=wrong\n")
+        self.output = Path(os.path.relpath(self.output))
+        child = Mock()
+        child.poll.return_value = 0
+        with patch.object(self.fixture.subprocess, "Popen", return_value=child) as launch, \
+             patch.object(self.fixture.time, "sleep", side_effect=RuntimeError("scenario stopped")), \
+             patch.dict(os.environ, {"DBUS_SESSION_BUS_ADDRESS": "private-bus"}):
+            self.run_fixture()
+        env = launch.call_args.kwargs["env"]
+        self.assertEqual(env["XDG_CONFIG_HOME"], str((self.work / "output/config").resolve()))
+        self.assertTrue((Path(env["XDG_CONFIG_HOME"]) / "ropy/config.toml").is_file())
+        self.assertEqual(env["DBUS_SESSION_BUS_ADDRESS"], "private-bus")
+        self.assertEqual(env["WAYLAND_DISPLAY"], "wayland-fixture")
+        self.assertNotIn("DISPLAY", env)
 
     def test_portal_fixture_failed_launch_reports_and_exits(self):
         report = self.run_fixture()

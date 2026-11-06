@@ -588,6 +588,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
 
     if compact {
         h_flex()
+            .key_context("RopyCommand")
             .gap(px(2.0))
             .items_center()
             .child(favorite_button)
@@ -596,6 +597,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
             .into_any_element()
     } else {
         v_flex()
+            .key_context("RopyCommand")
             .items_end()
             .gap(px(2.0))
             .child(

@@ -310,7 +310,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         if let Some(existing) = self.get_raw(&key)? {
             let mut record: ClipboardRecord = postcard::from_bytes(&existing)
                 .map_err(|e| RepositoryError::Deserialization(e.to_string()))?;
-            record.created_at = captured_at;
+            record.created_at = record.created_at.max(captured_at);
             self.put_indexed_record(&key, &record)?;
             if record.content != file_path {
                 remove_image_files(&file_path);

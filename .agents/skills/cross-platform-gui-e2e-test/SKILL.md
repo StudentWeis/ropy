@@ -39,7 +39,7 @@ Read only the reference for the platform being exercised:
 - Confirm paid-session authorization unless the current request already authorizes the virtual test. Do not enable postpaid billing, buy credits, or raise limits without separate authorization.
 - Before creating an AgentBay session, inspect active sessions and billing controls. Prefer concurrency `1`, a maximum runtime of no more than `30` minutes, and an idle timeout of at least `10` minutes.
 - Create only one AgentBay session at a time. Record its identifier immediately and release it in a `finally` path. Explicitly terminate it; do not leave it running or hibernating.
-- Use a unique marker such as `ropy-e2e-<platform>-<uuid>` so stale clipboard contents cannot create a false pass.
+- Use a unique marker such as `ropy-e2e-<platform>-<uuid>` and a different sentinel such as `ropy-sentinel-<uuid>`. Change only the isolated session's clipboard; never use the host or everyday account's clipboard. A unique marker alone cannot prove clipboard write-back if it is still the current clipboard value.
 - Never record unrelated local clipboard contents, credentials, signed URLs, or user data in screenshots and logs.
 
 ## Prefer Stable Virtual Control
@@ -62,14 +62,14 @@ Use platform-native UI automation, screenshots, and window inspection at every a
 2. Expect no initial visible window: Ropy intentionally starts hidden in the system tray.
 3. Send `Control+Shift+D`, the default activation hotkey on all supported platforms, and assert that the Ropy window becomes visible and receives keyboard focus.
 4. Open a platform-native plain-text editor, enter the unique marker, select it, and copy it.
-5. Wait briefly for clipboard ingestion, reactivate Ropy, and assert that the exact marker appears in history.
-6. Press `/`, search for a unique substring, and assert that the matching record remains visible.
-7. Select the record and press `Enter`. The default confirm mode copies the record back to the clipboard.
-8. Return to the editor, paste, and assert that the pasted text exactly equals the marker.
+5. Wait for clipboard ingestion and verify the exact marker in history. Before confirmation, replace the isolated clipboard with the different sentinel and verify its complete value; clear the destination editor and verify that its entire editable buffer is empty. Keep that editor as the return-focus target, then reactivate Ropy normally.
+6. Press `/`, search for a unique substring of the original marker, and assert that the matching record remains visible. The sentinel may also enter history; select the original marker, not the newest record.
+7. Select the marker record and press `Enter`. The default confirm mode copies the record back to the clipboard. Verify that the complete clipboard value changed from the sentinel to the marker and that editor focus returns without a corrective focus operation.
+8. In copy mode, paste once into the blank editor. In immediate-paste mode, wait without sending a manual paste. Read the entire editor buffer and compare it with the marker: an empty buffer, the sentinel, duplicated text or extra characters fails. Finding the marker as a substring or seeing it already present before the action does not pass.
 
 A mapped window is not proof of focus. If activation fails, record it before forcing focus or directing keys to a window; such workarounds can diagnose later steps but cannot turn the normal workflow into a pass.
 
-Prefer semantic window, text, and accessibility queries. Use coordinates only after taking a fresh screenshot. Retry a flaky clipboard ingestion once with a new marker; collect state before retrying.
+Prefer semantic window, text, and accessibility queries. Use coordinates only after taking a fresh screenshot. Retry a flaky clipboard ingestion once with a new marker and sentinel, repeating the empty-editor preparation; collect state before retrying.
 
 ## Add Focused Checks Deliberately
 

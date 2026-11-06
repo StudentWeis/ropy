@@ -80,6 +80,7 @@ def collect_referenced_icons(src_root: Path) -> set[str]:
     path_pattern = re.compile(r'\.path\(\s*"([^"]+)"\s*\)')
 
     referenced: set[str] = set()
+    assets_dir = (src_root.parent / "assets").resolve()
 
     for rs_file in src_root.rglob("*.rs"):
         text = rs_file.read_text(encoding="utf-8")
@@ -93,7 +94,10 @@ def collect_referenced_icons(src_root: Path) -> set[str]:
             path = m.group(1)
             # Only consider paths that look like icon files
             if any(path.lower().endswith(ext) for ext in ICON_EXTENSIONS):
-                referenced.add(path)
+                included = (rs_file.parent / path).resolve()
+                # Rust includes are source-relative; only bundled assets belong here.
+                if included.is_relative_to(assets_dir):
+                    referenced.add(included.relative_to(assets_dir).as_posix())
 
         # Match .path("...") calls
         for m in path_pattern.finditer(text):

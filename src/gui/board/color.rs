@@ -72,39 +72,37 @@ fn parse_hex_color(content: &str) -> Option<ClipboardColor> {
 
 fn parse_function_color(content: &str) -> Option<ClipboardColor> {
     let open_paren = content.find('(')?;
-    let close_paren = content.rfind(')')?;
-    if close_paren != content.len() - 1 {
-        return None;
-    }
-
     let name = &content[..open_paren];
-    if name.is_empty() || name.chars().any(char::is_whitespace) {
-        return None;
-    }
-
-    let args = split_function_arguments(&content[open_paren + 1..close_paren])?;
-
-    if name.eq_ignore_ascii_case("rgb") {
-        parse_rgb_function(&args)
+    let parse: fn(&[&str]) -> Option<ClipboardColor> = if name.eq_ignore_ascii_case("rgb") {
+        parse_rgb_function
     } else if name.eq_ignore_ascii_case("rgba") {
-        parse_rgba_function(&args)
+        parse_rgba_function
     } else if name.eq_ignore_ascii_case("hsl") {
-        parse_hsl_function(&args)
+        parse_hsl_function
     } else if name.eq_ignore_ascii_case("hsla") {
-        parse_hsla_function(&args)
+        parse_hsla_function
     } else {
-        None
-    }
+        return None;
+    };
+    let arguments = content[open_paren + 1..].strip_suffix(')')?;
+    let (args, count) = split_function_arguments(arguments)?;
+    parse(&args[..count])
 }
 
-fn split_function_arguments(arguments: &str) -> Option<Vec<&str>> {
-    let values = arguments.split(',').map(str::trim).collect::<Vec<_>>();
-
-    if values.is_empty() || values.iter().any(|value| value.is_empty()) {
-        None
-    } else {
-        Some(values)
+fn split_function_arguments(arguments: &str) -> Option<([&str; 4], usize)> {
+    let mut values = [""; 4];
+    let mut count = 0;
+    // The fifth segment only detects excess arguments. Never allocate based on
+    // clipboard text, or scan the rest of a comma-heavy non-color payload.
+    for (ix, value) in arguments.splitn(5, ',').enumerate() {
+        let slot = values.get_mut(ix)?;
+        *slot = value.trim();
+        if slot.is_empty() {
+            return None;
+        }
+        count = ix + 1;
     }
+    Some((values, count))
 }
 
 fn parse_rgb_function(args: &[&str]) -> Option<ClipboardColor> {
@@ -257,6 +255,17 @@ mod tests {
     use rstest::rstest;
 
     use super::{ClipboardColor, parse_clipboard_color};
+
+    #[test]
+    fn test_color_arguments_excessive_count_returns_none() {
+        let arguments = format!("{}0", "0,".repeat(100_000));
+        assert!(super::split_function_arguments(&arguments).is_none());
+        assert_eq!(parse_clipboard_color(&format!("rgb({arguments})")), None);
+        assert_eq!(
+            parse_clipboard_color(&format!("unknown({arguments})")),
+            None
+        );
+    }
 
     #[rstest]
     #[case("#abc", ClipboardColor::new(0xAA, 0xBB, 0xCC, 0xFF))]

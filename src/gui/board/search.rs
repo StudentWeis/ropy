@@ -63,6 +63,7 @@ fn create_search_option_button(
     };
 
     button
+        .toggled(is_active)
         .xsmall()
         .compact()
         .rounded(px(4.0))
@@ -152,8 +153,13 @@ fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl I
                 .child(render_search_icon())
                 .child(render_search_input_box(board))
                 .child(render_search_separator(cx))
-                .child(create_case_sensitive_button(board, cx))
-                .child(create_whole_word_button(board, cx)),
+                .child(
+                    h_flex()
+                        .key_context("RopyCommand")
+                        .gap_0p5()
+                        .child(create_case_sensitive_button(board, cx))
+                        .child(create_whole_word_button(board, cx)),
+                ),
         )
 }
 
@@ -189,8 +195,10 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         .rounded(px(16.0))
         .p(px(2.0))
         .gap(px(1.0))
+        .key_context("RopyCommand")
         .child(
             text_button
+                .toggled(board.filter_state.content_filter == ContentFilter::Text)
                 .icon(Icon::empty().path("icons/filter-text.svg"))
                 .accessibility_label(text_filter_tooltip.clone())
                 .tooltip(text_filter_tooltip)
@@ -206,6 +214,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         )
         .child(
             image_button
+                .toggled(board.filter_state.content_filter == ContentFilter::Image)
                 .icon(Icon::empty().path("icons/filter-image.svg"))
                 .accessibility_label(image_filter_tooltip.clone())
                 .tooltip(image_filter_tooltip)
@@ -221,6 +230,7 @@ fn render_filter_buttons(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl
         )
         .child(
             files_button
+                .toggled(board.filter_state.content_filter == ContentFilter::Files)
                 .icon(Icon::empty().path("icons/filter-files.svg"))
                 .accessibility_label(files_filter_tooltip.clone())
                 .tooltip(files_filter_tooltip)
@@ -253,8 +263,10 @@ fn render_favorites_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> im
         .border_color(cx.theme().border)
         .rounded(px(16.0))
         .p(px(2.0))
+        .key_context("RopyCommand")
         .child(
             favorites_button
+                .toggled(board.filter_state.favorites_only)
                 .icon(Icon::empty().path("icons/filter-star.svg"))
                 .accessibility_label(favorites_filter_tooltip.clone())
                 .tooltip(favorites_filter_tooltip)

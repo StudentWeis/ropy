@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mode", choices=["accept", "deny", "pending", "startup"], required=True)
     args = parser.parse_args()
+    args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     for line in args.environment.read_text().splitlines():

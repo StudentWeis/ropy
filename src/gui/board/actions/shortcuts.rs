@@ -16,7 +16,9 @@ use crate::{
 };
 
 const BOARD: Option<&str> = Some("Ropy && !Select && !List");
-const HISTORY: Option<&str> = Some("RopyHistory && !Input && !Select && !List");
+// Component Buttons do not supply a key context. Their containing command
+// regions opt out so history bindings cannot steal Enter/Space activation.
+const HISTORY: Option<&str> = Some("RopyHistory && !RopyCommand && !Input && !Select && !List");
 const SEARCH: Option<&str> = Some("RopyHistory > Input && !Select && !List");
 
 #[derive(Clone, Copy, PartialEq, Eq)]

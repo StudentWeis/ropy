@@ -39,7 +39,9 @@ fn keystroke_to_hotkey(keystroke: &Keystroke) -> Option<String> {
     }
 
     parts.push(key.as_str());
-    Some(parts.join("+"))
+    let candidate = parts.join("+");
+    HotKey::from_str(&candidate).ok()?;
+    Some(candidate)
 }
 
 fn is_cancel_key(key: &str) -> bool {
@@ -248,6 +250,18 @@ mod tests {
             key: key.to_string(),
             key_char: None,
         }
+    }
+
+    #[rstest::rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_keystroke_to_hotkey_unsupported_fn_combination_returns_none(#[case] control: bool) {
+        let modifiers = Modifiers {
+            function: true,
+            control,
+            ..Modifiers::none()
+        };
+        assert!(keystroke_to_hotkey(&keystroke("a", modifiers)).is_none());
     }
 
     #[test]

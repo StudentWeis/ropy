@@ -17,11 +17,7 @@ The PR release workflow runs the plan and checks generated configuration without
 publishing. Tag builds run the full pipeline:
 
 1. dist selects the five supported platform/architecture targets.
-2. The macOS build setup installs a pinned cargo-bundle and invokes
-   `scripts/build_macos_dmg.sh` for each target. The script uses only that target's
-   `Ropy.app`, creates a DMG with an Applications shortcut, and cleans temporary
-   staging files even if image creation fails. It also creates
-   `ropy-<target>-app.tar.xz` plus its SHA-256 sidecar from that complete app.
+2. The macOS build setup installs a pinned cargo-bundle and invokes `scripts/build_macos_dmg.sh` for each target. The script first runs `cargo build --locked --package ropy --release --target <target>`, then obtains Cargo's configured target directory with locked metadata. It passes that target's prebuilt release executable to cargo-bundle with `--binary-path`, avoiding cargo-bundle's internal unlocked build. It uses only that target's `Ropy.app`, creates a DMG with an Applications shortcut, and cleans temporary staging files even if image creation fails. It also creates `ropy-<target>-app.tar.xz` plus its SHA-256 sidecar from that complete app.
 3. dist builds binary archives and SHA-256 sidecars for standalone installations.
    Installed macOS bundles use the `-app.tar.xz` payload, which updates resources
    and `Info.plist` together with the executable. DMGs remain manual downloads.
@@ -34,9 +30,7 @@ publishing. Tag builds run the full pipeline:
 5. dist's generated host job collects all artifacts, including the DMGs and
    `latest.json`, and creates the GitHub Release. Custom jobs do not publish.
 
-The DMG still uses cargo-bundle's release build, while dist uses its own dist
-profile. This preserves the existing packaging behavior; this change does not
-attempt to share binaries between the two build tools.
+The DMG and complete app payload use the explicit locked Cargo release build; cargo-bundle packages that prebuilt executable without rebuilding it. Cargo's configured target directory is honored, including config-file and environment overrides. dist still builds its own binary archives with the dist profile; these are separate builds, not shared binaries. A successful lockfile check does not prove that either distributed package passed native acceptance; follow [Release acceptance](RELEASE_ACCEPTANCE.md) for the actual artifact bytes.
 
 Run packaging regression tests without compiling or publishing:
 
@@ -139,6 +133,8 @@ and cargo-dist `dist = false`; its version is independent of the application.
 `scripts/update_version.sh` selects `--package ropy`, and macOS bundling selects
 the same package explicitly. Root application metadata, updater version lookup,
 resource paths and archive names remain unchanged.
+
+Windows resource generation requires a Windows host. The build script rejects cross-OS combinations where only the host or only the target is Windows, rather than silently omitting resources or invoking the Windows resource compiler for another OS. Use a native Windows runner for Windows packages. This guard does not reject same-OS cross-architecture builds, which still require the matching target toolchain and system dependencies.
 
 ## Self-hosted Homebrew Cask
 
