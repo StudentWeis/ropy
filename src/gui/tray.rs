@@ -264,9 +264,12 @@ fn tray_event_from_menu_event(
 }
 
 #[cfg(not(target_os = "linux"))]
-fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
-    if let TrayIconEvent::Click { button, .. } = event
-        && *button == tray_icon::MouseButton::Left
+const fn tray_event_from_icon_event(event: &TrayIconEvent) -> Option<TrayEvent> {
+    if let TrayIconEvent::Click {
+        button: tray_icon::MouseButton::Left,
+        button_state: tray_icon::MouseButtonState::Up,
+        ..
+    } = event
     {
         Some(TrayEvent::Show)
     } else {
@@ -446,6 +449,16 @@ mod tests {
             button_state: tray_icon::MouseButtonState::Up,
         },
         Some(TrayEvent::Show)
+    )]
+    #[case(
+        TrayIconEvent::Click {
+            id: tray_icon::TrayIconId::new("tray"),
+            position: tray_icon::dpi::PhysicalPosition::new(0.0, 0.0),
+            rect: tray_icon::Rect::default(),
+            button: tray_icon::MouseButton::Left,
+            button_state: tray_icon::MouseButtonState::Down,
+        },
+        None
     )]
     #[case(
         TrayIconEvent::Click {

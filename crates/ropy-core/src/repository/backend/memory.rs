@@ -2,6 +2,9 @@
 
 //! In-memory implementation of the repository storage backend used by tests.
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
@@ -20,6 +23,8 @@ use crate::repository::{
 #[derive(Debug, Clone, Default)]
 pub struct MemoryBackend {
     trees: Arc<Mutex<HashMap<String, Arc<MemoryTree>>>>,
+    // Every entry read and mutation takes this lock before any tree lock, so
+    // readers cannot observe a batch between its individual tree mutations.
     transaction_lock: Arc<Mutex<()>>,
     fail_next_batch: Arc<AtomicBool>,
 }
@@ -153,6 +158,11 @@ impl MemoryTreeHandle {
     pub fn fail_next_get(&self) {
         self.tree.fail_next_get.store(true, Ordering::SeqCst);
     }
+
+    fn snapshot(&self) -> BTreeMap<Vec<u8>, Vec<u8>> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
+        recover_lock(self.tree.entries.read()).clone()
+    }
 }
 
 impl KvTree for MemoryTreeHandle {
@@ -165,6 +175,7 @@ impl KvTree for MemoryTreeHandle {
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, RepositoryError> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
         if self.tree.fail_next_get.swap(false, Ordering::SeqCst) {
             return Err(RepositoryError::Query("injected key read failure".into()));
         }
@@ -181,6 +192,7 @@ impl KvTree for MemoryTreeHandle {
     }
 
     fn len(&self) -> Result<usize, RepositoryError> {
+        let _transaction = recover_lock(self.transaction_lock.lock());
         let entries_lock = self.tree.entries.read();
         let entries = recover_lock(entries_lock);
         Ok(entries.len())
@@ -199,9 +211,9 @@ impl KvTree for MemoryTreeHandle {
         &self,
         callback: &mut dyn FnMut(&[u8], &[u8]) -> bool,
     ) -> Result<(), RepositoryError> {
-        let entries_lock = self.tree.entries.read();
-        let entries = recover_lock(entries_lock);
-        for (key, value) in entries.iter() {
+        // Release both locks before invoking callbacks, which may access trees.
+        let entries = self.snapshot();
+        for (key, value) in &entries {
             if !callback(key, value) {
                 break;
             }
@@ -213,8 +225,7 @@ impl KvTree for MemoryTreeHandle {
         &self,
         callback: &mut dyn FnMut(&[u8], &[u8]) -> bool,
     ) -> Result<(), RepositoryError> {
-        let entries_lock = self.tree.entries.read();
-        let entries = recover_lock(entries_lock);
+        let entries = self.snapshot();
         for (key, value) in entries.iter().rev() {
             if !callback(key, value) {
                 break;

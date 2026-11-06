@@ -196,6 +196,31 @@ def build_binary():
     return binary
 
 
+def build_provenance(rustc_version):
+    """Record Cargo's target selection and config inputs, in precedence order."""
+    root = ROOT.resolve()
+    cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
+    if not cargo_home.is_absolute():
+        cargo_home = root / cargo_home
+    directories = [cargo_home.resolve()] + [parent / ".cargo" for parent in reversed((root, *root.parents))]
+    sources = []
+    target = next(line.removeprefix("host: ") for line in rustc_version.splitlines()
+                  if line.startswith("host: "))
+    seen = set()
+    for directory in directories:
+        # Cargo prefers the extensionless legacy file when both names exist.
+        config = directory / "config"
+        if not config.is_file():
+            config = directory / "config.toml"
+        if not config.is_file() or config in seen:
+            continue
+        seen.add(config)
+        data = config.read_bytes()
+        sources.append({"path": str(config), "sha256": hashlib.sha256(data).hexdigest()})
+        target = tomllib.loads(data.decode()).get("build", {}).get("target", target)
+    return {"effective_target": os.environ.get("CARGO_BUILD_TARGET", target), "cargo_config": sources}
+
+
 def run(args):
     if platform.system() != "Darwin" and not args.skip_memory:
         raise ValueError("RSS requires macOS; use --skip-memory for core-only measurement")
@@ -209,9 +234,10 @@ def run(args):
                    "cpu": output("sysctl", "-n", "machdep.cpu.brand_string") if platform.system() == "Darwin" else platform.processor(),
                    "rustc": output("rustc", "-Vv"), "profile": manifest["profile"],
                    "build_overrides": {key: value for key, value in os.environ.items()
-                                       if key.startswith(("CARGO_PROFILE_", "CARGO_TARGET_"))
-                                       or key in ("CARGO_BUILD_TARGET", "RUSTC", "RUSTC_WRAPPER")},
+                                       if key.startswith(("CARGO_PROFILE_", "CARGO_TARGET_", "CARGO_BUILD_"))
+                                       or key in ("CARGO_INCREMENTAL", "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER")},
                    "rustflags": os.environ.get("CARGO_ENCODED_RUSTFLAGS", os.environ.get("RUSTFLAGS", ""))}
+    environment.update(build_provenance(environment["rustc"]))
     result = {"schema_version": 1, "suite_version": 1, "fixture_version": 1,
               "collected_at": datetime.now(timezone.utc).isoformat(),
               "version": version, "commit": output("git", "rev-parse", "HEAD"),

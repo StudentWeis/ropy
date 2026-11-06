@@ -15,10 +15,13 @@ aarch64-apple-darwin | x86_64-apple-darwin) ;;
 	;;
 esac
 
-cargo bundle --package ropy --release --target "$bundle_target" --format osx
+cargo build --locked --package ropy --release --target "$bundle_target"
 
 # Match cargo-bundle's source directory, including Cargo config and environment overrides.
 target_dir="$(cargo metadata --locked --no-deps --format-version 1 | jq -er '.target_directory')"
+# cargo-bundle 0.12 skips its internal (unlocked) build when given --binary-path.
+cargo bundle --package ropy --release --target "$bundle_target" --format osx \
+	--binary-path "$target_dir/$bundle_target/release/ropy"
 app="$target_dir/$bundle_target/release/bundle/osx/Ropy.app"
 if [[ ! -d "$app" ]]; then
 	echo "cargo-bundle did not produce $app" >&2

@@ -24,6 +24,131 @@ use crate::{
 mod shortcut_editor;
 mod user_themes;
 
+fn focus_button(
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::App,
+    id: impl Into<gpui_kit::ElementId>,
+) {
+    let id = id.into();
+    for _ in 0..40 {
+        if window.find(id.clone()).focused() == Some(true) {
+            return;
+        }
+        window.press("tab", cx);
+    }
+    assert_eq!(
+        window.find(id.clone()).focused(),
+        Some(true),
+        "button {id:?} must be keyboard reachable"
+    );
+}
+
+#[gpui_kit::test]
+fn test_history_buttons_keyboard_activation_does_not_request_copy(cx: &mut TestAppContext) {
+    let (handle, board, copies) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        for key in ["enter", "space"] {
+            focus_button(window, cx, "search-case-sensitive-btn");
+            window.press(key, cx);
+            assert!(board.read(cx).filter_state.search_options.case_sensitive);
+            assert!(!board.read(cx).ui_state.preview_visible());
+            assert!(copies.is_empty(), "a focused command must not copy history");
+            window.click("search-case-sensitive-btn", cx);
+            assert!(!board.read(cx).filter_state.search_options.case_sensitive);
+        }
+        for layout in crate::config::LayoutMode::all() {
+            board.update(cx, |board, cx| {
+                board.layout_mode = layout;
+                window.focus(&board.focus_handle, cx);
+                cx.notify();
+            });
+            window.render_frame(cx);
+            focus_button(window, cx, ("delete-btn", 1_u64));
+            window.press("enter", cx);
+            assert_eq!(board.read(cx).pending_delete_id, Some(1));
+            window.press("escape", cx);
+        }
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(copies.is_empty());
+}
+
+#[gpui_kit::test]
+fn test_search_buttons_expose_controlled_toggle_state(cx: &mut TestAppContext) {
+    let (handle, board, copies) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        for id in [
+            "search-case-sensitive-btn",
+            "search-whole-word-btn",
+            "filter-text-btn",
+            "filter-image-btn",
+            "filter-files-btn",
+            "filter-favorites-btn",
+        ] {
+            assert_eq!(window.find(id).checked(), Some(false), "{id}");
+            window.click(id, cx);
+            assert_eq!(window.find(id).checked(), Some(true), "{id}");
+            match id {
+                "search-case-sensitive-btn" => {
+                    assert!(board.read(cx).filter_state.search_options.case_sensitive);
+                }
+                "search-whole-word-btn" => {
+                    assert!(board.read(cx).filter_state.search_options.whole_word);
+                }
+                "filter-favorites-btn" => assert!(board.read(cx).filter_state.favorites_only),
+                "filter-text-btn" => assert_eq!(
+                    board.read(cx).filter_state.content_filter,
+                    super::search::ContentFilter::Text
+                ),
+                "filter-image-btn" => assert_eq!(
+                    board.read(cx).filter_state.content_filter,
+                    super::search::ContentFilter::Image
+                ),
+                "filter-files-btn" => assert_eq!(
+                    board.read(cx).filter_state.content_filter,
+                    super::search::ContentFilter::Files
+                ),
+                _ => unreachable!(),
+            }
+            window.click(id, cx);
+            assert_eq!(window.find(id).checked(), Some(false), "{id}");
+            assert!(copies.is_empty());
+        }
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(copies.is_empty());
+}
+
+#[gpui_kit::test]
+fn test_hotkey_recording_unsupported_fn_combination_keeps_recording(cx: &mut TestAppContext) {
+    let (handle, board, copies) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-button", cx);
+        window.click("hotkey-record-button", cx);
+        let before = board.read(cx).settings_editor.pending_hotkey.clone();
+        window.press("fn-a", cx);
+        assert!(board.read(cx).settings_editor.hotkey.recording);
+        assert_eq!(board.read(cx).settings_editor.pending_hotkey, before);
+        window.press("ctrl-shift-a", cx);
+        assert!(!board.read(cx).settings_editor.hotkey.recording);
+        assert_eq!(
+            board.read(cx).settings_editor.pending_hotkey,
+            if cfg!(target_os = "macos") {
+                "control+shift+a"
+            } else {
+                "ctrl+shift+a"
+            }
+        );
+        assert!(copies.is_empty());
+    })
+    .unwrap();
+}
+
 #[gpui_kit::test]
 fn test_grid_large_history_uses_one_extent_and_reveals_distant_selection(cx: &mut TestAppContext) {
     let mut settings = Settings::default();
@@ -1924,8 +2049,8 @@ fn test_startup_ready_hides_recovery_alerts(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn test_header_buttons_click_opens_corresponding_panel(cx: &mut TestAppContext) {
-    let (handle, board, _) = open_board(cx, vec![record(1)]);
+fn test_header_buttons_pointer_and_keyboard_open_corresponding_panel(cx: &mut TestAppContext) {
+    let (handle, board, copies) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {
         for (button, panel, back_button) in [
             ("help-button", ActivePanel::Help, "help-back-button"),
@@ -1937,13 +2062,22 @@ fn test_header_buttons_click_opens_corresponding_panel(cx: &mut TestAppContext) 
                 cx.notify();
             });
             window.render_frame(cx);
-            window.click(button, cx);
-            assert_eq!(board.read(cx).active_panel, panel);
-            window.click(back_button, cx);
-            assert_eq!(board.read(cx).active_panel, ActivePanel::ClipboardList);
+            for activation in ["click", "enter", "space"] {
+                if activation == "click" {
+                    window.click(button, cx);
+                } else {
+                    focus_button(window, cx, button);
+                    window.press(activation, cx);
+                }
+                assert_eq!(board.read(cx).active_panel, panel);
+                window.click(back_button, cx);
+                assert_eq!(board.read(cx).active_panel, ActivePanel::ClipboardList);
+            }
         }
     })
     .unwrap();
+    cx.run_until_parked();
+    assert!(copies.is_empty());
 }
 
 #[gpui_kit::test]

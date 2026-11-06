@@ -9,7 +9,7 @@ use std::{
 use gpui_kit::{
     App, AppContext, AssetSource, Bounds, Entity, Window, WindowBackgroundAppearance, WindowBounds,
     WindowHandle, WindowKind, WindowOptions,
-    component::{Root, ThemeMode as ComponentThemeMode, theme::Theme},
+    component::{Colorize, Root, ThemeMode as ComponentThemeMode, theme::Theme},
     rgb,
 };
 use rust_embed::RustEmbed;
@@ -138,7 +138,7 @@ pub(crate) fn apply_current_theme(window: &mut Window, cx: &mut App, opacity_per
     set_app_theme(window, cx, &id, opacity_percent);
 }
 
-/// Set the application theme from a bundled theme definition.
+/// Set the application theme from a catalog or bundled theme definition.
 /// Surface tokens include window opacity; consumers must use them unchanged.
 pub(crate) fn set_app_theme(
     window: &mut Window,
@@ -184,6 +184,40 @@ pub(crate) fn set_app_theme(
         theme.list_hover = surface(rgb(palette.list_hover).into());
         theme.list_active = surface(rgb(palette.list_active).into());
         theme.scrollbar_thumb = surface(rgb(palette.scrollbar_thumb).into());
+
+        // Theme::update reconciles same-name colors/tokens, but does not rerun
+        // schema fallbacks. Project our compact palette onto the tokens read by
+        // the components Ropy uses, rather than leaving the framework palette.
+        theme.secondary_hover = theme.list_hover;
+        theme.secondary_active = theme.list_active;
+        theme.button = theme.secondary;
+        theme.button_foreground = theme.secondary_foreground;
+        theme.button_hover = theme.list_hover;
+        theme.button_active = theme.list_active;
+        theme.button_primary = theme.primary;
+        theme.button_primary_foreground = theme.primary_foreground;
+        theme.button_primary_hover = theme.primary_hover;
+        theme.button_primary_active = theme.primary_active;
+        theme.button_secondary = theme.secondary;
+        theme.button_secondary_foreground = theme.secondary_foreground;
+        theme.button_secondary_hover = theme.secondary_hover;
+        theme.button_secondary_active = theme.secondary_active;
+        theme.danger_hover = theme.danger.darken(0.05);
+        theme.danger_active = theme.danger.darken(0.1);
+        theme.button_danger = theme.danger;
+        theme.button_danger_foreground = theme.danger_foreground;
+        theme.button_danger_hover = theme.danger_hover;
+        theme.button_danger_active = theme.danger_active;
+        theme.switch = theme.secondary_active;
+        theme.switch_thumb = theme.background;
+        theme.slider_bar = theme.primary;
+        theme.slider_thumb = surface(rgb(palette.primary_foreground).into());
+        theme.colors.list = theme.background;
+        theme.scrollbar = theme.background;
+        theme.scrollbar_thumb_hover = theme.scrollbar_thumb;
+        theme.drag_border = theme.ring;
+        // A caret is foreground, not a translucent window surface.
+        theme.caret = rgb(palette.primary).into();
         theme.notification.placement = gpui_kit::Anchor::BottomRight;
         theme.notification.margins.right = gpui_kit::px(12.);
     });
@@ -292,18 +326,120 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_bundled_themes_actual_text_pairs_have_readable_contrast() {
+        fn luminance(color: gpui_kit::Hsla) -> f64 {
+            let color = gpui_kit::Rgba::from(color);
+            [color.r, color.g, color.b]
+                .into_iter()
+                .zip([0.2126, 0.7152, 0.0722])
+                .map(|(channel, weight)| {
+                    let channel = f64::from(channel);
+                    let linear = if channel <= 0.04045 {
+                        channel / 12.92
+                    } else {
+                        ((channel + 0.055) / 1.055).powf(2.4)
+                    };
+                    linear * weight
+                })
+                .sum()
+        }
+        let mut failures = Vec::new();
+        let mut cx = TestAppContext::single();
+        cx.update(gpui_kit::init);
+        let cx = cx.add_empty_window();
+        // Check opaque bundled themes through their production projection, not
+        // user themes or translucent surfaces with an unknown desktop backdrop.
+        for id in crate::gui::theme::available_themes() {
+            cx.update(|window, cx| {
+                set_app_theme(window, cx, &id, 100);
+                let p = gpui_kit::component::Theme::global(cx);
+                let mut pairs = vec![
+                    (p.foreground, p.background),
+                    (p.secondary_foreground, p.secondary),
+                    (p.accent_foreground, p.accent),
+                    (p.popover_foreground, p.popover),
+                    (p.foreground, p.selection),
+                    (p.button_primary_foreground, p.button_primary),
+                    (p.button_primary_foreground, p.button_primary_hover),
+                    (p.button_primary_foreground, p.button_primary_active),
+                    (p.button_danger_foreground, p.button_danger),
+                    (p.button_danger_foreground, p.button_danger_hover),
+                    (p.button_danger_foreground, p.button_danger_active),
+                ];
+                // Rows, popup metadata and selection surfaces keep secondary
+                // text readable, including the selected row's accent surface.
+                pairs.extend(
+                    [
+                        p.background,
+                        p.secondary,
+                        p.accent,
+                        p.muted,
+                        p.popover,
+                        p.list_hover,
+                        p.list_active,
+                        p.selection,
+                    ]
+                    .map(|surface| (p.muted_foreground, surface)),
+                );
+                for (text, surface) in pairs {
+                    let (a, b) = (luminance(text), luminance(surface));
+                    let ratio = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                    if ratio < 4.5 {
+                        failures.push(format!(
+                            "{}: {text:?} on {surface:?} = {ratio:.2}",
+                            id.code()
+                        ));
+                    }
+                }
+            });
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
     #[rstest]
     #[case(0)]
     #[case(50)]
     #[case(100)]
-    fn test_app_theme_switch_updates_component_tokens_and_base(#[case] opacity: u8) {
+    fn test_app_theme_switch_updates_component_tokens_and_base(
+        #[case] opacity: u8,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut cx = TestAppContext::single();
         cx.update(gpui_kit::init);
+        // Use a user palette with every color distinct from the framework
+        // defaults, so mode changes cannot accidentally satisfy the assertions.
+        let custom_id = crate::gui::theme::ThemeId::new("user:projection-test");
+        let mut source: toml::Value =
+            toml::from_str(include_str!("../../assets/themes/ropy-light.toml"))?;
+        for (index, (key, value)) in source
+            .as_table_mut()
+            .ok_or("theme table")?
+            .iter_mut()
+            .enumerate()
+        {
+            if key != "mode" && key != "theme_name" {
+                *value = toml::Value::String(format!("#{:06x}", 0x0012_3456 + index * 0x0004_0302));
+            }
+        }
+        let source = toml::to_string(&source)?;
+        let custom = ThemeDefinition::parse(&custom_id, &source)?;
+        cx.update(|cx| {
+            let mut catalog = crate::gui::theme::ThemeCatalog::default();
+            catalog.insert(custom, source);
+            cx.set_global(catalog);
+        });
         let cx = cx.add_empty_window();
-        for theme_id in crate::gui::theme::available_themes() {
-            cx.update(|window, cx| {
+        let theme_ids = crate::gui::theme::available_themes();
+        // Apply the custom palette on both sides of bundled mode switches.
+        for theme_id in std::iter::once(custom_id.clone())
+            .chain(theme_ids)
+            .chain(std::iter::once(custom_id))
+        {
+            cx.update(|window, cx| -> Result<(), Box<dyn std::error::Error>> {
                 set_app_theme(window, cx, &theme_id, opacity);
-                let definition = ThemeDefinition::load_or_default(&theme_id);
+                let definition = crate::gui::theme::ThemeCatalog::global(cx)
+                    .get(&theme_id)
+                    .ok_or("registered theme")?;
                 let palette = definition.palette();
                 let expected = surface_with_opacity(rgb(palette.background).into(), opacity);
                 let component = gpui_kit::component::Theme::global(cx);
@@ -316,8 +452,75 @@ mod tests {
                     gpui_kit::base::Theme::global(cx).tokens.colors.background,
                     expected
                 );
+                // These are the production tokens read by Button (including
+                // hover/press), Switch, Slider, popup lists and Base scrollbars.
+                for (token, color) in [
+                    (component.tokens.button, palette.secondary),
+                    (component.tokens.button_hover, palette.list_hover),
+                    (component.tokens.button_active, palette.list_active),
+                    (component.tokens.button_primary, palette.primary),
+                    (component.tokens.button_primary_hover, palette.primary_hover),
+                    (
+                        component.tokens.button_primary_active,
+                        palette.primary_active,
+                    ),
+                    (component.tokens.button_secondary, palette.secondary),
+                    (component.tokens.button_secondary_hover, palette.list_hover),
+                    (
+                        component.tokens.button_secondary_active,
+                        palette.list_active,
+                    ),
+                    (component.tokens.button_danger, palette.danger),
+                    (component.tokens.switch, palette.list_active),
+                    (component.tokens.switch_thumb, palette.background),
+                    (component.tokens.slider_bar, palette.primary),
+                    (component.tokens.slider_thumb, palette.primary_foreground),
+                    (component.tokens.list, palette.background),
+                    (component.tokens.scrollbar, palette.background),
+                    (
+                        component.tokens.scrollbar_thumb_hover,
+                        palette.scrollbar_thumb,
+                    ),
+                ] {
+                    assert_eq!(
+                        token.background,
+                        solid_background(surface_with_opacity(rgb(color).into(), opacity)),
+                        "{theme_id:?} at {opacity}%"
+                    );
+                }
+                for (actual, color) in [
+                    (component.secondary_foreground, palette.secondary_foreground),
+                    (component.accent_foreground, palette.accent_foreground),
+                    (component.muted_foreground, palette.muted_foreground),
+                    (component.danger_foreground, palette.danger_foreground),
+                    (component.popover_foreground, palette.popover_foreground),
+                    (component.button_foreground, palette.secondary_foreground),
+                    (
+                        component.button_primary_foreground,
+                        palette.primary_foreground,
+                    ),
+                    (
+                        component.button_secondary_foreground,
+                        palette.secondary_foreground,
+                    ),
+                    (
+                        component.button_danger_foreground,
+                        palette.danger_foreground,
+                    ),
+                ] {
+                    assert_eq!(actual, rgb(color).into(), "text must remain opaque");
+                }
+                let base = gpui_kit::base::Theme::global(cx);
+                assert_eq!(base.tokens.colors.primary, component.primary);
+                assert_eq!(
+                    base.tokens.colors.muted_foreground,
+                    component.muted_foreground
+                );
+                assert_eq!(base.resizable.handle, Some(component.border));
                 assert_eq!(component.notification.placement, Anchor::BottomRight);
-            });
+                Ok(())
+            })?;
         }
+        Ok(())
     }
 }

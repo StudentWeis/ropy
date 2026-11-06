@@ -280,8 +280,13 @@ fn test_save_image_from_path_basic() {
     assert_eq!(record.id, hash);
 }
 
-#[test]
-fn test_save_image_from_path_dedup() {
+#[rstest::rstest]
+#[case(1, 2)]
+#[case(2, 1)]
+fn test_save_image_from_path_dedup_keeps_latest_timestamp(
+    #[case] first_time: i64,
+    #[case] second_time: i64,
+) {
     let (_temp_dir, repo) = create_test_repo();
     let images = tempfile::tempdir().expect("Failed to create image fixtures");
 
@@ -296,19 +301,31 @@ fn test_save_image_from_path_dedup() {
 
     let r1 = repo
         .save_image_from_path_with_clock(path1.to_string_lossy().into_owned(), hash, || {
-            capture_time(1)
+            capture_time(first_time)
         })
         .expect("Failed to save first");
 
     let r2 = repo
         .save_image_from_path_with_clock(path2.to_string_lossy().into_owned(), hash, || {
-            capture_time(2)
+            capture_time(second_time)
         })
         .expect("Failed to save second");
 
     assert_eq!(r1.id, r2.id);
     assert_eq!(repo.count().expect("count"), 1);
-    assert_eq!(r2.created_at, capture_time(2));
+    let expected_time = capture_time(2);
+    assert_eq!(r2.created_at, expected_time);
+    assert_eq!(
+        repo.get_by_id(hash)
+            .expect("load image")
+            .expect("image")
+            .created_at,
+        expected_time
+    );
+    assert_eq!(
+        repo.get_display_records(1).expect("load time index")[0].created_at,
+        expected_time
+    );
     assert_eq!(r2.content, r1.content);
     assert!(path1.exists());
     assert!(thumb1.exists());

@@ -1,8 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! Repository integration tests, split by theme.
 //!
-//! Each module focuses on one behavioral concern so a single test edit only
-//! recompiles its own file rather than the whole `repo.rs` translation unit.
+//! Each module groups one behavioral concern to make tests easier to navigate.
+//! These modules still compile together as part of the crate's test target.
 
 mod dedup_tests;
 mod display_tests;

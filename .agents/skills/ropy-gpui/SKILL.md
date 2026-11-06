@@ -5,7 +5,7 @@ description: Ropy-specific integration for the official gpui-kit and gpui-kit-de
 
 # Ropy GPUI adapter
 
-Read the official [GPUI Kit skill](../gpui-kit/SKILL.md), and the official [Design Guides skill](../gpui-kit-design-guides/SKILL.md) for visible UI work. Apply the repository-specific constraints below alongside them. The installed source and lockfile determine actual API signatures; repository instructions determine Ropy conventions.
+Read the official [GPUI Kit skill](../gpui-kit/SKILL.md), and the official [Design Guides skill](../gpui-kit-design-guides/SKILL.md) for visible UI work. Before applying their examples or testing advice, read the [locked API notes](references/locked-api.md), including the corrections for Masonry child identity, Transaction rollback, entity borrow chains and animation clocks. These notes are required for ordinary development and tests, not only upgrades. The installed source and lockfile determine actual API signatures; repository instructions determine Ropy conventions.
 
 ## Official snapshots
 
@@ -18,13 +18,15 @@ To verify against an extracted upstream checkout, run `diff -qr <upstream>/skill
 - Normal and development dependencies use `gpui-kit` 0.9.0, with the default `gpui-pre` 0.3.11 engine. Keep the existing feature set unless the task requires a change. Optional backend entries in Cargo.lock do not imply an active renderer switch.
 - Localize visible strings and accessible names with existing translation keys where appropriate. The official design guide's English-only accessibility-label exception does not override Ropy's localization convention.
 - The Coding Guides allow deliberately record-like configuration, theme tokens, geometry and serialized schemas to expose fields with `#[non_exhaustive]` and construction APIs. Follow that detailed rule instead of treating the official entrypoint's abbreviated “No pub fields” statement as an instruction to migrate unrelated types.
-- `gpui_kit::open_window` installs the window Root and returns the window handle and view entity. Do not mount duplicate dialog, sheet or notification layers. Existing setup is in [window.rs](../../../src/gui/window.rs).
+- `gpui_kit::open_window` installs the window Root and returns the window handle and view entity. Ropy's current [app.rs](../../../src/gui/app.rs) instead uses `cx.open_window` and explicitly constructs `Root::new` once. Do not add a second Root or duplicate dialog, sheet or notification layers. [window.rs](../../../src/gui/window.rs) manages the window handle, visibility, dismissal and recreation lifecycle; it is not the Root construction site.
 - Upstream recipes and `script/check-ai` commands belong to the upstream checkout. Ropy uses [docs/TESTING.md](../../../docs/TESTING.md) and `./scripts/precheck.sh`; its gate does not compile Markdown snippets or certify upstream recipes.
 - Headless UI tests exercise real components through the test platform. Native clipboard, OS IME, accessibility delivery and platform window behavior still require native acceptance evidence.
 
 ## Task-specific references
 
-- Before copying low-level examples, read [locked API notes](references/locked-api.md) for callback arity, entity return types, focus and Element lifecycle differences.
+- For custom layout or Masonry work, read [Masonry child mapping](references/locked-api.md#masonry-child-mapping) before the upstream advanced Element example; its column-local indices and bounds order are not safe to copy.
+- For entity state changes, read [entity borrow chains](references/locked-api.md#entity-borrow-chains) and [Transaction error paths](references/locked-api.md#transaction-error-paths). External entity reads are not all re-entrant, and the upstream Transaction example does not roll back on Drop or `?`.
+- Before writing animation tests or applying the official testing reference, read [animation timing and tests](references/locked-api.md#animation-timing-and-tests). The locked engine uses the executor clock, including non-synced Animation; the upstream wall-clock advice does not apply.
 - For 0.9.0 adoption and prioritized project opportunities, read [integration notes](references/integration.md).
 - Production-view UI integration tests live in [ui_tests.rs](../../../src/gui/board/ui_tests.rs). Use the official testing reference for the new `TestQueryExt`, `TestEventExt` and `TestInput` APIs, checking signatures in the installed crate.
 

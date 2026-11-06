@@ -5,13 +5,27 @@
 //! - Converting the logo PNG to ICO format on Windows
 
 fn main() {
+    let (Ok(host), Ok(target), Ok(target_os)) = (
+        std::env::var("HOST"),
+        std::env::var("TARGET"),
+        std::env::var("CARGO_CFG_TARGET_OS"),
+    ) else {
+        println!("cargo:error=Cargo must set HOST, TARGET and CARGO_CFG_TARGET_OS");
+        std::process::exit(1);
+    };
+    // Build dependencies and cfg below are selected for the build-script host.
+    // Do not silently skip Windows resources or run winres for a non-Windows target.
+    if host.contains("-windows-") != (target_os == "windows") {
+        println!(
+            "cargo:error=cross-OS Windows builds are not supported (HOST={host}, TARGET={target}); use a native Windows runner"
+        );
+        std::process::exit(1);
+    }
+
     // Procedural macros read catalogues at compile time; track edits and added locales.
     println!("cargo:rerun-if-changed=assets");
     // Inject the build target triple for auto-update platform detection
-    println!(
-        "cargo:rustc-env=TARGET={}",
-        std::env::var("TARGET").unwrap_or_default()
-    );
+    println!("cargo:rustc-env=TARGET={target}");
 
     #[cfg(target_os = "windows")]
     {

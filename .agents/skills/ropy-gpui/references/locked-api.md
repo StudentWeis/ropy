@@ -24,7 +24,17 @@ The [Context source](https://docs.rs/crate/gpui-pre/0.3.11/source/src/app/contex
 
 `Entity::update` returns the closure result directly. `WeakEntity::update` and `update_in` return a synchronous Result; do not await them. `WeakEntity::upgrade` returns Option. Await I/O or background Tasks, then update the owner. There is no `Task::then` continuation API in this engine. Retain cancellable Tasks and Subscriptions on their owner; detach only for an intentional independent lifetime.
 
-`Context::defer_in` already borrows the owner mutably. Use the supplied `&mut T`; accessing the same entity through another handle re-enters its borrow. See the [entity source](https://docs.rs/crate/gpui-pre/0.3.11/source/src/app/entity_map.rs).
+### Entity borrow chains
+
+`Context::defer_in` already borrows the owner mutably. Use the supplied `&mut T`; accessing the same entity through another handle re-enters its borrow. The prohibition applies to entities already mutably leased in the current render/update/callback chain, not to every external `Entity::read`. Reading another entity that is not in that borrow chain is valid; a cycle such as A updating B and B reading or updating A is not. Ordinary shared reads alone do not create a mutable lease. The [entity source](https://docs.rs/crate/gpui-pre/0.3.11/source/src/app/entity_map.rs) removes an entity from the map while leased, which is why reading or updating that same entity panics.
+
+The upstream [entity best practices](../../gpui-kit/references/gpui/entity-best-practices.md) overstate the restriction on external reads in rendering hooks. Capture a snapshot before entering a callback when it would otherwise reach an entity in the active borrow chain; do not clone all external state merely to avoid legal reads.
+
+### Transaction error paths
+
+The upstream [Entity Transaction Pattern](../../gpui-kit/references/gpui/entity-advanced.md#entity-transaction-pattern) is an illustrative helper, not a GPUI transaction API. Its `Drop` implementation only prints a warning; it does not restore `original_state`. In its usage example, `validate_state(&tx.entity, cx)?` can return early after `tx.update` has already mutated the live entity, leaving those mutations in place. The explicit `rollback(cx)` handles `Ok(false)` only, not `Err` or unwinding.
+
+Do not rely on Drop for rollback. Prefer preparing and validating an independent candidate before updating the live entity once. A candidate must not share mutable backing state with the live entity; a shallow Clone of handles is not isolation. If adapting the helper, explicitly handle both validation rejection and error, call `rollback(cx)` before returning either failure, and reserve `commit(cx)` for success. This still does not reverse already emitted events, I/O or mutations in other entities, nor guarantee recovery from a panic. Keep fallible work and external effects outside the live-state mutation boundary unless an explicit recovery contract covers them.
 
 ## Global state and focus
 
@@ -39,3 +49,15 @@ Focus queries take a Window: `handle.is_focused(window)`. Native activation is `
 `Window::with_element_state` receives a GlobalElementId and a closure mapping `Option<S>` to `(result, S)`. Element fields do not establish persistent application state. Register hitboxes in prepaint and input handlers in paint; the latter capture owned data or handles, not a temporary `&mut self`.
 
 `Input::new` and `Select::new` receive retained state entities, not string IDs. `Tab::new()` takes no ID argument. `h_flex()` centers on the cross axis; `v_flex()` retains stretch behavior. Full-height columns inside rows may need explicit height or stretch. Verify constructors in the [0.9.0 component source](https://github.com/longbridge/gpui-kit/tree/7591a35eced761e3613c01e71ff04c10129dae1a/crates/component/src).
+
+### Masonry child mapping
+
+Do not copy the upstream [Masonry Layout example](../../gpui-kit/references/gpui/element-advanced.md#masonry-layout-pinterest-style) as a working implementation. Each column stores only LayoutIds, then enumerates its children starting at zero in prepaint and indexes `self.children[child_idx]` with that column-local index. Multiple columns therefore revisit the wrong children. It also appends bounds in column traversal order and later zips them with children in original order, mismatching the paint mapping.
+
+Retain the original child index alongside each LayoutId when assigning columns, for example as `(child_ix, layout_id)`. Carry that same index with each resolved bound through prepaint and paint; use the same traversal order for both phases and address the original child by that index. Do not recover identity from a column-local enumeration or zip column-ordered bounds with the original children. A regression test should use multiple columns and unequal child heights and verify that every child is prepainted and painted exactly once with its own placement. The example also uses outdated `AnyElement` lifecycle signatures and reads child bounds before layout resolution; the index correction alone does not make it runnable. Check the installed Element implementation and resolve measurement in the appropriate layout phase.
+
+## Animation timing and tests
+
+For `gpui-kit` 0.9.0 with `gpui-pre` 0.3.11, both non-synced and synced `Animation` use `cx.background_executor().now()`; spring animations use that executor clock too. See the installed [animation source](https://docs.rs/crate/gpui-pre/0.3.11/source/src/elements/animation.rs). The wall-clock statement in the upstream [testing frame/async guidance](../../gpui-kit/references/gpui/test.md#frames-and-async-work) does not apply to this lockfile.
+
+In headless animation tests, first render to establish element-keyed animation state, then advance the test executor clock and draw/process the next frame before observing the animated result. Keep the element ID stable across those frames and explicitly set the intended reduced-motion policy. Use `VisualTestContext::advance_clock(duration)` or `TestAppContext::executor().advance_clock(duration)`; do not use wall-clock sleeps to progress these animations. Executor progress without a rendered frame is not evidence of a changed visual result. See also the [0.9 integration notes](integration.md).
