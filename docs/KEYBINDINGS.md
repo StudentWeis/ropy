@@ -86,14 +86,7 @@ action are deduplicated; assigning the same normalized combination to different
 actions is an error. To reuse an existing key, first disable or rebind its current
 action.
 
-Overrides apply while the history list has focus. They are suspended in other
-panels, confirmation dialogs, text inputs, and native selection controls.
-Search retains Up/Down result navigation, Enter and Shift+Enter confirmation,
-Alt+Left/Right filter cycling, and Alt+F favorites filtering. Other input keys
-keep their editing behavior. Escape retains its existing focus/window behavior.
-The help panel reads the effective bindings; keys that apply only in search are
-marked “search”. Disabling an action's list shortcuts does not disable its mouse
-controls or fixed search shortcuts.
+Overrides apply while the history list has focus. They are suspended in other panels, confirmation dialogs, text inputs, native selection controls and focused command buttons. Use Tab to reach a command button; Enter or Space activates that button instead of confirming or previewing a history record. Search retains Up/Down result navigation, Enter and Shift+Enter confirmation, Alt+Left/Right filter cycling, and Alt+F favorites filtering. Other input keys keep their editing behavior. Escape retains its existing focus/window behavior. The help panel reads the effective bindings; keys that apply only in search are marked “search”. Disabling an action's list shortcuts does not disable its mouse controls or fixed search shortcuts.
 
 The OS activation shortcut is separate (`hotkey.activation_key` or Settings).
 Desktop-reserved or globally registered combinations may be intercepted before

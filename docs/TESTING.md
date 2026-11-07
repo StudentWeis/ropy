@@ -94,6 +94,16 @@ system libraries; its result participates in the required aggregate check.
 See [Release benchmark baseline](BENCHMARKS.md) for `make bench`, version
 comparison, measurement boundaries and release artifact size reports.
 
+## Native X11 popup focus regression
+
+On an [isolated X11 desktop](../.agents/skills/cross-platform-gui-e2e-test/references/linux-local.md), start Ropy with disposable data, open another application to receive focus, and show one unpinned Ropy window. With `WAYLAND_DISPLAY` unset and `DISPLAY` pointing only to that test desktop, run:
+
+```sh
+python3 scripts/test_popup_focus.py --output /tmp/ropy-popup-focus
+```
+
+The script requires `xdotool` and `xwininfo`; use `--hotkey` if the activation shortcut differs from Ctrl+Shift+D. It leaves the pointer inside the popup, dismisses with Escape and the activation shortcut, and checks that each subsequent shortcut restores both mapping and actual keyboard focus for three cycles. Native focus/map observations are saved even on failure. This protects against stale GPUI activation after X11 `FocusIn(detail=NotifyPointer)` notifications. It is a manual native regression, not part of the headless precheck or a substitute for packaged GUI acceptance. Also run `scripts/test_window_drag.py` when changing native focus handling to cover window-manager keyboard grabs.
+
 ## Native Wayland integration
 
 For Linux window, shortcut or clipboard changes, follow the isolated VM procedure

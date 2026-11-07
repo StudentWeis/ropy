@@ -6,7 +6,11 @@ pub mod single_instance;
 /// Lock helpers that recover from poisoning.
 pub mod sync;
 
-use std::{path::Path, process::Command};
+use std::{
+    path::Path,
+    process::{Command, ExitStatus},
+    thread::{self, JoinHandle},
+};
 
 pub(crate) use logging::init as init_logging;
 #[cfg(target_os = "windows")]
@@ -25,5 +29,45 @@ pub fn open_in_file_manager(path: &Path) {
         target_os = "linux" => "xdg-open",
         _ => return,
     };
-    let _ = Command::new(opener).arg(path).spawn();
+    let mut command = Command::new(opener);
+    command.arg(path);
+    let _ = spawn_opener(command);
+}
+
+fn spawn_opener(mut command: Command) -> std::io::Result<JoinHandle<std::io::Result<ExitStatus>>> {
+    // Start the waiter first: failure to create the thread cannot leave an
+    // already-started child without an owner to reap it.
+    thread::Builder::new()
+        .name("file-manager-opener".into())
+        .spawn(move || command.status())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(any(unix, target_os = "windows"))]
+    #[expect(clippy::unwrap_used)]
+    fn test_spawn_opener_waits_for_child_exit() {
+        let mut command = cfg_select! {
+            unix => Command::new("sh"),
+            target_os = "windows" => Command::new("cmd"),
+        };
+        command.args(cfg_select! {
+            unix => ["-c", "exit 7"],
+            target_os = "windows" => ["/C", "exit /B 7"],
+        });
+        let status = spawn_opener(command).unwrap().join().unwrap().unwrap();
+        assert_eq!(status.code(), Some(7));
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_spawn_opener_missing_command_returns_error_without_panicking() {
+        let directory = tempfile::tempdir().unwrap();
+        let command = Command::new(directory.path().join("missing-opener"));
+        let result = spawn_opener(command).unwrap().join().unwrap();
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
 }

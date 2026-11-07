@@ -169,13 +169,13 @@ impl ThemeDefinition {
                 accent: 0x00ad_d8e6,
                 accent_foreground: 0x001a_1a1a,
                 muted: 0x00f5_f5f5,
-                muted_foreground: 0x006b_6b6b,
+                muted_foreground: 0x0058_5858,
                 input: 0x00f0_f0f0,
-                primary: 0x005b_7bd5,
+                primary: 0x0052_70c4,
                 primary_foreground: 0x00ff_ffff,
                 primary_hover: 0x004e_70c2,
                 primary_active: 0x0042_60ab,
-                danger: 0x00d9_5c5c,
+                danger: 0x00c2_4848,
                 danger_foreground: 0x00ff_ffff,
                 popover: 0x00ff_ffff,
                 popover_foreground: 0x001a_1a1a,
@@ -412,7 +412,7 @@ mod tests {
         assert_eq!(theme.palette().background, 0x002d_2d2d);
         assert_eq!(theme.palette().foreground, 0x00ff_ffff);
         assert_eq!(theme.palette().accent, 0x004d_4d4d);
-        assert_eq!(theme.palette().primary, 0x006b_8cff);
+        assert_eq!(theme.palette().primary, 0x0052_6fd6);
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod tests {
         assert_eq!(theme.mode(), ThemeMode::Light);
         assert_eq!(theme.palette().background, 0x00ff_ffff);
         assert_eq!(theme.palette().accent, 0x00ad_d8e6);
-        assert_eq!(theme.palette().primary, 0x005b_7bd5);
+        assert_eq!(theme.palette().primary, 0x0052_70c4);
     }
 
     #[test]
@@ -446,7 +446,13 @@ mod tests {
         assert_eq!(theme.name, "Nord Light");
         assert_eq!(theme.mode(), ThemeMode::Light);
         assert_eq!(theme.palette().background, 0x00e3_e7ee);
-        assert_eq!(theme.palette().primary, 0x005e_81ac);
+        assert_eq!(theme.palette().primary, 0x004d_6e97);
+    }
+
+    #[test]
+    fn test_emergency_theme_preserves_default_light_palette() {
+        let bundled = ThemeDefinition::load(&ThemeId::default()).unwrap();
+        assert_eq!(ThemeDefinition::fallback().palette(), bundled.palette());
     }
 
     #[test]

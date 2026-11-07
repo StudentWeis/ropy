@@ -49,7 +49,7 @@ cd "$aur_parent/ropy-bin"
 makepkg --printsrcinfo > .SRCINFO
 git add PKGBUILD .SRCINFO ropy.desktop
 git diff --cached
-git commit -m "Add ropy-bin 0.6.1"
+git commit -m "Add ropy-bin 0.6.2"
 git push origin master
 ```
 
@@ -65,6 +65,16 @@ If authentication, host verification or the push fails, resolve that failure bef
 
 ## Initial validation
 
-For version `0.6.1`, the local x86_64 `makepkg` build passed. The resulting package contained exactly the binary, desktop entry, icon and license, byte-identical to their verified inputs. Desktop entry validation and generated `.SRCINFO` consistency checks also passed. The downloaded x86_64 Linux archive matched its published SHA-256 checksum. Its ELF file requires `libxkbcommon`, `libxcb`, `libxkbcommon-x11`, `libgcc_s`, `libm` and `libc`. The x86_64 binary contains dynamic library names for EGL and Wayland. The tagged updater source already treats `/usr/bin/ropy` as externally managed.
+Version `0.6.2-1` was built from the published GitHub Release in an isolated, rootless Arch bootstrap environment. The official archive SHA-256 is `6e1abc7e0e98cd77d0df4e9d479e422d6c9ad7d60f26cbc1de6c545aa137a025`; the installed binary SHA-256 is `31ce510e0e7f73352cdc10ff8bb8222045464f6264c7b1686f380a2f7a8036e3`. Source checksums, desktop entry validation, generated `.SRCINFO` consistency and the package build passed. Pacman installation and upgrade checks reported 11 files with no altered files. All ELF dependencies resolved.
 
-Clean-chroot and packaged GUI validation are separate release gates; archive inspection and a successful local build do not certify them.
+The installed `/usr/bin/ropy` passed these checks in an authenticated Xvfb/Openbox desktop with private HOME/XDG directories and D-Bus, without accessing the real desktop's clipboard or application data:
+
+- Desktop entry activation and tray Settings, About and Quit actions.
+- Clipboard capture, search, copy confirmation and immediate paste, checked against unique markers and the complete destination editor buffer.
+- Three-cycle pointer-inside Escape/shortcut regression, the Settings/back/Escape/shortcut path, native window dragging, pinned focus loss/reactivation and unpinned auto-hide.
+- Package-managed updater notice, language switching and language persistence after restart. The test desktop includes `noto-fonts-cjk` for Chinese text.
+- A real pacman upgrade from `0.6.1-1` to `0.6.2-1`, preserving history and the exact configuration, followed by shortcut and copy/paste checks.
+
+Namcap reports warnings for the intentional x86_64-only source naming, `libgcc` satisfied through `gcc-libs`, and the dynamically loaded EGL/Wayland dependencies. These were reviewed rather than treating a successful namcap exit as a warning-free result.
+
+This validates the packaged application on software-rendered X11. It is not an `extra-x86_64-build` result and does not certify native Wayland, hardware graphics, ARM64, macOS or Windows GUI behavior. The original `0.6.1` GUI blocker is fixed by [#326](https://github.com/StudentWeis/ropy/pull/326); acceptance used the published `0.6.2` bytes, not a branch build.

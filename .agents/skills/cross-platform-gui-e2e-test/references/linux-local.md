@@ -70,11 +70,7 @@ Run the skill's shared GUI scenario, then the relevant branch-specific checks:
 - Click a header button using native pointer input after inspecting a fresh
   screenshot, and verify its panel opens. A component/headless test alone does
   not establish native pointer delivery.
-- Confirm the unique copied marker appears in history and filtered results.
-  In copy mode, verify clipboard write-back and paste in the editor. When
-  immediate paste is in scope, enable it only in the isolated settings, clear
-  the destination after copying, and assert the editor receives the marker
-  exactly once without a manual paste or corrective focus operation.
+- Confirm the unique copied marker appears in history. Follow the shared scenario's preparation: replace only the nested display's clipboard with a different sentinel and verify it, then clear the editor and verify its entire buffer is empty before reactivation. Search for and select the original marker even if the sentinel enters history. In copy mode, verify the complete clipboard changed back to the marker, paste once and compare the entire editor buffer with the marker. When immediate paste is in scope, enable it only in the isolated settings and make the same complete-buffer comparison without a manual paste or corrective focus operation. Empty, sentinel, duplicate or extra text fails either mode.
 
 If a normal step fails, capture focus, mapping, window properties and logs
 before any diagnostic workaround. `xdotool windowfocus`, direct-to-window key

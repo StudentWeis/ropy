@@ -153,15 +153,9 @@ be tested separately.
 
 ## Validation
 
-See [WAYLAND_VM.md](WAYLAND_VM.md) for the isolated native Sway scenario and the
-D-Bus portal fixture. The fixture verifies Ropy's protocol contract; it is not a
-GNOME or KDE portal integration test.
+See [WAYLAND_VM.md](WAYLAND_VM.md) for the isolated native Sway scenario and the D-Bus portal fixture. The fixture verifies Ropy's protocol contract; it is not a GNOME or KDE portal integration test.
 
-For manual verification, focus a plain-text editor, copy a unique marker, activate
-Ropy, search for the marker and confirm it. The popup must disappear and return
-focus to the editor. With immediate paste enabled, the editor must receive the
-marker exactly once. Repeat after the popup has been closed and after copying a
-new marker while Ropy is hidden.
+For manual verification, use only an isolated native Wayland desktop with private Ropy data and no host clipboard synchronization. Focus a native Wayland plain-text editor, copy a unique marker and wait for ingestion. Replace only that session's clipboard with a different sentinel and verify its complete value, then clear the editor and verify its entire buffer is empty. Activate Ropy normally, verify the original marker in history, search for it and confirm that record rather than the sentinel. The popup must disappear, focus must return naturally to the editor and the complete clipboard value must change from the sentinel to the marker. In copy mode, paste once; with immediate paste enabled, do not send a manual paste. Compare the entire editor buffer with the marker: empty, sentinel, duplicated or extra text fails. Repeat both modes with new markers and sentinels after the popup has been closed and after copying while Ropy is hidden. Do not force focus to rescue a failed activation or paste.
 
 Pure tests cover popup state retention and fresh input subscriptions, token
 forwarding and validation, shortcut translation and transactional rollback. An

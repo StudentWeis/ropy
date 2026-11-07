@@ -26,16 +26,17 @@ make bench BENCH_ARGS='--output /tmp/ropy-bench-repeat'
 make bench-compare BASELINE=/path/to/previous/result.json CURRENT=/tmp/ropy-bench-repeat/result.json
 ```
 
-`make bench` uses Cargo directly, builds the release application, and runs the
-core bench profile (which inherits release optimization settings). The first
-build may take several minutes. The RSS phase waits for readiness, settles for
-10 seconds, then samples the launched PID every second for 30 samples. It never
-attaches to a user's running instance. Process failure or invalid readiness
-fails the run; it is not reported as a low memory measurement.
+`make bench` uses Cargo directly with `--locked`, builds the release application, and runs the core bench profile (which inherits release optimization settings). It takes the executable path from Cargo's compiler-artifact JSON rather than assuming `target/release/ropy`, so configured target directories and build targets do not select a stale binary. The first build may take several minutes. The RSS phase waits for readiness, settles for 10 seconds, then samples the launched PID every second for 30 samples. It never attaches to a user's running instance. Process failure or invalid readiness fails the run; it is not reported as a low memory measurement.
 
-Use `BENCH_ARGS='--skip-memory'` for core/size collection without a desktop or
-on Linux/Windows. The omitted memory metric is not a zero. Full desktop RSS
-collection currently supports macOS only. No CPU or startup latency is measured.
+Use `BENCH_ARGS='--skip-memory'` for core/size collection without a desktop or on Linux/Windows. The omitted memory metric is not a zero. Full desktop RSS collection currently supports macOS only. No CPU or startup latency is measured.
+
+### Build target and Cargo configuration provenance
+
+`environment.effective_target` records target selection from `CARGO_BUILD_TARGET`, otherwise the highest-precedence discovered Cargo `[build].target`, otherwise the host from `rustc -Vv`. The runner records Cargo config inputs in `environment.cargo_config` as paths and SHA-256 hashes, not file contents. It checks `CARGO_HOME` (default `~/.cargo`) and ancestor/workspace `.cargo` directories in precedence order, preferring extensionless `config` over `config.toml` when both exist. Existing profile, build-override and rustflags metadata remain part of the recorded environment. Preserve the actual config files privately if needed to reproduce a run; hashes identify inputs but cannot reconstruct them.
+
+Use a target whose executable and Criterion benchmark can run in the measured environment. `--skip-memory` skips only RSS; it does not turn the suite into a compile-only cross-target check because Criterion still executes. A cross-target Criterion benchmark needs a matching environment or an explicitly configured Cargo target runner. The RSS phase launches the application directly and does not use that runner; its executable must run on the reference Mac. Do not label emulation or a different target as a native-host baseline.
+
+The target and config provenance participate in exact environment comparison. Different targets, config paths/hashes or missing provenance make results `not comparable`; older tracked reports remain historical baselines, not retroactively verified matches for the new metadata. This metadata describes the runner's discovered Cargo inputs, not a complete hermetic-build attestation.
 
 ## Fixed workload and interpretation
 

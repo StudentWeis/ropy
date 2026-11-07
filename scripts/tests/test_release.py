@@ -17,6 +17,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_macos_arm64_release_overrides_retired_dist_runner(self):
+        with (ROOT / "dist-workspace.toml").open("rb") as source:
+            dist = tomllib.load(source)["dist"]
+        self.assertEqual(
+            dist.get("github-custom-runners", {}).get("aarch64-apple-darwin"),
+            "macos-latest",
+            "Use the supported ARM64 image, not cargo-dist's retired macos-14 default",
+        )
+
     def test_macos_bundle_declares_accessory_application(self):
         with (ROOT / "Cargo.toml").open("rb") as manifest:
             macos = tomllib.load(manifest)["package"]["metadata"]["bundle"]["macos"]
@@ -103,6 +112,40 @@ fi
         self.assertIn("--no-verify", args)
         self.assertNotIn("--execute", args)
 
+    def test_dmg_builds_locked_then_bundles_exact_prebuilt_binary(self):
+        target = "aarch64-apple-darwin"
+        self.env["BUNDLE_TEST_TARGET_DIR"] = str(self.work / "custom target")
+        self.command("cargo", '''
+printf '%s\\n' "$*" >> cargo-commands
+if [[ "$1" == build ]]; then
+  [[ "$*" == "build --locked --package ropy --release --target aarch64-apple-darwin" ]]
+  mkdir -p "$BUNDLE_TEST_TARGET_DIR/aarch64-apple-darwin/release"
+  printf fresh > "$BUNDLE_TEST_TARGET_DIR/aarch64-apple-darwin/release/ropy"
+  exit 0
+fi
+[[ "$1" == bundle ]]
+while [[ "$1" != --binary-path ]]; do shift; done
+[[ "$2" == "$BUNDLE_TEST_TARGET_DIR/aarch64-apple-darwin/release/ropy" ]]
+app="$BUNDLE_TEST_TARGET_DIR/aarch64-apple-darwin/release/bundle/osx/Ropy.app"
+mkdir -p "$app"
+cp "$2" "$app/binary"
+''')
+        self.command("hdiutil", "exit 0\n")
+        result = self.bundle(target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = (self.work / "cargo-commands").read_text().splitlines()
+        self.assertEqual(len(commands), 2)
+        self.assertTrue(commands[0].startswith("build --locked "))
+        self.assertTrue(commands[1].startswith("bundle --package ropy "))
+        with tarfile.open(self.work / f"target/distrib/ropy-{target}-app.tar.xz") as archive:
+            self.assertEqual(archive.extractfile("Ropy.app/binary").read(), b"fresh")
+
+    def test_dmg_locked_build_failure_does_not_bundle(self):
+        self.command("cargo", '[[ "$1" == build ]] || exit 99\nexit 7\n')
+        result = self.bundle("aarch64-apple-darwin")
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertFalse((self.work / "target/distrib").exists())
+
     def test_dmg_selected_target_ignores_other_architecture(self):
         for target in ("aarch64-apple-darwin", "x86_64-apple-darwin"):
             with self.subTest(target=target):
@@ -110,6 +153,7 @@ fi
                 other.mkdir(parents=True, exist_ok=True)
                 (other / "binary").write_text("wrong architecture")
                 self.command("cargo", '''
+if [[ "$1" == build ]]; then exit 0; fi
 [[ "$1" == bundle && "$2" == --package && "$3" == ropy ]]
 while [[ "$1" != "--target" ]]; do shift; done
 bundle="target/$2/release/bundle/osx/Ropy.app"

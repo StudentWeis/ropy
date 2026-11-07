@@ -233,11 +233,7 @@ pub(crate) fn remove_rich_text_files(meta: &RichTextMeta) {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::Path,
-        thread,
-        time::{Duration, SystemTime},
-    };
+    use std::{path::Path, thread, time::Duration};
 
     use image::{DynamicImage, GenericImageView};
     use tempfile::tempdir;
@@ -395,16 +391,21 @@ mod tests {
         let thumb_path = thumb_path_for(&file_path);
         std::fs::remove_file(&thumb_path).expect("Failed to remove thumbnail");
 
-        thread::sleep(Duration::from_millis(20));
-
         save_image_to_dir(&image, hash, temp_dir.path())
             .expect("Failed to save image after deleting thumbnail");
-        let thumb_modified = std::fs::metadata(&thumb_path)
-            .expect("Failed to read recreated thumbnail metadata")
-            .modified()
-            .expect("Failed to read recreated thumbnail modification time");
 
-        assert!(thumb_modified <= SystemTime::now());
+        assert_eq!(
+            image::open(&file_path)
+                .expect("decode original")
+                .dimensions(),
+            (400, 100)
+        );
+        assert_eq!(
+            image::open(&thumb_path)
+                .expect("decode recreated thumbnail")
+                .dimensions(),
+            (180, 45)
+        );
     }
 
     #[test]

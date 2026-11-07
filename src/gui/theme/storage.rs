@@ -82,22 +82,35 @@ impl ThemeWrite {
     }
 
     pub(crate) fn rollback(self) -> Result<(), ThemeWriteError> {
-        if let Some(backup) = self.backup {
-            if let Err(error) = backup.persist(&self.path) {
-                // PersistError retains the file. Disable automatic cleanup so the
-                // original bytes survive even when restoring the destination fails.
-                let source = error.error;
-                let backup = error
-                    .file
-                    .into_temp_path()
-                    .keep()
-                    .map_err(|error| error.error)?;
-                return Err(ThemeWriteError::Restore { backup, source });
+        // Refuse to undo edits made after our save. This is a best-effort check,
+        // not a filesystem CAS: an uncooperative writer can still race the
+        // following rename/remove. On any read conflict, keep the recovery copy.
+        let unchanged = std::fs::read(&self.path).and_then(|current| {
+            if current == self.source.as_bytes() {
+                Ok(())
+            } else {
+                Err(std::io::Error::other(ThemeWriteError::Changed))
             }
+        });
+        if let Some(backup) = self.backup {
+            let (backup, source) = match unchanged {
+                Err(source) => (backup, source),
+                Ok(()) => match backup.persist(&self.path) {
+                    Ok(_) => return Ok(()),
+                    Err(error) => (error.file, error.error),
+                },
+            };
+            // Disable automatic cleanup on both a conflict and a failed restore.
+            let backup = backup
+                .into_temp_path()
+                .keep()
+                .map_err(|error| error.error)?;
+            Err(ThemeWriteError::Restore { backup, source })
         } else {
+            unchanged.map_err(|_| ThemeWriteError::Changed)?;
             std::fs::remove_file(&self.path)?;
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -175,6 +188,44 @@ mod tests {
             }
             error => panic!("unexpected error: {error}"),
         }
+    }
+
+    #[test]
+    fn test_theme_write_existing_rollback_preserves_external_edit_and_recovery_copy() {
+        let directory = tempfile::tempdir().unwrap();
+        let id = ThemeId::new("user:original");
+        let source = include_str!("../../../assets/themes/ropy-light.toml");
+        let path = directory.path().join("original.toml");
+        std::fs::write(&path, source).unwrap();
+        let write = ThemeWrite::save(directory.path(), &document(), Some((&id, source))).unwrap();
+        std::fs::write(&path, "external edit after save").unwrap();
+
+        match write.rollback().unwrap_err() {
+            ThemeWriteError::Restore { backup, .. } => {
+                assert_eq!(std::fs::read_to_string(backup).unwrap(), source);
+            }
+            error => panic!("unexpected error: {error}"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            "external edit after save"
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn test_theme_write_new_rollback_preserves_external_edit() {
+        let directory = tempfile::tempdir().unwrap();
+        let write = ThemeWrite::save(directory.path(), &document(), None).unwrap();
+        let path = write.path.clone();
+        std::fs::write(&path, "external edit after save").unwrap();
+
+        assert!(matches!(write.rollback(), Err(ThemeWriteError::Changed)));
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            "external edit after save"
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
     }
 
     #[test]

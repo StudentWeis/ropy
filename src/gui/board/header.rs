@@ -42,6 +42,7 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
         )
         .child(
             h_flex()
+                .key_context("RopyCommand")
                 .gap_2()
                 .items_center()
                 .when(board.copy_in_progress, |this| {

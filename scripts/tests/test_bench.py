@@ -1,6 +1,8 @@
 """Benchmark reports must not imply comparisons across incompatible runs."""
 import importlib.util
 import json
+import os
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import tempfile
 import unittest
@@ -93,6 +95,75 @@ class BenchmarkTests(unittest.TestCase):
         old, new = self.result(), self.result()
         new["metrics"] = {}
         self.assertIn("not measured", bench.report(new, old))
+
+    def test_build_provenance_tracks_target_config_precedence_and_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "workspace/project"
+            home = root / "cargo-home"
+            project.mkdir(parents=True)
+            home.mkdir()
+            (home / "config.toml").write_text('[build]\ntarget="x86_64-unknown-linux-gnu"\n')
+            config = project.parent / ".cargo/config.toml"
+            config.parent.mkdir()
+            config.write_text('[build]\ntarget="aarch64-apple-darwin"\nrustflags=["-C", "opt-level=2"]\n')
+            with patch.object(bench, "ROOT", project), patch.dict(os.environ, {"CARGO_HOME": str(home)}, clear=True):
+                before = bench.build_provenance("host: x86_64-apple-darwin\n")
+                self.assertEqual(before["effective_target"], "aarch64-apple-darwin")
+                self.assertEqual([item["path"] for item in before["cargo_config"]],
+                                 [str(home / "config.toml"), str(config)])
+                config.write_text(config.read_text().replace("opt-level=2", "opt-level=3"))
+                after = bench.build_provenance("host: x86_64-apple-darwin\n")
+                self.assertNotEqual(before, after)
+                old, new = self.result(), self.result()
+                old["environment"].update(before)
+                new["environment"].update(after)
+                self.assertIn("not comparable", bench.report(new, old))
+                # Historical v1 results remain readable but cannot certify new provenance.
+                self.assertIn("not comparable", bench.report(new, self.result()))
+                with patch.dict(os.environ, {"CARGO_BUILD_TARGET": "x86_64-pc-windows-msvc"}):
+                    self.assertEqual(bench.build_provenance("host: x86_64-apple-darwin\n")["effective_target"],
+                                     "x86_64-pc-windows-msvc")
+                config.unlink()
+                (home / "config.toml").unlink()
+                native = bench.build_provenance("host: x86_64-apple-darwin\n")
+                self.assertEqual(native["effective_target"], "x86_64-apple-darwin")
+                (home / "config.toml").write_text('[build]\ntarget="x86_64-unknown-linux-gnu"\n')
+                with patch.dict(os.environ, {"CARGO_HOME": "../../cargo-home"}):
+                    relative_home = bench.build_provenance("host: x86_64-apple-darwin\n")
+                    self.assertEqual(relative_home["effective_target"], "x86_64-unknown-linux-gnu")
+
+    def test_run_persists_build_provenance_in_v1_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Cargo.toml").write_text('[package]\nversion="0.5.7"\n[profile.release]\nopt-level=3\n')
+            binary = root / "ropy"
+            binary.write_bytes(b"fixture")
+            destination = root / "measurement"
+
+            def cargo_bench(*args, **kwargs):
+                for name in ("insert", "dedup", "read_100"):
+                    estimates = destination / "criterion" / name / "new/estimates.json"
+                    estimates.parent.mkdir(parents=True)
+                    estimates.write_text(json.dumps({"median": {"point_estimate": 100,
+                        "confidence_interval": {"lower_bound": 90, "upper_bound": 110}}}))
+
+            def output(*args):
+                return {"rustc": "host: x86_64-unknown-linux-gnu", "git": ""}[args[0]]
+
+            with patch.object(bench, "ROOT", root), patch.object(bench, "select_baseline", return_value=None), \
+                 patch.object(bench, "output", side_effect=output), \
+                 patch.object(bench.platform, "system", return_value="Linux"), \
+                 patch.object(bench.platform, "processor", return_value="fixture CPU"), \
+                 patch.object(bench, "build_binary", return_value=binary), \
+                 patch.object(bench.subprocess, "run", side_effect=cargo_bench), \
+                 patch.dict(os.environ, {"CARGO_HOME": str(root / "cargo-home")}, clear=True), \
+                 patch("builtins.print"):
+                bench.run(SimpleNamespace(skip_memory=True, output=destination, package=None))
+            result = json.loads((destination / "result.json").read_text())
+            self.assertEqual(result["schema_version"], 1)
+            self.assertEqual(result["environment"]["effective_target"], "x86_64-unknown-linux-gnu")
+            self.assertEqual(result["environment"]["cargo_config"], [])
 
     def test_build_binary_uses_cargo_reported_target_path(self):
         message = {"reason": "compiler-artifact", "target": {"name": "ropy"},

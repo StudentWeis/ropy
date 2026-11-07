@@ -74,23 +74,16 @@ copy/paste failures. Do not force window focus to turn a failed activation into 
 Repeat with `copy_to_clipboard` and `paste_immediately` confirmation modes:
 
 1. Start Ropy and verify that it stays alive with no visible popup.
-2. Type a unique marker in the native editor, select/copy it, then clear the editor.
-3. Send the compositor shortcut; assert the popup is visible **and focused**,
-   uses `xdg_shell`, and has app ID `com.ropy.app`.
-4. Search for the marker with `/`, then confirm with Enter.
-5. Assert the popup hides, editor focus returns and the clipboard equals the marker.
-6. In copy mode, send Ctrl+V; in immediate mode, wait without sending another paste.
-   Assert the editor receives the marker exactly once.
+2. Type a unique marker in the native editor, select/copy it and wait for ingestion. Replace only the guest compositor's isolated clipboard with a different sentinel using `wl-copy` in that private Wayland session; verify its complete value with `wl-paste --no-newline`. Clear the editor and verify that its entire buffer is empty, leaving it as the focused return target.
+3. Send the compositor shortcut; assert the popup is visible **and focused**, uses `xdg_shell`, and has app ID `com.ropy.app`.
+4. Verify the original marker is in history, search for it with `/`, then confirm that record with Enter. The sentinel may also enter history; do not select it instead of the marker.
+5. Assert the popup hides, editor focus returns naturally and the complete clipboard value changes from the sentinel to the marker.
+6. In copy mode, send Ctrl+V once; in immediate mode, wait without sending another paste. Read the entire editor buffer and compare it with the marker. Empty text, the sentinel, duplicate markers or extra characters fails; a substring match is insufficient.
 7. Repeat open/Escape twice, checking focus restoration each time.
 8. Run a second process with `--show`; assert the retained instance opens and dismisses.
-9. Copy a new unique marker while the popup is destroyed. Reopen, search and
-   confirm it; assert the new marker reaches the editor exactly once.
-10. In copy mode, pin the popup and change focus to the editor: the popup must
-    remain visible. Reactivate, unpin and change focus: it must close. Immediate
-    paste mode intentionally does not offer pinning. Test focus loss separately
-    from activation; never force focus to rescue a failed shortcut.
-11. Repeat with the headless output at scale 1.6; check the 400 × 550 logical
-    content size and inspect the rendered search screenshot.
+9. Copy a new unique marker while the popup is destroyed and wait for ingestion. Repeat the different-sentinel and empty-editor preparation from Step 2 before reopening. Search for and confirm the new marker; repeat the complete clipboard and editor-buffer assertions from Steps 5–6.
+10. In copy mode, pin the popup and change focus to the editor: the popup must remain visible. Reactivate, unpin and change focus: it must close. Immediate paste mode intentionally does not offer pinning. Test focus loss separately from activation; never force focus to rescue a failed shortcut.
+11. Repeat with the headless output at scale 1.6; check the 400 × 550 logical content size and inspect the rendered search screenshot.
 
 Keep the pinned-window activation policy explicit. Under Sway's default
 `focus_on_window_activation urgent`, a valid `--show` token marks the existing
@@ -98,16 +91,9 @@ window urgent without refocusing it. Record that result separately. The complete
 pin/reactivate/unpin scenario uses `focus_on_window_activation smart` on the
 private desktop; the compositor binding must then restore focus naturally.
 
-The earlier XWayland baseline/candidate × confirmation-mode runs passed before
-the native change. Keep native results separately, including the application log,
-assertion report, binary digest and history/search/paste screenshots. The native
-scenario covers Sway compositor activation, focus return, hidden clipboard capture
-and popup reconstruction. It does not certify a desktop portal implementation,
-Hyprland registration, tray interaction, hardware rendering or x86-64 builds.
-Headless GPUI tests separately cover tray settings/about routing after dismissal.
-The native candidate passed both confirmation modes at 160% scaling with XWayland
-disabled and `DISPLAY` unset: 26 copy-mode and 23 immediate-paste assertions.
-The floating content remained 400 × 550 logical pixels (640 × 880 physical pixels).
+The observed results below are historical evidence for the original procedure, not evidence that the added sentinel assertions have been rerun. New runs must use the strengthened preparation and complete-value comparisons above.
+
+The earlier XWayland baseline/candidate × confirmation-mode runs passed before the native change. Keep native results separately, including the application log, assertion report, binary digest and history/search/paste screenshots. The native scenario covers Sway compositor activation, focus return, hidden clipboard capture and popup reconstruction. It does not certify a desktop portal implementation, Hyprland registration, tray interaction, hardware rendering or x86-64 builds. Headless GPUI tests separately cover tray settings/about routing after dismissal. The native candidate passed both confirmation modes at 160% scaling with XWayland disabled and `DISPLAY` unset: 26 copy-mode and 23 immediate-paste assertions. The floating content remained 400 × 550 logical pixels (640 × 880 physical pixels).
 
 ## Portal contract fixture
 

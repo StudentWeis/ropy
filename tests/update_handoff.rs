@@ -82,7 +82,19 @@ fn run_handoff(scenario: HandoffScenario) {
     ));
     fs::create_dir(&root).expect("transaction directory");
     fs::copy(&binary, &target).expect("original executable");
-    fs::copy(&binary, root.join("staged")).expect("staged executable");
+    let candidate = directory.join(if cfg!(windows) {
+        "candidate.exe"
+    } else {
+        "candidate"
+    });
+    compile_fixture(&candidate, 1);
+    fs::copy(candidate, root.join("staged")).expect("staged executable");
+    let staged_bytes = fs::read(root.join("staged")).expect("staged contents");
+    assert_ne!(
+        Sha256::digest(fs::read(&target).expect("original contents")),
+        Sha256::digest(&staged_bytes),
+        "old and new installations must be independently identifiable"
+    );
     let mut executable_sha256 = String::new();
     for byte in Sha256::digest(fs::read(&target).expect("read fixture")) {
         use std::fmt::Write as _;
@@ -131,15 +143,22 @@ fn run_handoff(scenario: HandoffScenario) {
     if matches!(scenario, HandoffScenario::StaleInstallation) {
         // A different optimization level supplies a different fingerprint while
         // retaining a valid native executable, including its macOS code signature.
-        compile_fixture(&target, 1);
+        compile_fixture(&target, 2);
     }
+    let original_bytes = fs::read(&target).expect("installed contents before handoff");
     fs::write(root.join("exit-parent"), "exit").expect("request parent exit");
     assert!(parent.0.wait().expect("wait for parent exit").success());
-    assert_completed_handoff(&root, &target, scenario);
+    assert_completed_handoff(&root, &target, scenario, &original_bytes, &staged_bytes);
 }
 
 #[expect(clippy::expect_used)]
-fn assert_completed_handoff(root: &Path, target: &Path, scenario: HandoffScenario) {
+fn assert_completed_handoff(
+    root: &Path,
+    target: &Path,
+    scenario: HandoffScenario,
+    original_bytes: &[u8],
+    staged_bytes: &[u8],
+) {
     if matches!(scenario, HandoffScenario::Healthy) {
         wait_until("healthy startup and backup cleanup", || {
             assert!(
@@ -168,7 +187,17 @@ fn assert_completed_handoff(root: &Path, target: &Path, scenario: HandoffScenari
         !matches!(scenario, HandoffScenario::StaleInstallation)
     );
     assert!(!root.join("staged").exists());
-    assert!(target.is_file());
+    let expected = if matches!(scenario, HandoffScenario::Healthy) {
+        staged_bytes
+    } else {
+        original_bytes
+    };
+    assert_eq!(
+        Sha256::digest(fs::read(target).expect("installed result")),
+        Sha256::digest(expected),
+        "handoff must install or restore the expected executable"
+    );
+    assert!(!root.join("backup").exists());
     // On Windows an executing image cannot be removed until its process exits.
     wait_until("updated executable release", || {
         fs::remove_file(target).is_ok()

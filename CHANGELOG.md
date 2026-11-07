@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-11-07
+
+### 🐛 Bug Fixes
+- Use native x11 focus for popup reactivation (#326) by @StudentWeis in [#326](https://github.com/StudentWeis/ropy/pull/326)
+- Resolve repository audit findings (#324) by @StudentWeis in [#324](https://github.com/StudentWeis/ropy/pull/324)
+
+### 🚜 Refactor
+- Streamline features and upgrade windows libraries (#320) by @StudentWeis in [#320](https://github.com/StudentWeis/ropy/pull/320)
+
 ## [0.6.1] - 2026-11-03
 
 ### 🐛 Bug Fixes
