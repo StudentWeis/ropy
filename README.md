@@ -74,6 +74,8 @@ scoop install ropy
 
 ### Linux (X11 and Wayland)
 
+Arch Linux users can build the `ropy-bin` package using the [AUR packaging instructions](packaging/aur/README.md). The recipe installs official release binaries; check those instructions for publishing and validation steps before assuming AUR availability.
+
 The current source supports native Wayland windows without XWayland or `DISPLAY`.
 This support was added in [PR #234](https://github.com/StudentWeis/ropy/pull/234);
 check your release's notes when using a pre-built binary.
