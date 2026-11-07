@@ -21,12 +21,10 @@ use {super::x11::X11, std::sync::OnceLock};
 #[cfg(target_os = "linux")]
 static X11_INSTANCE: OnceLock<X11> = OnceLock::new();
 
-/// GPUI also reports temporary X11 keyboard grabs as deactivation. Ask the
-/// server before dismissing the popup during an OS-managed move gesture.
+/// On X11, query the server rather than trusting GPUI's cached active flag:
+/// keyboard grabs can report deactivation, while pointer focus notifications
+/// can report activation after the popup has already been hidden.
 pub(crate) fn has_native_focus(window: &Window) -> bool {
-    if window.is_window_active() {
-        return true;
-    }
     #[cfg(target_os = "linux")]
     if let Some(x11) = X11_INSTANCE.get() {
         return x11.has_input_focus().unwrap_or_else(|error| {
@@ -34,7 +32,7 @@ pub(crate) fn has_native_focus(window: &Window) -> bool {
             false
         });
     }
-    false
+    window.is_window_active()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
