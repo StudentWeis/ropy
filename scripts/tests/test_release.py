@@ -17,6 +17,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_macos_arm64_release_overrides_retired_dist_runner(self):
+        with (ROOT / "dist-workspace.toml").open("rb") as source:
+            dist = tomllib.load(source)["dist"]
+        self.assertEqual(
+            dist.get("github-custom-runners", {}).get("aarch64-apple-darwin"),
+            "macos-latest",
+            "Use the supported ARM64 image, not cargo-dist's retired macos-14 default",
+        )
+
     def test_macos_bundle_declares_accessory_application(self):
         with (ROOT / "Cargo.toml").open("rb") as manifest:
             macos = tomllib.load(manifest)["package"]["metadata"]["bundle"]["macos"]

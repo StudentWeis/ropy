@@ -21,6 +21,11 @@ github-build-setup = "../dist-build-setup.yml"
 github-custom-job-permissions = { "release-update-manifest" = { contents = "read", actions = "read" } }
 global-artifacts-jobs = ["./release-update-manifest"]
 
+# cargo-dist 0.32 defaults to macos-14 for ARM64, which GitHub no longer supports.
+# Use the same supported ARM64 runner label as the main CI workflow.
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-latest"
+
 # Keep generated release checkout aligned with the other workflows.
 [dist.github-action-commits]
 "actions/checkout" = "v7"
