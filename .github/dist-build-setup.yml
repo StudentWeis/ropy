@@ -2,7 +2,9 @@
 - name: Install cargo-bundle (macOS)
   if: runner.os == 'macOS'
   shell: bash
-  run: cargo install cargo-bundle --version 0.12.0 --locked
+  run: |
+    command -v xz >/dev/null || brew install xz
+    cargo install cargo-bundle --version 0.12.0 --locked
 
 - name: Build macOS bundles
   if: runner.os == 'macOS'

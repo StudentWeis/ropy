@@ -1,0 +1,32 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -154,0 +155 @@
++opt-level = "s"
+@@ -210,0 +212,27 @@
++
++[profile.release.package."ropy"]
++opt-level = 3
++
++[profile.release.package."ropy-core"]
++opt-level = 3
++
++[profile.release.package."memchr"]
++opt-level = 3
++
++[profile.release.package."redb"]
++opt-level = 3
++
++[profile.release.package."image"]
++opt-level = 3
++
++[profile.release.package."png:0.18.1"]
++opt-level = 3
++
++[profile.release.package."png:0.17.16"]
++opt-level = 3
++
++[profile.release.package."zune-jpeg"]
++opt-level = 3
++
++[profile.release.package."image-webp"]
++opt-level = 3

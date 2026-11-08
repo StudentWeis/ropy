@@ -39,5 +39,8 @@ hdiutil create -volname "Ropy" -srcfolder "$stage_dir" -ov -format UDZO \
 # Preserve the complete application for in-app updates, independently of the
 # binary-only cargo-dist archives used by standalone installations.
 archive="target/distrib/ropy-$bundle_target-app.tar.xz"
-COPYFILE_DISABLE=1 tar -cJf "$archive" -C "$(dirname "$app")" Ropy.app
+# Match cargo-dist's XZ level without inheriting machine-specific compressor options.
+# Keep one compression thread to bound release-runner memory use.
+COPYFILE_DISABLE=1 tar -cf - -C "$(dirname "$app")" Ropy.app |
+	XZ_OPT= XZ_DEFAULTS= xz -9 -T1 >"$archive"
 (cd target/distrib && shasum -a 256 "${archive##*/}" >"${archive##*/}.sha256")

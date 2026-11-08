@@ -181,14 +181,37 @@ printf binary > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Contents
 printf metadata > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/Contents/Info.plist
 ''')
         self.command("hdiutil", "exit 0\n")
+        # Observe the real compressor, including inherited options that would
+        # otherwise change release size or resource use on a developer machine.
+        self.env["REAL_XZ"] = shutil.which("xz")
+        self.env["XZ_OPT"] = "-0"
+        self.env["XZ_DEFAULTS"] = "-T0"
+        self.command("xz", '''
+printf '%s\\n' "$*" > xz-args
+printf '%s|%s' "${XZ_OPT-unset}" "${XZ_DEFAULTS-unset}" > xz-env
+exec "$REAL_XZ" "$@"
+''')
         result = self.bundle("aarch64-apple-darwin")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.work / "xz-args").read_text().strip(), "-9 -T1")
+        self.assertEqual((self.work / "xz-env").read_text(), "|")
         archive = self.work / "target/distrib/ropy-aarch64-apple-darwin-app.tar.xz"
         with tarfile.open(archive) as payload:
             self.assertEqual(payload.extractfile("Ropy.app/Contents/Info.plist").read(), b"metadata")
             self.assertEqual(payload.extractfile("Ropy.app/Contents/MacOS/ropy").read(), b"binary")
         checksum = Path(str(archive) + ".sha256").read_text().split()[0]
         self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
+
+    def test_bundle_compression_failure_does_not_publish_checksum(self):
+        self.command("cargo", '''
+mkdir -p target/aarch64-apple-darwin/release/bundle/osx/Ropy.app
+printf binary > target/aarch64-apple-darwin/release/bundle/osx/Ropy.app/binary
+''')
+        self.command("hdiutil", "exit 0\n")
+        self.command("xz", 'printf partial\nexit 7\n')
+        result = self.bundle("aarch64-apple-darwin")
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertFalse((self.work / "target/distrib/ropy-aarch64-apple-darwin-app.tar.xz.sha256").exists())
 
     def test_dmg_custom_target_directory_ignores_stale_default_bundle(self):
         target = "aarch64-apple-darwin"

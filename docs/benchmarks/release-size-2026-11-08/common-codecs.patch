@@ -1,0 +1,35 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -210,0 +211,4 @@
++
++[patch.crates-io]
++gpui-pre = { path = "experiment-vendor/gpui-pre" }
++gpui-pre-wgpu = { path = "experiment-vendor/gpui-pre-wgpu" }
+--- a/gpui-pre/Cargo.toml
++++ b/gpui-pre/Cargo.toml
+@@ -372,3 +371,0 @@
+-    "dds",
+-    "exr",
+-    "ff",
+@@ -376 +372,0 @@
+-    "hdr",
+@@ -380,2 +375,0 @@
+-    "pnm",
+-    "qoi",
+@@ -383,2 +376,0 @@
+-    "tga",
+-    "tiff",
+--- a/gpui-pre-wgpu/Cargo.toml
++++ b/gpui-pre-wgpu/Cargo.toml
+@@ -91,3 +90,0 @@
+-    "dds",
+-    "exr",
+-    "ff",
+@@ -95 +91,0 @@
+-    "hdr",
+@@ -99,2 +94,0 @@
+-    "pnm",
+-    "qoi",
+@@ -102,2 +95,0 @@
+-    "tga",
+-    "tiff",

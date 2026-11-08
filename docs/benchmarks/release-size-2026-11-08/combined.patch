@@ -1,0 +1,190 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -210,0 +211,5 @@
++
++[patch.crates-io]
++gpui-pre-linux = { path = "experiment-vendor/gpui-pre-linux" }
++gpui-pre = { path = "experiment-vendor/gpui-pre" }
++gpui-pre-wgpu = { path = "experiment-vendor/gpui-pre-wgpu" }
+--- a/gpui-pre/Cargo.toml
++++ b/gpui-pre/Cargo.toml
+@@ -372,3 +371,0 @@
+-    "dds",
+-    "exr",
+-    "ff",
+@@ -376 +372,0 @@
+-    "hdr",
+@@ -380,2 +375,0 @@
+-    "pnm",
+-    "qoi",
+@@ -383,2 +376,0 @@
+-    "tga",
+-    "tiff",
+--- a/gpui-pre-linux/Cargo.toml
++++ b/gpui-pre-linux/Cargo.toml
+@@ -101 +100,0 @@
+-    "inhibit",
+@@ -155,11 +153,0 @@
+-default-features = false
+-
+-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies.notify-rust]
+-version = "4"
+-
+-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies.oo7]
+-version = "0.6"
+-features = [
+-    "async-std",
+-    "native_crypto",
+-]
+--- a/gpui-pre-linux/src/linux/platform.rs
++++ b/gpui-pre-linux/src/linux/platform.rs
+@@ -24 +23,0 @@
+-        inhibit::{InhibitFlags, InhibitOptions, InhibitProxy},
+@@ -1083,16 +1082 @@
+-        let url = url.to_string();
+-        let username = username.to_string();
+-        let password = password.to_vec();
+-        self.background_executor().spawn(async move {
+-            let keyring = oo7::Keyring::new().await?;
+-            keyring.unlock().await?;
+-            keyring
+-                .create_item(
+-                    KEYRING_LABEL,
+-                    &vec![("url", &url), ("username", &username)],
+-                    password,
+-                    true,
+-                )
+-                .await?;
+-            Ok(())
+-        })
++        Task::ready(Err(anyhow!("Credentials disabled in size experiment")))
+@@ -1102,25 +1086 @@
+-        let url = url.to_string();
+-        self.background_executor().spawn(async move {
+-            let keyring = oo7::Keyring::new().await?;
+-            keyring.unlock().await?;
+-
+-            let items = keyring.search_items(&vec![("url", &url)]).await?;
+-
+-            for item in items.into_iter() {
+-                if item.label().await.is_ok_and(|label| label == KEYRING_LABEL) {
+-                    let attributes = item.attributes().await?;
+-                    let username = attributes
+-                        .get("username")
+-                        .context("Cannot find username in stored credentials")?;
+-                    item.unlock().await?;
+-                    let secret = item.secret().await?;
+-
+-                    // we lose the zeroizing capabilities at this boundary,
+-                    // a current limitation GPUI's credentials api
+-                    return Ok(Some((username.to_string(), secret.to_vec())));
+-                } else {
+-                    continue;
+-                }
+-            }
+-            Ok(None)
+-        })
++        Task::ready(Err(anyhow!("Credentials disabled in size experiment")))
+@@ -1130,16 +1090 @@
+-        let url = url.to_string();
+-        self.background_executor().spawn(async move {
+-            let keyring = oo7::Keyring::new().await?;
+-            keyring.unlock().await?;
+-
+-            let items = keyring.search_items(&vec![("url", &url)]).await?;
+-
+-            for item in items.into_iter() {
+-                if item.label().await.is_ok_and(|label| label == KEYRING_LABEL) {
+-                    item.delete().await?;
+-                    return Ok(());
+-                }
+-            }
+-
+-            Ok(())
+-        })
++        Task::ready(Err(anyhow!("Credentials disabled in size experiment")))
+@@ -1707,15 +1652,2 @@
+-    let proxy = InhibitProxy::new()
+-        .await
+-        .context("Idle sleep prevention portal is unavailable")?;
+-    let request = proxy
+-        .inhibit(
+-            None,
+-            BitFlags::from(InhibitFlags::Suspend),
+-            InhibitOptions::default().set_reason(reason.as_str()),
+-        )
+-        .await
+-        .context("Failed to request idle sleep prevention")?;
+-    request
+-        .response()
+-        .context("Idle sleep prevention request was rejected")?;
+-    Ok(release_on_drop(request, executor))
++    let _ = (reason, executor);
++    Err(anyhow!("Idle inhibition disabled in size experiment"))
+--- a/gpui-pre-linux/src/linux/system_notifications.rs
++++ b/gpui-pre-linux/src/linux/system_notifications.rs
+@@ -39,48 +39,2 @@
+-        let mut builder = notify_rust::Notification::new();
+-        if let Some(app_name) = app_name {
+-            builder.appname(app_name);
+-        }
+-        builder
+-            .summary(&notification.title)
+-            .body(&notification.body)
+-            .action(DEFAULT_ACTION, DEFAULT_ACTION);
+-        let mut action_ids = HashMap::new();
+-        for (index, action) in notification.actions.iter().enumerate() {
+-            let transport_id = format!("gpui-action-{index}");
+-            builder.action(&transport_id, &action.label);
+-            action_ids.insert(transport_id, action.id.clone());
+-        }
+-        let built = builder.finalize();
+-
+-        let sender = self.response_sender.clone();
+-        let tag = notification.tag.clone();
+-        // `show` connects to the session bus and `wait_for_action` blocks
+-        // until the notification closes, so both run off the UI thread.
+-        let spawn_result = std::thread::Builder::new()
+-            .name("system-notification".to_string())
+-            .spawn(move || match built.show() {
+-                Ok(handle) => handle.wait_for_action(|action| {
+-                    let action_id = match action {
+-                        // Sent by `notify-rust` when the notification closes
+-                        // without being activated.
+-                        "__closed" => return,
+-                        transport_id => {
+-                            let Some(action_id) = response_action_id(transport_id, &action_ids)
+-                            else {
+-                                log::warn!(
+-                                    "system notification returned unknown action {transport_id:?}"
+-                                );
+-                                return;
+-                            };
+-                            action_id
+-                        }
+-                    };
+-                    sender
+-                        .unbounded_send(SystemNotificationResponse { tag, action_id })
+-                        .ok();
+-                }),
+-                Err(error) => log::warn!("failed to show system notification: {error}"),
+-            });
+-        if let Err(error) = spawn_result {
+-            log::warn!("failed to spawn system notification thread: {error}");
+-        }
++        let _ = (app_name, notification);
++        log::warn!("System notifications disabled in size experiment");
+--- a/gpui-pre-wgpu/Cargo.toml
++++ b/gpui-pre-wgpu/Cargo.toml
+@@ -91,3 +90,0 @@
+-    "dds",
+-    "exr",
+-    "ff",
+@@ -95 +91,0 @@
+-    "hdr",
+@@ -99,2 +94,0 @@
+-    "pnm",
+-    "qoi",
+@@ -102,2 +95,0 @@
+-    "tga",
+-    "tiff",
