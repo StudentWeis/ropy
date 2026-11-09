@@ -2,93 +2,38 @@
 
 [English](../../CONTRIBUTING.md) | 简体中文
 
-感谢你考虑为 Ropy 做贡献！本文档将指导你如何为项目添加新的主题和多语言支持。
+本文说明如何贡献代码、内置主题、翻译和文档。如果只想创建自己使用的配色，请按[自定义主题](../THEMES.md)操作，无需提交内置资源。
 
-## 添加新主题
+## 准备修改
 
-Ropy 使用 TOML 格式的配置文件来定义主题。主题文件位于 `assets/themes/` 目录下。
+1. 按照 [contribution-flow](../../.agents/skills/contribution-flow/SKILL.md) 执行 Issue → 分支 → PR → Squash Merge。模板、分支与提交命名、precheck 和合并授权以该流程为准。
+2. 按[开发指南](../DEVELOPMENT.md)准备工具链和原生依赖。代码规范见 [AGENTS.md](../../AGENTS.md)，模块边界见[架构](../ARCHITECTURE.md)。
+3. 按[测试指南](../TESTING.md)选择测试。提交前必须执行 `./scripts/precheck.sh`，单独的资源检查不能替代完整门禁。
 
-### 步骤
+## 添加内置主题
 
-1. **创建主题文件**
+内置主题位于 [assets/themes](../../assets/themes/)。新建完整的 `.toml` 文件，使用小写字母和连字符命名，例如 `my-theme.toml`；不含扩展名的文件名是内置主题 ID。
 
-   在 `assets/themes/` 目录下创建一个新的 `.toml` 文件，文件名即为主题的 ID（使用小写字母和连字符，例如 `my-theme.toml`）。
+从 [ropy-dark.toml](../../assets/themes/ropy-dark.toml) 或 [ropy-light.toml](../../assets/themes/ropy-light.toml) 开始，保留非空的 `theme_name`、`mode`（`light` 或 `dark`）及全部颜色字段。颜色使用六位十六进制 RGB 值，精确字段以模板为准，不另外维护一份字段全集。
 
-2. **定义主题内容**
+执行 `python3 scripts/check/check_themes.py`，然后使用隔离的应用构建检查可读性、选中与悬浮状态，以及列表和网格布局。资源检查不能证明视觉质量；界面修改还须遵守 [GPUI 技能](../../AGENTS.md#gpui-skills)。
 
-   主题文件需要包含 `theme_name`、`mode`（`light` 或 `dark`）以及完整的颜色字段集（十六进制颜色值）。完整的字段列表和格式请参考 [`assets/themes/ropy-dark.toml`](../../assets/themes/ropy-dark.toml)。
+## 添加或更新语言
 
-### 示例
+语言文件位于 [assets/locales](../../assets/locales/)，使用 TOML 格式。以 [en.toml](../../assets/locales/en.toml) 的结构和键为准，文件名使用 [BCP 47](https://www.rfc-editor.org/rfc/bcp/bcp47.txt) 语言代码，例如 `fr.toml`、`ko.toml` 或 `pt-BR.toml`。
 
-参考现有的主题文件：
-- `assets/themes/ropy-dark.toml` - 深色主题示例
-- `assets/themes/ropy-light.toml` - 浅色主题示例
-- `assets/themes/nord-light.toml` - Nord 配色方案示例
-- `assets/themes/everforest-night.toml` - Everforest 配色方案示例
+将 `language_name` 设为该语言自身的名称，供设置选择器显示。翻译保持简洁、术语一致，并保留 `%{count}` 等插值参数名；重新构建后检查实际界面。资源在编译期嵌入，添加语言文件不需要额外维护语言列表。
 
-## 添加新语言
+应用直接调用 `rust_i18n::t!`，缺失翻译回退到英语。动态翻译键使用以 `_key` 结尾的字段保存字面量，供检查脚本识别。仅启动入口及语言设置保存成功后设置共享 locale；测试和离线夹具使用显式 locale。不要新增翻译映射或语言全局变量。
 
-Ropy 支持多语言国际化（i18n）。语言文件同样使用 TOML 格式，位于 `assets/locales/` 目录下。
+运行 `python3 scripts/check/check_i18n.py` 检查 TOML、键和插值参数一致性。运行时本地化职责见[架构](../ARCHITECTURE.md#dependency-direction)。
 
-### 步骤
+## 维护文档
 
-1. **创建语言文件**
+编写或整理项目文档前，阅读 [project-doc](../../.agents/skills/project-doc/SKILL.md)。通过[文档索引](../README.md)选择已有的事实拥有者，并同步中英文 README 和贡献入口。不要手改生成的基准结果，也不要将历史测量写成当前版本已经完成的验证。
 
-   在 `assets/locales/` 目录下创建一个新的 `.toml` 文件，文件名使用语言代码（例如 `fr.toml` 表示法语，`ko.toml` 表示韩语）。
+## 发布与问题反馈
 
-   语言代码应遵循 [BCP 47](https://tools.ietf.org/html/bcp47) 标准：
-   - 对于区域变体，使用 `{语言代码}-{区域代码}` 格式，例如：
-     - `zh-CN` - 简体中文
-     - `zh-TW` - 繁体中文（台湾）
-     - `pt-BR` - 巴西葡萄牙语
+维护者按照[发布流程](../RELEASING.md#protected-release-sequence)准备版本和发布，按照[发布包验收](../RELEASE_ACCEPTANCE.md)记录精确制品的 GUI 证据。整理文档或创建 PR 不代表获准发布或合并。
 
-2. **定义语言内容**
-
-   语言文件的第一行应包含 `language_name` 字段（用该语言本身书写），用于在设置中显示。完整的结构和所有翻译键请参考 [`assets/locales/en.toml`](../../assets/locales/en.toml)。
-
-### 开发约定
-
-应用直接使用 `rust_i18n::t!`，资源在编译期嵌入，缺失翻译回退到英语。
-添加语言文件后重新编译即可出现在语言选择器中，无需维护语言列表。
-
-```rust
-use rust_i18n::t;
-
-t!("tray_settings");
-t!("record_file_count", count = files.len());
-t!("language_name", locale = "ja");
-```
-
-命名参数在 TOML 中写作 `%{count}`，各语言必须保留相同的参数名。
-运行 `python3 scripts/check/check_i18n.py` 检查 TOML 格式、翻译键及占位符一致性。
-动态翻译键使用以 `_key` 结尾的字段保存字面量，供检查脚本识别。
-业务代码不维护额外的翻译映射或语言全局变量；仅启动入口及语言设置保存成功后
-调用 `rust_i18n::set_locale`。测试和离线内容生成使用显式 `locale` 参数。
-
-### 翻译技巧
-
-1. **保持简洁**：UI 空间有限，尽量使用简洁的表达
-2. **保持一致性**：相同的概念使用相同的翻译
-3. **尊重用户习惯**：使用目标语言用户的习惯表达方式
-4. **测试显示效果**：启动应用验证翻译在实际界面中的显示效果
-
-### 示例
-
-参考现有的语言文件：
-- `assets/locales/en.toml` - 英语（基准语言）
-- `assets/locales/zh-CN.toml` - 简体中文
-- `assets/locales/ja.toml` - 日语
-
-## 测试
-
-查看 [测试文档](../TESTING.md) 了解如何编写和运行测试。
-
-## 提交规范
-
-Ropy 采用 **Issue → 分支 → PR → Squash Merge** 的工作流，全程通过本地 `gh` CLI 完成。完整、可直接复制执行的 SOP 收敛在 [`contribution-flow`](../../.agents/skills/contribution-flow/SKILL.md) skill 中 —— 那里是分支命名、commit 规范、`scripts/precheck.sh` 检查、PR 自检清单的唯一权威来源。无论人类还是 AI 贡献者，都请遵循该 skill。
-
-## 问题反馈
-
-如果你发现 bug 或有功能建议，请在 [Issues](https://github.com/StudentWeis/ropy/issues) 页面选择对应模板提交。
-
-感谢你的贡献！
+报告缺陷或功能建议时，选择对应的 [Issue 模板](https://github.com/StudentWeis/ropy/issues/new/choose)，提供平台、版本、复现步骤和相关日志，不附带个人剪贴板内容。

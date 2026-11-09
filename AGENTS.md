@@ -20,6 +20,10 @@ Any code change in this repository — by a human or an AI agent — MUST follow
 
 That skill is the single source of truth for: when to open an Issue, branch naming, Conventional Commits rules, the `scripts/precheck.sh` gate, the `gh` command templates, and the PR self-check. Read it before making any commit.
 
+## Project Documentation
+
+For writing, reviewing or migrating Ropy documentation, read the project [project-doc](./.agents/skills/project-doc/SKILL.md) skill. It owns documentation structure, fact sources, translation scope and verification expectations. Use the [documentation index](./docs/README.md) to find the page responsible for a task; do not duplicate contribution or GPUI rules here.
+
 ## GPUI Skills
 
 For Ropy UI development, review, testing and GPUI upgrades, use the official [`gpui-kit`](./.agents/skills/gpui-kit/SKILL.md) skill together with the project [`ropy-gpui`](./.agents/skills/ropy-gpui/SKILL.md) adapter. For visible UI work, also use the official [`gpui-kit-design-guides`](./.agents/skills/gpui-kit-design-guides/SKILL.md) skill.

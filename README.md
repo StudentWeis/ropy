@@ -45,14 +45,9 @@ Install from the self-hosted [Homebrew tap](https://github.com/StudentWeis/homeb
 brew install --cask studentweis/tap/ropy
 ```
 
-Upgrade with `brew upgrade --cask ropy`. In-app update checks remain available;
-installation is managed by Homebrew. For the current unsigned release, this
-self-hosted Cask automatically removes `com.apple.quarantine` from the installed
-Ropy.app. It preserves other extended attributes and does not sign or notarize
-the app. A cleanup failure stops installation and prints an error. If macOS
-still blocks launch, review and allow Ropy in System Settings → Privacy & Security.
+Upgrade with `brew upgrade --cask ropy`. In-app update checks remain available; installation is managed by Homebrew. For the current unsigned release, this self-hosted Cask automatically removes `com.apple.quarantine` from the installed Ropy.app. It preserves other extended attributes and does not sign or notarize the app. A cleanup failure stops installation and prints an error. If macOS still blocks launch, review and allow Ropy in System Settings → Privacy & Security.
 
-After downloading the `.dmg` file and dragging Ropy.app to the Applications folder, you may need to remove the quarantine attribute to run the application without issues. Open Terminal and run the following commands:
+For a manual DMG installation, first verify that you trust the download source, then drag Ropy.app to Applications. The current release is unsigned and not notarized. If macOS blocks launch, review System Settings → Privacy & Security. Removing quarantine bypasses that download check; if you choose to do so, target only the installed app:
 
 ```sh
 xattr -r -d com.apple.quarantine /Applications/Ropy.app
@@ -69,51 +64,21 @@ scoop bucket add extras
 scoop install ropy
 ```
 
-> [!NOTE]
-> Ropy detects standard Scoop installations and leaves installation to Scoop. Use `scoop update ropy`; in-app update checks remain available.
+> [!NOTE] > Ropy detects standard Scoop installations and leaves installation to Scoop. Use `scoop update ropy`; in-app update checks remain available.
 
 ### Linux (X11 and Wayland)
 
 Arch Linux users can build the `ropy-bin` package using the [AUR packaging instructions](packaging/aur/README.md). The recipe installs official release binaries; check those instructions for publishing and validation steps before assuming AUR availability.
 
-The current source supports native Wayland windows without XWayland or `DISPLAY`.
-This support was added in [PR #234](https://github.com/StudentWeis/ropy/pull/234);
-check your release's notes when using a pre-built binary.
+The current source supports native Wayland windows without XWayland or `DISPLAY`. This support was added in [PR #234](https://github.com/StudentWeis/ropy/pull/234); check your release's notes when using a pre-built binary.
 
-Run `ropy --show` to open the history window. On Wayland, use the desktop-approved
-GlobalShortcuts portal, the supported Hyprland integration, or bind `ropy --show`
-in your compositor. Tiling compositors may need a floating rule.
+Run `ropy --show` to open the history window. On Wayland, use the desktop-approved GlobalShortcuts portal, the supported Hyprland integration, or bind `ropy --show` in your compositor. Tiling compositors may need a floating rule.
 
-Clipboard capture requires data-control support; automatic paste additionally
-requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and
-Niri have not been individually validated. See the [Wayland guide](docs/WAYLAND.md)
-for setup, fallback activation and capability limits.
+Clipboard capture requires data-control support; automatic paste additionally requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and Niri have not been individually validated. See the [Wayland guide](docs/WAYLAND.md) for setup, fallback activation and capability limits.
 
 ### Build from source
 
-Ensure you have Rust installed (via `rustup`). Then:
-
-```bash
-git clone https://github.com/StudentWeis/ropy.git
-cd ropy
-cargo build --release
-./target/release/ropy
-```
-
-### Development commands
-
-With GNU Make, Bash and `awk` installed (on Windows, use a compatible shell such as MSYS2), run `make` or `make help` to list the development commands. Cargo, rustfmt and Clippy use the stable Rust version and components declared in `rust-toolchain.toml`; run `rustup show active-toolchain` to install them.
-
-```sh
-make build          # Debug build
-make build-release  # Optimized build
-make run            # Launch the debug application
-make test           # Run tests
-make fmt-check      # Verify Rust formatting
-make precheck       # Format code and run the complete pre-commit gate
-```
-
-Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` runs `scripts/init.sh` to install development tools and hk Git hooks (hk 2.5+). Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first; YAML, TOML and JSON checks use `uvx` to run pinned parsers. Setup replaces the existing pre-commit hook. Run `hk check --all` to check files or `hk fix --all` to fix them. If a commit hook fixes files, review and stage the changes before committing again. The precheck script requires Python 3.11+ and Clippy (`rustup component add clippy`). Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets use their existing command selection.
+Follow [Development](docs/DEVELOPMENT.md) for toolchain and platform prerequisites, a locked source build, Make targets and optional Git hooks. Source builds describe the current checkout; check release notes when comparing them with packaged binaries.
 
 ## Usage
 
@@ -127,10 +92,13 @@ Other targets include `check`, `clippy`, `fmt`, `doc` and `clean`. `make setup` 
 - Use row actions to pin records so they are excluded from storage cleanup.
 - Choose between `copy_to_clipboard` and `paste_immediately` confirm modes in Settings.
 
-History shortcuts can be [customized in Settings or Help](docs/KEYBINDINGS.md),
-including disabling individual aliases such as `D` for deletion.
+History shortcuts can be [customized in Settings or Help](docs/KEYBINDINGS.md), including disabling individual aliases such as `D` for deletion. Use [custom themes](docs/THEMES.md) to preview, duplicate and edit a palette without changing bundled themes.
 
-## Limitations (Not planned)
+## Documentation
+
+Use the [documentation index](docs/README.md) to find user guides, development and testing commands, architecture, release acceptance and historical measurements. Start with [configuration and recovery](docs/CONFIGURATION.md) for settings files or load errors, or [Contributing](CONTRIBUTING.md) to submit a change.
+
+## Limitations and scope
 
 - The system clipboard does not expose the original application source for copied items.
 - Plugin/extension system: no current plans — Ropy focuses on simplicity and small footprint.

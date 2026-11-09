@@ -1,90 +1,39 @@
 # Contributing to Ropy
 
-English | [简体中文](./docs/CONTRIBUTING/CONTRIBUTING_ZH.md)
+English | [简体中文](docs/CONTRIBUTING/CONTRIBUTING_ZH.md)
 
-Thank you for considering contributing to Ropy! This document will guide you through adding new themes and language support to the project.
+Use this guide to contribute code, bundled themes, translations or documentation. For a personal palette that does not ship with Ropy, use [Custom themes](docs/THEMES.md) instead.
 
-## Release
+## Prepare a change
 
-Prepare releases with `cargo-release` on a contribution branch:
+1. Follow [contribution-flow](.agents/skills/contribution-flow/SKILL.md) for the required Issue → Branch → PR → Squash Merge procedure. It owns templates, branch and commit naming, precheck and merge authorization.
+2. Prepare the toolchain and native dependencies with [Development](docs/DEVELOPMENT.md). Read [AGENTS.md](AGENTS.md) for coding conventions and [Architecture](docs/ARCHITECTURE.md) for module boundaries.
+3. Choose tests using [Testing](docs/TESTING.md). Run `./scripts/precheck.sh` before committing; resource checks alone do not replace the complete gate.
 
-```bash
-scripts/update_version.sh patch                                 # dry-run a patch bump
-scripts/update_version.sh 0.6.0 --execute --no-tag --no-push       # prepare a stable release
-scripts/update_version.sh 0.6.0-beta --execute --no-tag --no-push  # prepare a prerelease
-```
+## Add a bundled theme
 
-Preparation updates the version and changelog, runs the checks, and creates a
-local commit. Merge that preparation through a PR, wait for main CI to pass,
-then tag the merged commit. Follow [Release workflow maintenance](./docs/RELEASING.md#protected-release-sequence)
-for the authoritative publishing sequence, package acceptance and recovery steps.
+Bundled themes live in [assets/themes](assets/themes/). Create a complete `.toml` file using a lowercase, hyphen-separated filename such as `my-theme.toml`; the filename without its extension becomes the built-in theme ID.
 
-## Adding a New Theme
+Start from [ropy-dark.toml](assets/themes/ropy-dark.toml) or [ropy-light.toml](assets/themes/ropy-light.toml). Include a nonempty `theme_name`, `mode` (`light` or `dark`) and every color field. Use six-digit hexadecimal RGB values and follow the template rather than maintaining a separate field list.
 
-Ropy uses TOML configuration files to define themes. Theme files are located in the `assets/themes/` directory.
+Run `python3 scripts/check/check_themes.py`, then launch an isolated app build to check legibility, selected/hover states and both list and grid layouts. The resource check does not establish visual quality. UI changes also follow the [GPUI skills](AGENTS.md#gpui-skills).
 
-### Steps
+## Add or update a language
 
-1. **Create a Theme File**
+Language files live in [assets/locales](assets/locales/) and use TOML. Copy the structure and keys from [en.toml](assets/locales/en.toml). Use a [BCP 47](https://www.rfc-editor.org/rfc/bcp/bcp47.txt) language code for the filename, such as `fr.toml`, `ko.toml` or `pt-BR.toml`.
 
-   Create a new `.toml` file in the `assets/themes/` directory. The filename (without extension) becomes the theme ID. Use lowercase letters and hyphens (e.g., `my-theme.toml`).
+Set `language_name` to the language's own name for the settings selector. Keep translations concise and consistent, preserve interpolation names such as `%{count}`, and check the actual interface after rebuilding. Resource files are embedded at compile time; adding a language file does not require a separate language list.
 
-2. **Define Theme Content**
+Application code calls `rust_i18n::t!` directly with English fallback. Dynamic translation-key fields end in `_key` so the checker can identify their literals. Only startup and a successfully saved language change set the shared locale; tests and offline fixtures use an explicit locale. Do not add another translation map or locale global.
 
-   The theme file must include `theme_name`, `mode` (`light` or `dark`), and a full set of color fields (six-digit RGB hexadecimal values). Refer to [`assets/themes/ropy-dark.toml`](./assets/themes/ropy-dark.toml) for the complete field list and expected format.
+Run `python3 scripts/check/check_i18n.py` to check TOML, key parity and interpolation names. See [Architecture](docs/ARCHITECTURE.md#dependency-direction) for runtime localization ownership.
 
-### Examples
+## Maintain documentation
 
-Refer to existing theme files:
-- `assets/themes/ropy-dark.toml` - Dark theme example
-- `assets/themes/ropy-light.toml` - Light theme example
-- `assets/themes/nord-light.toml` - Nord color scheme example
-- `assets/themes/everforest-night.toml` - Everforest color scheme example
+Read [project-doc](.agents/skills/project-doc/SKILL.md) before writing or reorganizing project documentation. Use the [documentation index](docs/README.md) to choose the existing owner; keep the English and Chinese README/contribution entry points aligned. Do not hand-edit generated benchmark results or rewrite historical measurements as current validation.
 
-## Adding a New Language
+## Releases and issue reports
 
-Ropy supports internationalization (i18n). Language files also use TOML format and are located in the `assets/locales/` directory.
+Maintainers use [Release workflow maintenance](docs/RELEASING.md#protected-release-sequence) for version preparation and publishing, and [Release package acceptance](docs/RELEASE_ACCEPTANCE.md) for exact-artifact GUI evidence. Preparing documentation or a PR does not authorize publishing or merging.
 
-### Steps
-
-1. **Create a Language File**
-
-   Create a new `.toml` file in the `assets/locales/` directory. The filename should use the language code (e.g., `fr.toml` for French, `ko.toml` for Korean).
-
-   Language codes should follow the [BCP 47](https://tools.ietf.org/html/bcp47) standard:
-   - For regional variants, use `{language-code}-{region-code}` format, e.g.:
-     - `zh-CN` - Simplified Chinese
-     - `zh-TW` - Traditional Chinese (Taiwan)
-     - `pt-BR` - Brazilian Portuguese
-
-2. **Define Language Content**
-
-   The first line of the language file should contain the `language_name` field (written in the language itself) for display in settings. Refer to [`assets/locales/en.toml`](./assets/locales/en.toml) for the full structure and all translation keys.
-
-### Translation Tips
-
-1. **Keep it concise**: UI space is limited, use compact expressions
-2. **Maintain consistency**: Use the same translation for the same concept
-3. **Respect user habits**: Use expressions natural to target language speakers
-4. **Test the display**: Launch the application to verify translations in the actual interface
-
-### Examples
-
-Refer to existing language files:
-- `assets/locales/en.toml` - English (base language)
-- `assets/locales/zh-CN.toml` - Simplified Chinese
-- `assets/locales/ja.toml` - Japanese
-
-## Testing
-
-See the [Testing Documentation](./docs/TESTING.md) for guidelines on writing and running tests.
-
-## Submitting Changes
-
-Ropy follows an **Issue → Branch → PR → Squash Merge** workflow, executed via the local `gh` CLI. The complete, copy-paste-ready SOP lives in the [`contribution-flow`](./.agents/skills/contribution-flow/SKILL.md) skill — it is the single source of truth for branch naming, commit conventions, the `scripts/precheck.sh` gate, and the PR self-check. Both human and AI contributors should follow it.
-
-## Reporting Issues
-
-If you find a bug or have a feature suggestion, please submit it on the [Issues](https://github.com/StudentWeis/ropy/issues) page using the matching template.
-
-Thank you for your contribution!
+Report bugs and feature suggestions through the matching [Issue template](https://github.com/StudentWeis/ropy/issues/new/choose). Include the platform, version, reproduction steps and relevant logs without personal clipboard content.

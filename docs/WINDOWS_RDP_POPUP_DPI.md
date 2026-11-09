@@ -1,10 +1,10 @@
-# Windows RDP Popup DPI Restore
+# Windows RDP popup DPI restore
 
 ## Background
 
 On Windows, Ropy keeps the main window as a popup. After disconnecting a Remote Desktop session, reopening the popup could leave it at an unexpectedly large size.
 
-This document records the analysis and the mitigation added in April 2026.
+Status: implemented application-side mitigation, recorded in April 2026. The calculation is unit-tested; real Windows RDP connect/disconnect acceptance remains unverified. This is a design and regression reference, not an operational claim that every DPI transition is fixed. See [Testing](TESTING.md) and [release acceptance](RELEASE_ACCEPTANCE.md) for current verification requirements.
 
 ## Symptom
 
@@ -12,7 +12,7 @@ This document records the analysis and the mitigation added in April 2026.
 - Trigger the popup again through the global hotkey or tray action.
 - The popup appears much larger than the normal 400x550 logical size.
 
-## Root Cause
+## Root cause
 
 The activation path previously relied on a fixed logical resize before restoring the popup:
 
@@ -32,9 +32,9 @@ When the cached scale factor still reflects the remote session, resizing to the 
 
 The fix adds a Windows-specific geometry reset before restoring the popup.
 
-### New activation helper
+### Geometry reset helper
 
-`src/gui/utils.rs` now exposes `reset_window_geometry_for_activation`.
+[src/gui/utils.rs](../src/gui/utils.rs) exposes `reset_window_geometry_for_activation`.
 
 On Windows it:
 
@@ -52,11 +52,11 @@ On non-Windows platforms it falls back to the existing logical `window.resize(..
 
 ### Activation flow change
 
-The board activation path now calls `reset_window_geometry_for_activation(window, default_window_size())` before `active_window(...)`.
+The shared `active_window` path in [src/gui/window.rs](../src/gui/window.rs) calls `reset_window_geometry_for_activation(window, default_window_size())` before GPUI activation and the Windows native restore/foreground steps.
 
 This keeps the popup behavior intact while ensuring the native geometry is refreshed from the current monitor state first.
 
-## Why This Fix
+## Why this fix
 
 This approach was chosen because it:
 
@@ -74,14 +74,14 @@ The following checks were used during implementation:
 
 Unit tests were added for the pure geometry calculation used by the Windows helper.
 
-## Known Limits
+## Known limits
 
 - The geometry math is covered by tests, but runtime behavior still needs validation on a real Windows machine across actual RDP connect/disconnect cycles.
 - The current mitigation is application-side. If future issues show GPUI still exposing stale DPI state in other paths, upstream investigation may still be needed.
 
-## Related Files
+## Related files
 
-- `src/gui/utils.rs`
-- `src/gui/board/actions.rs`
-- `src/gui/mod.rs`
-- `Cargo.toml`
+- [Geometry reset and tests](../src/gui/utils.rs)
+- [Window activation](../src/gui/window.rs)
+- [GUI module exports](../src/gui.rs)
+- [Windows dependencies](../Cargo.toml)

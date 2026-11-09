@@ -47,13 +47,9 @@
 brew install --cask studentweis/tap/ropy
 ```
 
-使用 `brew upgrade --cask ropy` 升级。应用内仍可检查新版本，安装交由
-Homebrew 管理。当前发布尚未签名，自建 Cask 会在安装后自动移除 Ropy.app
-的 `com.apple.quarantine` 下载隔离属性，保留其他扩展属性；这不等于签名或公证。
-若清理失败，安装会停止并显示错误；如果系统仍阻止启动，请在确认来源后，通过系统设置
-→ 隐私与安全性允许 Ropy 运行。
+使用 `brew upgrade --cask ropy` 升级。应用内仍可检查新版本，安装交由 Homebrew 管理。当前发布尚未签名，自建 Cask 会在安装后自动移除 Ropy.app 的 `com.apple.quarantine` 下载隔离属性，保留其他扩展属性；这不等于签名或公证。若清理失败，安装会停止并显示错误；如果系统仍阻止启动，请在确认来源后，通过系统设置 → 隐私与安全性允许 Ropy 运行。
 
-下载 `.dmg` 文件并将 Ropy.app 拖到应用程序文件夹后，您可能需要移除隔离属性才能正常运行应用程序。打开终端并运行以下命令：
+手动安装 DMG 时，先确认下载来源可信，再将 Ropy.app 拖到应用程序文件夹。当前发布尚未签名或公证；如果 macOS 阻止启动，先查看系统设置 → 隐私与安全性。移除隔离属性会绕过这项下载检查；如果选择移除，只对已安装的应用执行：
 
 ```sh
 xattr -r -d com.apple.quarantine /Applications/Ropy.app
@@ -70,48 +66,21 @@ scoop bucket add extras
 scoop install ropy
 ```
 
-> [!NOTE]
-> Ropy 会识别标准路径下的 Scoop 安装，并交由 Scoop 更新。请运行 `scoop update ropy`；应用内仍可检查新版本。
+> [!NOTE] > Ropy 会识别标准路径下的 Scoop 安装，并交由 Scoop 更新。请运行 `scoop update ropy`；应用内仍可检查新版本。
 
 ### Linux（X11 与 Wayland）
 
-当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`。该支持由
-[PR #234](https://github.com/StudentWeis/ropy/pull/234) 引入；使用预编译二进制时，
-请确认对应版本的发布说明是否包含此变更。
+Arch Linux 用户可按照 [AUR 打包说明](../../packaging/aur/README.md)构建 `ropy-bin`。配方安装官方发布二进制；仓库包含配方不代表已经发布到 AUR，请先查看发布和验证要求。
 
-运行 `ropy --show` 可打开历史窗口。Wayland 下可使用桌面授权的 GlobalShortcuts
-Portal、已支持的 Hyprland 集成，或在合成器中为 `ropy --show` 配置快捷键。
-平铺合成器可能需要额外配置浮动窗口规则。
+当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`。该支持由 [PR #234](https://github.com/StudentWeis/ropy/pull/234) 引入；使用预编译二进制时，请确认对应版本的发布说明是否包含此变更。
 
-剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。
-已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式
-和能力限制请参阅 [Wayland 指南](../WAYLAND.md)。
+运行 `ropy --show` 可打开历史窗口。Wayland 下可使用桌面授权的 GlobalShortcuts Portal、已支持的 Hyprland 集成，或在合成器中为 `ropy --show` 配置快捷键。平铺合成器可能需要额外配置浮动窗口规则。
+
+剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式和能力限制请参阅 [Wayland 指南](../WAYLAND.md)。
 
 ### 从源码构建
 
-确保您已安装 Rust（通过 `rustup`）。然后：
-
-```bash
-git clone https://github.com/StudentWeis/ropy.git
-cd ropy
-cargo build --release
-./target/release/ropy
-```
-
-### 开发命令
-
-安装 GNU Make、Bash 和 `awk` 后（Windows 可使用 MSYS2 等兼容环境），执行 `make` 或 `make help` 查看开发命令。Cargo、rustfmt 和 Clippy 统一使用 `rust-toolchain.toml` 中声明的稳定版 Rust 工具链和组件；执行 `rustup show active-toolchain` 即可安装。
-
-```sh
-make build          # 调试构建
-make build-release  # 优化构建
-make run            # 启动调试版应用
-make test           # 运行测试
-make fmt-check      # 检查 Rust 格式
-make precheck       # 格式化代码并执行完整的提交前检查
-```
-
-其他目标包括 `check`、`clippy`、`fmt`、`doc` 和 `clean`。`make setup` 调用 `scripts/init.sh` 安装开发工具及 hk Git hooks（hk 2.5+）。请先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)；YAML、TOML 和 JSON 检查通过 `uvx` 运行固定版本的解析器。安装脚本会替换现有的 pre-commit hook。使用 `hk check --all` 检查文件，使用 `hk fix --all` 修复文件。如果提交钩子修改了文件，请审阅并暂存修改后重新提交。预检查脚本需要 Python 3.11+ 和 Clippy（`rustup component add clippy`）。直接调用 Cargo 的目标支持 `make build CARGO="rtk cargo"` 等覆盖方式；脚本目标沿用各自的命令选择逻辑。
+按照[开发指南](../DEVELOPMENT.md)准备工具链和平台依赖，再执行锁定依赖的源码构建。该指南也说明 Make 命令和可选的 Git hooks。源码文档描述当前工作区，预编译包是否包含对应功能应以发布说明为准。
 
 ## 使用
 
@@ -129,7 +98,11 @@ make precheck       # 格式化代码并执行完整的提交前检查
 
 支持[用户自定义主题](../THEMES.md)：在设置中打开“自定义主题”，选择主题预览，复制或编辑配色后点击“保存并使用”。常用颜色直接调整，更多颜色可展开；取消编辑不会改变正在使用的主题。
 
-## 局限性（无计划支持）
+## 文档
+
+通过[文档索引](../README.md)查找用户指南、开发与测试命令、架构、发布验收和历史测量。设置文件或加载错误见[配置与恢复](../CONFIGURATION.md)，提交修改见[贡献指南](../CONTRIBUTING/CONTRIBUTING_ZH.md)。
+
+## 局限性与范围
 
 - 系统剪贴板不会暴露复制条目的原始应用程序来源。
 - 插件/扩展系统：目前没有计划 —— Ropy 专注于简洁和小体积。
