@@ -1,6 +1,6 @@
 # Promotional screenshots
 
-Use this guide to produce demo images from the real board without loading personal history or starting clipboard services. Capture supports macOS only and does not replace [native GUI tests](TESTING.md#promotional-captures).
+Use this guide to produce demo images from the real board without loading personal history or starting clipboard services. Capture supports macOS only and does not replace [native GUI tests](testing.md#promotional-captures).
 
 ## Prerequisites
 

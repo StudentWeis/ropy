@@ -23,7 +23,7 @@ Record the workflow run URL, commit SHA, artifact filename, size and SHA-256. Ac
 5. Open the tray menu, change its language, invoke its actions and quit cleanly. Use a working StatusNotifierItem host for Linux tray rendering checks.
 6. Upgrade a disposable installation from the previous stable version. Verify startup, preserved history/settings and managed-install behavior. Exercise failed startup rollback using the updater's existing test procedure; do not substitute unit-test success for actual installation evidence.
 
-Test native Wayland separately using [the VM procedure](WAYLAND_VM.md). An X11 pass on a Wayland host does not cover native Wayland input or activation.
+Test native Wayland separately using [the VM procedure](wayland-vm.md). An X11 pass on a Wayland host does not cover native Wayland input or activation.
 
 ## Acceptance record
 

@@ -4,7 +4,7 @@
 
 On Windows, Ropy keeps the main window as a popup. After disconnecting a Remote Desktop session, reopening the popup could leave it at an unexpectedly large size.
 
-Status: implemented application-side mitigation, recorded in April 2026. The calculation is unit-tested; real Windows RDP connect/disconnect acceptance remains unverified. This is a design and regression reference, not an operational claim that every DPI transition is fixed. See [Testing](TESTING.md) and [release acceptance](RELEASE_ACCEPTANCE.md) for current verification requirements.
+Status: implemented application-side mitigation, recorded in April 2026. The calculation is unit-tested; real Windows RDP connect/disconnect acceptance remains unverified. This is a design and regression reference, not an operational claim that every DPI transition is fixed. See [Testing](testing.md) and [release acceptance](release-acceptance.md) for current verification requirements.
 
 ## Symptom
 

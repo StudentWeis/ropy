@@ -1,6 +1,6 @@
 # Testing
 
-Use this guide to choose local checks, reproduce CI and identify tests that need an isolated desktop. Prepare dependencies with [Development](DEVELOPMENT.md). Commands run from the repository root unless stated otherwise. Unit tests and protocol fixtures do not replace [release package acceptance](RELEASE_ACCEPTANCE.md).
+Use this guide to choose local checks, reproduce CI and identify tests that need an isolated desktop. Prepare dependencies with [Development](development.md). Commands run from the repository root unless stated otherwise. Unit tests and protocol fixtures do not replace [release package acceptance](release-acceptance.md).
 
 ## Test design
 
@@ -38,11 +38,11 @@ The workflow resolves the source to one commit before starting the native Linux 
 
 ## Promotional captures
 
-See [Promotional screenshots](PROMO_SCREENSHOTS.md) for the isolated macOS capture workflow and plain 2×2 output. This checks real rendering; it does not replace clipboard or platform integration tests.
+See [Promotional screenshots](promo-screenshots.md) for the isolated macOS capture workflow and plain 2×2 output. This checks real rendering; it does not replace clipboard or platform integration tests.
 
 ## Architecture boundaries
 
-The lightweight gate includes `scripts/tests/test_architecture.py`. It rejects presentation dependencies in repository/settings modules and GPUI runtime references in clipboard I/O. This source-level check protects the module seams described in [Architecture](ARCHITECTURE.md); behavioral tests remain responsible for persistence, capture acknowledgement, settings recovery and UI interactions.
+The lightweight gate includes `scripts/tests/test_architecture.py`. It rejects presentation dependencies in repository/settings modules and GPUI runtime references in clipboard I/O. This source-level check protects the module seams described in [Architecture](architecture.md); behavioral tests remain responsible for persistence, capture acknowledgement, settings recovery and UI interactions.
 
 ## Workspace commands
 
@@ -59,7 +59,7 @@ The precheck uses explicit `--workspace` selection because the default member is
 
 ## Release benchmarks
 
-See [Release benchmark baseline](BENCHMARKS.md) for `make bench`, version comparison, measurement boundaries and release artifact size reports.
+See [Release benchmark baseline](benchmarks.md) for `make bench`, version comparison, measurement boundaries and release artifact size reports.
 
 ## Native X11 popup focus regression
 
@@ -73,7 +73,7 @@ The script requires `xdotool` and `xwininfo`; use `--hotkey` if the activation s
 
 ## Native Wayland integration
 
-For Linux window, shortcut or clipboard changes, follow the isolated VM procedure in [WAYLAND_VM.md](WAYLAND_VM.md) and the capability boundaries in [WAYLAND.md](WAYLAND.md). Use a native Wayland editor, disable XWayland and unset `DISPLAY`; an X11 clipboard test does not verify native Wayland behavior.
+For Linux window, shortcut or clipboard changes, follow the isolated VM procedure in [wayland-vm.md](wayland-vm.md) and the capability boundaries in [wayland.md](wayland.md). Use a native Wayland editor, disable XWayland and unset `DISPLAY`; an X11 clipboard test does not verify native Wayland behavior.
 
 Exercise hidden startup, repeated popup reconstruction, clipboard capture while hidden, search, both confirmation modes and focus restoration. Record the compositor version, source revision, binary digest and activation policy alongside the results. Test pinned-window reactivation separately from a newly mapped window.
 
@@ -101,4 +101,4 @@ Makefile and precheck Rust validation commands use `--locked`. Dependency change
 
 Formatting uses stable rustfmt defaults. Existing import groups and separate `use` statements are preserved, with imports sorted within each group. Automatic standard-library/external/local grouping and crate-level merging are no longer enforced.
 
-The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` and Release `plan` checks, with the PR up to date before merge. GitHub branch protection is server configuration, not something workflow YAML enables itself. The reviewed API payload is `.github/main-branch-protection.json`. Administrators can reconcile it with `gh api --method PUT repos/StudentWeis/ropy/branches/main/protection --input .github/main-branch-protection.json` and read the protection endpoint back to verify it. It requires a PR without requiring another reviewer, binds checks to GitHub Actions, applies to admins and disallows force pushes and deletion. The manual desktop packaging plan has a distinct check name so it cannot satisfy the Release `plan` requirement. See [Release acceptance](RELEASE_ACCEPTANCE.md) for the manual package smoke gate and its evidence requirements; CI unit tests alone do not certify a release.
+The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` and Release `plan` checks, with the PR up to date before merge. GitHub branch protection is server configuration, not something workflow YAML enables itself. The reviewed API payload is `.github/main-branch-protection.json`. Administrators can reconcile it with `gh api --method PUT repos/StudentWeis/ropy/branches/main/protection --input .github/main-branch-protection.json` and read the protection endpoint back to verify it. It requires a PR without requiring another reviewer, binds checks to GitHub Actions, applies to admins and disallows force pushes and deletion. The manual desktop packaging plan has a distinct check name so it cannot satisfy the Release `plan` requirement. See [Release acceptance](release-acceptance.md) for the manual package smoke gate and its evidence requirements; CI unit tests alone do not certify a release.

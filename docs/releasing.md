@@ -1,8 +1,8 @@
 # Release workflow maintenance
 
-Use this guide to maintain packaging and update delivery, or prepare an authorized release. Commands run from the repository root. Install development tools using [Development](DEVELOPMENT.md); publication additionally requires repository permissions and the relevant credentials. Do not run publishing or installation steps merely to check documentation.
+Use this guide to maintain packaging and update delivery, or prepare an authorized release. Commands run from the repository root. Install development tools using [Development](development.md); publication additionally requires repository permissions and the relevant credentials. Do not run publishing or installation steps merely to check documentation.
 
-For a release, start with the [protected release sequence](#protected-release-sequence), then complete [package acceptance](RELEASE_ACCEPTANCE.md). The sections below own the detailed pipeline and recovery contracts.
+For a release, start with the [protected release sequence](#protected-release-sequence), then complete [package acceptance](release-acceptance.md). The sections below own the detailed pipeline and recovery contracts.
 
 ## Generated pipeline
 
@@ -24,7 +24,7 @@ The PR release workflow runs the plan and checks generated configuration without
 4. The `release-update-manifest.yml` reusable workflow runs after all local artifacts finish. It downloads both dist archives and complete macOS bundles, first requires the latest main CI run for the exact release commit to have completed successfully, then generates `latest.json` from the downloaded archives and the release plan, then uploads it as an `artifacts-*` workflow artifact. A missing archive or checksum fails this job and blocks release publication.
 5. dist's generated host job collects all artifacts, including the DMGs and `latest.json`, and creates the GitHub Release. Custom jobs do not publish.
 
-The DMG and complete app payload use the explicit locked Cargo release build; cargo-bundle packages that prebuilt executable without rebuilding it. Cargo's configured target directory is honored, including config-file and environment overrides. dist still builds its own binary archives with the dist profile; these are separate builds, not shared binaries. A successful lockfile check does not prove that either distributed package passed native acceptance; follow [Release acceptance](RELEASE_ACCEPTANCE.md) for the actual artifact bytes.
+The DMG and complete app payload use the explicit locked Cargo release build; cargo-bundle packages that prebuilt executable without rebuilding it. Cargo's configured target directory is honored, including config-file and environment overrides. dist still builds its own binary archives with the dist profile; these are separate builds, not shared binaries. A successful lockfile check does not prove that either distributed package passed native acceptance; follow [Release acceptance](release-acceptance.md) for the actual artifact bytes.
 
 Run packaging regression tests without compiling or publishing:
 
@@ -97,4 +97,4 @@ After the preparation PR merges, wait for main CI to succeed. Tag the merged com
 
 The check lives in the existing update-manifest job, so it adds no runner or extra job. It runs after packaging and before publication. Generated Release workflow changes must continue to come from cargo-dist configuration.
 
-Complete [Release acceptance](RELEASE_ACCEPTANCE.md) against packaged artifacts. The human GUI acceptance procedure is separate from the automated CI gate; there is currently no GitHub environment approval enforcing that manual step.
+Complete [Release acceptance](release-acceptance.md) against packaged artifacts. The human GUI acceptance procedure is separate from the automated CI gate; there is currently no GitHub environment approval enforcing that manual step.

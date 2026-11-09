@@ -1,14 +1,14 @@
 # Contributing to Ropy
 
-English | [简体中文](docs/CONTRIBUTING/CONTRIBUTING_ZH.md)
+English | [简体中文](CONTRIBUTING.zh-CN.md)
 
-Use this guide to contribute code, bundled themes, translations or documentation. For a personal palette that does not ship with Ropy, use [Custom themes](docs/THEMES.md) instead.
+Use this guide to contribute code, bundled themes, translations or documentation. For a personal palette that does not ship with Ropy, use [Custom themes](docs/themes.md) instead.
 
 ## Prepare a change
 
 1. Follow [contribution-flow](.agents/skills/contribution-flow/SKILL.md) for the required Issue → Branch → PR → Squash Merge procedure. It owns templates, branch and commit naming, precheck and merge authorization.
-2. Prepare the toolchain and native dependencies with [Development](docs/DEVELOPMENT.md). Read [AGENTS.md](AGENTS.md) for coding conventions and [Architecture](docs/ARCHITECTURE.md) for module boundaries.
-3. Choose tests using [Testing](docs/TESTING.md). Run `./scripts/precheck.sh` before committing; resource checks alone do not replace the complete gate.
+2. Prepare the toolchain and native dependencies with [Development](docs/development.md). Read [AGENTS.md](AGENTS.md) for coding conventions and [Architecture](docs/architecture.md) for module boundaries.
+3. Choose tests using [Testing](docs/testing.md). Run `./scripts/precheck.sh` before committing; resource checks alone do not replace the complete gate.
 
 ## Add a bundled theme
 
@@ -26,7 +26,7 @@ Set `language_name` to the language's own name for the settings selector. Keep t
 
 Application code calls `rust_i18n::t!` directly with English fallback. Dynamic translation-key fields end in `_key` so the checker can identify their literals. Only startup and a successfully saved language change set the shared locale; tests and offline fixtures use an explicit locale. Do not add another translation map or locale global.
 
-Run `python3 scripts/check/check_i18n.py` to check TOML, key parity and interpolation names. See [Architecture](docs/ARCHITECTURE.md#dependency-direction) for runtime localization ownership.
+Run `python3 scripts/check/check_i18n.py` to check TOML, key parity and interpolation names. See [Architecture](docs/architecture.md#dependency-direction) for runtime localization ownership.
 
 ## Maintain documentation
 
@@ -34,6 +34,6 @@ Read [project-doc](.agents/skills/project-doc/SKILL.md) before writing or reorga
 
 ## Releases and issue reports
 
-Maintainers use [Release workflow maintenance](docs/RELEASING.md#protected-release-sequence) for version preparation and publishing, and [Release package acceptance](docs/RELEASE_ACCEPTANCE.md) for exact-artifact GUI evidence. Preparing documentation or a PR does not authorize publishing or merging.
+Maintainers use [Release workflow maintenance](docs/releasing.md#protected-release-sequence) for version preparation and publishing, and [Release package acceptance](docs/release-acceptance.md) for exact-artifact GUI evidence. Preparing documentation or a PR does not authorize publishing or merging.
 
 Report bugs and feature suggestions through the matching [Issue template](https://github.com/StudentWeis/ropy/issues/new/choose). Include the platform, version, reproduction steps and relevant logs without personal clipboard content.

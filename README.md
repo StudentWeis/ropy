@@ -13,7 +13,7 @@
 
 <p align="center">Cross-platform, lightweight clipboard manager written in Rust and GPUI.</p>
 
-<p align="center">English | <a href="docs/README/README_ZH.md">简体中文</a></p>
+<p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/StudentWeis/ropy-images/main/screenshots/2026-10-09/ropy-themes.png" alt="Ropy" width="80%">
@@ -22,7 +22,7 @@
 ## Features
 
 - Native desktop application built with Zed's GPUI.
-- Cross-platform support for Windows, macOS, and Linux (X11 and native [Wayland](docs/WAYLAND.md)), with compositor-dependent clipboard and shortcut capabilities.
+- Cross-platform support for Windows, macOS, and Linux (X11 and native [Wayland](docs/wayland.md)), with compositor-dependent clipboard and shortcut capabilities.
 - Tracks text, rich text (HTML/RTF), image, and file path clipboard history with content-based deduplication.
 - Switchable list and grid layout modes for browsing history.
 - Search the loaded history with case-sensitive and whole-word options.
@@ -74,11 +74,11 @@ The current source supports native Wayland windows without XWayland or `DISPLAY`
 
 Run `ropy --show` to open the history window. On Wayland, use the desktop-approved GlobalShortcuts portal, the supported Hyprland integration, or bind `ropy --show` in your compositor. Tiling compositors may need a floating rule.
 
-Clipboard capture requires data-control support; automatic paste additionally requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and Niri have not been individually validated. See the [Wayland guide](docs/WAYLAND.md) for setup, fallback activation and capability limits.
+Clipboard capture requires data-control support; automatic paste additionally requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and Niri have not been individually validated. See the [Wayland guide](docs/wayland.md) for setup, fallback activation and capability limits.
 
 ### Build from source
 
-Follow [Development](docs/DEVELOPMENT.md) for toolchain and platform prerequisites, a locked source build, Make targets and optional Git hooks. Source builds describe the current checkout; check release notes when comparing them with packaged binaries.
+Follow [Development](docs/development.md) for toolchain and platform prerequisites, a locked source build, Make targets and optional Git hooks. Source builds describe the current checkout; check release notes when comparing them with packaged binaries.
 
 ## Usage
 
@@ -92,11 +92,11 @@ Follow [Development](docs/DEVELOPMENT.md) for toolchain and platform prerequisit
 - Use row actions to pin records so they are excluded from storage cleanup.
 - Choose between `copy_to_clipboard` and `paste_immediately` confirm modes in Settings.
 
-History shortcuts can be [customized in Settings or Help](docs/KEYBINDINGS.md), including disabling individual aliases such as `D` for deletion. Use [custom themes](docs/THEMES.md) to preview, duplicate and edit a palette without changing bundled themes.
+History shortcuts can be [customized in Settings or Help](docs/keybindings.md), including disabling individual aliases such as `D` for deletion. Use [custom themes](docs/themes.md) to preview, duplicate and edit a palette without changing bundled themes.
 
 ## Documentation
 
-Use the [documentation index](docs/README.md) to find user guides, development and testing commands, architecture, release acceptance and historical measurements. Start with [configuration and recovery](docs/CONFIGURATION.md) for settings files or load errors, or [Contributing](CONTRIBUTING.md) to submit a change.
+Use the [documentation index](docs/README.md) to find user guides, development and testing commands, architecture, release acceptance and historical measurements. Start with [configuration and recovery](docs/configuration.md) for settings files or load errors, or [Contributing](CONTRIBUTING.md) to submit a change.
 
 ## Limitations and scope
 

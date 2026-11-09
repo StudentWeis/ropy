@@ -2,7 +2,7 @@
 
 Ropy uses a native Wayland window when `WAYLAND_DISPLAY` is set. XWayland and `DISPLAY` are not required. Native X11 sessions continue to use the X11 backend. Clipboard capture and immediate paste have separate compositor requirements; see the capability limits below.
 
-For all other user and contributor guides, use the [documentation index](README.md). Maintainers should use the [isolated VM procedure](WAYLAND_VM.md) for native regression evidence.
+For all other user and contributor guides, use the [documentation index](README.md). Maintainers should use the [isolated VM procedure](wayland-vm.md) for native regression evidence.
 
 ## Version and quick start
 
@@ -87,7 +87,7 @@ Pinning prevents automatic dismissal. It does not force a native Wayland window 
 
 ## Validation
 
-See [WAYLAND_VM.md](WAYLAND_VM.md) for the isolated native Sway scenario and the D-Bus portal fixture. The fixture verifies Ropy's protocol contract; it is not a GNOME or KDE portal integration test.
+See [wayland-vm.md](wayland-vm.md) for the isolated native Sway scenario and the D-Bus portal fixture. The fixture verifies Ropy's protocol contract; it is not a GNOME or KDE portal integration test.
 
 For manual verification, use only an isolated native Wayland desktop with private Ropy data and no host clipboard synchronization. Focus a native Wayland plain-text editor, copy a unique marker and wait for ingestion. Replace only that session's clipboard with a different sentinel and verify its complete value, then clear the editor and verify its entire buffer is empty. Activate Ropy normally, verify the original marker in history, search for it and confirm that record rather than the sentinel. The popup must disappear, focus must return naturally to the editor and the complete clipboard value must change from the sentinel to the marker. In copy mode, paste once; with immediate paste enabled, do not send a manual paste. Compare the entire editor buffer with the marker: empty, sentinel, duplicated or extra text fails. Repeat both modes with new markers and sentinels after the popup has been closed and after copying while Ropy is hidden. Do not force focus to rescue a failed activation or paste.
 

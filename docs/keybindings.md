@@ -1,6 +1,6 @@
 # History shortcuts
 
-Use this guide to change history-list bindings without changing the global activation shortcut. For the settings file location, backup precautions and load-error recovery, see [Configuration and recovery](CONFIGURATION.md).
+Use this guide to change history-list bindings without changing the global activation shortcut. For the settings file location, backup precautions and load-error recovery, see [Configuration and recovery](configuration.md).
 
 ## Customize in the app
 
@@ -12,7 +12,7 @@ While recording, Delete, Backspace and Enter are ordinary keys. Escape cancels; 
 
 ## Configure overrides in TOML
 
-You can also edit `config.toml` directly; quit and back up the file first, then restart after editing. See the [platform configuration paths](CONFIGURATION.md#configuration-file).
+You can also edit `config.toml` directly; quit and back up the file first, then restart after editing. See the [platform configuration paths](configuration.md#configuration-file).
 
 For example, keep Delete but remove the single-letter D shortcut:
 

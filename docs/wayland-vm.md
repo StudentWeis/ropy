@@ -1,12 +1,12 @@
 # Local Wayland regression on macOS
 
-Use a disposable Linux VM to test the native Wayland popup against a **native Wayland editor**, with XWayland disabled. A successful X11-only clipboard test does not cover this boundary. See [WAYLAND.md](WAYLAND.md) for the supported application behavior.
+Use a disposable Linux VM to test the native Wayland popup against a **native Wayland editor**, with XWayland disabled. A successful X11-only clipboard test does not cover this boundary. See [wayland.md](wayland.md) for the supported application behavior.
 
 The native results below correspond to [PR #234](https://github.com/StudentWeis/ropy/pull/234) (source commit `424c718`, merged as `6328331`). They establish the Sway regression baseline, not certification of every Wayland desktop.
 
 ## Procedure status and prerequisites
 
-This is a reproducible regression procedure with historical observations, not a current-release acceptance record. Commands below run inside the disposable guest unless identified as host operations. Guest administration is permitted only within that isolated environment. Use [Release acceptance](RELEASE_ACCEPTANCE.md) when validating distributed bytes.
+This is a reproducible regression procedure with historical observations, not a current-release acceptance record. Commands below run inside the disposable guest unless identified as host operations. Guest administration is permitted only within that isolated environment. Use [Release acceptance](release-acceptance.md) when validating distributed bytes.
 
 ## Tested environment
 
@@ -34,7 +34,7 @@ dbus-run-session -- sway -c /path/to/private/sway.conf
 
 The private `XDG_RUNTIME_DIR` must exist with mode 0700. A VM without a login seat also needs a dedicated seatd process with `SEATD_VTBOUND=0` and access for the guest user. Do not change the host desktop's seat or input services.
 
-Configure a 1280×960 output, disable focus-follows-mouse, float the Ropy window and bind `Ctrl+Shift+d` to the candidate executable with `--show`. The native window has app ID `com.ropy.app`; see the floating rule in [WAYLAND.md](WAYLAND.md). Export the compositor child environment into a private file so the editor, app and inspection commands share the same display and session bus. Give each test an isolated `XDG_CONFIG_HOME`. Disable autostart and automatic update checks in that test configuration.
+Configure a 1280×960 output, disable focus-follows-mouse, float the Ropy window and bind `Ctrl+Shift+d` to the candidate executable with `--show`. The native window has app ID `com.ropy.app`; see the floating rule in [wayland.md](wayland.md). Export the compositor child environment into a private file so the editor, app and inspection commands share the same display and session bus. Give each test an isolated `XDG_CONFIG_HOME`. Disable autostart and automatic update checks in that test configuration.
 
 Use a GTK TextView with `GDK_BACKEND=wayland`; assert that its display type is `GdkWaylandDisplay`. Inspect text and active state from the editor itself. Inspect Ropy's visibility and focus through `swaymsg -t get_tree`, and the selection through `wl-paste`. Capture the output with `grim`.
 

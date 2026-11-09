@@ -1,6 +1,6 @@
 # Custom themes
 
-Use this guide for personal palettes, not contributions to the bundled theme set. To ship a built-in theme, follow [Contributing](../CONTRIBUTING.md#add-a-bundled-theme). General settings paths and load-error recovery are in [Configuration and recovery](CONFIGURATION.md).
+Use this guide for personal palettes, not contributions to the bundled theme set. To ship a built-in theme, follow [Contributing](../CONTRIBUTING.md#add-a-bundled-theme). General settings paths and load-error recovery are in [Configuration and recovery](configuration.md).
 
 ## Create or edit in the app
 

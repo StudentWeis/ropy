@@ -9,14 +9,15 @@ description: 编写、重构、审查或迁移 Ropy 的项目文档，包括用�
 
 ## 项目约定
 
-- 读者与语言：用户从英文 [README](../../../README.md) 或[中文 README](../../../docs/README/README_ZH.md) 进入；贡献者与维护者从[文档索引](../../../docs/README.md) 进入。保留现有页面语言，不为整理文档批量翻译。两个 README 和两份贡献指南的功能、限制与操作说明须同步；实现细节链接到同一个拥有者。
-- 文档归属：用户操作、开发、架构、发布与平台指南位于 `docs/`；AUR 操作位于 `packaging/aur/README.md`；测量证据位于 `docs/benchmarks/`，旧体积数据位于 `docs/data/`。保留现有公开路径，新增页面加入索引。无文档站，不预建站点或目录。
+- 读者与语言：用户从英文 [README](../../../README.md) 或[中文 README](../../../README.zh-CN.md) 进入；贡献者与维护者从[文档索引](../../../docs/README.md) 进入。保留现有页面语言，不为整理文档批量翻译。两个 README 和两份贡献指南的功能、限制与操作说明须同步；实现细节链接到同一个拥有者。
+- 文档归属：用户操作、开发、架构、发布与平台指南位于 `docs/`；AUR 操作位于 `packaging/aur/README.md`；测量证据位于 `docs/benchmarks/`，旧体积数据位于 `docs/data/`。新增页面加入索引。无文档站，不预建站点或目录。
 - 事实来源：核心行为查 `crates/ropy-core/src/` 及其测试；桌面适配查 `src/`、`tests/`、`assets/`；检查查 `Makefile`、`scripts/precheck.sh`、`hk.pkl` 与 `.github/workflows/ci.yml`；发布查 `dist-workspace.toml`、`Cargo.toml` 中的发布元数据、`cliff.toml` 和 `scripts/`。精确类型、字段和依赖版本由实现、资源与 `Cargo.lock` 拥有，不抄成第二份全集。
 - 状态约定：稳定指南描述当前源码；设计与历史证据在开头标明状态、日期或来源提交，区分拟议、已接受、已实现和被替代。历史测试通过不等于当前版本或所有桌面已验收；未测平台、重建制品与强化后的断言必须单独说明。
+- 命名：普通文档使用简短、描述任务的小写 `kebab-case.md`，不使用全大写、下划线或只为单页增加目录。保留约定入口 `README.md`、`CONTRIBUTING.md`、`AGENTS.md`、`CHANGELOG.md`，中文入口使用根目录 `README.zh-CN.md` 和 `CONTRIBUTING.zh-CN.md`。技能的 `SKILL.md`、GitHub 模板和生成测量文件沿用各自格式。重命名时同步所有入站链接、资源和脚本引用。
 - 格式：沿用 GitHub Markdown，普通段落与列表正文不按列宽硬换行；不新增 frontmatter 体系或手写页内目录。现有 README 展示 HTML、技能 YAML 元数据和生成文件格式保留。相对链接以页面目录为基准，命令默认从仓库根目录运行，其他执行目录须写明。
-- 生成与上游：`CHANGELOG.md` 由 cargo-release/git-cliff 维护；基准 Markdown/JSON 由 `make bench-record` 记录，不手改测量值、提交或环境。两个官方 GPUI skill 必须保持原样，约束见 [ropy-gpui](../ropy-gpui/SKILL.md)。`.github/workflows/release.yml` 由 cargo-dist 生成，按[发布指南](../../../docs/RELEASING.md) 编辑来源。
-- 检查：在仓库根目录执行 `git diff --check` 并核对链接、锚点、资源和命令；当前没有仓库内 Markdown 专用检查器或文档站构建。提交前完整 `./scripts/precheck.sh` 必须通过，它检查资源、脚本、Rust 和 rustdoc，不检查 Markdown 语义或本地链接。准备环境见[开发指南](../../../docs/DEVELOPMENT.md)，选择证据见[核验与审查](references/verification.md)。
-- 关键契约：保留[架构](../../../docs/ARCHITECTURE.md)中的存储兼容性、捕获确认、任务所有权和一致性边界；保留[配置恢复](../../../docs/CONFIGURATION.md#recovery-after-a-load-error)、[快捷键失败](../../../docs/KEYBINDINGS.md#configuration-errors)、[主题回退](../../../docs/THEMES.md#reload-and-recovery)、[更新回滚](../../../docs/RELEASING.md#update-behavior-and-recovery)与 [Wayland 能力限制](../../../docs/WAYLAND.md#capabilities-and-limits)。GUI 验收仅使用隔离数据和对应制品，按[发布验收](../../../docs/RELEASE_ACCEPTANCE.md)记录，不能以单元测试替代。
+- 生成与上游：`CHANGELOG.md` 由 cargo-release/git-cliff 维护；基准 Markdown/JSON 由 `make bench-record` 记录，不手改测量值、提交或环境。两个官方 GPUI skill 必须保持原样，约束见 [ropy-gpui](../ropy-gpui/SKILL.md)。`.github/workflows/release.yml` 由 cargo-dist 生成，按[发布指南](../../../docs/releasing.md) 编辑来源。
+- 检查：在仓库根目录执行 `git diff --check` 并核对链接、锚点、资源和命令；当前没有仓库内 Markdown 专用检查器或文档站构建。提交前完整 `./scripts/precheck.sh` 必须通过，它检查资源、脚本、Rust 和 rustdoc，不检查 Markdown 语义或本地链接。准备环境见[开发指南](../../../docs/development.md)，选择证据见[核验与审查](references/verification.md)。
+- 关键契约：保留[架构](../../../docs/architecture.md)中的存储兼容性、捕获确认、任务所有权和一致性边界；保留[配置恢复](../../../docs/configuration.md#recovery-after-a-load-error)、[快捷键失败](../../../docs/keybindings.md#configuration-errors)、[主题回退](../../../docs/themes.md#reload-and-recovery)、[更新回滚](../../../docs/releasing.md#update-behavior-and-recovery)与 [Wayland 能力限制](../../../docs/wayland.md#capabilities-and-limits)。GUI 验收仅使用隔离数据和对应制品，按[发布验收](../../../docs/release-acceptance.md)记录，不能以单元测试替代。
 
 ## 工作流程
 

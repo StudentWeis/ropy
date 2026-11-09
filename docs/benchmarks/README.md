@@ -1,6 +1,6 @@
 # Benchmark evidence
 
-These records describe specific measured commits and environments, not the current checkout or every published release. Use [Release benchmark baseline](../BENCHMARKS.md) for collection and comparison rules, and [Search benchmark and implementation](../SEARCH_PERFORMANCE.md) for filtering semantics and timing boundaries.
+These records describe specific measured commits and environments, not the current checkout or every published release. Use [Release benchmark baseline](../benchmarks.md) for collection and comparison rules, and [Search benchmark and implementation](../search-performance.md) for filtering semantics and timing boundaries.
 
 | Record | Scope and limits |
 | --- | --- |

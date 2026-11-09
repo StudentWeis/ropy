@@ -1,4 +1,4 @@
-<p align="center"><img src="../../assets/logo.png" alt="Ropy Logo" width="20%"></p>
+<p align="center"><img src="assets/logo.png" alt="Ropy Logo" width="20%"></p>
 
 <h2 align="center"><em><strong>R</strong>opy <strong>O</strong>rganizes <strong>P</strong>revious <strong>Y</strong>anks</em></h2>
 
@@ -14,7 +14,7 @@
 <p align="center">使用 Rust 和 GPUI 编写的跨平台原生剪贴板管理器。</p>
 
 <p align="center">
-<a href="../../README.md">English</a> | 简体中文
+<a href="README.md">English</a> | 简体中文
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 ## 特性
 
 - 使用 Zed 的 GPUI 构建的原生桌面应用。
-- 跨平台支持：Windows、macOS 和 Linux（X11 与原生 [Wayland](../WAYLAND.md)）；剪贴板和快捷键能力取决于合成器支持。
+- 跨平台支持：Windows、macOS 和 Linux（X11 与原生 [Wayland](docs/wayland.md)）；剪贴板和快捷键能力取决于合成器支持。
 - 追踪文本、富文本（HTML/RTF）、图片和文件路径剪贴板历史，并基于内容进行去重。
 - 支持列表和网格布局模式切换，灵活浏览历史记录。
 - 支持使用大小写敏感和整词匹配选项搜索已加载的历史记录。
@@ -70,17 +70,17 @@ scoop install ropy
 
 ### Linux（X11 与 Wayland）
 
-Arch Linux 用户可按照 [AUR 打包说明](../../packaging/aur/README.md)构建 `ropy-bin`。配方安装官方发布二进制；仓库包含配方不代表已经发布到 AUR，请先查看发布和验证要求。
+Arch Linux 用户可按照 [AUR 打包说明](packaging/aur/README.md)构建 `ropy-bin`。配方安装官方发布二进制；仓库包含配方不代表已经发布到 AUR，请先查看发布和验证要求。
 
 当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`。该支持由 [PR #234](https://github.com/StudentWeis/ropy/pull/234) 引入；使用预编译二进制时，请确认对应版本的发布说明是否包含此变更。
 
 运行 `ropy --show` 可打开历史窗口。Wayland 下可使用桌面授权的 GlobalShortcuts Portal、已支持的 Hyprland 集成，或在合成器中为 `ropy --show` 配置快捷键。平铺合成器可能需要额外配置浮动窗口规则。
 
-剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式和能力限制请参阅 [Wayland 指南](../WAYLAND.md)。
+剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式和能力限制请参阅 [Wayland 指南](docs/wayland.md)。
 
 ### 从源码构建
 
-按照[开发指南](../DEVELOPMENT.md)准备工具链和平台依赖，再执行锁定依赖的源码构建。该指南也说明 Make 命令和可选的 Git hooks。源码文档描述当前工作区，预编译包是否包含对应功能应以发布说明为准。
+按照[开发指南](docs/development.md)准备工具链和平台依赖，再执行锁定依赖的源码构建。该指南也说明 Make 命令和可选的 Git hooks。源码文档描述当前工作区，预编译包是否包含对应功能应以发布说明为准。
 
 ## 使用
 
@@ -94,13 +94,13 @@ Arch Linux 用户可按照 [AUR 打包说明](../../packaging/aur/README.md)构�
 - 使用行内操作置顶记录，使其排除在存储清理之外。
 - 在设置中选择 `copy_to_clipboard` 或 `paste_immediately` 确认模式。
 
-列表快捷键支持[在设置或帮助页中自定义](../KEYBINDINGS.md)，例如保留 `Delete`、禁用 `D` 删除。点击“应用”后立即生效；也可以编辑 `config.toml`，文件修改需重启生效。
+列表快捷键支持[在设置或帮助页中自定义](docs/keybindings.md)，例如保留 `Delete`、禁用 `D` 删除。点击“应用”后立即生效；也可以编辑 `config.toml`，文件修改需重启生效。
 
-支持[用户自定义主题](../THEMES.md)：在设置中打开“自定义主题”，选择主题预览，复制或编辑配色后点击“保存并使用”。常用颜色直接调整，更多颜色可展开；取消编辑不会改变正在使用的主题。
+支持[用户自定义主题](docs/themes.md)：在设置中打开“自定义主题”，选择主题预览，复制或编辑配色后点击“保存并使用”。常用颜色直接调整，更多颜色可展开；取消编辑不会改变正在使用的主题。
 
 ## 文档
 
-通过[文档索引](../README.md)查找用户指南、开发与测试命令、架构、发布验收和历史测量。设置文件或加载错误见[配置与恢复](../CONFIGURATION.md)，提交修改见[贡献指南](../CONTRIBUTING/CONTRIBUTING_ZH.md)。
+通过[文档索引](docs/README.md)查找用户指南、开发与测试命令、架构、发布验收和历史测量。设置文件或加载错误见[配置与恢复](docs/configuration.md)，提交修改见[贡献指南](CONTRIBUTING.zh-CN.md)。
 
 ## 局限性与范围
 

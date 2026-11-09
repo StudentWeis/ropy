@@ -2,7 +2,7 @@
 
 ## Ropy 检查入口
 
-命令从仓库根目录执行，前置条件见[开发指南](../../../../docs/DEVELOPMENT.md)。
+命令从仓库根目录执行，前置条件见[开发指南](../../../../docs/development.md)。
 
 - `git diff --check`：检查差异空白；另行阅读新文件和检查 Markdown 标题、围栏、链接与资源。
 - `make help`：核对公开 Make 入口，不启动桌面应用。

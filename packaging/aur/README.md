@@ -17,7 +17,7 @@ makepkg -si
 
 Review `PKGBUILD` before running it. `makepkg -si` uses pacman to install missing dependencies and the completed package; it may request administrator authentication. Launch Ropy from the application menu or run `ropy --show`.
 
-The package installs the executable to `/usr/bin/ropy`, where Ropy disables in-app installation of updates. Update through the package manager instead. It does not enable autostart, launch the application during installation, or change compositor settings. See the [Wayland guide](../../docs/WAYLAND.md) for desktop-specific setup and capability limits. Global shortcuts through a portal require `xdg-desktop-portal` and a compatible desktop backend; installing the portal alone does not guarantee support.
+The package installs the executable to `/usr/bin/ropy`, where Ropy disables in-app installation of updates. Update through the package manager instead. It does not enable autostart, launch the application during installation, or change compositor settings. See the [Wayland guide](../../docs/wayland.md) for desktop-specific setup and capability limits. Global shortcuts through a portal require `xdg-desktop-portal` and a compatible desktop backend; installing the portal alone does not guarantee support.
 
 ## Validate before publishing
 
@@ -33,7 +33,7 @@ namcap PKGBUILD
 namcap ropy-bin-*.pkg.tar.zst
 ```
 
-For an x86_64 clean-chroot build, install Arch's `devtools` and run `extra-x86_64-build`. Check the installed application's menu launch, tray, clipboard capture, activation and package-managed update behavior in an isolated desktop before publishing. See [release acceptance](../../docs/RELEASE_ACCEPTANCE.md) for the GUI validation procedure.
+For an x86_64 clean-chroot build, install Arch's `devtools` and run `extra-x86_64-build`. Check the installed application's menu launch, tray, clipboard capture, activation and package-managed update behavior in an isolated desktop before publishing. See [release acceptance](../../docs/release-acceptance.md) for the GUI validation procedure.
 
 Dependencies include the release ELF's direct dependencies and the dynamically loaded EGL and Wayland libraries. `libglvnd` supplies EGL; a working graphics driver is still required. Inspect the x86_64 release binary again when upgrading rather than assuming their dependency set stays unchanged. Namcap may not recognize dynamically loaded dependencies.
 

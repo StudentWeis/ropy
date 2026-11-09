@@ -1,6 +1,6 @@
 # Development
 
-Use this guide to prepare a source checkout and run local commands. For patch submission, follow [contribution-flow](../.agents/skills/contribution-flow/SKILL.md); for test selection and CI, see [Testing](TESTING.md). Commands below run from the repository root.
+Use this guide to prepare a source checkout and run local commands. For patch submission, follow [contribution-flow](../.agents/skills/contribution-flow/SKILL.md); for test selection and CI, see [Testing](testing.md). Commands below run from the repository root.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ cargo build --locked --release
 
 The final path assumes Cargo's default native target directory. If you configure a target or output directory, launch the executable from that output instead. Normal startup accesses your user configuration and clipboard history; use the [isolated GUI procedure](../.agents/skills/cross-platform-gui-e2e-test/SKILL.md) for testing.
 
-Ropy starts hidden. Open it with the activation shortcut or tray; Linux also supports `ropy --show`. Native Wayland has compositor-specific [activation and clipboard requirements](WAYLAND.md).
+Ropy starts hidden. Open it with the activation shortcut or tray; Linux also supports `ropy --show`. Native Wayland has compositor-specific [activation and clipboard requirements](wayland.md).
 
 ## Command entry points
 
@@ -38,9 +38,9 @@ Run `make` or `make help` for the available targets. [Makefile](../Makefile) own
 | `make precheck` | Format locally, then run the complete pre-commit gate |
 | `make clean` | Remove Cargo build artifacts |
 
-Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets retain their own command selection. The root desktop package is the default Cargo member. Use explicit `--workspace` for both packages or `-p ropy-core` for portable core work; see [Architecture](ARCHITECTURE.md).
+Direct Cargo targets support overrides such as `make build CARGO="rtk cargo"`; script targets retain their own command selection. The root desktop package is the default Cargo member. Use explicit `--workspace` for both packages or `-p ropy-core` for portable core work; see [Architecture](architecture.md).
 
-For performance commands and measurement boundaries, use [release benchmarks](BENCHMARKS.md) and [search benchmarks](SEARCH_PERFORMANCE.md). Do not run timing comparisons alongside compilation.
+For performance commands and measurement boundaries, use [release benchmarks](benchmarks.md) and [search benchmarks](search-performance.md). Do not run timing comparisons alongside compilation.
 
 ## Optional tool and hook setup
 
@@ -56,6 +56,6 @@ YAML, TOML and JSON hooks use `uvx` with pinned parsers. Run `hk check --all` to
 
 ## Before submitting
 
-Run `./scripts/precheck.sh`; it is mandatory before a commit, including documentation-only commits. Use `--check` for non-mutating CI reproduction. The light and Rust phases, required CI checks and native tests are described in [Testing](TESTING.md).
+Run `./scripts/precheck.sh`; it is mandatory before a commit, including documentation-only commits. Use `--check` for non-mutating CI reproduction. The light and Rust phases, required CI checks and native tests are described in [Testing](testing.md).
 
 For Markdown, also review local links, anchors, code fences and `git diff --check`. Precheck's documentation step builds Rust API documentation; it does not validate Markdown links or establish native GUI acceptance. Documentation ownership and evidence requirements live in [project-doc](../.agents/skills/project-doc/SKILL.md).
