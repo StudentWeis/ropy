@@ -2,6 +2,10 @@
 
 Use this checklist for release candidates and changes to packaging, clipboard, shortcuts, focus, tray or updating. Follow the existing [cross-platform GUI procedure](../.agents/skills/cross-platform-gui-e2e-test/SKILL.md) for isolation and platform automation. Never test against a user's clipboard history or installed application.
 
+## Preconditions
+
+Use a disposable desktop matching the target architecture, with private application data and no host clipboard synchronization. Platform setup, required automation tools and cleanup are owned by the [cross-platform GUI procedure](../.agents/skills/cross-platform-gui-e2e-test/SKILL.md). Do not run install, upgrade or rollback tests over a personal installation.
+
 ## Select the artifact
 
 For branch testing, run **Desktop test artifacts** with a full commit SHA; its Linux x86-64 and Windows archives include checksums and the resolved revision. For macOS and Linux ARM64, use the matching Release workflow artifacts. A development build is useful for diagnosis but does not certify a distributed package. Download with `gh run download <run-id>`.
@@ -19,7 +23,7 @@ Record the workflow run URL, commit SHA, artifact filename, size and SHA-256. Ac
 5. Open the tray menu, change its language, invoke its actions and quit cleanly. Use a working StatusNotifierItem host for Linux tray rendering checks.
 6. Upgrade a disposable installation from the previous stable version. Verify startup, preserved history/settings and managed-install behavior. Exercise failed startup rollback using the updater's existing test procedure; do not substitute unit-test success for actual installation evidence.
 
-Test native Wayland separately using [the VM procedure](WAYLAND_VM.md). An X11 pass on a Wayland host does not cover native Wayland input or activation.
+Test native Wayland separately using [the VM procedure](wayland-vm.md). An X11 pass on a Wayland host does not cover native Wayland input or activation.
 
 ## Acceptance record
 

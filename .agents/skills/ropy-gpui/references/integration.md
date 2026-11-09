@@ -59,4 +59,4 @@ Keep the existing core/UI boundary and virtualized history layout. This release 
 
 Run `./scripts/precheck.sh` for formatting, resource checks, Clippy, all workspace targets/features and documentation. For a focused check run `cargo test --locked -p ropy test_board_controls_expose_localized_accessible_names`.
 
-Headless UI integration checks exercise real components through the test platform; they do not certify macOS accessibility delivery, native clipboard/IME services, or Windows/Linux desktop behavior. Follow [Ropy testing](../../../../docs/TESTING.md) for platform acceptance.
+Headless UI integration checks exercise real components through the test platform; they do not certify macOS accessibility delivery, native clipboard/IME services, or Windows/Linux desktop behavior. Follow [Ropy testing](../../../../docs/testing.md) for platform acceptance.

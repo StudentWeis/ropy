@@ -11,7 +11,7 @@
 - Define all error types with `thiserror` — avoid manual `impl Display/Error`.
 - Build new UI components using `gpui-component`.
 - Localize all user-facing strings — no hardcoded display text in source files.
-- Follow the guidelines in [Testing](./docs/TESTING.md) for test structure, naming, and coverage expectations.
+- Follow the guidelines in [Testing](./docs/testing.md) for test structure, naming, and coverage expectations.
 - Log files can be viewed when troubleshooting problems.
 
 ## AI Collaboration Workflow
@@ -19,6 +19,10 @@
 Any code change in this repository — by a human or an AI agent — MUST follow the contribution SOP defined in the [`contribution-flow`](./.agents/skills/contribution-flow/SKILL.md) skill.
 
 That skill is the single source of truth for: when to open an Issue, branch naming, Conventional Commits rules, the `scripts/precheck.sh` gate, the `gh` command templates, and the PR self-check. Read it before making any commit.
+
+## Project Documentation
+
+For writing, reviewing or migrating Ropy documentation, read the project [project-doc](./.agents/skills/project-doc/SKILL.md) skill. It owns documentation structure, fact sources, translation scope and verification expectations. Use the [documentation index](./docs/README.md) to find the page responsible for a task; do not duplicate contribution or GPUI rules here.
 
 ## GPUI Skills
 
