@@ -1,12 +1,22 @@
-# Ropy integration with GPUI Kit 0.9.0
+# Ropy integration with GPUI Kit 0.9.1
 
 ## Source and refresh policy
 
-Checked against [GPUI Kit v0.9.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.9.0), commit `7591a35eced761e3613c01e71ff04c10129dae1a`. Normal and development dependencies use 0.9.0; the default engine is `gpui-pre` 0.3.11. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
+Checked against [GPUI Kit v0.9.1](https://github.com/longbridge/gpui-kit/releases/tag/v0.9.1), commit `39ab849a93b5f15507b969164d49891db8d5b470`. Normal and development dependencies use 0.9.1; the default engine is `gpui-pre` 0.3.12. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
 
 Use the official `gpui-kit` and `gpui-kit-design-guides` skills alongside the `ropy-gpui` adapter for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy-specific guidance in `ropy-gpui`; replace the two official skill directories only with an unmodified upstream snapshot. Upstream `script/check-ai` commands do not run in this repository.
 
 This reference adapts [GPUI Kit documentation](https://gpui-kit.com) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adding Ropy-specific scope, verification and recommendations. Code examples retain their upstream Apache-2.0 terms.
+
+## 0.9.1 migration
+
+This is a backward-compatible patch upgrade. Keep the production `component`/`assets` and development `component`/`test-support` features unchanged. The lockfile also updates optional GPUI Fast packages to 0.1.14; their frame-reuse improvement is not a benefit of Ropy's active `gpui-pre` backend.
+
+Both official skill directories in v0.9.1 are byte-for-byte identical to the recorded v0.9.0 snapshot. Verified with `diff -qr` against the tagged upstream archive; only the adapter's recorded revision changes.
+
+Ropy's search input and theme-name inputs use `InputState`, so upstream caret movement, prepaint layout publication, focused-only layout notifications and early-value shaping fixes apply without application workarounds. Verify native Chinese IME positioning separately: headless tests cannot certify the OS candidate window.
+
+The opacity and RGB controls use `Slider`. They inherit fixes for step snapping from `min`, disabled-thumb accessibility and assistive-technology stepping. Checked-menu positioning and rem-based menu sizing also arrive through the shared components. Custom history scrolling still needs its own acceptance evidence.
 
 ## 0.9.0 migration
 
@@ -33,11 +43,15 @@ Existing UI integration tests cover shortcut editing, persistence and focus; hos
 
 | Priority | Ropy surface | Recommendation and evidence needed |
 | --- | --- | --- |
+| Blocked upstream | Slider keyboard focus | The release notes advertise `Slider::track_focus`, but the tagged source exposes it only on `gpui-base::slider::Slider`, not the themed component Ropy uses. Do not call the missing builder or replace the themed control just to obtain it. |
+| Blocked upstream | Theme catalog selection | The release notes advertise `Button::selected_accent`, but the tagged component Button has no such builder. Keep the catalog's outline buttons with `.selected(...)`; recheck the published API before adopting accent-filled selection in a later release. |
 | Next | Search input and Chinese text entry | Use `TestInput` with the production search input to cover preedit, commit and cancellation. Still verify native IME candidate windows and focus separately; the helper does not run an OS IME. |
 | Next | Hold-Space preview and modified gestures | Use `TestEventExt` or `click_with_modifiers` when adding regression cases, reducing manually constructed event boilerplate while keeping held-key and focus-loss assertions. Do not rewrite passing tests solely for style. |
 | Evaluate | History list and masonry scrolling | The custom history layouts own virtualized scroll state. Verify trackpad edge behavior, selection visibility and scrollbar geometry before adopting the shared boundary-bounce behavior; the upgrade alone does not prove custom surfaces inherit it. |
 | Conditional | Long text preview | Consider Textarea `prewrap` only if measurement identifies repeated wrapping cost. Current previews render plain text; TextView selection fixes and `SelectionFormat::SourceAcrossStyles` are not automatic benefits for those previews. |
 | Deferred | Syntax-highlighted previews | `syntect` is useful if code preview becomes a product requirement. Measure startup, memory and binary size before enabling it. Ropy currently leaves highlighting, Shell and WebView features disabled. |
+
+Do not replace the virtualized history list or masonry layout with the new draggable `GridLayout`: dashboard drag/resize behavior is not clipboard-history virtualization. Markdown task toggles, right-pinned table columns, vertical toolbars and retained `TransitionState` have no immediate production use here. Plain-text previews do not automatically gain TextView's Markdown table, selection or link-tooltip fixes.
 
 Keep the existing core/UI boundary and virtualized history layout. This release does not justify a Shell rewrite, WebView dependency, renderer switch or replacement of the clipboard-specific selection model.
 
