@@ -1,13 +1,13 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use gpui_kit::{
-    AnyElement, AnyView, App, Context, Window, anchored,
+    AnyElement, AnyView, App, Context, Window,
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonCustomVariant, ButtonVariants},
         h_flex, v_flex,
     },
-    deferred, div, img,
+    div, img,
     prelude::{
         FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
         Styled,
@@ -271,12 +271,6 @@ pub(super) enum SelectionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PreviewVisibility {
-    Visible,
-    Hidden,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum HoverPreviewState {
     Enabled,
     Disabled,
@@ -286,7 +280,6 @@ pub(super) enum HoverPreviewState {
 pub(super) struct RenderFlags {
     favorite: FavoriteState,
     selection: SelectionState,
-    preview: PreviewVisibility,
     hover_preview: HoverPreviewState,
 }
 
@@ -297,10 +290,6 @@ impl RenderFlags {
 
     const fn is_selected(self) -> bool {
         matches!(self.selection, SelectionState::Selected)
-    }
-
-    const fn preview_visible(self) -> bool {
-        matches!(self.preview, PreviewVisibility::Visible)
     }
 
     const fn hover_preview_enabled(self) -> bool {
@@ -324,7 +313,6 @@ pub(super) struct RecordsListState {
     favorite_ids: Arc<HashSet<u64>>,
     selected_index: usize,
     layout_mode: LayoutMode,
-    show_preview: bool,
     hover_preview_enabled: bool,
     overlay_visible: bool,
     history_mutation: HistoryMutationState,
@@ -340,20 +328,20 @@ impl RecordsListState {
             favorite_ids: board.favorite_ids.clone(),
             selected_index: board.selected_index,
             layout_mode: board.layout_mode,
-            show_preview: board.ui_state.preview_visible(),
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
-                && !overlay_visible,
+                && !overlay_visible
+                && board.preview_window.is_none(),
             overlay_visible,
             history_mutation: board.history_mutation,
             view: context.weak_entity(),
         }
     }
 
-    pub(super) fn render_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+    pub(super) fn render_row(&self, index: usize, window: &Window, cx: &App) -> AnyElement {
         self.render_list_row(index, window, cx)
     }
 
-    fn render_list_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+    fn render_list_row(&self, index: usize, window: &Window, cx: &App) -> AnyElement {
         let records = read_or_recover(&self.records);
         let Some(record_index) = self.filtered_record_indices.get(index).copied() else {
             return div().into_any_element();
@@ -385,11 +373,6 @@ impl RecordsListState {
                 } else {
                     SelectionState::Unselected
                 },
-                preview: if self.show_preview {
-                    PreviewVisibility::Visible
-                } else {
-                    PreviewVisibility::Hidden
-                },
                 hover_preview: if self.hover_preview_enabled {
                     HoverPreviewState::Enabled
                 } else {
@@ -411,7 +394,7 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
         .min_w_0()
         .id(("record-content", ctx.record.id));
 
-    if !ctx.flags.preview_visible() && ctx.flags.hover_preview_enabled() {
+    if ctx.flags.hover_preview_enabled() {
         let preview_data = PreviewData::new(ctx.record);
         content = content.tooltip(move |window, cx| preview_data.build(window, cx));
     }
@@ -439,10 +422,6 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
     }
 
     content.into_any_element()
-}
-
-const fn should_render_selected_preview(flags: RenderFlags) -> bool {
-    flags.is_selected() && flags.preview_visible()
 }
 
 fn render_record_meta(
@@ -641,21 +620,6 @@ fn render_record_delete_button(ctx: &RenderContext<'_>, cx: &App) -> Button {
         })
 }
 
-fn render_selected_preview(
-    preview_data: &PreviewData,
-    window: &Window,
-    cx: &mut App,
-) -> impl IntoElement {
-    deferred(
-        div().absolute().top_full().left_0().child(
-            anchored()
-                .snap_to_window()
-                .child(div().mt_1().child(preview_data.build(window, cx))),
-        ),
-    )
-    .with_priority(1)
-}
-
 fn decorate_record_card(
     card: gpui_kit::Div,
     ctx: &RenderContext<'_>,
@@ -704,14 +668,14 @@ fn decorate_record_card(
         .into_any_element()
 }
 
-fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> AnyElement {
+fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &App) -> AnyElement {
     render_list_item_with_grid_height(ctx, window, cx, None)
 }
 
 pub(super) fn render_list_item_with_grid_height(
     ctx: &RenderContext<'_>,
-    window: &Window,
-    cx: &mut App,
+    _window: &Window,
+    cx: &App,
     grid_height_override: Option<f32>,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
@@ -754,43 +718,17 @@ pub(super) fn render_list_item_with_grid_height(
         )
     };
 
-    let mut item = if compact {
+    let item = if compact {
         div().relative().min_w_0().child(card)
     } else {
         div().pb_2().relative().child(card)
     };
-
-    if should_render_selected_preview(ctx.flags) {
-        item = item.child(render_selected_preview(
-            &PreviewData::new(ctx.record),
-            window,
-            cx,
-        ));
-    }
 
     item.into_any_element()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        FavoriteState, HoverPreviewState, PreviewVisibility, RenderFlags, SelectionState,
-        should_render_selected_preview,
-    };
-
-    const fn flags(
-        selection: SelectionState,
-        preview: PreviewVisibility,
-        hover_preview: HoverPreviewState,
-    ) -> RenderFlags {
-        RenderFlags {
-            favorite: FavoriteState::NotFavorite,
-            selection,
-            preview,
-            hover_preview,
-        }
-    }
-
     #[test]
     fn test_preview_data_long_text_retains_only_visible_unicode_prefix() {
         let record = crate::repository::ClipboardRecord::new(
@@ -833,28 +771,5 @@ mod tests {
         let record =
             crate::repository::ClipboardRecord::new(1, content.into(), chrono::Local::now(), kind);
         assert_eq!(super::PreviewData::new(&record).record_content, expected);
-    }
-
-    #[test]
-    fn selected_preview_remains_available_when_hover_preview_is_disabled() {
-        assert!(should_render_selected_preview(flags(
-            SelectionState::Selected,
-            PreviewVisibility::Visible,
-            HoverPreviewState::Disabled,
-        )));
-    }
-
-    #[test]
-    fn selected_preview_requires_selected_visible_state() {
-        assert!(!should_render_selected_preview(flags(
-            SelectionState::Unselected,
-            PreviewVisibility::Visible,
-            HoverPreviewState::Enabled,
-        )));
-        assert!(!should_render_selected_preview(flags(
-            SelectionState::Selected,
-            PreviewVisibility::Hidden,
-            HoverPreviewState::Enabled,
-        )));
     }
 }

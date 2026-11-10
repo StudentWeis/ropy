@@ -1,6 +1,4 @@
-use gpui_kit::{
-    AsKeystroke, Bounds, Context, Focusable, KeyUpEvent, Pixels, Window, component::WindowExt,
-};
+use gpui_kit::{Bounds, Context, Focusable, KeyUpEvent, Pixels, Window, component::WindowExt};
 
 /// History shortcut catalog, validation and registration.
 pub mod shortcuts;
@@ -318,7 +316,8 @@ impl RopyBoard {
         }
 
         self.selected_index = 0;
-        self.ui_state.hide_preview();
+        self.preview_key = super::preview_window::PreviewKeyState::Released;
+        self.dismiss_preview(cx);
         if self.active_panel == ActivePanel::Settings {
             settings::reset_settings_dialog(self, window, cx);
         }
@@ -350,7 +349,7 @@ impl RopyBoard {
             return;
         }
         self.cancel_shortcut_recording(cx);
-        self.ui_state.hide_preview();
+        self.dismiss_preview(cx);
         self.invalidate_copy_confirmation();
         self.set_window_pinned(window, false);
         cx.notify();
@@ -363,8 +362,8 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self.ui_state.hide_preview() {
-            cx.notify();
+        if self.close_preview(cx) {
+            return;
         }
         if self.active_panel == ActivePanel::Settings && self.settings_editor.hotkey.recording {
             self.cancel_hotkey_recording(window, cx);
@@ -414,6 +413,7 @@ impl RopyBoard {
     }
 
     fn dismiss_popup(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        self.dismiss_preview(cx);
         self.clear_search(window, cx);
         hide_window(window, cx, self.pinned);
         if self.pinned {
@@ -444,16 +444,10 @@ impl RopyBoard {
     pub(crate) fn on_preview_selection(
         &mut self,
         _: &PreviewSelection,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
-        if self
-            .ui_state
-            .show_space_preview(self.settings_editor.panel_state.space_preview_enabled)
-        {
-            self.reveal_selected_record();
-            cx.notify();
-        }
+        self.open_preview(window, cx);
     }
 
     pub(crate) fn on_toggle_window_pin(
@@ -495,18 +489,10 @@ impl RopyBoard {
     ) {
         // Focus may have moved into search or another panel since the preview
         // key was pressed. Ignore modifiers on release, which can change while held.
-        let released_preview_key = cx
-            .key_bindings()
-            .borrow()
-            .bindings_for_action(&PreviewSelection)
-            .any(|binding| {
-                binding
-                    .keystrokes()
-                    .last()
-                    .is_some_and(|key| key.as_keystroke().key == event.keystroke.key)
-            });
-        if released_preview_key && self.ui_state.hide_preview() {
-            cx.notify();
+        let released_preview_key = super::preview_window::is_preview_key(&event.keystroke.key, cx);
+        if released_preview_key {
+            self.preview_key = super::preview_window::PreviewKeyState::Released;
+            self.close_preview(cx);
         }
     }
 }

@@ -220,6 +220,7 @@ impl RopyBoard {
                     );
                     return;
                 }
+                this.dismiss_preview(cx);
                 match mode {
                     ConfirmMode::CopyToClipboard => {
                         if !this.pinned {

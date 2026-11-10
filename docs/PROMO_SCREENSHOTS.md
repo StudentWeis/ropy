@@ -56,6 +56,12 @@ Blank or differently sized images are rejected. Fonts and rasterization may vary
 display scales, so this is repeatable content and geometry, not a cross-machine
 pixel hash guarantee.
 
+## Preview interaction probe
+
+To inspect the production preview without starting clipboard, hotkey, tray, update or autostart services, build with `cargo build --locked`, then run `target/debug/ropy --promo-preview ropy-light en /tmp/ropy-preview-ready`. The ready file must have an existing parent directory. This mode uses disposable storage and demo records, including a 1,000-line text record. Use Up/Down to select a record, hold Space to preview, and release Space or press Escape to close. Image previews support wheel zoom, left-button drag, Fit and Original size. Main-window buttons and all non-preview commands remain shielded. Stop this process with Ctrl+C when finished.
+
+This probe verifies native preview rendering and focus only; it does not replace isolated-account clipboard/hotkey E2E testing. The ordinary `--promo` mode remains noninteractive.
+
 For debugging, the internal entry points are:
 
 ```sh
