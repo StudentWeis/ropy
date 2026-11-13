@@ -28,17 +28,22 @@ fn test_preview_hold_opens_bounded_window_and_release_in_either_window_closes_it
                 .find(|handle| *handle != main)
                 .unwrap()
         });
-        let main_size = cx
-            .update_window(main, |_, window, _| window.bounds().size)
+        let main_bounds = cx
+            .update_window(main, |_, window, _| window.bounds())
             .unwrap();
         cx.update_window(preview, |_, window, cx| {
             let work_area = window.display(cx).unwrap().visible_bounds();
             let bounds = window.bounds();
-            assert_eq!(bounds.size, main_size);
             assert!(bounds.size.width <= work_area.size.width);
             assert!(bounds.size.height <= work_area.size.height);
-            assert!((bounds.center().x - work_area.center().x).abs() < px(1.));
-            assert!((bounds.center().y - work_area.center().y).abs() < px(1.));
+            assert!(bounds.left() >= work_area.left());
+            assert!(bounds.right() <= work_area.right());
+            assert!(bounds.top() >= work_area.top());
+            assert!(bounds.bottom() <= work_area.bottom());
+            assert!(
+                bounds.left() >= main_bounds.right() || bounds.right() <= main_bounds.left(),
+                "preview {bounds:?} should sit beside main {main_bounds:?}"
+            );
         })
         .unwrap();
         cx.update_window(
@@ -349,6 +354,493 @@ fn test_preview_long_text_scrolls_to_untruncated_tail(cx: &mut TestAppContext) {
         assert_eq!(
             window.find(("preview-line", 199_usize)).label(),
             Some(expected_tail.as_str())
+        );
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows(), vec![main]));
+}
+
+#[gpui_kit::test]
+fn test_preview_follows_main_window_origin(cx: &mut TestAppContext) {
+    let (tx, _rx) = async_channel::unbounded();
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        cx.set_reduce_motion(true);
+        cx.set_global(GlobalSettings::new(Settings::default()));
+        cx.set_global(GlobalRepository::new(None));
+        crate::gui::board::bind_application_keys(cx);
+    });
+    for (main_origin, expect_right_side) in [
+        (point(px(40.), px(60.)), true),
+        (point(px(1480.), px(60.)), false),
+    ] {
+        let main_bounds = gpui_kit::Bounds::new(main_origin, size(px(400.), px(550.)));
+        let (main, _board) = cx.update(|cx| {
+            gpui_kit::open_window(
+                gpui_kit::WindowOptions {
+                    window_bounds: Some(gpui_kit::WindowBounds::Windowed(main_bounds)),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| {
+                    cx.new(|cx| {
+                        let mut board = RopyBoard::new(
+                            Arc::new(RwLock::new(vec![record(1)])),
+                            Arc::new(Mutex::new(CopyTracker::default())),
+                            tx.clone(),
+                            window,
+                            cx,
+                        );
+                        board.activated = true;
+                        board.pinned = true;
+                        board.settings_editor.panel_state.space_preview_enabled = true;
+                        board
+                    })
+                },
+            )
+            .expect("open main board")
+        });
+        cx.update_window(main, |_, window, cx| {
+            window.key_down("space", false, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let preview = cx.update(|cx| {
+            cx.windows()
+                .into_iter()
+                .find(|handle| *handle != main)
+                .expect("preview window should open")
+        });
+        let actual_main_bounds = cx
+            .update_window(main, |_, window, _| window.bounds())
+            .unwrap();
+        cx.update_window(preview, |_, window, _| {
+            let preview_bounds = window.bounds();
+            assert_eq!(preview_bounds.top(), actual_main_bounds.top());
+            if expect_right_side {
+                assert!(preview_bounds.left() > actual_main_bounds.right());
+            } else {
+                assert!(preview_bounds.right() < actual_main_bounds.left());
+            }
+        })
+        .unwrap();
+        cx.update_window(main, |_, window, _| window.remove_window())
+            .unwrap();
+        cx.run_until_parked();
+    }
+}
+
+#[gpui_kit::test]
+fn test_hover_preview_opens_side_window_after_delay_without_stealing_focus_and_updates_on_row_switch(
+    cx: &mut TestAppContext,
+) {
+    let (main, board, _) = open_board(cx, vec![record(1), record(2)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.hover_preview_enabled = true;
+            board.on_record_hover(1, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert_eq!(
+            cx.windows().len(),
+            1,
+            "hover preview must wait for the open debounce"
+        );
+    });
+
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(main, |_, window, _| {
+        assert!(
+            window.is_window_active(),
+            "hover preview must not steal focus from the main window"
+        );
+    })
+    .unwrap();
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 1")
+        );
+    })
+    .unwrap();
+
+    // Switching to another row updates the existing hover preview in-place.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_record_hover(1, false, window, cx);
+            board.on_record_hover(2, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows().len(), 2));
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 2")
+        );
+    })
+    .unwrap();
+
+    // Leaving the row closes the hover preview after the grace period
+    // once the pointer is not inside the preview window either.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_record_hover(2, false, window, cx);
+            board.on_preview_hover(false, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(250));
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows(), vec![main]));
+}
+
+#[gpui_kit::test]
+fn test_hover_preview_stays_open_when_pointer_moves_into_preview_window(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(cx, vec![record(1)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.hover_preview_enabled = true;
+            board.on_record_hover(1, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(400));
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows().len(), 2));
+
+    // Leaving the row and entering the preview window cancels the close timer.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_record_hover(1, false, window, cx);
+            board.on_preview_hover(true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(300));
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows().len(), 2));
+
+    // Leaving the preview window closes it after the grace period.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_preview_hover(false, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(250));
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows(), vec![main]));
+}
+
+#[gpui_kit::test]
+fn test_grid_hover_preview_ignores_brief_cross_over_and_switches_on_dwell(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(cx, vec![record(1), record(2)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.layout_mode = crate::config::LayoutMode::Grid;
+            board.settings_editor.panel_state.hover_preview_enabled = true;
+            board.on_record_hover(1, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(400));
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+
+    // Crossing an adjacent grid card briefly on the way to the preview window keeps record 1.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_record_hover(1, false, window, cx);
+            board.on_record_hover(2, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(120));
+    cx.run_until_parked();
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_record_hover(2, false, window, cx);
+            board.on_preview_hover(true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 1")
+        );
+    })
+    .unwrap();
+
+    // Dwelling on another grid card switches the preview after the grid switch delay.
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.on_preview_hover(false, window, cx);
+            board.on_record_hover(2, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(300));
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 2")
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_hover_preview_aligns_vertically_with_hovered_item(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(cx, vec![record(1)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    let main_top = cx
+        .update_window(main, |_, window, _| window.bounds().top())
+        .unwrap();
+    cx.update_window(main, |_, window, cx| {
+        window.simulate_mouse_move(point(px(100.), px(380.)), cx);
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.hover_preview_enabled = true;
+            board.on_record_hover(1, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(400));
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview, |_, window, _| {
+        assert_eq!(window.bounds().top(), main_top + px(360.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_space_preview_aligns_vertically_with_selected_item_in_list_mode(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(
+        cx,
+        vec![record(1), record(2), record(3), record(4), record(5)],
+    );
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    let main_top = cx
+        .update_window(main, |_, window, _| window.bounds().top())
+        .unwrap();
+
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+            board.selected_index = 3;
+            cx.notify();
+        });
+        window.key_down("space", false, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview, |_, window, _| {
+        assert!(window.bounds().top() > main_top);
+    })
+    .unwrap();
+
+    cx.update_window(main, |_, window, cx| {
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn test_grid_space_preview_docks_next_to_selected_column_and_row(cx: &mut TestAppContext) {
+    let (tx, _rx) = async_channel::unbounded();
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        cx.set_reduce_motion(true);
+        cx.set_global(GlobalSettings::new(Settings::default()));
+        cx.set_global(GlobalRepository::new(None));
+        crate::gui::board::bind_application_keys(cx);
+    });
+    let main_bounds = gpui_kit::Bounds::new(point(px(760.), px(265.)), size(px(400.), px(550.)));
+    let (main, board) = cx.update(|cx| {
+        gpui_kit::open_window(
+            gpui_kit::WindowOptions {
+                window_bounds: Some(gpui_kit::WindowBounds::Windowed(main_bounds)),
+                ..Default::default()
+            },
+            cx,
+            |window, cx| {
+                cx.new(|cx| {
+                    let mut board = RopyBoard::new(
+                        Arc::new(RwLock::new(vec![
+                            record(1),
+                            record(2),
+                            record(3),
+                            record(4),
+                        ])),
+                        Arc::new(Mutex::new(CopyTracker::default())),
+                        tx,
+                        window,
+                        cx,
+                    );
+                    board.activated = true;
+                    board.pinned = true;
+                    board.layout_mode = crate::config::LayoutMode::Grid;
+                    board.settings_editor.panel_state.space_preview_enabled = true;
+                    board.selected_index = 0;
+                    board
+                })
+            },
+        )
+        .expect("open main board")
+    });
+    cx.update_window(main, |_, window, cx| {
+        window.render_frame(cx);
+        window.key_down("space", false, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let preview_left = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview_left, |_, window, _| {
+        assert!(window.bounds().right() < main_bounds.left());
+    })
+    .unwrap();
+
+    cx.update_window(main, |_, window, cx| {
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.selected_index = 1;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.key_down("space", false, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let preview_right = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview_right, |_, window, _| {
+        assert!(window.bounds().left() > main_bounds.right());
+    })
+    .unwrap();
+
+    cx.update_window(main, |_, window, cx| {
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn test_hover_preview_is_replaced_by_hold_preview(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(cx, vec![record(1), record(2)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.run_until_parked();
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.hover_preview_enabled = true;
+            board.settings_editor.panel_state.space_preview_enabled = true;
+            board.on_record_hover(1, true, window, cx);
+        });
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(400));
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows().len(), 2));
+
+    // Pressing Space replaces the hover preview with a hold preview for the selected row (2).
+    cx.update_window(main, |_, window, cx| {
+        assert!(
+            board.read(cx).focus_handle.is_focused(window),
+            "main board should still have focus"
+        );
+        window.key_down("space", false, cx);
+        assert!(
+            board.read(cx).is_hold_preview_active(),
+            "space should replace hover preview with hold preview"
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        assert_eq!(cx.windows().len(), 2);
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 2")
         );
         window.key_up("space", cx);
     })

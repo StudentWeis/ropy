@@ -28,8 +28,6 @@ const GRID_ESTIMATED_TEXT_LINE_WIDTH_UNITS: f32 = 11.0;
 pub(super) const LIST_CONTENT_PREVIEW_LIMIT: usize = 80;
 pub(super) const LIST_CONTENT_PREVIEW_MAX_LINES: usize = 3;
 pub(super) const LIST_COLOR_SWATCH_SIZE_PX: f32 = 16.0;
-pub(super) const TOOLTIP_CONTENT_PREVIEW_LIMIT: usize = 500;
-pub(super) const TOOLTIP_CONTENT_PREVIEW_MAX_LINES: usize = 10;
 
 pub(in crate::gui::board) const fn visible_list_len(
     record_count: usize,
@@ -184,10 +182,6 @@ pub(super) fn file_display_name(path: &str) -> String {
         .map_or_else(|| path.to_string(), ToString::to_string)
 }
 
-pub(super) fn file_preview_content(record_content: &str) -> String {
-    deserialize_file_paths(record_content).join("\n")
-}
-
 fn estimated_grid_file_detail_lines(record_content: &str) -> usize {
     let files = deserialize_file_paths(record_content);
     let detail = if files.len() <= 1 {
@@ -250,8 +244,8 @@ mod tests {
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
         GRID_COLOR_SWATCH_HEIGHT, GRID_CONTENT_PREVIEW_MAX_LINES, GRID_ESTIMATED_TEXT_LINE_HEIGHT,
         TruncateOptions, estimated_grid_card_height, estimated_grid_color_body_height,
-        estimated_grid_text_lines, file_display_name, file_preview_content,
-        list_row_for_selected_index, truncate, visible_list_len,
+        estimated_grid_text_lines, file_display_name, list_row_for_selected_index, truncate,
+        visible_list_len,
     };
     use crate::{
         config::LayoutMode,
@@ -368,20 +362,6 @@ mod tests {
     #[test]
     fn test_file_display_name_when_path_has_filename_returns_filename() {
         assert_eq!(file_display_name("/tmp/archive.zip"), "archive.zip");
-    }
-
-    #[test]
-    fn test_file_preview_content_when_json_array_returns_joined_paths() {
-        let preview = file_preview_content("[\"/tmp/a.txt\",\"/tmp/b.txt\"]");
-
-        assert_eq!(preview, "/tmp/a.txt\n/tmp/b.txt");
-    }
-
-    #[test]
-    fn test_file_preview_content_when_legacy_string_returns_single_path() {
-        let preview = file_preview_content("/tmp/a.txt");
-
-        assert_eq!(preview, "/tmp/a.txt");
     }
 
     #[test]

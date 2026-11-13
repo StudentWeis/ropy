@@ -192,6 +192,7 @@ impl RopyBoard {
         _: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.cancel_hover_preview(cx);
         self.move_grid_horizontal(false, cx);
     }
 
@@ -201,6 +202,7 @@ impl RopyBoard {
         _: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.cancel_hover_preview(cx);
         self.move_grid_horizontal(true, cx);
     }
 
@@ -210,6 +212,7 @@ impl RopyBoard {
         _: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.cancel_hover_preview(cx);
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.reveal_selected_record();
@@ -223,6 +226,7 @@ impl RopyBoard {
         _: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.cancel_hover_preview(cx);
         let count = self.filtered_record_len();
         if count > 0 && self.selected_index < count - 1 {
             self.selected_index += 1;
@@ -438,6 +442,7 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        self.cancel_hover_preview(cx);
         window.focus(&self.search_input.focus_handle(cx), cx);
     }
 

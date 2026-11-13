@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use gpui_kit::{
-    AnyElement, AnyView, App, Context, Window,
+    AnyElement, App, Context, Window,
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonCustomVariant, ButtonVariants},
@@ -20,16 +20,13 @@ use super::{
     super::{
         RopyBoard,
         color::{ClipboardColor, parse_clipboard_color},
-        preview,
         record_ops::HistoryMutationState,
     },
     metrics::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
         GRID_COLOR_SWATCH_HEIGHT, GRID_CONTENT_PREVIEW_LIMIT, GRID_CONTENT_PREVIEW_MAX_LINES,
         GRID_IMAGE_MAX_HEIGHT, LIST_COLOR_SWATCH_SIZE_PX, LIST_CONTENT_PREVIEW_LIMIT,
-        LIST_CONTENT_PREVIEW_MAX_LINES, TOOLTIP_CONTENT_PREVIEW_LIMIT,
-        TOOLTIP_CONTENT_PREVIEW_MAX_LINES, TruncateOptions, file_display_name,
-        file_preview_content, truncate,
+        LIST_CONTENT_PREVIEW_MAX_LINES, TruncateOptions, file_display_name, truncate,
     },
 };
 use crate::{
@@ -202,40 +199,6 @@ fn render_file_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Di
         .child(Icon::empty().path("icons/filter-files.svg").size(px(12.0)))
 }
 
-struct PreviewData {
-    content_type: ContentType,
-    record_content: String,
-}
-
-impl PreviewData {
-    fn new(record: &ClipboardRecord) -> Self {
-        let truncate_preview = |content: &str| {
-            truncate(
-                content,
-                TOOLTIP_CONTENT_PREVIEW_LIMIT,
-                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
-            )
-        };
-        let record_content = match record.content_type {
-            ContentType::Image => record.content.clone(),
-            ContentType::FilePath => truncate_preview(&file_preview_content(&record.content)),
-            ContentType::Text | ContentType::RichText => truncate_preview(&record.content),
-        };
-        Self {
-            content_type: record.content_type.clone(),
-            record_content,
-        }
-    }
-
-    fn build(&self, window: &Window, cx: &mut App) -> AnyView {
-        if self.content_type == ContentType::Image {
-            preview::image_tooltip(&self.record_content, window, cx)
-        } else {
-            preview::simple_tooltip(&self.record_content, window, cx)
-        }
-    }
-}
-
 struct ItemStyle {
     selected_background: gpui_kit::Hsla,
     normal_background: gpui_kit::Hsla,
@@ -330,7 +293,7 @@ impl RecordsListState {
             layout_mode: board.layout_mode,
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
                 && !overlay_visible
-                && board.preview_window.is_none(),
+                && !board.is_hold_preview_active(),
             overlay_visible,
             history_mutation: board.history_mutation,
             view: context.weak_entity(),
@@ -395,8 +358,13 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
         .id(("record-content", ctx.record.id));
 
     if ctx.flags.hover_preview_enabled() {
-        let preview_data = PreviewData::new(ctx.record);
-        content = content.tooltip(move |window, cx| preview_data.build(window, cx));
+        let board = ctx.view.clone();
+        let record_id = ctx.record.id;
+        content = content.on_hover(move |hovered, window, cx| {
+            let _ = board.update(cx, |board, cx| {
+                board.on_record_hover(record_id, *hovered, window, cx);
+            });
+        });
     }
 
     if compact {
@@ -725,51 +693,4 @@ pub(super) fn render_list_item_with_grid_height(
     };
 
     item.into_any_element()
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_preview_data_long_text_retains_only_visible_unicode_prefix() {
-        let record = crate::repository::ClipboardRecord::new(
-            1,
-            "界".repeat(1_000_000),
-            chrono::Local::now(),
-            crate::repository::ContentType::Text,
-        );
-        let preview = super::PreviewData::new(&record);
-        let expected = format!("{}...", "界".repeat(500));
-        assert!(
-            preview.record_content == expected,
-            "preview retained {} bytes",
-            preview.record_content.len()
-        );
-    }
-
-    #[rstest::rstest]
-    #[case(crate::repository::ContentType::Text, "short\ntext", "short\ntext")]
-    #[case(
-        crate::repository::ContentType::RichText,
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11",
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10..."
-    )]
-    #[case(
-        crate::repository::ContentType::FilePath,
-        r#"["file:///tmp/a%20b","/tmp/literal%20"]"#,
-        "/tmp/a b\n/tmp/literal%20"
-    )]
-    #[case(
-        crate::repository::ContentType::Image,
-        "/tmp/image.png",
-        "/tmp/image.png"
-    )]
-    fn test_preview_data_preserves_each_payload_presentation(
-        #[case] kind: crate::repository::ContentType,
-        #[case] content: &str,
-        #[case] expected: &str,
-    ) {
-        let record =
-            crate::repository::ClipboardRecord::new(1, content.into(), chrono::Local::now(), kind);
-        assert_eq!(super::PreviewData::new(&record).record_content, expected);
-    }
 }

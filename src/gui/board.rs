@@ -7,7 +7,6 @@ mod delete_confirm;
 pub(super) mod filtering;
 mod header;
 mod hotkey_record_handler;
-mod preview;
 mod preview_window;
 mod record_ops;
 mod records_list;
@@ -152,6 +151,7 @@ pub(crate) struct RopyBoard {
     grid_layout: records_list::MasonryState,
     pub(crate) ui_state: UiState,
     preview_window: Option<preview_window::PreviewSession>,
+    hover_preview: preview_window::HoverPreviewState,
     // Remains held after Escape so auto-repeat cannot reopen the preview.
     preview_key: preview_window::PreviewKeyState,
     pub(crate) selected_index: usize,
@@ -494,6 +494,7 @@ impl RopyBoard {
             grid_layout: records_list::MasonryState::default(),
             ui_state: UiState::default(),
             preview_window: None,
+            hover_preview: preview_window::HoverPreviewState::default(),
             preview_key: preview_window::PreviewKeyState::Released,
             selected_index: 0,
             last_copy,
