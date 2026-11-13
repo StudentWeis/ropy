@@ -303,6 +303,7 @@ impl RopyBoard {
                         || board.ui_state.any_overlay_visible()
                         || window.has_active_dialog(cx)
                         || board.active_panel != ActivePanel::ClipboardList
+                        || !crate::gui::window::has_native_focus(window)
                     {
                         return;
                     }
@@ -401,20 +402,10 @@ impl RopyBoard {
                 if fallback_y.is_some() {
                     return (fallback_y, SidePreference::Right);
                 }
-                let Some(ix) = record_index else {
-                    return (None, SidePreference::Right);
-                };
-                let top = self.list_state.logical_scroll_top();
-                if ix <= top.item_ix {
-                    return (None, SidePreference::Right);
-                }
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "visible row offset fits UI geometry"
-                )]
-                let row_offset = (ix - top.item_ix) as f32 * px(72.) - top.offset_in_item;
-                let y = (parent_top + px(96.) + row_offset).clamp(parent_top, parent_bottom);
-                (Some(y), SidePreference::Right)
+                let y = record_index
+                    .and_then(|ix| self.list_state.bounds_for_item(ix))
+                    .map(|bounds| (parent_top + bounds.top()).clamp(parent_top, parent_bottom));
+                (y, SidePreference::Right)
             }
         }
     }
@@ -459,7 +450,8 @@ impl RopyBoard {
         if (next_bounds.origin.x - current_bounds.origin.x).abs() > px(0.5)
             || (next_bounds.origin.y - current_bounds.origin.y).abs() > px(0.5)
         {
-            self.dismiss_preview(cx);
+            // Repositioning preserves the current hover target, unlike dismissal.
+            self.remove_preview(false, cx);
             self.open_preview_for_record(record, PreviewMode::Hover, window, cx);
             return;
         }
@@ -600,10 +592,12 @@ impl RopyBoard {
     }
 
     pub(super) fn close_preview(&mut self, cx: &mut Context<'_, Self>) -> bool {
+        self.hover_preview.reset();
         self.remove_preview(true, cx)
     }
 
     pub(super) fn dismiss_preview(&mut self, cx: &mut Context<'_, Self>) {
+        self.hover_preview.reset();
         self.remove_preview(false, cx);
     }
 
@@ -717,9 +711,9 @@ impl PreviewWindow {
         cx: &mut Context<'_, Self>,
     ) -> Self {
         let focus = cx.focus_handle();
-        if mode == PreviewMode::Hold {
-            window.focus(&focus, cx);
-        }
+        // Window-local focus does not activate the native window. Hover previews
+        // need a keyboard dispatch path even when the first click is a toolbar button.
+        window.focus(&focus, cx);
         window.set_window_title(&t!("preview_title"));
         let activation = cx.observe_window_activation(window, |this, window, cx| {
             if !window.is_window_active() {

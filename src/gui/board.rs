@@ -387,6 +387,7 @@ impl RopyBoard {
                     this.defer_preview_focus_check(window, cx);
                     return;
                 }
+                this.cancel_hover_preview(cx);
                 this.preview_key = preview_window::PreviewKeyState::Released;
                 this.cancel_shortcut_recording(cx);
                 // When the window loses focus, hide the window (unless pinned).

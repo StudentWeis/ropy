@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use gpui_kit::{
     AnyElement, App, Context, Window,
+    base::TestSupportExt,
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonCustomVariant, ButtonVariants},
@@ -355,7 +356,8 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
     let mut content = div()
         .flex_1()
         .min_w_0()
-        .id(("record-content", ctx.record.id));
+        .id(("record-content", ctx.record.id))
+        .test_support();
 
     if ctx.flags.hover_preview_enabled() {
         let board = ctx.view.clone();

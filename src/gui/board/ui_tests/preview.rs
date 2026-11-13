@@ -4,6 +4,20 @@ use gpui_kit::{
     test::{TestAppContextExt, TestEventExt},
 };
 
+fn open_board(
+    cx: &mut TestAppContext,
+    records: Vec<ClipboardRecord>,
+) -> (
+    AnyWindowHandle,
+    Entity<RopyBoard>,
+    async_channel::Receiver<CopyRequest>,
+) {
+    let result = super::open_board(cx, records);
+    cx.update_window(result.0, |_, window, _| window.activate_window())
+        .unwrap();
+    result
+}
+
 #[gpui_kit::test]
 fn test_preview_hold_opens_bounded_window_and_release_in_either_window_closes_it(
     cx: &mut TestAppContext,
@@ -81,6 +95,7 @@ fn test_preview_escape_closes_only_preview_and_repeat_does_not_reopen(cx: &mut T
 )]
 async fn open_image_preview(
     cx: &mut TestAppContext,
+    hover: bool,
 ) -> (tempfile::TempDir, AnyWindowHandle, AnyWindowHandle) {
     let fixture = tempfile::tempdir().unwrap();
     let path = fixture.path().join("image.png");
@@ -91,15 +106,26 @@ async fn open_image_preview(
         chrono::Local::now(),
         crate::repository::ContentType::Image,
     );
-    let (main, board, _) = open_board(cx, vec![image]);
+    let mut settings = Settings::default();
+    settings.preview.hover_preview_enabled = hover;
+    settings.preview.space_preview_enabled = true;
+    let (main, _, _) = open_board_with_settings(cx, vec![image], settings);
     cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.update_window(main, |_, window, _| window.activate_window())
+        .unwrap();
+    cx.run_until_parked();
     cx.update_window(main, |_, window, cx| {
-        board.update(cx, |board, _| {
-            board.settings_editor.panel_state.space_preview_enabled = true;
-        });
-        window.key_down("space", false, cx);
+        if hover {
+            window.hover(("record-content", 1_u64), cx);
+        } else {
+            window.key_down("space", false, cx);
+        }
     })
     .unwrap();
+    if hover {
+        cx.executor().advance_clock(Duration::from_millis(400));
+        cx.run_until_parked();
+    }
     let preview = cx.update(|cx| {
         cx.windows()
             .into_iter()
@@ -119,7 +145,7 @@ async fn open_image_preview(
     reason = "GPUI UI tests run on the foreground executor"
 )]
 async fn test_preview_image_wheel_and_drag_change_rendered_geometry(cx: &mut TestAppContext) {
-    let (_fixture, main, preview) = open_image_preview(cx).await;
+    let (_fixture, main, preview) = open_image_preview(cx, false).await;
     cx.update_window(preview, |_, window, cx| {
         let fitted = window.find("preview-image").bounds();
         let canvas = window.find("preview-canvas").bounds();
@@ -198,7 +224,7 @@ async fn test_preview_image_wheel_and_drag_change_rendered_geometry(cx: &mut Tes
     reason = "GPUI UI tests run on the foreground executor"
 )]
 async fn test_preview_scale_refreshes_after_canvas_resize(cx: &mut TestAppContext) {
-    let (_fixture, main, preview) = open_image_preview(cx).await;
+    let (_fixture, main, preview) = open_image_preview(cx, false).await;
     cx.simulate_window_resize(preview, size(px(320.), px(550.)));
     cx.update_window(preview, |_, window, cx| {
         window.render_frame(cx);
@@ -377,7 +403,7 @@ fn test_preview_follows_main_window_origin(cx: &mut TestAppContext) {
         (point(px(1480.), px(60.)), false),
     ] {
         let main_bounds = gpui_kit::Bounds::new(main_origin, size(px(400.), px(550.)));
-        let (main, _board) = cx.update(|cx| {
+        let (main, board) = cx.update(|cx| {
             gpui_kit::open_window(
                 gpui_kit::WindowOptions {
                     window_bounds: Some(gpui_kit::WindowBounds::Windowed(main_bounds)),
@@ -413,12 +439,16 @@ fn test_preview_follows_main_window_origin(cx: &mut TestAppContext) {
                 .find(|handle| *handle != main)
                 .expect("preview window should open")
         });
-        let actual_main_bounds = cx
-            .update_window(main, |_, window, _| window.bounds())
+        let (actual_main_bounds, expected_top) = cx
+            .update_window(main, |_, window, cx| {
+                let bounds = window.bounds();
+                let row = board.read(cx).list_state.bounds_for_item(0).unwrap();
+                (bounds, bounds.top() + row.top())
+            })
             .unwrap();
         cx.update_window(preview, |_, window, _| {
             let preview_bounds = window.bounds();
-            assert_eq!(preview_bounds.top(), actual_main_bounds.top());
+            assert_eq!(preview_bounds.top(), expected_top);
             if expect_right_side {
                 assert!(preview_bounds.left() > actual_main_bounds.right());
             } else {
@@ -430,6 +460,66 @@ fn test_preview_follows_main_window_origin(cx: &mut TestAppContext) {
             .unwrap();
         cx.run_until_parked();
     }
+}
+
+#[gpui_kit::test]
+fn test_hover_preview_pending_open_is_cancelled_on_dismiss_or_deactivation(
+    cx: &mut TestAppContext,
+) {
+    for deactivate in [false, true] {
+        let mut settings = Settings::default();
+        settings.preview.hover_preview_enabled = true;
+        let (main, board, _) = open_board_with_settings(cx, vec![record(1)], settings);
+        cx.update_window(main, |_, window, cx| {
+            window.activate_window();
+            board.update(cx, |board, _| board.pinned = true);
+            window.hover(("record-content", 1_u64), cx);
+        })
+        .unwrap();
+        cx.executor().advance_clock(Duration::from_millis(100));
+        cx.run_until_parked();
+        if deactivate {
+            gpui_kit::VisualTestContext::from_window(main, cx).deactivate_window();
+        } else {
+            cx.update_window(main, |_, window, cx| window.press("escape", cx))
+                .unwrap();
+        }
+        cx.run_until_parked();
+        cx.executor().advance_clock(Duration::from_millis(400));
+        cx.run_until_parked();
+        cx.update(|cx| assert_eq!(cx.windows(), vec![main], "deactivate={deactivate}"));
+        cx.update_window(main, |_, window, _| {
+            if deactivate {
+                assert!(
+                    !window.is_window_active(),
+                    "hover must not reactivate the parent"
+                );
+            }
+            window.remove_window();
+        })
+        .unwrap();
+        cx.run_until_parked();
+    }
+}
+
+#[gpui_kit::test]
+#[expect(
+    clippy::future_not_send,
+    reason = "GPUI UI tests run on the foreground executor"
+)]
+async fn test_hover_preview_toolbar_click_preserves_escape_dismissal(cx: &mut TestAppContext) {
+    let (_fixture, main, preview) = open_image_preview(cx, true).await;
+    cx.update_window(main, |_, window, _| assert!(window.is_window_active()))
+        .unwrap();
+    cx.update_window(preview, |_, window, cx| {
+        window.activate_window();
+        window.click("preview-original", cx);
+        assert_eq!(window.find("preview-scale").label(), Some("100%"));
+        window.press("escape", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows(), vec![main]));
 }
 
 #[gpui_kit::test]
@@ -666,8 +756,11 @@ fn test_space_preview_aligns_vertically_with_selected_item_in_list_mode(cx: &mut
         vec![record(1), record(2), record(3), record(4), record(5)],
     );
     cx.simulate_window_resize(main, size(px(400.), px(550.)));
-    let main_top = cx
-        .update_window(main, |_, window, _| window.bounds().top())
+    let expected_top = cx
+        .update_window(main, |_, window, cx| {
+            window.render_frame(cx);
+            window.bounds().top() + board.read(cx).list_state.bounds_for_item(3).unwrap().top()
+        })
         .unwrap();
 
     cx.update_window(main, |_, window, cx| {
@@ -689,7 +782,7 @@ fn test_space_preview_aligns_vertically_with_selected_item_in_list_mode(cx: &mut
             .unwrap()
     });
     cx.update_window(preview, |_, window, _| {
-        assert!(window.bounds().top() > main_top);
+        assert_eq!(window.bounds().top(), expected_top);
     })
     .unwrap();
 
