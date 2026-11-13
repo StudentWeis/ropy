@@ -272,24 +272,7 @@ impl Global for KeybindingStatus {}
 
 pub(crate) fn keybinding_error_message(cx: &App) -> Option<SharedString> {
     let error = cx.try_global::<KeybindingStatus>()?.0.as_ref()?;
-    let detail = match error {
-        KeybindingError::UnknownAction { action } => {
-            t!("keybindings_unknown_action", action = action)
-        }
-        KeybindingError::InvalidKey { action, key } => {
-            t!("keybindings_invalid_key", action = action, key = key)
-        }
-        KeybindingError::ReservedKey { action, key } => {
-            t!("keybindings_reserved_key", action = action, key = key)
-        }
-        KeybindingError::Conflict { key, first, second } => t!(
-            "keybindings_conflict",
-            key = key,
-            first = first,
-            second = second
-        ),
-    };
-    Some(t!("keybindings_error", error = detail).into())
+    Some(t!("keybindings_error", error = error.message()).into())
 }
 
 fn supported_key(key: &str) -> bool {

@@ -110,8 +110,10 @@ class BenchmarkTests(unittest.TestCase):
             with patch.object(bench, "ROOT", project), patch.dict(os.environ, {"CARGO_HOME": str(home)}, clear=True):
                 before = bench.build_provenance("host: x86_64-apple-darwin\n")
                 self.assertEqual(before["effective_target"], "aarch64-apple-darwin")
-                self.assertEqual([item["path"] for item in before["cargo_config"]],
-                                 [str(home / "config.toml"), str(config)])
+                # Compare resolved paths: macOS temp directories live behind a
+                # /var -> /private/var symlink while provenance records real paths.
+                self.assertEqual([Path(item["path"]).resolve() for item in before["cargo_config"]],
+                                 [(home / "config.toml").resolve(), config.resolve()])
                 config.write_text(config.read_text().replace("opt-level=2", "opt-level=3"))
                 after = bench.build_provenance("host: x86_64-apple-darwin\n")
                 self.assertNotEqual(before, after)

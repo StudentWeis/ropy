@@ -252,14 +252,6 @@ pub enum ConfirmMode {
     PasteImmediately,
 }
 
-impl ConfirmMode {
-    /// Whether confirmation must await a successful native clipboard write.
-    #[must_use]
-    pub const fn requires_clipboard_completion(self) -> bool {
-        matches!(self, Self::CopyToClipboard | Self::PasteImmediately)
-    }
-}
-
 /// Persisted history layout preference.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -837,12 +829,6 @@ max_history_records = 100
     }
 
     // ── ConfirmMode Tests ─────────────────────────────────────────
-
-    #[test]
-    fn test_confirm_mode_requires_clipboard_completion() {
-        assert!(ConfirmMode::CopyToClipboard.requires_clipboard_completion());
-        assert!(ConfirmMode::PasteImmediately.requires_clipboard_completion());
-    }
 
     #[test]
     fn test_confirm_mode_default() {

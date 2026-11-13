@@ -9,6 +9,7 @@ use crate::repository::{
         memory::{MemoryBackend, memory_backend_factory},
         redb::redb_backend_factory,
     },
+    cleanup,
     repo::ClipboardRepository,
     test_helpers::{
         create_test_repo, create_test_repo_with, load_display_records, save_numbered_records,
@@ -135,7 +136,7 @@ fn test_cleanup_old_records_equal_to_total() {
 #[case(50)]
 fn test_cleanup_old_records_if_needed_at_threshold_preserves_records(#[case] keep_count: usize) {
     let (_temp_dir, repo) = create_test_repo();
-    let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
+    let threshold = keep_count + cleanup::cleanup_buffer_record_count(keep_count);
 
     save_numbered_records(&repo, threshold);
 
@@ -154,7 +155,7 @@ fn test_cleanup_old_records_if_needed_above_threshold_trims_to_keep_count(
     #[case] keep_count: usize,
 ) {
     let (_temp_dir, repo) = create_test_repo();
-    let threshold = keep_count + ClipboardRepository::cleanup_buffer_record_count(keep_count);
+    let threshold = keep_count + cleanup::cleanup_buffer_record_count(keep_count);
 
     save_numbered_records(&repo, threshold + 1);
 
