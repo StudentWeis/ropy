@@ -168,7 +168,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
 impl<B: StorageBackend> Drop for ClipboardRepository<B> {
     fn drop(&mut self) {
-        self.flush().ok();
+        let _ = self.flush();
     }
 }
 
@@ -482,7 +482,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             .get_by_id(id)?
             .ok_or_else(|| RepositoryError::Query("record not found".to_string()))?;
 
-        record.pinned = !record.pinned;
+        record.pinned.toggle();
 
         let key = id.to_be_bytes();
         self.put_indexed_record(&key, &record)?;

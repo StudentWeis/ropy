@@ -152,7 +152,7 @@ fn activation_directory(
     // Preserve existing runtime endpoints, including those of a running instance.
     // Hash display names so they cannot introduce path components.
     let session = seahash::hash(display.as_encoded_bytes());
-    if let Some(runtime) = runtime.filter(|path| !path.as_os_str().is_empty()) {
+    if let Some(runtime) = runtime.filter(|path| !path.is_empty()) {
         let directory = runtime.join(format!("ropy-{session:016x}"));
         std::fs::create_dir_all(&directory)?;
         return Ok(directory);

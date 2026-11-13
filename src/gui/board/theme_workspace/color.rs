@@ -176,7 +176,7 @@ impl Render for ColorEditor {
 
 fn parse_hex(text: &str) -> Option<u32> {
     let text = text.trim();
-    let text = text.strip_prefix('#').unwrap_or(text);
+    let text = text.trim_prefix('#');
     (text.len() == 6 && text.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .then(|| u32::from_str_radix(text, 16).ok())
         .flatten()

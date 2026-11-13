@@ -59,7 +59,7 @@ fn build_masonry_layout(
                     .partial_cmp(right_height)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map_or(0, |(column, _)| column);
+            .map_or_default(|(column, _)| column);
 
         let top = column_heights[column];
         #[expect(

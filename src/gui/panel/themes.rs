@@ -241,7 +241,7 @@ fn render_editor(draft: &ThemeDraft, cx: &Context<'_, RopyBoard>) -> impl IntoEl
                         .as_mut()
                         .and_then(|workspace| workspace.draft.as_mut())
                     {
-                        draft.advanced = !draft.advanced;
+                        draft.advanced.toggle();
                     }
                     cx.notify();
                 })),
