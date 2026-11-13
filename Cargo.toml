@@ -2,7 +2,7 @@
 name = "ropy"
 version = "0.6.2"
 edition = "2024"
-rust-version = "1.99"
+rust-version.workspace = true
 description = "A clipboard manager built with Rust and GPUI."
 authors = ["Student Wei <studentweis@gmail.com>"]
 repository = "https://github.com/StudentWeis/ropy"
@@ -129,6 +129,12 @@ unused_import_braces = "deny"
 unused_lifetimes = "deny"
 unused_macro_rules = "deny"
 
+[workspace.lints.cargo]
+unused_dependencies = "deny"
+unused_workspace_dependencies = "deny"
+missing_lints_inheritance = "deny"
+unknown_lints = "deny"
+
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
@@ -150,6 +156,7 @@ print_stderr = "deny"
 undocumented_unsafe_blocks = "deny"
 mod_module_files = "deny"
 empty_drop = "deny"
+unused_result_ok = "deny"
 
 [profile.release]
 lto = "fat"
@@ -191,6 +198,9 @@ long_description = "A clipboard manager built with Rust and GPUI."
 members = ["crates/ropy-core"]
 default-members = ["."]
 resolver = "3"
+
+[workspace.package]
+rust-version = "1.100"
 
 [workspace.dependencies]
 serde = { version = "1.0.229", features = ["derive"] }

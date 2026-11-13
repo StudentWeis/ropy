@@ -409,16 +409,15 @@ impl RopyBoard {
     /// Favorites toggle is intentionally orthogonal to the content filter
     /// so users can scope to e.g. "favorited images only".
     pub(crate) const fn toggle_favorites_only(&mut self) {
-        self.filter_state.favorites_only = !self.filter_state.favorites_only;
+        self.filter_state.favorites_only.toggle();
     }
 
     pub(crate) const fn toggle_case_sensitive_search(&mut self) {
-        self.filter_state.search_options.case_sensitive =
-            !self.filter_state.search_options.case_sensitive;
+        self.filter_state.search_options.case_sensitive.toggle();
     }
 
     pub(crate) const fn toggle_whole_word_search(&mut self) {
-        self.filter_state.search_options.whole_word = !self.filter_state.search_options.whole_word;
+        self.filter_state.search_options.whole_word.toggle();
     }
 
     pub(super) fn get_filtered_record_indices(&self, query: &str) -> Vec<usize> {
