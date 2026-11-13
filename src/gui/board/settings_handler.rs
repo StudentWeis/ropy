@@ -185,6 +185,9 @@ impl RopyBoard {
         }
 
         self.settings_editor.panel_state.hover_preview_enabled = enabled;
+        if !enabled {
+            self.cancel_hover_preview(cx);
+        }
         Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();
     }
@@ -208,8 +211,8 @@ impl RopyBoard {
         }
 
         self.settings_editor.panel_state.space_preview_enabled = enabled;
-        if !enabled {
-            self.ui_state.hide_preview();
+        if !enabled && self.is_hold_preview_active() {
+            self.close_preview(cx);
         }
         Self::notify_settings_success(window, cx, t!("settings_save_success"));
         cx.notify();

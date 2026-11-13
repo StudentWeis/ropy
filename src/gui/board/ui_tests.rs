@@ -21,6 +21,7 @@ use crate::{
     repository::{ClipboardRecord, ClipboardRepository},
 };
 
+mod preview;
 mod shortcut_editor;
 mod user_themes;
 
@@ -52,7 +53,7 @@ fn test_history_buttons_keyboard_activation_does_not_request_copy(cx: &mut TestA
             focus_button(window, cx, "search-case-sensitive-btn");
             window.press(key, cx);
             assert!(board.read(cx).filter_state.search_options.case_sensitive);
-            assert!(!board.read(cx).ui_state.preview_visible());
+            assert!(board.read(cx).preview_window.is_none());
             assert!(copies.is_empty(), "a focused command must not copy history");
             window.click("search-case-sensitive-btn", cx);
             assert!(!board.read(cx).filter_state.search_options.case_sensitive);
@@ -647,7 +648,7 @@ fn test_board_navigation_aliases_preserve_search_input(cx: &mut TestAppContext) 
             "jdkflhpq12345 /"
         );
         assert!(!board.read(cx).ui_state.delete_confirm_visible());
-        assert!(!board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_none());
         assert!(board.read(cx).pinned);
         assert_eq!(board.read(cx).active_panel, ActivePanel::ClipboardList);
     })
@@ -863,7 +864,7 @@ fn test_board_space_preview_release_after_search_focus_hides_preview(cx: &mut Te
             cx,
         );
         window.render_frame(cx);
-        assert!(board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_some());
         window.press("/", cx);
         assert!(
             board
@@ -873,7 +874,7 @@ fn test_board_space_preview_release_after_search_focus_hides_preview(cx: &mut Te
                 .is_focused(window)
         );
         window.dispatch_event(KeyUpEvent { keystroke }.to_platform_input(), cx);
-        assert!(!board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_none());
     })
     .unwrap();
 }
@@ -900,7 +901,7 @@ fn test_board_preview_release_follows_configured_binding(cx: &mut TestAppContext
             .to_platform_input(),
             cx,
         );
-        assert!(board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_some());
         window.focus(&board.read(cx).search_input.focus_handle(cx), cx);
         window.render_frame(cx);
         for (key, visible) in [("space", true), ("shift-v", false)] {
@@ -911,7 +912,7 @@ fn test_board_preview_release_follows_configured_binding(cx: &mut TestAppContext
                 .to_platform_input(),
                 cx,
             );
-            assert_eq!(board.read(cx).ui_state.preview_visible(), visible, "{key}");
+            assert_eq!(board.read(cx).preview_window.is_some(), visible, "{key}");
         }
     })
     .unwrap();
@@ -935,14 +936,16 @@ fn test_board_space_preview_deactivation_hides_preview_in_pinned_window(cx: &mut
             .to_platform_input(),
             cx,
         );
-        assert!(board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_some());
     })
     .unwrap();
     cx.run_until_parked();
     gpui_kit::VisualTestContext::from_window(handle, cx).deactivate_window();
     cx.run_until_parked();
+    cx.executor().advance_clock(Duration::from_millis(100));
+    cx.run_until_parked();
     cx.read(|cx| {
-        assert!(!board.read(cx).ui_state.preview_visible());
+        assert!(board.read(cx).preview_window.is_none());
         assert!(board.read(cx).pinned);
     });
 }

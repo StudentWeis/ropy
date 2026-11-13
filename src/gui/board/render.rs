@@ -28,7 +28,7 @@ impl Render for RopyBoard {
             .on_action(cx.listener(Self::on_hide_action))
             .on_action(cx.listener(Self::on_quit_action))
             .on_action(cx.listener(Self::on_active_action))
-            .on_key_up(cx.listener(Self::on_key_up))
+            .capture_key_up(cx.listener(Self::on_key_up))
             .size_full()
             .px_4()
             .pb_4()

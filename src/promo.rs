@@ -39,6 +39,7 @@ pub(crate) enum PromoCommand {
         theme: ThemeId,
         language: Language,
         ready: PathBuf,
+        preview: bool,
     },
     Compose {
         output: PathBuf,
@@ -71,7 +72,7 @@ pub(crate) enum PromoError {
 impl PromoCommand {
     pub(crate) fn parse(args: &[OsString]) -> Result<Option<Self>, PromoError> {
         match args.first().and_then(|arg| arg.to_str()) {
-            Some("--promo") => {
+            Some(mode @ ("--promo" | "--promo-preview")) => {
                 let [_, theme, language, ready] = args else {
                     return Err(PromoError::Arguments);
                 };
@@ -86,6 +87,7 @@ impl PromoCommand {
                     theme,
                     language,
                     ready: ready.into(),
+                    preview: mode == "--promo-preview",
                 }))
             }
             Some("--compose-promo") => {
@@ -107,7 +109,8 @@ impl PromoCommand {
                 theme,
                 language,
                 ready,
-            } => capture(theme, language, ready),
+                preview,
+            } => capture(theme, language, ready, preview),
             Self::Compose { output, inputs } => compose(&output, &inputs),
         }
     }
@@ -165,14 +168,49 @@ struct PromoView {
 }
 
 impl Render for PromoView {
-    fn render(&mut self, _: &mut Window, _: &mut Context<'_, Self>) -> impl IntoElement {
-        // The real board stays behind an invisible input shield: no button, hover,
-        // scroll or keyboard path can persist settings or access OS services.
+    fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        // Keep all main-window controls shielded, including in preview inspection
+        // mode. Only transient selection and preview commands may pass through.
         div()
             .size_full()
             .relative()
-            .capture_key_down(|_, _, cx| cx.stop_propagation())
-            .capture_key_up(|_, _, cx| cx.stop_propagation())
+            .capture_key_down(
+                cx.listener(|this, event: &gpui_kit::KeyDownEvent, window, cx| {
+                    if GlobalSettings::read(cx, |s| s.preview.space_preview_enabled) {
+                        // Native key events may reach capture before key binding
+                        // dispatch; leave Space available to the preview action.
+                        if event.keystroke.key == "space" {
+                            return;
+                        }
+                        this.board.update(cx, |board, cx| {
+                            use crate::gui::board::actions::Hide;
+                            match event.keystroke.key.as_str() {
+                                "escape" => board.on_hide_action(&Hide, window, cx),
+                                "up" => {
+                                    board.selected_index = board.selected_index.saturating_sub(1);
+                                }
+                                "down" => {
+                                    board.selected_index = (board.selected_index + 1)
+                                        .min(board.filtered_record_indices.len().saturating_sub(1));
+                                }
+                                _ => {}
+                            }
+                            board.reveal_selected_record();
+                            cx.notify();
+                        });
+                    }
+                    cx.stop_propagation();
+                }),
+            )
+            .capture_key_up(
+                cx.listener(|this, event: &gpui_kit::KeyUpEvent, window, cx| {
+                    if GlobalSettings::read(cx, |s| s.preview.space_preview_enabled) {
+                        this.board
+                            .update(cx, |board, cx| board.on_key_up(event, window, cx));
+                    }
+                    cx.stop_propagation();
+                }),
+            )
             .child(self.board.clone())
             .child(
                 div()
@@ -180,7 +218,11 @@ impl Render for PromoView {
                     .absolute()
                     .inset_0()
                     .occlude()
-                    .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
+                    .on_any_mouse_down(cx.listener(|this, _, window, cx| {
+                        let focus = this.board.read(cx).focus_handle.clone();
+                        window.focus(&focus, cx);
+                        cx.stop_propagation();
+                    }))
                     .capture_any_mouse_up(|_, _, cx| cx.stop_propagation())
                     .on_scroll(|_, _, cx| cx.stop_propagation()),
             )
@@ -227,6 +269,14 @@ fn open_promo_window(
     let repository =
         ClipboardRepository::open(&fixture.join("clipboard.redb"), fixture.join("images"))?;
     cx.set_global(GlobalRepository::new(Some(Arc::new(repository))));
+    // Only bind inspection: the shield must never expose history mutations.
+    if GlobalSettings::read(cx, |s| s.preview.space_preview_enabled) {
+        cx.bind_keys([gpui_kit::KeyBinding::new(
+            "space",
+            crate::gui::board::actions::PreviewSelection,
+            Some("RopyHistory"),
+        )]);
+    }
     let bounds = Bounds::centered(None, crate::gui::default_window_size(), cx);
     let result = gpui_kit::open_window(
         WindowOptions {
@@ -264,7 +314,12 @@ fn open_promo_window(
     Ok(result)
 }
 
-fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), PromoError> {
+fn capture(
+    theme: ThemeId,
+    language: Language,
+    ready: PathBuf,
+    preview: bool,
+) -> Result<(), PromoError> {
     let fixture = tempfile::tempdir_in(
         ready
             .parent()
@@ -277,8 +332,14 @@ fn capture(theme: ThemeId, language: Language, ready: PathBuf) -> Result<(), Pro
     let asset = Assets::get("logo.png")
         .ok_or_else(|| PromoError::Logo("bundled logo is missing".into()))?;
     std::fs::write(&logo, asset.data)?;
-    let settings = demo_settings(theme, language);
-    let records = demo_records(&logo, &settings.language)?;
+    let mut settings = demo_settings(theme, language);
+    settings.preview.space_preview_enabled = preview;
+    let mut records = demo_records(&logo, &settings.language)?;
+    if preview {
+        records[0].content = std::iter::repeat_n(records[0].content.clone(), 1000)
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
     let failure = CaptureFailure::default();
     let failure_for_app = failure.clone();
     let platform = gpui_kit::platform::current_platform(false);

@@ -7,7 +7,7 @@ mod delete_confirm;
 pub(super) mod filtering;
 mod header;
 mod hotkey_record_handler;
-mod preview;
+mod preview_window;
 mod record_ops;
 mod records_list;
 mod render;
@@ -89,13 +89,6 @@ pub(crate) struct FilterState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum PreviewState {
-    #[default]
-    Hidden,
-    Visible,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum DeletionState {
     #[default]
     Idle,
@@ -118,7 +111,6 @@ pub(crate) enum DeleteConfirmState {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct UiState {
-    pub(crate) preview: PreviewState,
     pub(crate) deletion: DeletionState,
     pub(crate) clear_confirm: ClearConfirmState,
     pub(crate) delete_confirm: DeleteConfirmState,
@@ -140,36 +132,6 @@ impl UiState {
     pub(crate) const fn any_overlay_visible(self) -> bool {
         self.clear_confirm_visible() || self.delete_confirm_visible()
     }
-
-    pub(crate) const fn preview_visible(self) -> bool {
-        matches!(self.preview, PreviewState::Visible)
-    }
-
-    pub(crate) const fn show_preview(&mut self) -> bool {
-        if self.preview_visible() {
-            return false;
-        }
-
-        self.preview = PreviewState::Visible;
-        true
-    }
-
-    pub(crate) const fn show_space_preview(&mut self, enabled: bool) -> bool {
-        if !enabled {
-            return false;
-        }
-
-        self.show_preview()
-    }
-
-    pub(crate) const fn hide_preview(&mut self) -> bool {
-        if !self.preview_visible() {
-            return false;
-        }
-
-        self.preview = PreviewState::Hidden;
-        true
-    }
 }
 
 /// `RopyBoard` Main Window Component
@@ -188,6 +150,10 @@ pub(crate) struct RopyBoard {
     pub(crate) grid_scroll_handle: ScrollHandle,
     grid_layout: records_list::MasonryState,
     pub(crate) ui_state: UiState,
+    preview_window: Option<preview_window::PreviewSession>,
+    hover_preview: preview_window::HoverPreviewState,
+    // Remains held after Escape so auto-repeat cannot reopen the preview.
+    preview_key: preview_window::PreviewKeyState,
     pub(crate) selected_index: usize,
     pub(super) copy_in_progress: bool,
     pub(super) copy_generation: u64,
@@ -394,6 +360,8 @@ impl RopyBoard {
             self.active_panel = ActivePanel::ClipboardList;
         }
         self.cancel_shortcut_recording(cx);
+        self.dismiss_preview(cx);
+        self.preview_key = preview_window::PreviewKeyState::Released;
         self.ui_state = UiState::default();
         self.pending_delete_id = None;
         self.sync_filtered_records(cx);
@@ -413,11 +381,15 @@ impl RopyBoard {
                 }
             }
             if !crate::gui::window::has_native_focus(window) {
-                this.cancel_shortcut_recording(cx);
-                // A key released in another application will not reach this window.
-                if this.ui_state.hide_preview() {
-                    cx.notify();
+                if this.preview_window.is_some() {
+                    // Native activation of the preview can follow main deactivation.
+                    // Reconcile after native focus settles, not between the events.
+                    this.defer_preview_focus_check(window, cx);
+                    return;
                 }
+                this.cancel_hover_preview(cx);
+                this.preview_key = preview_window::PreviewKeyState::Released;
+                this.cancel_shortcut_recording(cx);
                 // When the window loses focus, hide the window (unless pinned).
                 if Self::should_auto_hide_on_focus_out(this.pinned) && !window.has_active_dialog(cx)
                 {
@@ -522,6 +494,9 @@ impl RopyBoard {
             grid_scroll_handle: ScrollHandle::new(),
             grid_layout: records_list::MasonryState::default(),
             ui_state: UiState::default(),
+            preview_window: None,
+            hover_preview: preview_window::HoverPreviewState::default(),
+            preview_key: preview_window::PreviewKeyState::Released,
             selected_index: 0,
             last_copy,
             list_state,

@@ -87,6 +87,45 @@ fn test_promo_input_shield_prevents_settings_and_copy(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn test_preview_probe_allows_inspection_but_shields_main_controls(cx: &mut TestAppContext) {
+    use gpui_kit::test::TestEventExt;
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        let mut settings = demo_settings(ThemeId::default(), Language::new("en"));
+        settings.preview.space_preview_enabled = true;
+        cx.set_global(GlobalSettings::new(settings));
+    });
+    let records = demo_records(Path::new("missing-logo.png"), &Language::default()).unwrap();
+    let fixture = tempfile::tempdir().unwrap();
+    let (main, view) = cx.update(|cx| open_promo_window(records, fixture.path(), cx).unwrap());
+    cx.update_window(main, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-button", cx);
+        window.key_down("space", false, cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(cx.windows().len(), 2));
+    cx.update_window(main, |_, window, cx| {
+        window.key_up("space", cx);
+        window.click("settings-button", cx);
+        window.press("enter", cx);
+        window.press("d", cx);
+        assert_eq!(
+            view.read(cx).board.read(cx).active_panel,
+            ActivePanel::ClipboardList
+        );
+        assert_eq!(
+            view.read(cx).board.read(cx).filtered_record_indices.len(),
+            4
+        );
+        assert!(view.read(cx).board.read(cx).copy_tx.is_closed());
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| assert_eq!(cx.windows(), vec![main]));
+}
+
+#[gpui_kit::test]
 fn test_record_action_labels_follow_state_and_locale(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
     for (locale, labels) in [
@@ -220,10 +259,12 @@ fn test_promo_arguments_valid_capture_accepted(#[case] theme: &str, #[case] lang
         theme: actual,
         language: locale,
         ready,
+        preview,
     }) = PromoCommand::parse(&args).unwrap()
     else {
         unreachable!()
     };
+    assert!(!preview);
     assert_eq!(actual.code(), theme);
     assert_eq!(locale.code(), language);
     assert_eq!(ready, Path::new("ready"));

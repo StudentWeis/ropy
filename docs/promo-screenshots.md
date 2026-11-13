@@ -32,6 +32,12 @@ Each window uses the application's default 400×550 logical size and list layout
 
 The composite preserves opaque screenshot pixels. Borders and shadows follow the screenshot's alpha silhouette, including rounded corners; the canvas remains transparent beyond those decorations. Original captures are left unchanged. Blank or differently sized images are rejected. Fonts and rasterization may vary across macOS versions or display scales, so this is repeatable content and geometry, not a cross-machine pixel hash guarantee.
 
+## Preview interaction probe
+
+To inspect the production preview without starting clipboard, hotkey, tray, update or autostart services, build with `cargo build --locked`, then run `target/debug/ropy --promo-preview ropy-light en /tmp/ropy-preview-ready`. The ready file must have an existing parent directory. This mode uses disposable storage and demo records, including a 1,000-line text record. Use Up/Down to select a record, hold Space to preview, and release Space or press Escape to close. Image previews support wheel zoom, left-button drag, Fit and Original size. Main-window buttons and all non-preview commands remain shielded. Stop this process with Ctrl+C when finished.
+
+This probe verifies native preview rendering and focus only; it does not replace isolated-account clipboard/hotkey E2E testing. The ordinary `--promo` mode remains noninteractive.
+
 ## Failure diagnosis and internal entry points
 
 Check the run's `capture.log` after a failure. Fix permissions, lock/sleep state or the reported render error before retrying; a retry creates a separate run rather than replacing previous output.

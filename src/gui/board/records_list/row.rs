@@ -1,13 +1,14 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use gpui_kit::{
-    AnyElement, AnyView, App, Context, Window, anchored,
+    AnyElement, App, Context, Window,
+    base::TestSupportExt,
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonCustomVariant, ButtonVariants},
         h_flex, v_flex,
     },
-    deferred, div, img,
+    div, img,
     prelude::{
         FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
         Styled,
@@ -20,16 +21,13 @@ use super::{
     super::{
         RopyBoard,
         color::{ClipboardColor, parse_clipboard_color},
-        preview,
         record_ops::HistoryMutationState,
     },
     metrics::{
         GRID_CARD_MAX_HEIGHT, GRID_CARD_MIN_HEIGHT, GRID_COLOR_SWATCH_GAP,
         GRID_COLOR_SWATCH_HEIGHT, GRID_CONTENT_PREVIEW_LIMIT, GRID_CONTENT_PREVIEW_MAX_LINES,
         GRID_IMAGE_MAX_HEIGHT, LIST_COLOR_SWATCH_SIZE_PX, LIST_CONTENT_PREVIEW_LIMIT,
-        LIST_CONTENT_PREVIEW_MAX_LINES, TOOLTIP_CONTENT_PREVIEW_LIMIT,
-        TOOLTIP_CONTENT_PREVIEW_MAX_LINES, TruncateOptions, file_display_name,
-        file_preview_content, truncate,
+        LIST_CONTENT_PREVIEW_MAX_LINES, TruncateOptions, file_display_name, truncate,
     },
 };
 use crate::{
@@ -202,40 +200,6 @@ fn render_file_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Di
         .child(Icon::empty().path("icons/filter-files.svg").size(px(12.0)))
 }
 
-struct PreviewData {
-    content_type: ContentType,
-    record_content: String,
-}
-
-impl PreviewData {
-    fn new(record: &ClipboardRecord) -> Self {
-        let truncate_preview = |content: &str| {
-            truncate(
-                content,
-                TOOLTIP_CONTENT_PREVIEW_LIMIT,
-                TruncateOptions::with_max_lines(TOOLTIP_CONTENT_PREVIEW_MAX_LINES),
-            )
-        };
-        let record_content = match record.content_type {
-            ContentType::Image => record.content.clone(),
-            ContentType::FilePath => truncate_preview(&file_preview_content(&record.content)),
-            ContentType::Text | ContentType::RichText => truncate_preview(&record.content),
-        };
-        Self {
-            content_type: record.content_type.clone(),
-            record_content,
-        }
-    }
-
-    fn build(&self, window: &Window, cx: &mut App) -> AnyView {
-        if self.content_type == ContentType::Image {
-            preview::image_tooltip(&self.record_content, window, cx)
-        } else {
-            preview::simple_tooltip(&self.record_content, window, cx)
-        }
-    }
-}
-
 struct ItemStyle {
     selected_background: gpui_kit::Hsla,
     normal_background: gpui_kit::Hsla,
@@ -271,12 +235,6 @@ pub(super) enum SelectionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PreviewVisibility {
-    Visible,
-    Hidden,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum HoverPreviewState {
     Enabled,
     Disabled,
@@ -286,7 +244,6 @@ pub(super) enum HoverPreviewState {
 pub(super) struct RenderFlags {
     favorite: FavoriteState,
     selection: SelectionState,
-    preview: PreviewVisibility,
     hover_preview: HoverPreviewState,
 }
 
@@ -297,10 +254,6 @@ impl RenderFlags {
 
     const fn is_selected(self) -> bool {
         matches!(self.selection, SelectionState::Selected)
-    }
-
-    const fn preview_visible(self) -> bool {
-        matches!(self.preview, PreviewVisibility::Visible)
     }
 
     const fn hover_preview_enabled(self) -> bool {
@@ -324,7 +277,6 @@ pub(super) struct RecordsListState {
     favorite_ids: Arc<HashSet<u64>>,
     selected_index: usize,
     layout_mode: LayoutMode,
-    show_preview: bool,
     hover_preview_enabled: bool,
     overlay_visible: bool,
     history_mutation: HistoryMutationState,
@@ -340,20 +292,20 @@ impl RecordsListState {
             favorite_ids: board.favorite_ids.clone(),
             selected_index: board.selected_index,
             layout_mode: board.layout_mode,
-            show_preview: board.ui_state.preview_visible(),
             hover_preview_enabled: board.settings_editor.panel_state.hover_preview_enabled
-                && !overlay_visible,
+                && !overlay_visible
+                && !board.is_hold_preview_active(),
             overlay_visible,
             history_mutation: board.history_mutation,
             view: context.weak_entity(),
         }
     }
 
-    pub(super) fn render_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+    pub(super) fn render_row(&self, index: usize, window: &Window, cx: &App) -> AnyElement {
         self.render_list_row(index, window, cx)
     }
 
-    fn render_list_row(&self, index: usize, window: &Window, cx: &mut App) -> AnyElement {
+    fn render_list_row(&self, index: usize, window: &Window, cx: &App) -> AnyElement {
         let records = read_or_recover(&self.records);
         let Some(record_index) = self.filtered_record_indices.get(index).copied() else {
             return div().into_any_element();
@@ -385,11 +337,6 @@ impl RecordsListState {
                 } else {
                     SelectionState::Unselected
                 },
-                preview: if self.show_preview {
-                    PreviewVisibility::Visible
-                } else {
-                    PreviewVisibility::Hidden
-                },
                 hover_preview: if self.hover_preview_enabled {
                     HoverPreviewState::Enabled
                 } else {
@@ -409,11 +356,17 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
     let mut content = div()
         .flex_1()
         .min_w_0()
-        .id(("record-content", ctx.record.id));
+        .id(("record-content", ctx.record.id))
+        .test_support();
 
-    if !ctx.flags.preview_visible() && ctx.flags.hover_preview_enabled() {
-        let preview_data = PreviewData::new(ctx.record);
-        content = content.tooltip(move |window, cx| preview_data.build(window, cx));
+    if ctx.flags.hover_preview_enabled() {
+        let board = ctx.view.clone();
+        let record_id = ctx.record.id;
+        content = content.on_hover(move |hovered, window, cx| {
+            let _ = board.update(cx, |board, cx| {
+                board.on_record_hover(record_id, *hovered, window, cx);
+            });
+        });
     }
 
     if compact {
@@ -439,10 +392,6 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
     }
 
     content.into_any_element()
-}
-
-const fn should_render_selected_preview(flags: RenderFlags) -> bool {
-    flags.is_selected() && flags.preview_visible()
 }
 
 fn render_record_meta(
@@ -636,21 +585,6 @@ fn render_record_delete_button(ctx: &RenderContext<'_>, cx: &App) -> Button {
         })
 }
 
-fn render_selected_preview(
-    preview_data: &PreviewData,
-    window: &Window,
-    cx: &mut App,
-) -> impl IntoElement {
-    deferred(
-        div().absolute().top_full().left_0().child(
-            anchored()
-                .snap_to_window()
-                .child(div().mt_1().child(preview_data.build(window, cx))),
-        ),
-    )
-    .with_priority(1)
-}
-
 fn decorate_record_card(
     card: gpui_kit::Div,
     ctx: &RenderContext<'_>,
@@ -697,14 +631,14 @@ fn decorate_record_card(
         .into_any_element()
 }
 
-fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &mut App) -> AnyElement {
+fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &App) -> AnyElement {
     render_list_item_with_grid_height(ctx, window, cx, None)
 }
 
 pub(super) fn render_list_item_with_grid_height(
     ctx: &RenderContext<'_>,
-    window: &Window,
-    cx: &mut App,
+    _window: &Window,
+    cx: &App,
     grid_height_override: Option<f32>,
 ) -> AnyElement {
     let compact = ctx.layout_mode == LayoutMode::Grid;
@@ -747,107 +681,11 @@ pub(super) fn render_list_item_with_grid_height(
         )
     };
 
-    let mut item = if compact {
+    let item = if compact {
         div().relative().min_w_0().child(card)
     } else {
         div().pb_2().relative().child(card)
     };
 
-    if should_render_selected_preview(ctx.flags) {
-        item = item.child(render_selected_preview(
-            &PreviewData::new(ctx.record),
-            window,
-            cx,
-        ));
-    }
-
     item.into_any_element()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        FavoriteState, HoverPreviewState, PreviewVisibility, RenderFlags, SelectionState,
-        should_render_selected_preview,
-    };
-
-    const fn flags(
-        selection: SelectionState,
-        preview: PreviewVisibility,
-        hover_preview: HoverPreviewState,
-    ) -> RenderFlags {
-        RenderFlags {
-            favorite: FavoriteState::NotFavorite,
-            selection,
-            preview,
-            hover_preview,
-        }
-    }
-
-    #[test]
-    fn test_preview_data_long_text_retains_only_visible_unicode_prefix() {
-        let record = crate::repository::ClipboardRecord::new(
-            1,
-            "界".repeat(1_000_000),
-            chrono::Local::now(),
-            crate::repository::ContentType::Text,
-        );
-        let preview = super::PreviewData::new(&record);
-        let expected = format!("{}...", "界".repeat(500));
-        assert!(
-            preview.record_content == expected,
-            "preview retained {} bytes",
-            preview.record_content.len()
-        );
-    }
-
-    #[rstest::rstest]
-    #[case(crate::repository::ContentType::Text, "short\ntext", "short\ntext")]
-    #[case(
-        crate::repository::ContentType::RichText,
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11",
-        "1\n2\n3\n4\n5\n6\n7\n8\n9\n10..."
-    )]
-    #[case(
-        crate::repository::ContentType::FilePath,
-        r#"["file:///tmp/a%20b","/tmp/literal%20"]"#,
-        "/tmp/a b\n/tmp/literal%20"
-    )]
-    #[case(
-        crate::repository::ContentType::Image,
-        "/tmp/image.png",
-        "/tmp/image.png"
-    )]
-    fn test_preview_data_preserves_each_payload_presentation(
-        #[case] kind: crate::repository::ContentType,
-        #[case] content: &str,
-        #[case] expected: &str,
-    ) {
-        let record =
-            crate::repository::ClipboardRecord::new(1, content.into(), chrono::Local::now(), kind);
-        assert_eq!(super::PreviewData::new(&record).record_content, expected);
-    }
-
-    #[test]
-    fn selected_preview_remains_available_when_hover_preview_is_disabled() {
-        assert!(should_render_selected_preview(flags(
-            SelectionState::Selected,
-            PreviewVisibility::Visible,
-            HoverPreviewState::Disabled,
-        )));
-    }
-
-    #[test]
-    fn selected_preview_requires_selected_visible_state() {
-        assert!(!should_render_selected_preview(flags(
-            SelectionState::Unselected,
-            PreviewVisibility::Visible,
-            HoverPreviewState::Enabled,
-        )));
-        assert!(!should_render_selected_preview(flags(
-            SelectionState::Selected,
-            PreviewVisibility::Hidden,
-            HoverPreviewState::Enabled,
-        )));
-    }
 }

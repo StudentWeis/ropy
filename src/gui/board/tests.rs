@@ -20,7 +20,7 @@ use super::{
 use crate::{
     clipboard::ClipboardWriteError,
     config::{ConfirmMode, LayoutMode},
-    gui::board::{RopyBoard, UiState},
+    gui::board::RopyBoard,
     repository::{ClipboardRecord, ContentType},
     updater::models::UpdateStatus,
 };
@@ -140,27 +140,6 @@ fn test_update_manager_busy_or_staged_rejects_check_without_losing_state(
     manager.status = status.clone();
     assert!(!manager.begin_check());
     assert_eq!(manager.status, status);
-}
-
-#[test]
-fn test_preview_state_is_visible_only_while_space_is_held() {
-    let mut ui_state = UiState::default();
-
-    assert!(!ui_state.preview_visible());
-    assert!(ui_state.show_space_preview(true));
-    assert!(ui_state.preview_visible());
-    assert!(!ui_state.show_space_preview(true));
-    assert!(ui_state.hide_preview());
-    assert!(!ui_state.preview_visible());
-    assert!(!ui_state.hide_preview());
-}
-
-#[test]
-fn test_space_preview_setting_blocks_space_preview_when_disabled() {
-    let mut ui_state = UiState::default();
-
-    assert!(!ui_state.show_space_preview(false));
-    assert!(!ui_state.preview_visible());
 }
 
 #[test]
