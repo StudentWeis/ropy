@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-11-13
+
+### 🚀 Features
+- Add compact native hold-to-preview window (#337) by @StudentWeis in [#337](https://github.com/StudentWeis/ropy/pull/337)
+- Add ropy-bin AUR recipe (#322) by @StudentWeis in [#322](https://github.com/StudentWeis/ropy/pull/322)
+
+### 🐛 Bug Fixes
+- Resolve remaining audit findings (#341) by @StudentWeis in [#341](https://github.com/StudentWeis/ropy/pull/341)
+
+### 💼 Other
+- Align update compression and record size tradeoffs (#332) by @StudentWeis in [#332](https://github.com/StudentWeis/ropy/pull/332)
+
+### 🚜 Refactor
+- Upgrade rust to 1.100 and modernize stable idioms (#339) by @StudentWeis in [#339](https://github.com/StudentWeis/ropy/pull/339)
+- Upgrade gpui-kit to 0.9.1 (#334) by @StudentWeis in [#334](https://github.com/StudentWeis/ropy/pull/334)
+
+### 📚 Documentation
+- Organize guides and customize project-doc skill (#336) by @StudentWeis in [#336](https://github.com/StudentWeis/ropy/pull/336)
+
 ## [0.6.2] - 2026-11-07
 
 ### 🐛 Bug Fixes
