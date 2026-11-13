@@ -9,7 +9,7 @@
 
 - Follow all the best practices outlined in the clippy lint.
 - Define all error types with `thiserror` — avoid manual `impl Display/Error`.
-- Build new UI components using `gpui-component`.
+- Build new UI components with the `component` module from `gpui-kit` (`gpui_kit::component`). Do not add a direct `gpui-component` dependency; follow the `ropy-gpui` adapter for API differences.
 - Localize all user-facing strings — no hardcoded display text in source files.
 - Follow the guidelines in [Testing](./docs/testing.md) for test structure, naming, and coverage expectations.
 - Log files can be viewed when troubleshooting problems.

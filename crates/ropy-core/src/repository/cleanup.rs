@@ -4,10 +4,7 @@
 use std::collections::HashSet;
 
 use super::{
-    backend::{
-        RECORDS_TREE, StorageBackend, TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey,
-        redb::RedbBackend,
-    },
+    backend::{RECORDS_TREE, StorageBackend, TIME_INDEX_LOOKUP_TREE, TIME_INDEX_TREE, TreeKey},
     errors::RepositoryError,
     models::ClipboardRecord,
     repo::ClipboardRepository,
@@ -18,6 +15,17 @@ use super::{
 /// batch deletions instead of scanning on every successful save.
 const CLEANUP_BUFFER_DIVISOR: usize = 10;
 const MIN_CLEANUP_BUFFER_RECORDS: usize = 1;
+
+/// Extra ordinary records a buffered cleanup tolerates before it scans.
+pub(super) fn cleanup_buffer_record_count(keep_count: usize) -> usize {
+    keep_count
+        .saturating_div(CLEANUP_BUFFER_DIVISOR)
+        .max(MIN_CLEANUP_BUFFER_RECORDS)
+}
+
+fn cleanup_trigger_record_count(keep_count: usize) -> usize {
+    keep_count.saturating_add(cleanup_buffer_record_count(keep_count))
+}
 
 impl<B: StorageBackend> ClipboardRepository<B> {
     /// "Clear history" without losing user-curated records: pinned and
@@ -65,7 +73,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     ) -> Result<usize, RepositoryError> {
         let _operation = self.lock_operation();
         let total = self.count()?;
-        let trigger = ClipboardRepository::<RedbBackend>::cleanup_trigger_record_count(keep_count);
+        let trigger = cleanup_trigger_record_count(keep_count);
         // Ordinary records cannot outnumber all records. Avoid reading retention
         // exemptions until even the total exceeds the buffered limit.
         if total <= trigger {
@@ -162,18 +170,6 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 }
 
-impl ClipboardRepository<RedbBackend> {
-    pub(super) fn cleanup_buffer_record_count(keep_count: usize) -> usize {
-        keep_count
-            .saturating_div(CLEANUP_BUFFER_DIVISOR)
-            .max(MIN_CLEANUP_BUFFER_RECORDS)
-    }
-
-    fn cleanup_trigger_record_count(keep_count: usize) -> usize {
-        keep_count.saturating_add(Self::cleanup_buffer_record_count(keep_count))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -229,10 +225,7 @@ mod tests {
         #[case] keep_count: usize,
         #[case] expected: usize,
     ) {
-        assert_eq!(
-            ClipboardRepository::cleanup_buffer_record_count(keep_count),
-            expected
-        );
+        assert_eq!(cleanup_buffer_record_count(keep_count), expected);
     }
 
     #[rstest]
@@ -245,10 +238,7 @@ mod tests {
         #[case] keep_count: usize,
         #[case] expected: usize,
     ) {
-        assert_eq!(
-            ClipboardRepository::cleanup_trigger_record_count(keep_count),
-            expected
-        );
+        assert_eq!(cleanup_trigger_record_count(keep_count), expected);
     }
 
     #[test]

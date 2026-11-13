@@ -459,8 +459,14 @@ fn test_history_conflict_disables_history_and_shows_repair_message(cx: &mut Test
             .label()
             .unwrap()
             .to_string();
-        assert!(message.contains("delete_record"), "{message}");
-        assert!(message.contains("select_next"), "{message}");
+        let label = |id: &str| {
+            crate::gui::board::actions::shortcuts::history_shortcuts()
+                .into_iter()
+                .find(|shortcut| shortcut.id == id)
+                .map_or_else(|| id.to_owned(), |shortcut| shortcut.label.to_string())
+        };
+        assert!(message.contains(&label("delete_record")), "{message}");
+        assert!(message.contains(&label("select_next")), "{message}");
         assert!(message.contains("config.toml"), "{message}");
         for key in ["j", "d", "delete"] {
             window.press(key, cx);
