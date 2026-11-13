@@ -1,0 +1,52 @@
+# Promotional screenshots
+
+Use this guide to produce demo images from the real board without loading personal history or starting clipboard services. Capture supports macOS only and does not replace [native GUI tests](testing.md#promotional-captures).
+
+## Prerequisites
+
+Use an unlocked, awake macOS desktop, the repository's Rust toolchain, Python 3 and Xcode command-line tools (`swift`). macOS must allow Screen Recording for the terminal or app running the command; Accessibility permission is not needed. The script checks for lock/sleep before building. Keep the screen unlocked until capture finishes.
+
+## Capture
+
+From the repository root, run:
+
+```sh
+./scripts/capture-promo.sh
+```
+
+The command builds Ropy, captures its real production board in four bundled themes, and prints the path to `ropy-themes.png`. Each run has its own directory under `target/promo/`, containing the four original screenshots, a transparent 2×2 composite, and `capture.log`. The grid order is Ropy Light / Ropy Dark on the top row and Nord Light / Everforest Night on the bottom row. The canvas stays transparent. Each screenshot receives a one-pixel contour border and a soft drop shadow, so light windows remain visible on white pages. Each screenshot has 16 output pixels of padding for decoration, with 12 pixels between padded tiles and around the grid. No labels are added.
+
+```sh
+# Localized demo content
+./scripts/capture-promo.sh --language zh-CN
+
+# Reuse an already built binary and choose the output directory
+./scripts/capture-promo.sh --binary target/debug/ropy --output /tmp/ropy-promo
+```
+
+## Isolation and output contract
+
+The screenshot process branches before normal application logging and startup. It uses in-memory default settings, a fixed local date, fixed record IDs and localized demo content. The Logo is extracted from the bundled asset to a per-capture temporary directory. No personal settings or history are loaded; clipboard monitoring/writing, global hotkeys, tray, autostart and update services are not started. An invisible input shield keeps accidental mouse/keyboard input from opening settings or changing the demonstration. Existing Ropy processes can keep running.
+
+Each window uses the application's default 400×550 logical size and list layout. PNG dimensions follow the display's backing scale (for example, 800×1100 on a 2× display). The application signals readiness after its Logo has loaded and a frame has rendered. The script resolves only the child process's window, waits for consecutive identical captures, then stops that child and cleans up its temporary data. A missing window, render failure, or unstable capture fails within a bounded timeout. Capture errors are retained in the run's `capture.log`; a failed run does not replace any previous output.
+
+The composite preserves opaque screenshot pixels. Borders and shadows follow the screenshot's alpha silhouette, including rounded corners; the canvas remains transparent beyond those decorations. Original captures are left unchanged. Blank or differently sized images are rejected. Fonts and rasterization may vary across macOS versions or display scales, so this is repeatable content and geometry, not a cross-machine pixel hash guarantee.
+
+## Preview interaction probe
+
+To inspect the production preview without starting clipboard, hotkey, tray, update or autostart services, build with `cargo build --locked`, then run `target/debug/ropy --promo-preview ropy-light en /tmp/ropy-preview-ready`. The ready file must have an existing parent directory. This mode uses disposable storage and demo records, including a 1,000-line text record. Use Up/Down to select a record, hold Space to preview, and release Space or press Escape to close. Image previews support wheel zoom, left-button drag, Fit and Original size. Main-window buttons and all non-preview commands remain shielded. Stop this process with Ctrl+C when finished.
+
+This probe verifies native preview rendering and focus only; it does not replace isolated-account clipboard/hotkey E2E testing. The ordinary `--promo` mode remains noninteractive.
+
+## Failure diagnosis and internal entry points
+
+Check the run's `capture.log` after a failure. Fix permissions, lock/sleep state or the reported render error before retrying; a retry creates a separate run rather than replacing previous output.
+
+For debugging, run these internal entry points from the repository root:
+
+```sh
+# READY_FILE's parent must exist. The file receives the child PID after rendering.
+target/debug/ropy --promo ropy-light en /tmp/ropy-ready
+# Stop this preview with Ctrl+C when finished.
+target/debug/ropy --compose-promo /tmp/themes.png light.png dark.png nord.png forest.png
+```

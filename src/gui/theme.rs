@@ -275,7 +275,7 @@ struct ThemeDefinitionRaw {
 
 fn parse_color(theme_id: &ThemeId, field: &'static str, value: &str) -> Result<u32, ThemeError> {
     let trimmed = value.trim();
-    let normalized = trimmed.strip_prefix('#').map_or(trimmed, |hex| hex);
+    let normalized = trimmed.trim_prefix('#');
     if normalized.len() != 6 || !normalized.chars().all(|ch| ch.is_ascii_hexdigit()) {
         return Err(ThemeError::InvalidColor {
             theme_id: theme_id.code().to_string(),

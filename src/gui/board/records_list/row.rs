@@ -501,11 +501,9 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
         cx.stop_propagation();
     })
     .on_click(move |_event, _window, cx| {
-        view_favorite
-            .update(cx, |this, cx| {
-                this.toggle_record_favorite(record_id, cx);
-            })
-            .ok();
+        let _ = view_favorite.update(cx, |this, cx| {
+            this.toggle_record_favorite(record_id, cx);
+        });
     });
 
     let pin_button = {
@@ -525,11 +523,9 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
                 cx.stop_propagation();
             })
             .on_click(move |_event, _window, cx| {
-                view_pin
-                    .update(cx, |this, cx| {
-                        this.toggle_record_pin(record_id, cx);
-                    })
-                    .ok();
+                let _ = view_pin.update(cx, |this, cx| {
+                    this.toggle_record_pin(record_id, cx);
+                });
             })
     };
 
@@ -583,10 +579,9 @@ fn render_record_delete_button(ctx: &RenderContext<'_>, cx: &App) -> Button {
             cx.stop_propagation();
         })
         .on_click(move |_event, window, cx| {
-            view.update(cx, |this, cx| {
+            let _ = view.update(cx, |this, cx| {
                 this.request_delete_record(record_id, window, cx);
-            })
-            .ok();
+            });
         })
 }
 
@@ -625,15 +620,13 @@ fn decorate_record_card(
                 return;
             }
             let confirm_as_plain_text = event.modifiers().shift;
-            view_click
-                .update(cx, |this, cx| {
-                    if confirm_as_plain_text {
-                        this.confirm_record_as_plain_text(window, cx, index);
-                    } else {
-                        this.confirm_record(window, cx, index);
-                    }
-                })
-                .ok();
+            let _ = view_click.update(cx, |this, cx| {
+                if confirm_as_plain_text {
+                    this.confirm_record_as_plain_text(window, cx, index);
+                } else {
+                    this.confirm_record(window, cx, index);
+                }
+            });
         })
         .into_any_element()
 }

@@ -323,7 +323,7 @@ fn capture(
     let fixture = tempfile::tempdir_in(
         ready
             .parent()
-            .filter(|p| !p.as_os_str().is_empty())
+            .filter(|p| !p.is_empty())
             .unwrap_or_else(|| Path::new(".")),
     )?;
     // Keep the TempDir here until the event loop exits, not in its setup closure.

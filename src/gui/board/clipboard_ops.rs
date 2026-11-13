@@ -75,9 +75,10 @@ pub(in crate::gui::board) fn build_copy_request_for_record(
         return build_copy_request(&record.content, &record.content_type, completion);
     }
 
-    let (html, rtf) = record.rich_text_meta.as_ref().map_or((None, None), |meta| {
-        (load_rich_text_html(meta), load_rich_text_rtf(meta))
-    });
+    let (html, rtf) = record
+        .rich_text_meta
+        .as_ref()
+        .map_or_default(|meta| (load_rich_text_html(meta), load_rich_text_rtf(meta)));
 
     Some(CopyRequest::rich_text_with_completion(
         record.content.clone(),

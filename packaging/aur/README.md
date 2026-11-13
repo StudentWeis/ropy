@@ -2,6 +2,8 @@
 
 `ropy-bin/` contains the recipe for installing official Ropy Linux release binaries on Arch Linux (`x86_64` only). ARM64 is not included in this package. The recipe does not compile Rust code. Its presence in this repository does not mean the package has been published to AUR.
 
+For other installation paths and maintainer guides, use the [documentation index](../../docs/README.md). Commands begin at the Ropy repository root unless they explicitly change into a build or AUR checkout.
+
 ## Build locally
 
 Install `base-devel`, then build as a regular user in a temporary directory to keep downloaded sources and packages out of the repository:
@@ -15,7 +17,7 @@ makepkg -si
 
 Review `PKGBUILD` before running it. `makepkg -si` uses pacman to install missing dependencies and the completed package; it may request administrator authentication. Launch Ropy from the application menu or run `ropy --show`.
 
-The package installs the executable to `/usr/bin/ropy`, where Ropy disables in-app installation of updates. Update through the package manager instead. It does not enable autostart, launch the application during installation, or change compositor settings. See the [Wayland guide](../../docs/WAYLAND.md) for desktop-specific setup and capability limits. Global shortcuts through a portal require `xdg-desktop-portal` and a compatible desktop backend; installing the portal alone does not guarantee support.
+The package installs the executable to `/usr/bin/ropy`, where Ropy disables in-app installation of updates. Update through the package manager instead. It does not enable autostart, launch the application during installation, or change compositor settings. See the [Wayland guide](../../docs/wayland.md) for desktop-specific setup and capability limits. Global shortcuts through a portal require `xdg-desktop-portal` and a compatible desktop backend; installing the portal alone does not guarantee support.
 
 ## Validate before publishing
 
@@ -31,7 +33,7 @@ namcap PKGBUILD
 namcap ropy-bin-*.pkg.tar.zst
 ```
 
-For an x86_64 clean-chroot build, install Arch's `devtools` and run `extra-x86_64-build`. Check the installed application's menu launch, tray, clipboard capture, activation and package-managed update behavior in an isolated desktop before publishing. See [release acceptance](../../docs/RELEASE_ACCEPTANCE.md) for the GUI validation procedure.
+For an x86_64 clean-chroot build, install Arch's `devtools` and run `extra-x86_64-build`. Check the installed application's menu launch, tray, clipboard capture, activation and package-managed update behavior in an isolated desktop before publishing. See [release acceptance](../../docs/release-acceptance.md) for the GUI validation procedure.
 
 Dependencies include the release ELF's direct dependencies and the dynamically loaded EGL and Wayland libraries. `libglvnd` supplies EGL; a working graphics driver is still required. Inspect the x86_64 release binary again when upgrading rather than assuming their dependency set stays unchanged. Namcap may not recognize dynamically loaded dependencies.
 
@@ -63,7 +65,7 @@ If authentication, host verification or the push fails, resolve that failure bef
 4. Build and validate the package, including the installed desktop behavior. Regenerate `.SRCINFO` with `makepkg --printsrcinfo > .SRCINFO` from the recipe directory.
 5. Submit the repository changes through the contribution workflow, then copy the three distribution files into the separate AUR checkout, review, commit and push them.
 
-## Initial validation
+## Historical validation: 0.6.2-1
 
 Version `0.6.2-1` was built from the published GitHub Release in an isolated, rootless Arch bootstrap environment. The official archive SHA-256 is `6e1abc7e0e98cd77d0df4e9d479e422d6c9ad7d60f26cbc1de6c545aa137a025`; the installed binary SHA-256 is `31ce510e0e7f73352cdc10ff8bb8222045464f6264c7b1686f380a2f7a8036e3`. Source checksums, desktop entry validation, generated `.SRCINFO` consistency and the package build passed. Pacman installation and upgrade checks reported 11 files with no altered files. All ELF dependencies resolved.
 

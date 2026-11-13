@@ -12,7 +12,7 @@ Examples:
 
 This wrapper delegates to cargo release.
 Merge the preparation commit through a PR, wait for main CI, then tag the
-merged commit. Follow docs/RELEASING.md for the publishing sequence.
+merged commit. Follow docs/releasing.md for the publishing sequence.
 Dry-run mode is the default and automatically adds --no-verify to avoid
 leaving Cargo.lock behind in repositories that do not track lockfiles.
 EOF

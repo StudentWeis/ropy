@@ -80,7 +80,7 @@ pub fn deserialize_file_paths(content: &str) -> Vec<String> {
 /// Hash the normalized JSON file list for capture deduplication.
 #[must_use]
 pub fn hash_file_paths(paths: &[String]) -> u64 {
-    serialize_file_paths(paths).map_or(0, |serialized| seahash::hash(serialized.as_bytes()))
+    serialize_file_paths(paths).map_or_default(|serialized| seahash::hash(serialized.as_bytes()))
 }
 
 #[cfg(test)]

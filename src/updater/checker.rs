@@ -145,10 +145,7 @@ fn fetch_releases(include_prerelease: bool) -> Result<Vec<GitHubRelease>, Update
 
 /// Strip an optional `v` / `V` prefix and parse a semver version.
 fn parse_version(tag: &str) -> Result<Version, UpdateError> {
-    let cleaned = tag
-        .strip_prefix('v')
-        .or_else(|| tag.strip_prefix('V'))
-        .unwrap_or(tag);
+    let cleaned = tag.trim_prefix(['v', 'V']);
     Version::parse(cleaned).map_err(|e| UpdateError::Parse(format!("invalid version '{tag}': {e}")))
 }
 
