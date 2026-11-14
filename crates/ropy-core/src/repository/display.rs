@@ -3,9 +3,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use super::{
-    backend::{StorageBackend, redb::RedbBackend},
-    errors::RepositoryError,
-    models::ClipboardRecord,
+    backend::StorageBackend, errors::RepositoryError, models::ClipboardRecord,
     repo::ClipboardRepository,
 };
 
@@ -50,7 +48,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let mut records = self
             .time_index
             .select_display_records(limit, &favorite_ids, |id| self.load_record(id))?;
-        ClipboardRepository::<RedbBackend>::sort_for_display(&mut records);
+        sort_for_display(&mut records);
         let mut ordinary_count = 0;
         records.retain(|record| {
             if record.pinned || favorite_ids.contains(&record.id) {
@@ -66,23 +64,21 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 }
 
-impl ClipboardRepository<RedbBackend> {
-    /// Compare pinned priority first, then newest capture time.
-    #[must_use]
-    pub fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
-        Self::display_priority(left)
-            .cmp(&Self::display_priority(right))
-            .then_with(|| right.created_at.cmp(&left.created_at))
-    }
+/// Compare pinned priority first, then newest capture time.
+#[must_use]
+pub fn compare_for_display(left: &ClipboardRecord, right: &ClipboardRecord) -> Ordering {
+    display_priority(left)
+        .cmp(&display_priority(right))
+        .then_with(|| right.created_at.cmp(&left.created_at))
+}
 
-    /// Sort records by pinned priority and newest capture time.
-    pub fn sort_for_display(records: &mut [ClipboardRecord]) {
-        records.sort_unstable_by(Self::compare_for_display);
-    }
+const fn display_priority(record: &ClipboardRecord) -> u8 {
+    (!record.pinned) as u8
+}
 
-    const fn display_priority(record: &ClipboardRecord) -> u8 {
-        (!record.pinned) as u8
-    }
+/// Sort records by pinned priority and newest capture time.
+pub fn sort_for_display(records: &mut [ClipboardRecord]) {
+    records.sort_unstable_by(compare_for_display);
 }
 
 #[cfg(test)]
@@ -92,7 +88,9 @@ mod tests {
 
     use chrono::{Local, TimeZone};
 
-    use crate::repository::{ClipboardRecord, models::ContentType, repo::ClipboardRepository};
+    use crate::repository::{ClipboardRecord, models::ContentType};
+
+    use super::{compare_for_display, display_priority, sort_for_display};
 
     fn test_datetime(hour: u32) -> chrono::DateTime<Local> {
         Local
@@ -116,7 +114,7 @@ mod tests {
     fn test_display_priority_pinned_returns_zero() {
         let record = test_record("pinned", true, 10);
 
-        assert_eq!(ClipboardRepository::display_priority(&record), 0);
+        assert_eq!(display_priority(&record), 0);
     }
 
     #[test]
@@ -139,7 +137,7 @@ mod tests {
     fn test_display_priority_unpinned_returns_one() {
         let record = test_record("unpinned", false, 10);
 
-        assert_eq!(ClipboardRepository::display_priority(&record), 1);
+        assert_eq!(display_priority(&record), 1);
     }
 
     #[test]
@@ -147,14 +145,8 @@ mod tests {
         let pinned = test_record("pinned", true, 8);
         let unpinned = test_record("unpinned", false, 12);
 
-        assert_eq!(
-            ClipboardRepository::compare_for_display(&pinned, &unpinned),
-            Ordering::Less
-        );
-        assert_eq!(
-            ClipboardRepository::compare_for_display(&unpinned, &pinned),
-            Ordering::Greater
-        );
+        assert_eq!(compare_for_display(&pinned, &unpinned), Ordering::Less);
+        assert_eq!(compare_for_display(&unpinned, &pinned), Ordering::Greater);
     }
 
     #[test]
@@ -162,14 +154,8 @@ mod tests {
         let older = test_record("older", false, 8);
         let newer = test_record("newer", false, 12);
 
-        assert_eq!(
-            ClipboardRepository::compare_for_display(&newer, &older),
-            Ordering::Less
-        );
-        assert_eq!(
-            ClipboardRepository::compare_for_display(&older, &newer),
-            Ordering::Greater
-        );
+        assert_eq!(compare_for_display(&newer, &older), Ordering::Less);
+        assert_eq!(compare_for_display(&older, &newer), Ordering::Greater);
     }
 
     #[test]
@@ -177,10 +163,7 @@ mod tests {
         let record_a = test_record("a", false, 10);
         let record_b = test_record("b", false, 10);
 
-        assert_eq!(
-            ClipboardRepository::compare_for_display(&record_a, &record_b),
-            Ordering::Equal
-        );
+        assert_eq!(compare_for_display(&record_a, &record_b), Ordering::Equal);
     }
 
     #[test]
@@ -192,7 +175,7 @@ mod tests {
             test_record("new pinned", true, 14),
         ];
 
-        ClipboardRepository::sort_for_display(&mut records);
+        sort_for_display(&mut records);
 
         let contents: Vec<&str> = records.iter().map(|r| r.content.as_str()).collect();
         assert_eq!(
@@ -205,7 +188,7 @@ mod tests {
     fn test_sort_for_display_empty_slice_does_not_panic() {
         let mut records: Vec<ClipboardRecord> = vec![];
 
-        ClipboardRepository::sort_for_display(&mut records);
+        sort_for_display(&mut records);
 
         assert_eq!(records, []);
     }
@@ -215,7 +198,7 @@ mod tests {
         let record = test_record("only", false, 10);
         let mut records = vec![record.clone()];
 
-        ClipboardRepository::sort_for_display(&mut records);
+        sort_for_display(&mut records);
 
         assert_eq!(records, [record]);
     }

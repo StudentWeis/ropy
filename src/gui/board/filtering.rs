@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::search::{ContentFilter, SearchOptions, filter_records_by_query};
-use crate::repository::{ClipboardRecord, ClipboardRepository};
+use crate::repository::{ClipboardRecord, compare_for_display};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum FilteredRecordsUpdate {
@@ -68,7 +68,7 @@ pub(super) fn filter_and_sort_record_indices(
         let right = records.get(*right_index);
 
         match (left, right) {
-            (Some(left), Some(right)) => ClipboardRepository::compare_for_display(left, right),
+            (Some(left), Some(right)) => compare_for_display(left, right),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => left_index.cmp(right_index),
