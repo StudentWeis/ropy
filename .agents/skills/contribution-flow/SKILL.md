@@ -1,125 +1,115 @@
 ---
 name: contribution-flow
-description: Repository contribution workflow. Use for any code change that should become a commit — adding features, fixing bugs, refactoring, or any source modification. Drives the full Issue → Branch → PR → Merge process.
+description: Repository contribution workflow for changes intended for commit. Covers Issue → branch → checks → commit → PR → merge → cleanup, including coordinated workspaces and authorization boundaries.
 ---
 
-# Contribution Flow
+# Contribution flow
 
-Issue → Branch → PR → Merge workflow for any code change in this repo. Coding standards live in the project's development guidelines (e.g. `AGENTS.md`); this skill only covers the process.
+Run commands from the repository root. Follow `AGENTS.md` for development rules and `coord` for workspace coordination. Stop at the user's requested stage; implementing a change does not by itself authorize committing, pushing or merging.
 
 ## Conventions
 
-Shared vocabulary used throughout the flow below: `<type>` and `<scope>` placeholders in every step refer back here.
-
-- **Types**: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`
-- **Scopes**: infer from the project's top-level module/directory structure (e.g. `core`, `api`, `ui`).
+- **Type**: `feat | fix | docs | style | refactor | perf | test | build | ci | chore | revert`. Keep it consistent across the Issue title, branch prefix, commits and PR title.
+- **Scope**: infer from the affected module, such as `core`, `gui` or `clipboard`. Required on commits and the PR title, optional on the Issue title, omitted from the branch name.
 - **Subject**: lowercase, imperative mood, no trailing period.
-- **Consistency**: the `<type>` must match across the Issue title, branch prefix, every commit, and the PR title. The `<scope>` is required on commits and the PR title, optional on the Issue title, and omitted from the branch name.
+- **Body files**: allocate a separate `mktemp` file for each Issue or PR. Carry its absolute path across shells. Delete only that file after successful creation; retain it on failure for retry.
 
-## The flow
+## 1. Open or reuse the Issue
 
-### 1. Open or reuse the Issue
-
-If the authorized contribution already has an Issue, record its number as `<N>` and reuse it; delegated workers must not create duplicate Issues. This is not an Issue skip. Otherwise, create one as follows.
-
-Pick the appropriate issue template from `.github/ISSUE_TEMPLATE/` — using a template is **mandatory**. Allocate a private body file for this task:
+Reuse the task's existing Issue, including for delegated work. Otherwise, fill the appropriate `.github/ISSUE_TEMPLATE/` template into a private body file; templates are mandatory.
 
 ```bash
 issue_body=$(mktemp "${TMPDIR:-/tmp}/ropy-issue.XXXXXX")
+# Fill the body from the selected template before creating the Issue.
+gh issue create --title "<type>: <subject>" --label "<label>" --body-file "$issue_body"
 ```
 
-Fill the template into the returned file, then use that same path:
+Record the Issue number as `<issue>`. Skip the Issue only at the user's explicit request, and record the skip in the PR description.
+
+## 2. Choose the workspace and branch
+
+Inspect Git status and active sessions before writing or switching branches. When coordination is required, follow `coord`: register scopes, verify `held_scopes`, and use the returned worktree and branch. Reuse an existing task Issue and contribution branch. An independent worktree uses its recorded integration target; do not switch it to `main`. These workspace exceptions do not waive the remaining contribution steps.
+
+For an ordinary clean, unoccupied workspace, start from fresh `main`:
 
 ```bash
-gh issue create --title "<type>: ..." --label "<appropriate label>" --body-file "$issue_body"
+git checkout main && git pull --ff-only &&
+    git checkout -b <type>/<kebab-slug>
 ```
 
-Capture the returned number as `<N>`. After successful creation, remove only this task's body file. If creation fails, retain the file for retry. When commands run in separate shells, carry the returned absolute path forward explicitly.
+In a shared worktree, designate one owner for staging, hooks, commits, pushes and the PR; record that owner and the Issue in handoffs. Other workers edit only their held paths. If branch ownership or staged inputs are unclear, pause Git mutations and coordinate. Do not stash, reset, clean or move others' changes to obtain a clean state.
 
-> **Skipping the Issue**: only when the user explicitly asks. Proceed to Step 2 with a descriptive branch name and note the skip in the PR description.
+## 3. Implement and run precheck
 
-### 2. Choose the coordinated workspace and branch
-
-Inspect Git status before changing branches or writing files. When the agent environment requires `coord` or the task already uses it, follow that skill first: inspect active sessions, register the intended write scopes, and verify the returned worktree, branch and `held_scopes`. A path lease does not grant exclusive access to the shared Git index or permission to change another session's branch. Contributors without `coord` use the ordinary branch flow below; this does not override an agent environment that requires coordination.
-
-For a new, unoccupied workspace with no unrelated changes, branch from fresh `main`:
-
-```bash
-git checkout main && git pull --ff-only
-git checkout -b <type>/<kebab-slug> # e.g. feat/grid-layout, fix/clipboard-empty-x11
-```
-
-**Coordinated workspace exception:** when the authorized task already has an Issue and a contribution branch, reuse both in the worktree returned by `coord`; do not run the checkout/pull commands above. An independent worktree created by `coord` uses its returned branch and recorded integration target instead of switching to `main`. Follow `coord` for integration and post-integration checks. Neither exception skips the Issue, precheck, Conventional Commits, PR or explicit merge authorization requirements. Record the existing Issue and intended PR owner in the handoff.
-
-In a shared worktree, designate one owner for staging, hooks, commits, pushes and the PR. Other workers edit only their held paths and report their checks without touching the index or switching branches. If branch ownership or staged inputs are unclear, pause Git mutations and coordinate; do not stash, reset, clean or move another participant's changes to obtain a clean state.
-
-### 3. Implement
-
-Follow the project's development guidelines.
-
-### 4. Precheck
-
-Must pass before any commit:
+Follow the development rules and [Testing](../../../docs/testing.md). Before every commit, pass the full gate on the intended commit inputs:
 
 ```bash
 ./scripts/precheck.sh
 ```
 
-### 5. Commit
+Use `--check` when checks must not modify files. Targeted tests or the lightweight phase alone do not replace the full gate. In shared worktrees, included workers must finish their paths before combined verification and staging.
 
-The designated Git owner stages only the files for the ready change, including new files and deletions. Inspect the staged diff and status before committing; leave unrelated changes unstaged. In a shared worktree, confirm that all included workers have finished their held paths and that the precheck covers the combined commit inputs. A worker's targeted tests do not replace Step 4.
+## 4. Commit
+
+The Git owner stages only ready task files, including additions and deletions. Review the staged diff and status; leave unrelated changes unstaged.
 
 ```bash
-git add -- <paths-for-this-change>
+git add -- <task-paths>
 git diff --cached
 git status --short
-git commit -m "<type>(<scope>): <short description>
+git commit -m "<type>(<scope>): <subject>
 
-Refs #<N>"
+Refs #<issue>"
 ```
 
-Multiple commits are fine — they are squashed on merge.
+Omit `Refs` if the Issue was explicitly skipped. Multiple commits are allowed; merge uses squash.
 
-### 6. Push & Open the PR
+## 5. Push and open the PR
 
-Use `.github/PULL_REQUEST_TEMPLATE.md` — using the template is **mandatory**. Allocate another private body file:
+Fill `.github/PULL_REQUEST_TEMPLATE.md` into a new private body file. The template is mandatory.
 
 ```bash
 pr_body=$(mktemp "${TMPDIR:-/tmp}/ropy-pr.XXXXXX")
+# Fill the PR body before creating the PR.
+git push -u origin HEAD &&
+    gh pr create --base main --title "<type>(<scope>): <subject>" --body-file "$pr_body"
 ```
 
-Fill the template into the returned file, then:
+Report the PR URL and record its number as `<pr>`.
+
+## 6. Review and CI
+
+Push review fixes to the same branch. After reviewer feedback, do not force-push without explicit user authorization.
+
+Wait for complete CI on the latest PR head, including the aggregate gate and required checks. A partial list of passing jobs is not a CI pass. Inspect failures with `gh run view <run-id> --log-failed`; do not bypass failed, pending or skipped required checks.
+
+## 7. Merge when authorized
+
+Merge only on explicit user instruction; “merge when CI passes” authorizes waiting and then merging. Recheck Git status, active sessions, the PR head and CI before merging. If another worker still depends on the branch or has unfinished PR changes, defer merge and cleanup without abandoning their work.
+
+Record the contribution branch as `<branch>` and the checked head as `<head-sha>`, then merge without coupling it to checkout or branch deletion:
 
 ```bash
-git push -u origin HEAD
-gh pr create --base main --title "<type>(<scope>): ..." --body-file "$pr_body"
+gh pr merge <pr> --squash --match-head-commit <head-sha>
 ```
 
-Report the PR URL back to the user. After successful creation, remove only this task's PR body file; retain it on failure and carry its absolute path across separate shells as needed.
+Confirm the PR is merged and record the merge commit. Then continue to cleanup.
 
-### 7. Iterate on review
+## 8. Clean up and report
 
-Push additional commits to the same branch. **Do not force-push once a reviewer has left feedback**, unless the user explicitly requests it.
+After an authorized merge, finish local cleanup by default without a second confirmation, unless the user asked to retain the branch. Separate commands are a safety boundary, not permission to omit this step.
 
-### 8. Merge
+Recheck Git status and active sessions before cleanup. Require a clean worktree, no unfinished Git operation, no session or linked worktree depending on the contribution branch or this worktree's current HEAD, and all contribution work preserved in the merged result. For independent worktrees, use the `coord` recovery/workspace cleanup procedure instead of manually deleting their branch or directory.
 
-Only on explicit user instruction. Check Git status and, when coordination is in use, active `coord` sessions again before merging or cleaning up. Confirm that no worker still depends on the PR branch or has unfinished changes for that PR. If it is still in use, defer merge and cleanup until the owners finish; do not abandon their work implicitly.
-
-Once the PR is ready and merging is authorized, merge without coupling it to local branch deletion or a checkout:
+For an ordinary worktree that meets these conditions:
 
 ```bash
-gh pr merge <N> --squash
+git checkout main &&
+    git pull --ff-only &&
+    git branch -d <branch> &&
+    git fetch --prune
 ```
 
-Local cleanup is a separate operation. Run checkout/pull only in a clean worktree with no active participants relying on its current branch or HEAD and no unfinished Git operation:
+If a prerequisite is unmet or a command fails, stop cleanup, retain the remaining branch/worktree and report the specific blocker. Do not force deletion or reset to hide the failure. Apply the same preservation and usage checks before any remote branch deletion.
 
-```bash
-git checkout main && git pull --ff-only
-git fetch --prune # Cleanup stale remote-tracking branches
-```
-
-Delete the contribution branch locally or remotely only after confirming that no active session or linked worktree still uses it and that all required work is preserved in the merged PR or integrated commit. Use the `coord` recovery/workspace cleanup procedure for an independent worktree; do not delete its branch or directory manually while it is active. If checkout, pull or cleanup fails, retain the branch/worktree and report the failed step; do not force deletion or reset. A successful remote merge does not imply successful local cleanup.
-
-## CI failures
-
-Inspect logs with `gh run view --log-failed`.
+Report the PR URL, checks, merge commit, current local branch and cleanup outcome. Distinguish “merged” from “cleanup complete”; name any retained branch/worktree and why it remains.
