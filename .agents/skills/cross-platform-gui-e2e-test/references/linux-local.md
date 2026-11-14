@@ -5,7 +5,7 @@ desktop. Use Xephyr with a lightweight window manager such as Openbox for a
 visible desktop; Xephyr connects to the host's XWayland `DISPLAY`. Use Xvfb
 with a window manager for unattended testing or when the host has no reachable
 X display. Neither mode certifies native Wayland behavior or other window
-managers/distributions. AgentBay is not a prerequisite for this workflow.
+managers/distributions.
 
 ## Prepare the executable and tools
 
@@ -21,6 +21,10 @@ managers/distributions. AgentBay is not a prerequisite for this workflow.
   overrides to test children; verify runtime libraries before launch. Follow
   normal authorization for system installation rather than changing the host
   desktop configuration to enable testing.
+- The executable needs every shared library reported by `ldd`, including the
+  runtime counterparts of `libxdo` and `libxkbcommon-x11`. The KSNI tray backend
+  needs a D-Bus session and a StatusNotifierItem host for tray assertions; it
+  does not need GTK3 or AppIndicator.
 - If comparing a baseline, retain distinct executable copies or use separate
   build output directories. Do not accidentally test a baseline binary as the
   current branch; restore any shared build output afterward.
