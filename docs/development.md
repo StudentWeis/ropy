@@ -50,7 +50,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before run
 make setup
 ```
 
-[scripts/init.sh](../scripts/init.sh) installs cargo-binstall, hk 2.5+, the configured cargo-dist version, cargo-release, git-cliff and cargo-outdated. It replaces the existing pre-commit hook; review the script before running it in a checkout with custom hooks.
+[scripts/init.sh](../scripts/init.sh) installs cargo-binstall, the hk version declared by `min_hk_version` in [hk.pkl](../hk.pkl), the configured cargo-dist version, cargo-release, git-cliff and cargo-outdated. Keep `min_hk_version` and the Pkl config package URLs on the same release so the builtin definitions match the installed binary. It replaces the existing pre-commit hook; review the script before running it in a checkout with custom hooks.
 
 YAML, TOML and JSON hooks use `uvx` with pinned parsers. Run `hk check --all` to check files or `hk fix --all` to fix them. Hooks leave fixes unstaged and fail the commit so you can review and stage them before retrying. The official GPUI skill snapshots are excluded from formatting fixes.
 

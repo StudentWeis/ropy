@@ -1,7 +1,7 @@
-amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.12.0/hk@2.12.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.12.0/hk@2.12.0#/Builtins.pkl"
 
-min_hk_version = "2.4.0"
+min_hk_version = "2.12.0"
 fail_fast = false
 
 // Keep fixes unstaged so contributors can review them before retrying the commit.
