@@ -18,12 +18,15 @@ use gpui_kit::{
         spinner::Spinner,
     },
     div, img, list, point,
+    popup::{PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupOptions},
     prelude::{
         FluentBuilder, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
         Styled,
     },
     px, size,
 };
+#[cfg(target_os = "linux")]
+use raw_window_handle::RawWindowHandle;
 use rust_i18n::t;
 
 use super::{ActivePanel, RopyBoard, actions::PreviewSelection};
@@ -70,7 +73,7 @@ pub(super) struct PreviewSession {
     parent: AnyWindowHandle,
     view: WeakEntity<PreviewWindow>,
     mode: PreviewMode,
-    bounds: Bounds<Pixels>,
+    placement: PreviewPlacement,
     displayed_record_id: u64,
     _closed: Subscription,
     _owner_released: Subscription,
@@ -151,6 +154,100 @@ fn preview_image_window_size(dimensions: Option<(u32, u32)>, scale_factor: f32) 
 enum SidePreference {
     Right,
     Left,
+}
+
+struct PreviewPlacement {
+    bounds: Bounds<Pixels>,
+    kind: WindowKind,
+}
+
+impl PreviewPlacement {
+    fn requires_reopen(&self, current: &Self) -> bool {
+        // GPUI can resize a mapped popup, but cannot update its anchor options.
+        if self.kind != current.kind {
+            return true;
+        }
+        if matches!(self.kind, WindowKind::AnchoredPopup(_)) {
+            return false;
+        }
+        (self.bounds.origin.x - current.bounds.origin.x).abs() > px(0.5)
+            || (self.bounds.origin.y - current.bounds.origin.y).abs() > px(0.5)
+    }
+}
+
+fn uses_wayland_popup(window: &Window) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        // Inspect the actual backend, not the session environment: X11 and headless
+        // windows can also run inside a Wayland session.
+        matches!(
+            raw_window_handle::HasWindowHandle::window_handle(window).map(|handle| handle.as_raw()),
+            Ok(RawWindowHandle::Wayland(_))
+        )
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = window;
+        false
+    }
+}
+
+fn preview_placement(
+    work_area: Bounds<Pixels>,
+    parent_bounds: Bounds<Pixels>,
+    desired_size: Size<Pixels>,
+    anchor_y: Option<Pixels>,
+    side_preference: SidePreference,
+    parent: AnyWindowHandle,
+    wayland: bool,
+) -> PreviewPlacement {
+    if !wayland {
+        return PreviewPlacement {
+            bounds: preview_bounds(
+                work_area,
+                parent_bounds,
+                desired_size,
+                anchor_y,
+                side_preference,
+            ),
+            // Match the main popup's level; Floating is below it on macOS.
+            kind: WindowKind::PopUp,
+        };
+    }
+
+    // Preserve popup-edge docking. Convert the scroll-aware vertical anchor to
+    // parent-local coordinates; Wayland toplevel screen origins are not available.
+    let parent_size = parent_bounds.size;
+    let y = (anchor_y.unwrap_or_else(|| parent_bounds.top()) - parent_bounds.top())
+        .clamp(px(0.), (parent_size.height - px(1.)).max(px(0.)));
+    let (anchor, gravity, offset_x) = match side_preference {
+        SidePreference::Right => (
+            PopupAnchor::TopRight,
+            PopupGravity::BottomRight,
+            px(PREVIEW_GAP_PX),
+        ),
+        SidePreference::Left => (
+            PopupAnchor::TopLeft,
+            PopupGravity::BottomLeft,
+            px(-PREVIEW_GAP_PX),
+        ),
+    };
+    PreviewPlacement {
+        // Only the requested size is meaningful. The compositor fits and places it.
+        bounds: Bounds::new(Point::default(), desired_size),
+        kind: WindowKind::AnchoredPopup(PopupOptions {
+            parent,
+            anchor_rect: Bounds::new(
+                point(px(0.), y),
+                size(parent_size.width.max(px(1.)), px(1.)),
+            ),
+            anchor,
+            gravity,
+            constraint_adjustment: PopupConstraintAdjustment::all(),
+            offset: point(offset_x, px(0.)),
+            grab: false,
+        }),
+    }
 }
 
 fn preview_bounds(
@@ -435,21 +532,20 @@ impl RopyBoard {
             self.hover_preview.anchor_y,
             window,
         );
-        let next_bounds = preview_bounds(
+        let placement = preview_placement(
             display.visible_bounds(),
             window.bounds(),
             desired_size,
             anchor_y,
             side_preference,
+            window.window_handle(),
+            uses_wayland_popup(window),
         );
-        let current_bounds = session.bounds;
+        let current_bounds = session.placement.bounds;
         let handle = session.handle;
         let view = session.view.clone();
 
-        // Reopen if origin must shift (e.g. left-docked window growing wider).
-        if (next_bounds.origin.x - current_bounds.origin.x).abs() > px(0.5)
-            || (next_bounds.origin.y - current_bounds.origin.y).abs() > px(0.5)
-        {
+        if placement.requires_reopen(&session.placement) {
             // Repositioning preserves the current hover target, unlike dismissal.
             self.remove_preview(false, cx);
             self.open_preview_for_record(record, PreviewMode::Hover, window, cx);
@@ -458,14 +554,14 @@ impl RopyBoard {
 
         let updated = handle
             .update(cx, |_, preview_window, cx| {
-                if next_bounds.size != current_bounds.size {
-                    preview_window.resize(next_bounds.size);
+                if placement.bounds.size != current_bounds.size {
+                    preview_window.resize(placement.bounds.size);
                 }
                 let _ = view.update(cx, |preview, cx| preview.set_record(record, cx));
             })
             .is_ok();
         if updated && let Some(session) = self.preview_window.as_mut() {
-            session.bounds = next_bounds;
+            session.placement = placement;
             session.displayed_record_id = record_id;
         }
     }
@@ -518,19 +614,20 @@ impl RopyBoard {
             ),
         };
         let (anchor_y, side_preference) = self.preview_anchor(record_index, fallback_y, window);
-        let bounds = preview_bounds(
+        let placement = preview_placement(
             display.visible_bounds(),
             window.bounds(),
             desired_size,
             anchor_y,
             side_preference,
+            parent,
+            uses_wayland_popup(window),
         );
         let result = gpui_kit::open_window(
             WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_bounds: Some(WindowBounds::Windowed(placement.bounds)),
                 display_id: Some(display.id()),
-                // Match the main popup's level; Floating is below it on macOS.
-                kind: WindowKind::PopUp,
+                kind: placement.kind.clone(),
                 titlebar: None,
                 focus: false,
                 is_movable: false,
@@ -574,7 +671,7 @@ impl RopyBoard {
                     parent,
                     view: entity.downgrade(),
                     mode,
-                    bounds,
+                    placement,
                     displayed_record_id: record_id,
                     _closed: closed,
                     _owner_released: owner_released,
@@ -1160,6 +1257,133 @@ impl Render for PreviewWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui_kit::test]
+    fn test_preview_placement_wayland_uses_parent_edges_and_compositor_constraints(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        cx.add_empty_window();
+        let parent = cx.update(|cx| cx.windows()[0]);
+        let parent_bounds = Bounds::new(point(px(900.), px(500.)), size(px(400.), px(550.)));
+        let work_area = Bounds::new(point(px(800.), px(400.)), size(px(500.), px(600.)));
+        let desired = size(px(500.), px(484.));
+        for (side, anchor, gravity, offset_x) in [
+            (
+                SidePreference::Right,
+                PopupAnchor::TopRight,
+                PopupGravity::BottomRight,
+                px(10.),
+            ),
+            (
+                SidePreference::Left,
+                PopupAnchor::TopLeft,
+                PopupGravity::BottomLeft,
+                px(-10.),
+            ),
+        ] {
+            let placement = preview_placement(
+                work_area,
+                parent_bounds,
+                desired,
+                Some(px(740.)),
+                side,
+                parent,
+                true,
+            );
+            assert_eq!(
+                placement.bounds,
+                Bounds::new(point(px(0.), px(0.)), desired)
+            );
+            let WindowKind::AnchoredPopup(options) = placement.kind else {
+                unreachable!("Wayland preview must not create a managed toplevel");
+            };
+            assert_eq!(options.parent, parent);
+            assert_eq!(
+                options.anchor_rect,
+                Bounds::new(point(px(0.), px(240.)), size(px(400.), px(1.)))
+            );
+            assert_eq!(options.anchor, anchor);
+            assert_eq!(options.gravity, gravity);
+            assert_eq!(options.offset, point(offset_x, px(0.)));
+            assert_eq!(
+                options.constraint_adjustment,
+                PopupConstraintAdjustment::all()
+            );
+            assert!(!options.grab);
+        }
+        for (anchor_y, expected_y) in [(None, 0.), (Some(px(450.)), 0.), (Some(px(1100.)), 549.)] {
+            let placement = preview_placement(
+                work_area,
+                parent_bounds,
+                desired,
+                anchor_y,
+                SidePreference::Right,
+                parent,
+                true,
+            );
+            let WindowKind::AnchoredPopup(options) = placement.kind else {
+                unreachable!()
+            };
+            assert_eq!(options.anchor_rect.top(), px(expected_y));
+            assert!(options.anchor_rect.bottom() <= parent_bounds.size.height);
+        }
+    }
+
+    #[gpui_kit::test]
+    fn test_preview_placement_recreates_for_anchor_but_not_size_changes(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        cx.add_empty_window();
+        let parent = cx.update(|cx| cx.windows()[0]);
+        let work_area = Bounds::new(point(px(0.), px(0.)), size(px(1440.), px(900.)));
+        let parent_bounds = Bounds::new(point(px(520.), px(120.)), size(px(400.), px(550.)));
+        let desired = size(px(380.), px(320.));
+        for wayland in [true, false] {
+            let current = preview_placement(
+                work_area,
+                parent_bounds,
+                desired,
+                Some(px(200.)),
+                SidePreference::Right,
+                parent,
+                wayland,
+            );
+            let resized = preview_placement(
+                work_area,
+                parent_bounds,
+                size(px(420.), px(380.)),
+                Some(px(200.)),
+                SidePreference::Right,
+                parent,
+                wayland,
+            );
+            assert!(!resized.requires_reopen(&current));
+            let moved = preview_placement(
+                work_area,
+                parent_bounds,
+                desired,
+                Some(px(240.)),
+                SidePreference::Right,
+                parent,
+                wayland,
+            );
+            assert!(moved.requires_reopen(&current));
+            let flipped = preview_placement(
+                work_area,
+                parent_bounds,
+                desired,
+                Some(px(200.)),
+                SidePreference::Left,
+                parent,
+                wayland,
+            );
+            assert!(flipped.requires_reopen(&current));
+            if !wayland {
+                assert_eq!(current.kind, WindowKind::PopUp);
+                assert_eq!(current.bounds.origin, point(px(930.), px(200.)));
+            }
+        }
+    }
 
     #[test]
     fn test_preview_bounds_prefers_right_side_without_overlap() {
