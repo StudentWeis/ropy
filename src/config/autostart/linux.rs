@@ -2,7 +2,6 @@
 
 use std::{
     fs,
-    io::Write as _,
     path::{Path, PathBuf},
 };
 
@@ -45,17 +44,7 @@ impl DesktopEntry {
     }
 
     fn write(&self) -> std::io::Result<()> {
-        // The path always has the autostart directory supplied by new().
-        let directory = self
-            .path
-            .parent()
-            .ok_or_else(|| std::io::Error::other("missing autostart directory"))?;
-        fs::create_dir_all(directory)?;
-        let mut pending = tempfile::NamedTempFile::new_in(directory)?;
-        pending.write_all(self.contents.as_bytes())?;
-        pending.as_file().sync_all()?;
-        pending.persist(&self.path).map_err(|error| error.error)?;
-        Ok(())
+        crate::utils::write_atomic(&self.path, self.contents.as_bytes())
     }
 }
 

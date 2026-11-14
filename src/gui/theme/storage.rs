@@ -128,11 +128,7 @@ fn staged_file(directory: &Path, bytes: &[u8]) -> Result<NamedTempFile, std::io:
 
 #[expect(clippy::redundant_pub_crate)]
 pub(crate) fn export(path: &Path, source: &str) -> Result<(), std::io::Error> {
-    let directory = path.parent().unwrap_or_else(|| Path::new("."));
-    staged_file(directory, source.as_bytes())?
-        .persist(path)
-        .map_err(|error| error.error)?;
-    Ok(())
+    crate::utils::write_atomic(path, source.as_bytes())
 }
 
 #[cfg(test)]

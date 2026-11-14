@@ -187,33 +187,16 @@ impl Settings {
             return Err(SettingsError::RecoveryRequired);
         }
         let toml_string = toml::to_string_pretty(self)?;
-        let parent = config_file
-            .parent()
-            .ok_or(SettingsError::ConfigDirectoryNotFound)?;
-        std::fs::create_dir_all(parent).map_err(|source| SettingsError::Io {
-            path: parent.to_path_buf(),
+        if config_file.parent().is_none() {
+            return Err(SettingsError::ConfigDirectoryNotFound);
+        }
+        crate::atomic_write::write_atomic(config_file, |file| {
+            file.write_all(toml_string.as_bytes())
+        })
+        .map_err(|source| SettingsError::Io {
+            path: config_file.to_path_buf(),
             source,
-        })?;
-
-        let mut temp_file =
-            tempfile::NamedTempFile::new_in(parent).map_err(|source| SettingsError::Io {
-                path: parent.to_path_buf(),
-                source,
-            })?;
-        temp_file
-            .write_all(toml_string.as_bytes())
-            .and_then(|()| temp_file.as_file().sync_all())
-            .map_err(|source| SettingsError::Io {
-                path: config_file.to_path_buf(),
-                source,
-            })?;
-        temp_file
-            .persist(config_file)
-            .map_err(|error| SettingsError::Io {
-                path: config_file.to_path_buf(),
-                source: error.error,
-            })?;
-        Ok(())
+        })
     }
 
     fn validated(mut self) -> Self {
