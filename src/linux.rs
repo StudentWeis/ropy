@@ -149,32 +149,48 @@ fn activation_directory(
     temporary: &Path,
     display: &OsStr,
 ) -> Result<PathBuf, StartupError> {
-    // Preserve existing runtime endpoints, including those of a running instance.
     // Hash display names so they cannot introduce path components.
     let session = seahash::hash(display.as_encoded_bytes());
     if let Some(runtime) = runtime.filter(|path| !path.is_empty()) {
         let directory = runtime.join(format!("ropy-{session:016x}"));
-        std::fs::create_dir_all(&directory)?;
-        return Ok(directory);
+        match create_private_directory(&directory) {
+            Ok(()) => return Ok(directory),
+            // Keep the temporary-root fallback when the runtime directory itself
+            // is unavailable; the ownership checks below still apply there.
+            Err(StartupError::Activation(error)) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
     }
 
     // X11 does not require XDG_RUNTIME_DIR. A deterministic private directory
     // in the temporary root keeps activation and stale-socket recovery available.
-    // SAFETY: geteuid has no preconditions and only reads the effective user ID.
-    let uid = unsafe { libc::geteuid() };
-    let directory = temporary.join(format!("ropy-{uid}-{session:016x}"));
-    match DirBuilder::new().mode(0o700).create(&directory) {
+    let directory = temporary.join(format!("ropy-{}-{session:016x}", effective_uid()));
+    create_private_directory(&directory)?;
+    Ok(directory)
+}
+
+/// Create the per-session endpoint directory with private permissions, then
+/// prove it is the directory this user can safely bind a socket in.
+fn create_private_directory(directory: &Path) -> Result<(), StartupError> {
+    match DirBuilder::new().mode(0o700).create(directory) {
         Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error.into()),
     }
     // Do not follow symlinks or repair an untrusted pre-existing path: no lock
     // or socket inside it may be opened or removed before this check succeeds.
-    let metadata = std::fs::symlink_metadata(&directory)?;
-    if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o777 != 0o700 {
-        return Err(StartupError::UnsafeActivationDirectory(directory));
+    let metadata = std::fs::symlink_metadata(directory)?;
+    if !metadata.is_dir() || metadata.uid() != effective_uid() || metadata.mode() & 0o777 != 0o700 {
+        return Err(StartupError::UnsafeActivationDirectory(
+            directory.to_path_buf(),
+        ));
     }
-    Ok(directory)
+    Ok(())
+}
+
+fn effective_uid() -> u32 {
+    // SAFETY: geteuid has no preconditions and only reads the effective user ID.
+    unsafe { libc::geteuid() }
 }
 
 const MAX_ACTIVATION_BYTES: usize = 4096;
@@ -313,6 +329,60 @@ mod tests {
             std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o777)).unwrap();
         }
         assert!(activation_directory(None, temporary.path(), display).is_err());
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn test_activation_directory_unsafe_configured_runtime_rejected(#[case] link: bool) {
+        let runtime = tempfile::tempdir().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let display = OsStr::new("wayland-1");
+        let directory = runtime.path().join(format!(
+            "ropy-{:016x}",
+            seahash::hash(display.as_encoded_bytes())
+        ));
+        if link {
+            symlink(temporary.path(), &directory).unwrap();
+        } else {
+            std::fs::create_dir(&directory).unwrap();
+            std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o777)).unwrap();
+        }
+        assert!(matches!(
+            activation_directory(Some(runtime.path()), temporary.path(), display),
+            Err(StartupError::UnsafeActivationDirectory(_))
+        ));
+    }
+
+    #[test]
+    fn test_activation_directory_missing_runtime_root_uses_private_temporary_root() {
+        let runtime = tempfile::tempdir().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let display = OsStr::new("wayland-1");
+        let missing = runtime.path().join("absent");
+
+        let directory = activation_directory(Some(&missing), temporary.path(), display).unwrap();
+
+        assert!(directory.starts_with(temporary.path()));
+        assert_eq!(
+            std::fs::symlink_metadata(&directory).unwrap().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn test_activation_directory_reuses_existing_private_runtime_directory() {
+        let runtime = tempfile::tempdir().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let display = OsStr::new("wayland-1");
+
+        let first = activation_directory(Some(runtime.path()), temporary.path(), display).unwrap();
+        let second = activation_directory(Some(runtime.path()), temporary.path(), display).unwrap();
+
+        assert!(first.starts_with(runtime.path()));
+        assert_eq!(first, second);
+        let metadata = std::fs::symlink_metadata(&first).unwrap();
+        assert_eq!(metadata.mode() & 0o777, 0o700);
     }
 
     #[rstest]
