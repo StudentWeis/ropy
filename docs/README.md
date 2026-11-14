@@ -20,6 +20,7 @@ Start with the [English README](../README.md) or [中文 README](../README.zh-CN
 | Contribute bundled themes, translations or code | [Contributing](../CONTRIBUTING.md) / [中文贡献指南](../CONTRIBUTING.zh-CN.md) |
 | Follow the Issue, branch, commit and PR procedure | [Contribution flow](../.agents/skills/contribution-flow/SKILL.md) |
 | Understand package boundaries, persistence and background tasks | [Architecture](architecture.md) |
+| Evaluate the native preview window on Wayland | [Native preview popup on Wayland](wayland-preview-window.md) |
 | Choose tests, reproduce CI, or collect native regression evidence | [Testing](testing.md) |
 | Capture isolated promotional screenshots on macOS | [Promotional screenshots](promo-screenshots.md) |
 | Maintain documentation and verify its facts | [Project documentation skill](../.agents/skills/project-doc/SKILL.md) |
