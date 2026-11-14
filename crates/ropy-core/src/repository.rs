@@ -25,7 +25,7 @@ mod time_index;
 pub use clipboard_files::{
     deserialize_file_paths, hash_file_paths, normalize_file_paths, serialize_file_paths,
 };
-pub use display::DisplaySnapshot;
+pub use display::{DisplaySnapshot, compare_for_display, sort_for_display};
 pub use hash::content_hash;
 pub use models::{ClipboardRecord, ContentType, RichTextMeta};
 pub use repo::ClipboardRepository;

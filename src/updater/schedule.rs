@@ -22,15 +22,9 @@ impl CheckSchedule {
     pub(crate) fn save(&self) {
         if let Some(path) = Self::path() {
             let result = (|| -> Result<(), super::errors::UpdateError> {
-                let parent = path.parent().ok_or_else(|| {
-                    super::errors::UpdateError::Parse("missing schedule directory".into())
-                })?;
-                std::fs::create_dir_all(parent)?;
-                let mut file = tempfile::NamedTempFile::new_in(parent)?;
-                serde_json::to_writer(file.as_file_mut(), self)
+                let bytes = serde_json::to_vec(self)
                     .map_err(|e| super::errors::UpdateError::Parse(e.to_string()))?;
-                file.persist(path)
-                    .map_err(|e| super::errors::UpdateError::Io(e.error))?;
+                crate::utils::write_atomic(&path, &bytes)?;
                 Ok(())
             })();
             if let Err(error) = result {

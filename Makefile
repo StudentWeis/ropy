@@ -22,8 +22,8 @@ run: ## Build and run the debug application
 check: ## Check all targets and features
 	$(CARGO) check --locked --workspace --all-targets --all-features
 
-test: ## Run the test suite
-	$(CARGO) test --locked --workspace --all-targets --all-features
+test: ## Run the test suite (unit, integration and doc tests)
+	$(CARGO) test --locked --workspace --all-features
 
 fmt: ## Format Rust code with the pinned stable rustfmt
 	$(CARGO) fmt --all

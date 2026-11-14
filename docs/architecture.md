@@ -110,7 +110,7 @@ The existing generic storage seam is public because capture tests use its fault-
 
 ## Verification
 
-The maintained precheck formats, lints, tests and documents the entire workspace. `scripts/check/check_core_dependencies.py` checks normal, build and dev dependency edges across all features and target platforms, rejecting desktop dependencies. CI also runs `cargo test --locked -p ropy-core --all-targets --all-features` in a separate Linux job without installing desktop system libraries. The aggregate CI gate requires that job as well as the existing desktop checks.
+The maintained precheck formats, lints, tests and documents the entire workspace. `scripts/check/check_core_dependencies.py` checks normal, build and dev dependency edges across all features and target platforms, rejecting desktop dependencies. CI also runs `cargo test --locked -p ropy-core --all-features` in a separate Linux job without installing desktop system libraries. The aggregate CI gate requires that job as well as the existing desktop checks.
 
 `scripts/tests/test_architecture.py` retains a source-level check for module layering and clipboard scheduling, while the separate Cargo package prevents core from importing desktop application modules. Public API integration tests exercise real database reopen, rich-text persistence and settings recovery as an external consumer. Existing behavior tests moved with their owners. See [Testing](testing.md) for commands and coverage expectations.
 

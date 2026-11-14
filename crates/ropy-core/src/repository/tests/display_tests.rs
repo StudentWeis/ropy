@@ -6,6 +6,7 @@ use std::thread;
 use crate::repository::{
     models::{ClipboardRecord, ContentType},
     repo::ClipboardRepository,
+    sort_for_display,
     test_helpers::{
         capture_time, create_test_repo, load_display_records, save_numbered_records, save_text_at,
     },
@@ -343,7 +344,7 @@ fn test_sort_for_display_all_same_pinned_state() {
         },
     ];
 
-    ClipboardRepository::sort_for_display(&mut records);
+    sort_for_display(&mut records);
 
     assert_eq!(records[0].content, "newest");
     assert_eq!(records[1].content, "middle");

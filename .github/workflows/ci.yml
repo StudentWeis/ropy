@@ -52,7 +52,7 @@ jobs:
         run: python3 scripts/check/check_core_dependencies.py
 
       - name: Test core without desktop system libraries
-        run: cargo test --locked -p ropy-core --all-targets --all-features
+        run: cargo test --locked -p ropy-core --all-features
 
   precheck:
     name: Linux (clippy + test + docs)
@@ -108,7 +108,7 @@ jobs:
         run: cargo build --locked --workspace --all-targets --all-features
 
       - name: Run unit tests
-        run: cargo test --locked --workspace --all-targets --all-features
+        run: cargo test --locked --workspace --all-features
 
   ci:
     # Preserve the previous required check, now aggregating every platform.

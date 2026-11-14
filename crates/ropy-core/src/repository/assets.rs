@@ -94,14 +94,7 @@ fn write_image_atomically(
     path: &Path,
     encode: impl FnOnce(&mut fs::File) -> Result<(), ImageSaveError>,
 ) -> Result<(), ImageSaveError> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| std::io::Error::other("image path has no parent"))?;
-    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    encode(temporary.as_file_mut())?;
-    temporary.as_file().sync_all()?;
-    temporary.persist(path).map_err(|error| error.error)?;
-    Ok(())
+    crate::atomic_write::write_atomic(path, encode)
 }
 
 fn save_png(image: &DynamicImage, path: &Path) -> Result<(), ImageSaveError> {

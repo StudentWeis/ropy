@@ -17,6 +17,22 @@ pub(crate) use logging::init as init_logging;
 pub use single_instance::ensure_single_instance;
 pub(crate) use sync::{lock_or_recover, read_or_recover, write_or_recover};
 
+/// Replace `path` with `bytes`, staging the write next to the destination so a
+/// crash leaves either the previous file or the complete new one.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("path has no parent directory"))?;
+    std::fs::create_dir_all(parent)?;
+    let mut staging = tempfile::NamedTempFile::new_in(parent)?;
+    staging.write_all(bytes)?;
+    staging.as_file().sync_all()?;
+    staging.persist(path).map_err(|error| error.error)?;
+    Ok(())
+}
+
 /// Reveal `path` in the host operating system's default file manager.
 ///
 /// On unsupported platforms this is a no-op; on supported platforms any

@@ -415,3 +415,61 @@ fn test_redb_reopen_inconsistent_indexes_repairs_without_losing_pin_or_favorite(
         );
     }
 }
+
+#[test]
+fn test_delete_corrupt_record_removes_record_and_index_entries() {
+    use crate::repository::{
+        backend::{FAVORITES_TREE, RECORDS_TREE, TIME_INDEX_LOOKUP_TREE},
+        test_helpers::save_text_at,
+    };
+    let dir = tempfile::tempdir().expect("fixture directory");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), dir.path().join("images"))
+        .expect("repository");
+    let record = save_text_at(&repo, "corrupt", 1);
+    repo.toggle_favorite(record.id).expect("favorite");
+    backend
+        .open_tree(RECORDS_TREE)
+        .expect("tree")
+        .insert(&record.id.to_be_bytes(), b"broken")
+        .expect("corrupt payload");
+
+    assert!(repo.get_by_id(record.id).is_err());
+    assert!(repo.delete(record.id).expect("delete corrupt record"));
+    assert_eq!(repo.count().expect("count"), 0);
+    for tree in [TIME_INDEX_TREE, TIME_INDEX_LOOKUP_TREE, FAVORITES_TREE] {
+        assert_eq!(
+            backend.open_tree(tree).expect("tree").len().expect("count"),
+            0,
+            "delete must clear {tree}"
+        );
+    }
+    assert!(!repo.delete(record.id).expect("repeat delete"));
+}
+
+#[test]
+fn test_delete_missing_record_clears_orphan_index_entries() {
+    use crate::repository::{
+        backend::{RECORDS_TREE, TIME_INDEX_LOOKUP_TREE},
+        test_helpers::save_text_at,
+    };
+    let dir = tempfile::tempdir().expect("fixture directory");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), dir.path().join("images"))
+        .expect("repository");
+    let record = save_text_at(&repo, "orphaned", 1);
+    backend
+        .open_tree(RECORDS_TREE)
+        .expect("tree")
+        .remove(&record.id.to_be_bytes())
+        .expect("drop payload");
+
+    assert!(!repo.delete(record.id).expect("delete orphan"));
+    for tree in [TIME_INDEX_TREE, TIME_INDEX_LOOKUP_TREE] {
+        assert_eq!(
+            backend.open_tree(tree).expect("tree").len().expect("count"),
+            0,
+            "delete must clear {tree}"
+        );
+    }
+}

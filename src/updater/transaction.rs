@@ -82,12 +82,7 @@ impl Transaction {
         fs::rename(payload, transaction.staged())?;
         let bytes =
             serde_json::to_vec(&transaction).map_err(|e| UpdateError::Parse(e.to_string()))?;
-        let mut metadata = tempfile::NamedTempFile::new_in(transaction.root())?;
-        std::io::Write::write_all(metadata.as_file_mut(), &bytes)?;
-        metadata.as_file().sync_all()?;
-        metadata
-            .persist(transaction.root().join("transaction.json"))
-            .map_err(|error| UpdateError::Io(error.error))?;
+        crate::utils::write_atomic(&transaction.root().join("transaction.json"), &bytes)?;
         Ok(transaction)
     }
 
@@ -284,23 +279,53 @@ pub(crate) fn handle_startup() -> Result<bool, UpdateError> {
     let root = transaction_root(target);
     // A live helper already owns recovery. An interrupted transaction
     // is resumed by a helper outside the installation being replaced.
-    if root.join("backup").exists()
-        && let transaction = Transaction::load(&root)?
-        && let Ok(lock) = transaction.lock()
-    {
-        if root.join("healthy").exists() {
-            // A failed backup cleanup must not roll back an acknowledged
-            // healthy version on the next launch.
-            if let Err(error) = remove_if_exists(&transaction.backup()) {
-                tracing::warn!(%error, "could not remove acknowledged update backup");
-            }
+    recover_interrupted_transaction(&root)
+}
+
+/// Resume an interrupted replacement, or discard metadata this version cannot
+/// read. Returns `true` when a helper now owns recovery and this process exits.
+fn recover_interrupted_transaction(root: &Path) -> Result<bool, UpdateError> {
+    if !root.join("backup").exists() {
+        return Ok(false);
+    }
+    let transaction = match Transaction::load(root) {
+        Ok(transaction) => transaction,
+        Err(error) => {
+            // Recovery needs the recorded target. A payload this version cannot
+            // read is kept aside instead of blocking every later launch, because
+            // startup has no UI that could explain or repair it.
+            tracing::warn!(%error, path = %root.display(), "setting unreadable update transaction aside");
+            discard_transaction(root);
             return Ok(false);
         }
-        drop(lock);
-        let _child = start_helper(&root)?;
-        return Ok(true);
+    };
+    let Ok(lock) = transaction.lock() else {
+        // A live helper already owns this transaction.
+        return Ok(false);
+    };
+    if root.join("healthy").exists() {
+        // A failed backup cleanup must not roll back an acknowledged
+        // healthy version on the next launch.
+        if let Err(error) = remove_if_exists(&transaction.backup()) {
+            tracing::warn!(%error, "could not remove acknowledged update backup");
+        }
+        return Ok(false);
     }
-    Ok(false)
+    drop(lock);
+    let _child = start_helper(root)?;
+    Ok(true)
+}
+
+fn discard_transaction(root: &Path) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let name = root.file_name().unwrap_or_default().to_string_lossy();
+    let quarantined = root.with_file_name(format!("{name}.unreadable-{stamp}"));
+    if let Err(error) = fs::rename(root, &quarantined) {
+        tracing::warn!(%error, path = %root.display(), "could not set unreadable update transaction aside");
+    }
 }
 
 fn run_helper(root: &Path, pid: u32) -> Result<(), UpdateError> {
@@ -394,6 +419,56 @@ pub(crate) fn confirm_startup() -> Result<(), UpdateError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_startup_recovery_discards_unreadable_transaction_and_keeps_starting() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("ropy");
+        fs::write(&target, "installed").unwrap();
+        let transaction = Transaction {
+            target: target.clone(),
+            bundle: false,
+            origin: None,
+        };
+        fs::create_dir_all(transaction.backup()).unwrap();
+        fs::write(transaction.backup().join("ropy"), "backup").unwrap();
+        fs::write(
+            transaction.root().join("transaction.json"),
+            b"{ not a transaction",
+        )
+        .unwrap();
+
+        assert!(!recover_interrupted_transaction(&transaction.root()).unwrap());
+        assert!(
+            !transaction.root().exists(),
+            "unreadable metadata must not block startup"
+        );
+        assert_eq!(fs::read_to_string(&target).unwrap(), "installed");
+    }
+
+    #[test]
+    #[expect(clippy::unwrap_used)]
+    fn test_startup_recovery_removes_backup_of_acknowledged_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("ropy");
+        fs::write(&target, "old").unwrap();
+        let transaction = Transaction {
+            target: target.clone(),
+            bundle: false,
+            origin: None,
+        };
+        fs::create_dir_all(transaction.root()).unwrap();
+        fs::rename(&target, transaction.backup()).unwrap();
+        fs::write(&target, "new").unwrap();
+        let metadata = serde_json::to_vec(&transaction).unwrap();
+        fs::write(transaction.root().join("transaction.json"), metadata).unwrap();
+        fs::write(transaction.root().join("healthy"), b"healthy").unwrap();
+
+        assert!(!recover_interrupted_transaction(&transaction.root()).unwrap());
+        assert!(!transaction.backup().exists());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "new");
+    }
 
     #[test]
     #[expect(clippy::unwrap_used)]

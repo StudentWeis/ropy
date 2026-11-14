@@ -491,22 +491,30 @@ impl<B: StorageBackend> ClipboardRepository<B> {
 
     /// Delete a record and its payload files, returning whether it existed.
     ///
+    /// An unreadable record is removed together with its index entries: the
+    /// board cannot display it, so refusing the deletion would leave a slot the
+    /// user can never clear.
+    ///
     /// # Errors
-    /// Returns an error if the record cannot be read or its deletion transaction fails.
+    /// Returns an error if the deletion transaction cannot be committed.
     pub fn delete(&self, id: u64) -> Result<bool, RepositoryError> {
         let _operation = self.lock_operation();
-        let record = self.get_by_id(id)?;
+        let record = self.load_record(id)?;
         let key = id.to_be_bytes();
-        let time_key = record.as_ref().map(|record| {
-            TimeIndex::<B::Tree>::encode_key(record.created_at.timestamp_millis(), id)
-        });
+        let time_key = match self.time_index.key_for_id(id) {
+            Ok(time_key) => time_key,
+            Err(error) => {
+                tracing::warn!(%error, id, "ignoring unreadable time index lookup during delete");
+                None
+            }
+        };
         let mut removals = vec![
             TreeKey::new(RECORDS_TREE, &key),
             TreeKey::new(FAVORITES_TREE, &key),
+            TreeKey::new(TIME_INDEX_LOOKUP_TREE, &key),
         ];
         if let Some(time_key) = time_key.as_ref() {
             removals.push(TreeKey::new(TIME_INDEX_TREE, time_key));
-            removals.push(TreeKey::new(TIME_INDEX_LOOKUP_TREE, &key));
         }
         let removed = self
             .backend

@@ -57,7 +57,9 @@ if [[ "$PHASE" != light ]]; then
 	python3 scripts/check/check_core_dependencies.py
 	# Clippy already performs the compiler checks for the same target/feature set.
 	$CARGO_CMD clippy --locked --workspace --all-targets --all-features
-	$CARGO_CMD test --locked --workspace --all-targets --all-features
+	# Default targets cover unit, integration and doc tests. Criterion benchmark
+	# binaries are built by Clippy above and run only by `make bench-search`.
+	$CARGO_CMD test --locked --workspace --all-features
 	if [[ "$(uname -s)" == Linux ]]; then
 		if ! command -v dbus-run-session &>/dev/null; then
 			echo "Linux precheck requires dbus-run-session; install your distribution's D-Bus tools." >&2
