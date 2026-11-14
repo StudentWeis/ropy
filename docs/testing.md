@@ -12,7 +12,7 @@ Use this guide to choose local checks, reproduce CI and identify tests that need
 
 ## Precheck and CI
 
-Run `./scripts/precheck.sh` before committing. It formats locally, checks resources and script tests, then runs Clippy, all-target/all-feature tests, and documentation checks across the workspace. Clippy covers the compiler checks, so a separate `cargo check` is unnecessary.
+Run `./scripts/precheck.sh` before committing. It formats locally, checks resources and script tests, then runs Clippy, all-feature tests whose default targets cover unit, integration and doc tests, and documentation checks across the workspace. Clippy covers the compiler checks, so a separate `cargo check` is unnecessary. Criterion benchmark binaries are type-checked by Clippy but not executed by the gate; `make bench-search` runs them.
 
 CI uses the same script without modifying files:
 
@@ -51,7 +51,7 @@ Makefile check, test, Clippy and documentation targets explicitly select the who
 Image capture tests exercise abandoned staging, failed database commits, partial file installation and preservation of existing same-hash payloads. GPUI context tests cover background history refresh, current filters and selection, changed history limits and clearing history with a request pending.
 
 - `cargo test --locked -p ropy-core`: run core unit tests, public API integration tests and doctests without compiling GPUI or native clipboard integration.
-- `cargo test --locked --workspace --all-targets --all-features`: run both packages, including the desktop tests that use the core `test` feature for fault injection.
+- `cargo test --locked --workspace --all-features`: run both packages, including the desktop tests that use the core `test` feature for fault injection. The default target selection covers unit, integration and doc tests without executing the Criterion benchmark binaries.
 - `python3 scripts/check/check_core_dependencies.py`: verify the full core dependency graph, including platform-specific and test dependencies.
 - `make fmt-check`: check formatting in both packages.
 

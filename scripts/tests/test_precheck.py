@@ -116,7 +116,10 @@ fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(full, light + rust)
         self.assertIn("cargo clippy --locked --workspace --all-targets --all-features", rust)
-        self.assertIn("cargo test --locked --workspace --all-targets --all-features", rust)
+        test_command = "cargo test --locked --workspace --all-features"
+        self.assertIn(test_command, rust)
+        # Benchmark binaries must not run as part of the test gate.
+        self.assertFalse(any(c.startswith(test_command) and "--all-targets" in c for c in rust))
         self.assertIn("cargo doc --locked --workspace --no-deps", rust)
         self.assertFalse(any(c.startswith("cargo check") for c in full))
 
