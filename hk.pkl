@@ -38,4 +38,6 @@ steps {
   ["end-of-file-fixer"] = (Builtins.newlines) { exclude = officialSkills }
   ["mixed-line-ending"] = (Builtins.mixed_line_ending) { exclude = officialSkills }
   ["fix-byte-order-marker"] = (Builtins.byte_order_marker) { exclude = officialSkills }
+  ["check-symlinks"] = Builtins.check_symlinks
+  ["destroyed-symlinks"] = Builtins.destroyed_symlinks
 }
