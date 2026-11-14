@@ -31,9 +31,11 @@ class SetupTests(unittest.TestCase):
             command = commands / name
             command.write_text("#!/bin/sh\nset -eu\n" + body + "\n")
             command.chmod(0o755)
+        # The stubs shadow cargo, hk and uvx while the rest of PATH keeps the
+        # interpreter that runs this suite and provides tomllib.
         self.env = dict(
             os.environ,
-            PATH=f"{commands}:/usr/bin:/bin",
+            PATH=f"{commands}:{os.environ['PATH']}",
             INIT_TEST_LOG=str(self.log),
         )
 
