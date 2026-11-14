@@ -2,6 +2,7 @@
 //! Clipboard repository for storing and retrieving clipboard records.
 
 use std::{
+    mem::DropGuard,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
 };
@@ -15,7 +16,7 @@ use super::{
         redb::{RedbBackend, redb_backend_factory},
     },
     errors::RepositoryError,
-    models::{ClipboardRecord, ContentType},
+    models::{ClipboardRecord, ContentType, RichTextMeta},
     sidecar::{
         purge_sidecar_dirs, remove_image_files, remove_record_sidecars,
         remove_superseded_rich_text_files,
@@ -406,20 +407,21 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         {
             return Ok(record.clone());
         }
-        let rich_text_meta = save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root())?;
+        // Staged sidecars belong to no record until the write below commits, so
+        // every early return from here on removes them. `dismiss` disarms the guard.
+        let staged = DropGuard::new(
+            save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root())?,
+            remove_staged_rich_text,
+        );
 
         if let Some(mut record) = existing {
             record.created_at = captured_at;
             let previous_meta = record.rich_text_meta.clone();
-            if let Some(meta) = rich_text_meta.as_ref() {
+            if let Some(meta) = staged.as_ref() {
                 record.rich_text_meta = Some(meta.clone());
             }
-            if let Err(error) = self.put_indexed_record(&key, &record) {
-                if let Some(meta) = rich_text_meta.as_ref() {
-                    remove_rich_text_files(meta);
-                }
-                return Err(error);
-            }
+            self.put_indexed_record(&key, &record)?;
+            let _ = DropGuard::dismiss(staged);
             if let Some(meta) = record.rich_text_meta.as_ref() {
                 remove_superseded_rich_text_files(previous_meta.as_ref(), meta);
             }
@@ -432,15 +434,18 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             created_at: captured_at,
             content_type: ContentType::RichText,
             pinned: false,
-            rich_text_meta,
+            rich_text_meta: (*staged).clone(),
         };
-        if let Err(error) = self.put_indexed_record(&key, &record) {
-            if let Some(meta) = record.rich_text_meta.as_ref() {
-                remove_rich_text_files(meta);
-            }
-            return Err(error);
-        }
+        self.put_indexed_record(&key, &record)?;
+        let _ = DropGuard::dismiss(staged);
         Ok(record)
+    }
+}
+
+/// Remove sidecars staged for a record write that never committed.
+fn remove_staged_rich_text(meta: Option<RichTextMeta>) {
+    if let Some(meta) = meta {
+        remove_rich_text_files(&meta);
     }
 }
 
