@@ -50,6 +50,8 @@ if [[ "$PHASE" != rust ]]; then
 	python3 scripts/check/check_i18n.py
 	python3 scripts/check/check_icons.py
 	python3 scripts/check/check_themes.py
+	python3 scripts/check/check_markdown.py
+	python3 scripts/check/check_agent_skills.py
 	python3 -m unittest discover -s scripts/tests
 fi
 
