@@ -1,11 +1,12 @@
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use gpui_kit::InteractiveElement;
 use gpui_kit::{
-    Context, SharedString,
+    Context, Keystroke, SharedString,
     component::{
         ActiveTheme, Sizable,
         button::{Button, ButtonVariants},
         h_flex,
+        kbd::Kbd,
     },
     div,
     prelude::{IntoElement, ParentElement, Styled},
@@ -13,6 +14,32 @@ use gpui_kit::{
 };
 
 const PANEL_SIDE_WIDTH_PX: f32 = 72.0;
+
+/// Direction keys read as arrows on every platform, not only macOS.
+fn arrow_glyph(key: &str) -> Option<&'static str> {
+    match key {
+        "up" => Some("\u{2191}"),
+        "down" => Some("\u{2193}"),
+        "left" => Some("\u{2190}"),
+        "right" => Some("\u{2192}"),
+        _ => None,
+    }
+}
+
+/// Copy of a keystroke whose arrow keys carry the arrow glyph.
+pub(super) fn display_keystroke(key: &Keystroke) -> Keystroke {
+    let Some(glyph) = arrow_glyph(&key.key) else {
+        return key.clone();
+    };
+    let mut display = key.clone();
+    glyph.clone_into(&mut display.key);
+    display
+}
+
+/// Key label built from the display keystroke.
+pub(super) fn keystroke_label(key: &Keystroke) -> String {
+    Kbd::format(&display_keystroke(key))
+}
 
 fn panel_side_slot<C: IntoElement>(child: C) -> impl IntoElement {
     div()

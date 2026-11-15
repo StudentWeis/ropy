@@ -5,7 +5,6 @@ use gpui_kit::{
         ActiveTheme, Disableable, Sizable, StyledExt,
         button::{Button, ButtonVariants},
         h_flex,
-        kbd::Kbd,
         menu::{DropdownMenu, PopupMenuItem},
         tag::Tag,
         v_flex,
@@ -15,7 +14,7 @@ use gpui_kit::{
 };
 use rust_i18n::t;
 
-use super::common::{panel_back_button, panel_header_with_back};
+use super::common::{keystroke_label, panel_back_button, panel_header_with_back};
 use crate::{
     config::Settings,
     gui::{
@@ -414,7 +413,7 @@ fn shortcut_controls(
         let mut remaining = keys.to_vec();
         remaining.retain(|other| other != key);
         let label = gpui_kit::Keystroke::parse_with_os(key, cx.platform_info().os)
-            .map_or_else(|_| key.clone(), |key| Kbd::format(&key));
+            .map_or_else(|_| key.clone(), |key| keystroke_label(&key));
         let remove_label = t!("shortcuts_remove_key", key = label, action = shortcut.label);
         controls = controls.child(
             h_flex()

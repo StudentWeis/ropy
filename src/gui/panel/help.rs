@@ -7,7 +7,6 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         h_flex,
         kbd::Kbd,
-        tag::Tag,
         v_flex,
     },
     div,
@@ -27,7 +26,7 @@ use crate::{
                 ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin, binding_applies_to_history,
             },
         },
-        panel::common::{panel_back_button, panel_header_with_back},
+        panel::common::{display_keystroke, panel_back_button, panel_header_with_back},
     },
 };
 
@@ -66,7 +65,7 @@ impl ShortcutRow {
             let keystrokes = binding
                 .keystrokes()
                 .iter()
-                .map(|key| key.as_keystroke().clone())
+                .map(|key| display_keystroke(key.as_keystroke()))
                 .collect::<Vec<_>>();
             let keys = keystrokes
                 .iter()
@@ -89,15 +88,55 @@ impl ShortcutRow {
         }
         self
     }
+
+    /// Bindings in display order: list scope first, then search scope.
+    fn ordered(&self) -> impl Iterator<Item = &ShortcutBinding> {
+        self.bindings
+            .iter()
+            .filter(|binding| !binding.search_scope)
+            .chain(self.bindings.iter().filter(|binding| binding.search_scope))
+    }
+
+    /// Accessible text for the row, in the order the key groups appear.
+    fn keys(&self) -> String {
+        self.ordered()
+            .map(|binding| binding.display.as_str())
+            .collect::<Vec<_>>()
+            .join(" / ")
+    }
 }
 
-/// Key caps for one row, separated the same way as the accessible label.
+/// Key caps for one row. Rows that span both scopes stack one labelled group per
+/// scope; single-scope rows render without a label.
 fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
-    h_flex()
-        .w_full()
-        .flex_wrap()
-        .items_center()
-        .gap_1()
+    let (search, list): (Vec<_>, Vec<_>) = bindings
+        .into_iter()
+        .partition(|binding| binding.search_scope);
+    let labelled = !search.is_empty() && !list.is_empty();
+    let mut groups = v_flex().w_full().gap_1();
+    if !list.is_empty() {
+        let label = labelled.then(|| t!("help_list_scope").into_owned());
+        groups = groups.child(render_key_group(list, label, cx));
+    }
+    if !search.is_empty() {
+        let label = labelled.then(|| t!("help_search_scope").into_owned());
+        groups = groups.child(render_key_group(search, label, cx));
+    }
+    groups.into_any_element()
+}
+
+fn render_key_group(bindings: Vec<ShortcutBinding>, label: Option<String>, cx: &App) -> AnyElement {
+    let mut group = h_flex().w_full().flex_wrap().items_center().gap_1();
+    if let Some(label) = label {
+        group = group.child(
+            div()
+                .flex_shrink_0()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(label),
+        );
+    }
+    group
         .children(
             bindings
                 .into_iter()
@@ -113,20 +152,13 @@ fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
                                 .into_any_element(),
                         );
                     }
-                    let keystrokes = binding.keystrokes;
-                    let mut keys = h_flex()
-                        .items_center()
-                        .gap_0p5()
-                        .children(keystrokes.into_iter().map(Kbd::new));
-                    if binding.search_scope {
-                        keys = keys.child(
-                            Tag::secondary()
-                                .outline()
-                                .small()
-                                .child(t!("help_search_scope")),
-                        );
-                    }
-                    chips.push(keys.into_any_element());
+                    chips.push(
+                        h_flex()
+                            .items_center()
+                            .gap_0p5()
+                            .children(binding.keystrokes.into_iter().map(Kbd::new))
+                            .into_any_element(),
+                    );
                     chips
                 }),
         )
@@ -234,16 +266,12 @@ pub(crate) fn render_help_content(
         .into_iter()
         .enumerate()
         .map(|(i, row)| {
+            let keys = row.keys();
             let ShortcutRow {
                 bindings,
                 id,
                 label,
             } = row;
-            let keys = bindings
-                .iter()
-                .map(|binding| binding.display.as_str())
-                .collect::<Vec<_>>()
-                .join(" / ");
 
             let row_bg = if i % 2 == 0 {
                 cx.theme().background

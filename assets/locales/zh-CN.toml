@@ -169,7 +169,8 @@ keybindings_invalid_key = "动作“%{action}”的快捷键“%{key}”不受�
 keybindings_reserved_key = "动作“%{action}”的快捷键“%{key}”已保留给窗口或焦点操作。"
 keybindings_conflict = "快捷键“%{key}”同时分配给了“%{first}”和“%{second}”。"
 help_search_binding = "%{keys}（搜索框）"
-help_search_scope = "搜索框"
+help_list_scope = "列表"
+help_search_scope = "搜索框内"
 
 shortcuts_title = "列表快捷键"
 shortcuts_customize = "自定义…"

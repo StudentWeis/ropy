@@ -169,7 +169,8 @@ keybindings_invalid_key = "「%{action}」のショートカット「%{key}」�
 keybindings_reserved_key = "「%{action}」のショートカット「%{key}」はウィンドウまたはフォーカス操作用に予約されています。"
 keybindings_conflict = "ショートカット「%{key}」が「%{first}」と「%{second}」の両方に割り当てられています。"
 help_search_binding = "%{keys}（検索欄）"
-help_search_scope = "検索欄"
+help_list_scope = "リスト"
+help_search_scope = "検索欄内"
 
 shortcuts_title = "履歴のショートカット"
 shortcuts_customize = "カスタマイズ…"

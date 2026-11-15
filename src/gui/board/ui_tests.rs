@@ -459,9 +459,8 @@ fn test_history_override_preserves_search_navigation_and_labels_its_keys(cx: &mu
             .label()
             .unwrap()
             .to_string();
-        let down = gpui_kit::component::kbd::Kbd::format(&Keystroke::parse("down").unwrap());
         assert!(
-            label.contains(t!("help_search_binding", keys = down).as_ref()),
+            label.contains(t!("help_search_binding", keys = "\u{2193}").as_ref()),
             "{label}"
         );
         assert!(label.contains(" / N"), "{label}");
