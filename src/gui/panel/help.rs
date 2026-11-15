@@ -7,10 +7,12 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         h_flex,
         kbd::Kbd,
+        separator::Separator,
         v_flex,
     },
     div,
     prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
+    px,
 };
 use rust_i18n::t;
 
@@ -265,44 +267,23 @@ pub(crate) fn render_help_content(
 
     let col_header = render_column_header(cx);
 
-    // Build shortcut rows. Rows carry no fill: the column header band and the
-    // key groups already separate entries, and alternating fills compete with
-    // them once a row grows to two lines.
-    let rows = shortcut_rows(board, cx).into_iter().map(|row| {
-        let keys = row.keys();
-        let ShortcutRow {
-            bindings,
-            id,
-            label,
-        } = row;
-
-        h_flex()
-            .id(id)
-            .test_support()
-            .aria_label(format!("{label}: {keys}"))
-            .w_full()
-            .px_2()
-            .py_1p5()
-            .gap_4()
-            .child(
-                // Key badges
+    // Separators carry the row boundaries: rows keep no fill, and the hairline
+    // reads quieter than alternating bands once a row grows to two lines.
+    let mut rows = Vec::new();
+    for row in shortcut_rows(board, cx) {
+        if !rows.is_empty() {
+            // Separator paints an absolutely positioned line, so the wrapper
+            // gives it the one pixel it occupies in the column.
+            rows.push(
                 div()
-                    .id(SharedString::from(format!("help-keys-{id}")))
-                    .test_support()
-                    .w(KEY_COLUMN_WIDTH)
-                    .flex_shrink_0()
-                    .child(render_row_keys(bindings, cx)),
-            )
-            .child(
-                div()
-                    .id(SharedString::from(format!("help-action-{id}")))
-                    .test_support()
-                    .flex_1()
-                    .text_sm()
-                    .text_color(cx.theme().foreground)
-                    .child(label),
-            )
-    });
+                    .w_full()
+                    .h(px(1.))
+                    .child(Separator::horizontal())
+                    .into_any_element(),
+            );
+        }
+        rows.push(render_row(row, cx));
+    }
 
     v_flex()
         .size_full()
@@ -314,11 +295,47 @@ pub(crate) fn render_help_content(
                 .overflow_y_scroll()
                 .size_full()
                 .flex_1()
-                .gap_0p5()
                 .pb_4()
                 .child(col_header)
                 .children(rows),
         )
+}
+
+fn render_row(row: ShortcutRow, cx: &Context<'_, RopyBoard>) -> AnyElement {
+    let keys = row.keys();
+    let ShortcutRow {
+        bindings,
+        id,
+        label,
+    } = row;
+
+    h_flex()
+        .id(id)
+        .test_support()
+        .aria_label(format!("{label}: {keys}"))
+        .w_full()
+        .px_2()
+        .py_1p5()
+        .gap_4()
+        .child(
+            // Key badges
+            div()
+                .id(SharedString::from(format!("help-keys-{id}")))
+                .test_support()
+                .w(KEY_COLUMN_WIDTH)
+                .flex_shrink_0()
+                .child(render_row_keys(bindings, cx)),
+        )
+        .child(
+            div()
+                .id(SharedString::from(format!("help-action-{id}")))
+                .test_support()
+                .flex_1()
+                .text_sm()
+                .text_color(cx.theme().foreground)
+                .child(label),
+        )
+        .into_any_element()
 }
 
 fn customize_button(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
