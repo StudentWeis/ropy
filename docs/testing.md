@@ -4,25 +4,27 @@ Use this guide to choose local checks, reproduce CI and identify tests that need
 
 ## Test design
 
-- Use `tempfile` to create temporary files.
-- Use `rstest` to perform parameterized tests.
-- Use appropriate macros to avoid clippy warnings in test functions.
-- Test functions should follow the `test_<object>_<scenario>_<expected>` naming pattern.
-- Don't write meaningless inevitably correct tests, focus on the execution of the logic.
+- Name test functions `test_<object>_<scenario>_<expected>`.
+- Use `rstest` for parameterized cases and `tempfile` for filesystem isolation.
+- Place each test at the layer that owns the behavior: core tests for storage, search and settings; GPUI tests for window, board and hotkey behavior.
+- Cover the failure and recovery path next to the happy path. A test that cannot fail adds maintenance cost without diagnostics.
+- Pass the active locale explicitly; tests and offline fixtures do not read the shared locale global.
+
+A behavior change needs a test that fails without it. Doc tests and a clean Clippy run do not replace that test, and headless tests do not replace the native evidence described below.
 
 ## Precheck and CI
 
-Run `./scripts/precheck.sh` before committing. It formats locally, checks resources and script tests, then runs Clippy, all-feature tests whose default targets cover unit, integration and doc tests, and documentation checks across the workspace. Clippy covers the compiler checks, so a separate `cargo check` is unnecessary. Criterion benchmark binaries are type-checked by Clippy but not executed by the gate; `make bench-search` runs them.
+Choose the gate by what the change contains. Code, checks, templates, configuration and assets need `./scripts/precheck.sh`; Markdown and agent instructions alone use `./scripts/precheck.sh --check --light`. CI runs both phases on every PR, so a Markdown-only change still has to pass the full gate before merge.
+
+The full gate formats locally, checks resources, Markdown links and script tests, then runs Clippy, all-feature tests whose default targets cover unit, integration and doc tests, and documentation checks across the workspace. Clippy covers the compiler checks, so a separate `cargo check` is unnecessary. Criterion benchmark binaries are type-checked by Clippy but not executed by the gate; `make bench-search` runs them.
 
 CI uses the same script without modifying files:
 
-- `./scripts/precheck.sh --check --light` verifies Rust formatting, i18n, icons, themes and script tests before compilation.
+- `./scripts/precheck.sh --check --light` verifies Rust formatting, i18n, icons, themes, Markdown links and anchors, the vendored GPUI Kit skill snapshots and script tests before compilation.
 - `./scripts/precheck.sh --check --rust` runs Clippy, tests, the isolated Linux tray regression and documentation.
 - `./scripts/precheck.sh --check` runs both phases for local CI reproduction.
 
-After the lightweight gate passes, core-only Linux tests, Linux desktop checks, and macOS/Windows builds and unit tests run concurrently. These unit tests do not replace packaged GUI E2E tests. The existing `Precheck (fmt + clippy + test + i18n/icons/themes)` check is now an aggregate gate: failure, cancellation or skipping of any required job prevents it from passing. Cross-platform check names are also preserved for branch rules.
-
-Rust caches are restored on all branches and saved only on main. This avoids PR cache uploads and retains the existing job-based cache keys. A PR that changes dependencies may need to rebuild them on each run until it merges; compare cache restore/save durations and end-to-end workflow duration in Actions when evaluating this tradeoff. Runner queue time can still dominate even with parallel jobs.
+After the lightweight gate passes, core-only Linux tests, Linux desktop checks, and macOS/Windows builds and unit tests run concurrently. These unit tests do not replace packaged GUI E2E tests. The aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` check passes only when every required job, including the preserved cross-platform check names, passes; [main branch protection](releasing.md#main-branch-protection) records which checks are required.
 
 ## Packaged desktop test builds
 
@@ -53,6 +55,8 @@ Image capture tests exercise abandoned staging, failed database commits, partial
 - `cargo test --locked -p ropy-core`: run core unit tests, public API integration tests and doctests without compiling GPUI or native clipboard integration.
 - `cargo test --locked --workspace --all-features`: run both packages, including the desktop tests that use the core `test` feature for fault injection. The default target selection covers unit, integration and doc tests without executing the Criterion benchmark binaries.
 - `python3 scripts/check/check_core_dependencies.py`: verify the full core dependency graph, including platform-specific and test dependencies.
+- `python3 scripts/check/check_markdown.py`: verify relative links and heading anchors in repository Markdown, skipping the vendored GPUI Kit snapshots.
+- `python3 scripts/check/check_agent_skills.py`: verify both vendored snapshot digests against `.agents/official-snapshots.json`, and that the adapter records the manifest commit, the declared `gpui-kit` version and the locked `gpui-pre` version.
 - `make fmt-check`: check formatting in both packages.
 
 The precheck uses explicit `--workspace` selection because the default member is still the root desktop application. Core CI deliberately installs no GTK/X11 system libraries; its result participates in the required aggregate check.
@@ -99,6 +103,6 @@ rustup show active-toolchain
 
 Makefile and precheck Rust validation commands use `--locked`. Dependency changes must include the reviewed `Cargo.lock` update. Upgrade the shared toolchain deliberately in `rust-toolchain.toml`, then run `make fmt` and the full precheck.
 
-Formatting uses stable rustfmt defaults. Existing import groups and separate `use` statements are preserved, with imports sorted within each group. Automatic standard-library/external/local grouping and crate-level merging are no longer enforced.
+Formatting uses stable rustfmt defaults; imports stay sorted within each explicit group. The formatter does not regroup standard-library, external and local imports, and it does not merge crate-level `use` statements.
 
-The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` and Release `plan` checks, with the PR up to date before merge. GitHub branch protection is server configuration, not something workflow YAML enables itself. The reviewed API payload is `.github/main-branch-protection.json`. Administrators can reconcile it with `gh api --method PUT repos/StudentWeis/ropy/branches/main/protection --input .github/main-branch-protection.json` and read the protection endpoint back to verify it. It requires a PR without requiring another reviewer, binds checks to GitHub Actions, applies to admins and disallows force pushes and deletion. The manual desktop packaging plan has a distinct check name so it cannot satisfy the Release `plan` requirement. See [Release acceptance](release-acceptance.md) for the manual package smoke gate and its evidence requirements; CI unit tests alone do not certify a release.
+Main branch protection is server configuration, not something workflow YAML enables itself. See [main branch protection](releasing.md#main-branch-protection) for the required checks and the reviewed API payload. See [Release acceptance](release-acceptance.md) for the manual package smoke gate and its evidence requirements; CI unit tests alone do not certify a release.

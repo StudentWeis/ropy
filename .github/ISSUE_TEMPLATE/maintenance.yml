@@ -1,0 +1,48 @@
+name: Maintenance
+description: Plan a chore, CI, build, test-only, style, performance or revert change.
+title: "chore: <short summary>"
+labels: ["maintenance"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Commit Type
+      description: Use the same type in the branch, commits and PR title.
+      options:
+        - chore
+        - ci
+        - build
+        - test
+        - style
+        - perf
+        - revert
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current State
+      description: What does the repository or pipeline do today, and what breaks or wastes time because of it?
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed Change
+      description: Describe the concrete change and the files or workflows it owns.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: State how the change is proven, such as a script test, `./scripts/precheck.sh`, or a manual step that cannot be automated.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Boundaries
+      options:
+        - label: This change does not publish a release, push a tag or merge a PR without explicit authorization
+        - label: This change does not modify the vendored GPUI Kit skill snapshots

@@ -17,13 +17,12 @@ Start with the [English README](../README.md) or [中文 README](../README.zh-CN
 | Task | Guide |
 | --- | --- |
 | Set up a checkout and run development commands | [Development](development.md) |
-| Contribute bundled themes, translations or code | [Contributing](../CONTRIBUTING.md) / [中文贡献指南](../CONTRIBUTING.zh-CN.md) |
-| Follow the Issue, branch, commit and PR procedure | [Contribution flow](../.agents/skills/contribution-flow/SKILL.md) |
+| Contribute code, themes, translations or documentation, and follow the Issue, branch, commit and PR procedure | [Contributing](../CONTRIBUTING.md) / [中文贡献指南](../CONTRIBUTING.zh-CN.md) |
 | Understand package boundaries, persistence and background tasks | [Architecture](architecture.md) |
 | Evaluate the native preview window on Wayland | [Native preview popup on Wayland](wayland-preview-window.md) |
 | Choose tests, reproduce CI, or collect native regression evidence | [Testing](testing.md) |
 | Capture isolated promotional screenshots on macOS | [Promotional screenshots](promo-screenshots.md) |
-| Maintain documentation and verify its facts | [Project documentation skill](../.agents/skills/project-doc/SKILL.md) |
+| Maintain documentation and verify its facts | [Contributing: maintain documentation](../CONTRIBUTING.md#maintain-documentation) |
 
 ## Validate and release
 
@@ -36,6 +35,8 @@ Start with the [English README](../README.md) or [中文 README](../README.zh-CN
 | Understand the Windows RDP geometry mitigation and its unverified boundary | [Windows RDP popup DPI restore](windows-rdp-dpi.md) |
 
 Passing unit tests, protocol fixtures or a development build does not certify a distributed package. Record platform, source revision, artifact digest and untested scenarios as required by the acceptance guide.
+
+Repository instructions for AI agents live in [`AGENTS.md`](../AGENTS.md), and `.agents/skills/` holds the procedures referenced above. They are maintained with the source like the pages in this index.
 
 ## Measure performance and read historical evidence
 

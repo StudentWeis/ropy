@@ -1,0 +1,33 @@
+name: Documentation
+description: Fix, extend or reorganize project documentation.
+title: "docs: <short summary>"
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: pages
+    attributes:
+      label: Affected Pages
+      description: Link the pages that are wrong or missing, such as docs/testing.md or AGENTS.md.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Current Content
+      description: Quote or summarize what the pages say, and why it is wrong, stale or unclear.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed Change
+      description: Describe the corrected content and name the fact owner that confirms it, such as source code, tests, Cargo.lock or a workflow file.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This change only touches Markdown or repository instructions, so `./scripts/precheck.sh --check --light` is the gate
+        - label: This change also touches code, checks or templates, so the full `./scripts/precheck.sh` gate is required

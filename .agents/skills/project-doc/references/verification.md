@@ -7,10 +7,11 @@
 - `git diff --check`：检查差异空白；另行阅读新文件和检查 Markdown 标题、围栏、链接与资源。
 - `make help`：核对公开 Make 入口，不启动桌面应用。
 - `python3 scripts/check/check_i18n.py` 与 `python3 scripts/check/check_themes.py`：检查语言和主题资源契约，不证明视觉效果。
-- `./scripts/precheck.sh`：提交前完整门禁。只做快速诊断可先用 `./scripts/precheck.sh --check --light`，但不能把它当作完整通过。
+- `./scripts/precheck.sh`：代码、检查、模板、配置和资源改动的提交前门禁。
+- `./scripts/precheck.sh --check --light`：仅修改 Markdown 与 agent 说明时使用的门禁，覆盖格式化、资源、Markdown 链接与锚点、官方 GPUI 快照摘要和脚本测试；合并前 CI 仍需通过两阶段。
 - `cargo test --locked -p ropy-core`：验证便携核心，不能证明原生剪贴板、窗口或桌面适配行为。
 
-当前没有仓库内 Markdown 专用校验器。使用外部 Markdown 工具时报告工具与范围，不把个人环境写成所有贡献者的前置依赖。检查历史/生成文档时保留其格式和数值；官方 GPUI 快照按 ropy-gpui 的上游比较程序验证，不批量修复。
+`python3 scripts/check/check_markdown.py` 校验仓库 Markdown 的相对链接与标题锚点，跳过两个官方 GPUI 快照；它不判断正文语义、代码围栏或外部链接，仍需人工核对。`python3 scripts/check/check_agent_skills.py` 比较两个官方快照的目录摘要与 [official-snapshots.json](../../../official-snapshots.json)，并核对适配器记录的修订号和依赖版本。检查历史/生成文档时保留其格式和数值；官方 GPUI 快照按 ropy-gpui 上游比较程序验证，不批量修复。
 
 ## 核验示例
 

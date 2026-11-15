@@ -83,6 +83,17 @@ The current DMGs are unsigned. At the user's request, the self-hosted Cask runs 
 
 Validate syntax, style, download/unpacking and both architecture hashes. On a machine without an existing Ropy installation, smoke-test installation, launch, managed update behavior, upgrade/reinstall and uninstall before publishing packaging changes. Never overwrite an existing app or clipboard data for tests.
 
+## Main branch protection
+
+The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` check and the Release `plan` check, with the PR up to date before merge. [Testing](testing.md) describes the jobs behind the aggregate check. GitHub branch protection is server configuration, not something workflow YAML enables itself; the reviewed API payload is `.github/main-branch-protection.json`. Administrators reconcile it with:
+
+```sh
+gh api --method PUT repos/StudentWeis/ropy/branches/main/protection \
+    --input .github/main-branch-protection.json
+```
+
+Read the protection endpoint back to confirm the result. It requires a PR without requiring another reviewer, binds checks to GitHub Actions, applies to admins and disallows force pushes and deletion. The manual desktop packaging plan has a distinct check name so it cannot satisfy the Release `plan` requirement.
+
 ## Protected release sequence
 
 Prepare the version and changelog on a branch and merge them through a PR before pushing a version tag. With cargo-release, use its preparation-only options:

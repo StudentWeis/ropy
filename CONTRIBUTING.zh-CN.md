@@ -6,9 +6,9 @@
 
 ## 准备修改
 
-1. 按照 [contribution-flow](.agents/skills/contribution-flow/SKILL.md) 执行 Issue → 分支 → PR → Squash Merge。模板、分支与提交命名、precheck 和合并授权以该流程为准。
+1. 按照 [contribution-flow](.agents/skills/contribution-flow/SKILL.md) 执行 Issue → 分支 → PR → Squash Merge。模板、分支与提交命名、门禁选择、precheck 和合并授权以该流程为准，squash 合并信息也按该流程撰写。
 2. 按[开发指南](docs/development.md)准备工具链和原生依赖。代码规范见 [AGENTS.md](AGENTS.md)，模块边界见[架构](docs/architecture.md)。
-3. 按[测试指南](docs/testing.md)选择测试。提交前必须执行 `./scripts/precheck.sh`，单独的资源检查不能替代完整门禁。
+3. 按[测试指南](docs/testing.md)选择测试。代码、检查、模板、配置和资源改动执行 `./scripts/precheck.sh`；仅修改 Markdown 和 agent 说明时执行 `./scripts/precheck.sh --check --light`。单独的资源检查不能替代所选门禁。
 
 ## 添加内置主题
 
