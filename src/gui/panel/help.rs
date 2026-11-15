@@ -1,11 +1,13 @@
 use gpui_kit::{
-    Action, App, AsKeystroke, Context, SharedString, StatefulInteractiveElement,
+    Action, AnyElement, App, AsKeystroke, Context, Keystroke, SharedString,
+    StatefulInteractiveElement,
     base::TestSupportExt,
     component::{
         ActiveTheme, Sizable,
         button::{Button, ButtonVariants},
         h_flex,
         kbd::Kbd,
+        tag::Tag,
         v_flex,
     },
     div,
@@ -29,8 +31,15 @@ use crate::{
     },
 };
 
+/// One registered binding, kept as keystrokes so rows can render key caps.
+struct ShortcutBinding {
+    keystrokes: Vec<Keystroke>,
+    display: String,
+    search_scope: bool,
+}
+
 struct ShortcutRow {
-    keys: Vec<String>,
+    bindings: Vec<ShortcutBinding>,
     id: &'static str,
     label: SharedString,
 }
@@ -38,7 +47,7 @@ struct ShortcutRow {
 impl ShortcutRow {
     fn new(label: impl Into<SharedString>, action: &dyn Action, cx: &App) -> Self {
         Self {
-            keys: Vec::new(),
+            bindings: Vec::new(),
             id: action.name(),
             label: label.into(),
         }
@@ -51,25 +60,74 @@ impl ShortcutRow {
         let mut bindings = keymap.bindings_for_action(action).collect::<Vec<_>>();
         bindings.sort_by_key(|binding| !binding_applies_to_history(binding));
         for binding in bindings {
-            let keys = binding
+            let keystrokes = binding
                 .keystrokes()
                 .iter()
-                .map(|key| Kbd::format(key.as_keystroke()))
+                .map(|key| key.as_keystroke().clone())
+                .collect::<Vec<_>>();
+            let keys = keystrokes
+                .iter()
+                .map(Kbd::format)
                 .collect::<Vec<_>>()
                 .join(" ");
-            if !self.keys.contains(&keys) {
-                let display = if binding_applies_to_history(binding) {
-                    keys
-                } else {
-                    t!("help_search_binding", keys = keys).to_string()
-                };
-                if !self.keys.contains(&display) {
-                    self.keys.push(display);
-                }
+            let search_scope = !binding_applies_to_history(binding);
+            let display = if search_scope {
+                t!("help_search_binding", keys = keys).to_string()
+            } else {
+                keys
+            };
+            if self.bindings.iter().all(|known| known.display != display) {
+                self.bindings.push(ShortcutBinding {
+                    keystrokes,
+                    display,
+                    search_scope,
+                });
             }
         }
         self
     }
+}
+
+/// Key caps for one row, separated the same way as the accessible label.
+fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
+    h_flex()
+        .w_full()
+        .flex_wrap()
+        .items_center()
+        .gap_1()
+        .children(
+            bindings
+                .into_iter()
+                .enumerate()
+                .flat_map(|(index, binding)| {
+                    let mut chips = Vec::with_capacity(2);
+                    if index > 0 {
+                        chips.push(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("/")
+                                .into_any_element(),
+                        );
+                    }
+                    let keystrokes = binding.keystrokes;
+                    let mut keys = h_flex()
+                        .items_center()
+                        .gap_0p5()
+                        .children(keystrokes.into_iter().map(Kbd::new));
+                    if binding.search_scope {
+                        keys = keys.child(
+                            Tag::secondary()
+                                .outline()
+                                .small()
+                                .child(t!("help_search_scope")),
+                        );
+                    }
+                    chips.push(keys.into_any_element());
+                    chips
+                }),
+        )
+        .into_any_element()
 }
 
 // Presentation groups refer to actions; key names come exclusively from GPUI's
@@ -111,7 +169,7 @@ fn shortcut_rows(board: &RopyBoard, cx: &App) -> Vec<ShortcutRow> {
         rows.push(ShortcutRow::new(t!("help_pin"), &ToggleWindowPin, cx));
     }
     rows.push(ShortcutRow::new(t!("help_hide"), &Hide, cx));
-    rows.retain(|row| !row.keys.is_empty());
+    rows.retain(|row| !row.bindings.is_empty());
     rows
 }
 
@@ -165,8 +223,16 @@ pub(crate) fn render_help_content(
         .into_iter()
         .enumerate()
         .map(|(i, row)| {
-            let label = row.label;
-            let keys = row.keys.join(" / ");
+            let ShortcutRow {
+                bindings,
+                id,
+                label,
+            } = row;
+            let keys = bindings
+                .iter()
+                .map(|binding| binding.display.as_str())
+                .collect::<Vec<_>>()
+                .join(" / ");
 
             let row_bg = if i % 2 == 0 {
                 cx.theme().background
@@ -175,7 +241,7 @@ pub(crate) fn render_help_content(
             };
 
             h_flex()
-                .id(row.id)
+                .id(id)
                 .test_support()
                 .aria_label(format!("{label}: {keys}"))
                 .w_full()
@@ -185,22 +251,11 @@ pub(crate) fn render_help_content(
                 .rounded_md()
                 .bg(row_bg)
                 .child(
-                    // Key badge
-                    div().w_32().flex_shrink_0().child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .px_2()
-                            .py_0p5()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(cx.theme().background)
-                            .text_xs()
-                            .font_family("monospace")
-                            .text_color(cx.theme().foreground)
-                            .child(keys),
-                    ),
+                    // Key badges
+                    div()
+                        .w_48()
+                        .flex_shrink_0()
+                        .child(render_row_keys(bindings, cx)),
                 )
                 .child(
                     div()

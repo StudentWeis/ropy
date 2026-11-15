@@ -16,6 +16,7 @@ use gpui_kit::{
         button::{Button, ButtonVariants},
         scroll::Scrollbar,
         spinner::Spinner,
+        status_bar::StatusBar,
     },
     div, img, list, point,
     popup::{PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupOptions},
@@ -1102,64 +1103,54 @@ impl PreviewWindow {
             percent = format!("{:.0}", self.image.scale() * 100.)
         )
         .into_owned();
+        let release_hint =
+            (self.mode == PreviewMode::Hold).then(|| t!("preview_release_to_close").into_owned());
         div()
             .id("preview-footer")
             .test_support()
-            .flex()
-            .items_center()
             .flex_shrink_0()
-            .h_8()
-            .px_3()
-            .gap_2()
-            .border_t_1()
-            .border_color(cx.theme().border)
-            .text_size(px(11.))
-            .text_color(cx.theme().muted_foreground)
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .when(self.mode == PreviewMode::Hold, |el| {
-                        el.child(t!("preview_release_to_close").into_owned())
+                StatusBar::new()
+                    .w_full()
+                    .when_some(release_hint, |bar, hint| {
+                        bar.left(div().truncate().child(hint))
+                    })
+                    .when(image_ready, |bar| {
+                        bar.right(
+                            div()
+                                .id("preview-scale")
+                                .test_support()
+                                .aria_label(scale.clone())
+                                .child(scale),
+                        )
+                    })
+                    .when(image_content, |bar| {
+                        bar.right(
+                            Button::new("preview-fit")
+                                .small()
+                                .ghost()
+                                .label(t!("preview_fit"))
+                                .disabled(!image_ready)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.image.reset();
+                                    cx.notify();
+                                })),
+                        )
+                        .right(
+                            Button::new("preview-original")
+                                .small()
+                                .ghost()
+                                .label(t!("preview_actual_size"))
+                                .accessibility_label(t!("preview_original"))
+                                .tooltip(t!("preview_original"))
+                                .disabled(!image_ready)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.image.original_size();
+                                    cx.notify();
+                                })),
+                        )
                     }),
             )
-            .when(image_ready, |footer| {
-                footer.child(
-                    div()
-                        .id("preview-scale")
-                        .test_support()
-                        .aria_label(scale.clone())
-                        .child(scale),
-                )
-            })
-            .when(image_content, |footer| {
-                footer
-                    .child(
-                        Button::new("preview-fit")
-                            .small()
-                            .ghost()
-                            .label(t!("preview_fit"))
-                            .disabled(!image_ready)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.image.reset();
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new("preview-original")
-                            .small()
-                            .ghost()
-                            .label(t!("preview_actual_size"))
-                            .accessibility_label(t!("preview_original"))
-                            .tooltip(t!("preview_original"))
-                            .disabled(!image_ready)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.image.original_size();
-                                cx.notify();
-                            })),
-                    )
-            })
     }
 }
 

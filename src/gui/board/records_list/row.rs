@@ -6,7 +6,9 @@ use gpui_kit::{
     component::{
         ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonCustomVariant, ButtonVariants},
-        h_flex, v_flex,
+        h_flex,
+        tag::{Tag, TagVariant},
+        v_flex,
     },
     div, img,
     prelude::{
@@ -172,32 +174,24 @@ fn render_file_record(cx: &App, record: &ClipboardRecord, compact: bool) -> AnyE
         .into_any_element()
 }
 
-fn render_rich_text_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .text_xs()
-        .text_color(cx.theme().accent_foreground)
-        .bg(badge_background)
-        .px_1p5()
-        .py_0p5()
-        .rounded_sm()
-        .child(Icon::empty().path("icons/filter-text.svg").size(px(12.0)))
+fn render_content_type_badge(cx: &App, icon: &'static str) -> Tag {
+    let accent = cx.theme().accent;
+    Tag::new()
+        .small()
+        .with_variant(TagVariant::Custom {
+            color: accent,
+            foreground: cx.theme().accent_foreground,
+            border: accent,
+        })
+        .child(Icon::empty().path(icon).size(px(12.0)))
 }
 
-fn render_file_badge(badge_background: gpui_kit::Hsla, cx: &App) -> gpui_kit::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .text_xs()
-        .text_color(cx.theme().accent_foreground)
-        .bg(badge_background)
-        .px_1p5()
-        .py_0p5()
-        .rounded_sm()
-        .child(Icon::empty().path("icons/filter-files.svg").size(px(12.0)))
+fn render_rich_text_badge(cx: &App) -> Tag {
+    render_content_type_badge(cx, "icons/filter-text.svg")
+}
+
+fn render_file_badge(cx: &App) -> Tag {
+    render_content_type_badge(cx, "icons/filter-files.svg")
 }
 
 struct ItemStyle {
@@ -206,7 +200,6 @@ struct ItemStyle {
     border: gpui_kit::Hsla,
     hover_border: gpui_kit::Hsla,
     meta_background: gpui_kit::Hsla,
-    badge_background: gpui_kit::Hsla,
 }
 
 impl ItemStyle {
@@ -217,7 +210,6 @@ impl ItemStyle {
             border: cx.theme().border,
             hover_border: cx.theme().foreground,
             meta_background: cx.theme().background,
-            badge_background: cx.theme().accent,
         }
     }
 }
@@ -384,7 +376,6 @@ fn render_record_body(ctx: &RenderContext<'_>, styles: &ItemStyle, cx: &App) -> 
             ctx.index,
             ctx.record,
             styles.meta_background,
-            styles.badge_background,
             true,
             true,
             cx,
@@ -398,7 +389,6 @@ fn render_record_meta(
     index: usize,
     record: &ClipboardRecord,
     meta_background: gpui_kit::Hsla,
-    badge_background: gpui_kit::Hsla,
     show_timestamp: bool,
     with_top_margin: bool,
     cx: &App,
@@ -430,9 +420,9 @@ fn render_record_meta(
     }
 
     if record.content_type == ContentType::RichText {
-        meta = meta.child(render_rich_text_badge(badge_background, cx));
+        meta = meta.child(render_rich_text_badge(cx));
     } else if record.content_type == ContentType::FilePath {
-        meta = meta.child(render_file_badge(badge_background, cx));
+        meta = meta.child(render_file_badge(cx));
     }
 
     meta
@@ -452,7 +442,6 @@ fn render_grid_record_header(
             ctx.index,
             ctx.record,
             styles.meta_background,
-            styles.badge_background,
             false,
             false,
             cx,
