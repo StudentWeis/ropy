@@ -1,15 +1,18 @@
 use gpui_kit::{
-    Action, App, AsKeystroke, Context, SharedString, StatefulInteractiveElement,
+    Action, AnyElement, App, AsKeystroke, Context, Keystroke, SharedString,
+    StatefulInteractiveElement,
     base::TestSupportExt,
     component::{
         ActiveTheme, Sizable,
         button::{Button, ButtonVariants},
         h_flex,
         kbd::Kbd,
+        separator::Separator,
         v_flex,
     },
     div,
-    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
+    prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
+    px,
 };
 use rust_i18n::t;
 
@@ -25,12 +28,24 @@ use crate::{
                 ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin, binding_applies_to_history,
             },
         },
-        panel::common::{panel_back_button, panel_header_with_back},
+        panel::common::{display_keystroke, panel_back_button, panel_header_with_back_and_action},
     },
 };
 
+/// Width of the key column, shared by the column header and every row.
+const KEY_COLUMN_WIDTH: gpui_kit::Rems = gpui_kit::rems(10.0);
+
+/// One registered binding, kept as keystrokes so rows can render key caps.
+struct ShortcutBinding {
+    keystrokes: Vec<Keystroke>,
+    /// Keys without the scope note, used to compare both scopes.
+    plain: String,
+    display: String,
+    search_scope: bool,
+}
+
 struct ShortcutRow {
-    keys: Vec<String>,
+    bindings: Vec<ShortcutBinding>,
     id: &'static str,
     label: SharedString,
 }
@@ -38,7 +53,7 @@ struct ShortcutRow {
 impl ShortcutRow {
     fn new(label: impl Into<SharedString>, action: &dyn Action, cx: &App) -> Self {
         Self {
-            keys: Vec::new(),
+            bindings: Vec::new(),
             id: action.name(),
             label: label.into(),
         }
@@ -51,25 +66,135 @@ impl ShortcutRow {
         let mut bindings = keymap.bindings_for_action(action).collect::<Vec<_>>();
         bindings.sort_by_key(|binding| !binding_applies_to_history(binding));
         for binding in bindings {
-            let keys = binding
+            let keystrokes = binding
                 .keystrokes()
                 .iter()
-                .map(|key| Kbd::format(key.as_keystroke()))
+                .map(|key| display_keystroke(key.as_keystroke()))
+                .collect::<Vec<_>>();
+            let keys = keystrokes
+                .iter()
+                .map(Kbd::format)
                 .collect::<Vec<_>>()
                 .join(" ");
-            if !self.keys.contains(&keys) {
-                let display = if binding_applies_to_history(binding) {
-                    keys
-                } else {
-                    t!("help_search_binding", keys = keys).to_string()
-                };
-                if !self.keys.contains(&display) {
-                    self.keys.push(display);
-                }
+            let search_scope = !binding_applies_to_history(binding);
+            let display = if search_scope {
+                t!("help_search_binding", keys = keys).to_string()
+            } else {
+                keys.clone()
+            };
+            if self.bindings.iter().all(|known| known.display != display) {
+                self.bindings.push(ShortcutBinding {
+                    keystrokes,
+                    plain: keys,
+                    display,
+                    search_scope,
+                });
             }
         }
         self
     }
+
+    /// Accessible text for the row, in the order the key groups appear.
+    fn keys(&self) -> String {
+        let list = self.scope(false);
+        let search = self.scope(true);
+        let mut displays = list
+            .iter()
+            .map(|binding| binding.display.as_str())
+            .collect::<Vec<_>>();
+        if scopes_bind_different_keys(&list, &search) {
+            displays.extend(search.iter().map(|binding| binding.display.as_str()));
+        }
+        displays.join(" / ")
+    }
+
+    fn scope(&self, search: bool) -> Vec<&ShortcutBinding> {
+        self.bindings
+            .iter()
+            .filter(|binding| binding.search_scope == search)
+            .collect()
+    }
+}
+
+/// True when the search scope adds keys the list scope does not already list.
+fn scopes_bind_different_keys(list: &[&ShortcutBinding], search: &[&ShortcutBinding]) -> bool {
+    !list.is_empty() && sorted_keys(list) != sorted_keys(search)
+}
+
+fn sorted_keys<'a>(bindings: &[&'a ShortcutBinding]) -> Vec<&'a str> {
+    let mut keys = bindings
+        .iter()
+        .map(|binding| binding.plain.as_str())
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    keys
+}
+
+/// Key caps for one row. Rows that span both scopes stack one labelled group per
+/// scope, unless both scopes bind the same keys; single-scope rows render
+/// without a label.
+fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
+    let (search, list): (Vec<_>, Vec<_>) = bindings
+        .into_iter()
+        .partition(|binding| binding.search_scope);
+    let list_refs = list.iter().collect::<Vec<_>>();
+    let search_refs = search.iter().collect::<Vec<_>>();
+    let same_keys = !scopes_bind_different_keys(&list_refs, &search_refs);
+    let labelled = !same_keys && !search.is_empty();
+    let mut groups = v_flex().w_full().gap_1();
+    if !list.is_empty() {
+        let label = labelled.then(|| t!("help_list_scope").into_owned());
+        groups = groups.child(render_key_group(list, label, cx));
+    }
+    if !same_keys {
+        let label = labelled.then(|| t!("help_search_scope").into_owned());
+        groups = groups.child(render_key_group(search, label, cx));
+    }
+    groups.into_any_element()
+}
+
+fn render_key_group(bindings: Vec<ShortcutBinding>, label: Option<String>, cx: &App) -> AnyElement {
+    h_flex()
+        .w_full()
+        .flex_wrap()
+        .items_center()
+        .gap_0p5()
+        .when_some(label, |group, label| {
+            group.child(
+                div()
+                    .pr_1()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(label),
+            )
+        })
+        .children(
+            bindings
+                .into_iter()
+                .enumerate()
+                .flat_map(|(index, binding)| {
+                    let mut chips = Vec::with_capacity(2);
+                    if index > 0 {
+                        chips.push(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("/")
+                                .into_any_element(),
+                        );
+                    }
+                    chips.push(
+                        h_flex()
+                            .items_center()
+                            .gap_0p5()
+                            .children(binding.keystrokes.into_iter().map(Kbd::new))
+                            .into_any_element(),
+                    );
+                    chips
+                }),
+        )
+        .into_any_element()
 }
 
 // Presentation groups refer to actions; key names come exclusively from GPUI's
@@ -111,15 +236,48 @@ fn shortcut_rows(board: &RopyBoard, cx: &App) -> Vec<ShortcutRow> {
         rows.push(ShortcutRow::new(t!("help_pin"), &ToggleWindowPin, cx));
     }
     rows.push(ShortcutRow::new(t!("help_hide"), &Hide, cx));
-    rows.retain(|row| !row.keys.is_empty());
+    rows.retain(|row| !row.bindings.is_empty());
     rows
+}
+
+/// Column header row, using the same column widths as the shortcut rows.
+fn render_column_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    h_flex()
+        .w_full()
+        .px_2()
+        .py_1()
+        .mb_1()
+        .gap_4()
+        .rounded_md()
+        .bg(cx.theme().secondary)
+        .child(
+            div()
+                .id("help-keys-header")
+                .test_support()
+                .w(KEY_COLUMN_WIDTH)
+                .flex_shrink_0()
+                .text_sm()
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                .text_color(cx.theme().secondary_foreground)
+                .child(t!("help_key")),
+        )
+        .child(
+            div()
+                .id("help-action-header")
+                .test_support()
+                .flex_1()
+                .text_sm()
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                .text_color(cx.theme().secondary_foreground)
+                .child(t!("help_action")),
+        )
 }
 
 pub(crate) fn render_help_content(
     board: &RopyBoard,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
-    let header = panel_header_with_back(
+    let header = panel_header_with_back_and_action(
         t!("help_title"),
         panel_back_button("help-back-button")
             .on_click(cx.listener(|board, _, window, cx| {
@@ -130,110 +288,89 @@ pub(crate) fn render_help_content(
             .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                 cx.stop_propagation();
             }),
+        customize_button(cx),
         cx,
     );
 
-    // Column header row
-    let col_header = h_flex()
-        .w_full()
-        .px_2()
-        .py_1()
-        .mb_1()
-        .gap_4()
-        .rounded_md()
-        .bg(cx.theme().secondary)
-        .child(
-            div()
-                .w_32()
-                .flex_shrink_0()
-                .text_sm()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .text_color(cx.theme().secondary_foreground)
-                .child(t!("help_key")),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_sm()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .text_color(cx.theme().secondary_foreground)
-                .child(t!("help_action")),
-        );
+    let col_header = render_column_header(cx);
 
-    // Build shortcut rows
-    let rows = shortcut_rows(board, cx)
-        .into_iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let label = row.label;
-            let keys = row.keys.join(" / ");
+    // Separators carry the row boundaries: rows keep no fill, and the hairline
+    // reads quieter than alternating bands once a row grows to two lines.
+    let mut rows = Vec::new();
+    for row in shortcut_rows(board, cx) {
+        if !rows.is_empty() {
+            // Separator paints an absolutely positioned line, so the wrapper
+            // gives it the one pixel it occupies in the column.
+            rows.push(
+                div()
+                    .w_full()
+                    .h(px(1.))
+                    .child(Separator::horizontal())
+                    .into_any_element(),
+            );
+        }
+        rows.push(render_row(row, cx));
+    }
 
-            let row_bg = if i % 2 == 0 {
-                cx.theme().background
-            } else {
-                cx.theme().secondary
-            };
-
-            h_flex()
-                .id(row.id)
-                .test_support()
-                .aria_label(format!("{label}: {keys}"))
-                .w_full()
-                .px_2()
-                .py_1()
-                .gap_4()
-                .rounded_md()
-                .bg(row_bg)
-                .child(
-                    // Key badge
-                    div().w_32().flex_shrink_0().child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .px_2()
-                            .py_0p5()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(cx.theme().background)
-                            .text_xs()
-                            .font_family("monospace")
-                            .text_color(cx.theme().foreground)
-                            .child(keys),
-                    ),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .text_sm()
-                        .text_color(cx.theme().foreground)
-                        .child(label),
-                )
-        });
-
-    v_flex()
-        .size_full()
-        .child(header)
-        .child(customize_button(cx))
-        .child(
-            v_flex()
-                .id("help-content")
-                .overflow_y_scroll()
-                .size_full()
-                .flex_1()
-                .gap_0p5()
-                .pb_4()
-                .child(col_header)
-                .children(rows),
-        )
+    // The column header sits outside the scroll area, so it stays put while the
+    // rows scroll under it.
+    v_flex().size_full().child(header).child(col_header).child(
+        v_flex()
+            .id("help-content")
+            .overflow_y_scroll()
+            .size_full()
+            .flex_1()
+            .min_h_0()
+            .pb_4()
+            .children(rows),
+    )
 }
 
-fn customize_button(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    h_flex().justify_end().pb_2().child(
-        Button::new("customize-shortcuts")
-            .small()
-            .ghost()
-            .label(t!("shortcuts_customize"))
-            .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx))),
-    )
+fn render_row(row: ShortcutRow, cx: &Context<'_, RopyBoard>) -> AnyElement {
+    let keys = row.keys();
+    let ShortcutRow {
+        bindings,
+        id,
+        label,
+    } = row;
+
+    h_flex()
+        .id(id)
+        .test_support()
+        .aria_label(format!("{label}: {keys}"))
+        .w_full()
+        .px_2()
+        .py_1p5()
+        .gap_4()
+        .child(
+            // Key badges
+            div()
+                .id(SharedString::from(format!("help-keys-{id}")))
+                .test_support()
+                .w(KEY_COLUMN_WIDTH)
+                .flex_shrink_0()
+                .child(render_row_keys(bindings, cx)),
+        )
+        .child(
+            div()
+                .id(SharedString::from(format!("help-action-{id}")))
+                .test_support()
+                .flex_1()
+                .text_sm()
+                .text_color(cx.theme().foreground)
+                .child(label),
+        )
+        .into_any_element()
+}
+
+fn customize_button(cx: &Context<'_, RopyBoard>) -> Button {
+    Button::new("customize-shortcuts")
+        .small()
+        .ghost()
+        .label(t!("shortcuts_customize"))
+        .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx)))
+        // The header starts a window drag on press; the button keeps its own click.
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation();
+        })
 }

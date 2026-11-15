@@ -168,6 +168,8 @@ keybindings_invalid_key = "Unsupported shortcut \"%{key}\" for \"%{action}\". Us
 keybindings_reserved_key = "Shortcut \"%{key}\" for \"%{action}\" is reserved for window or focus controls."
 keybindings_conflict = "Shortcut \"%{key}\" is assigned to both \"%{first}\" and \"%{second}\"."
 help_search_binding = "%{keys} (search)"
+help_list_scope = "List"
+help_search_scope = "In search"
 
 shortcuts_title = "History shortcuts"
 shortcuts_customize = "Customize…"

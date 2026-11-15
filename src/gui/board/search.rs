@@ -109,54 +109,32 @@ fn create_whole_word_button(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> B
     })
 }
 
-/// Render the search icon
-fn render_search_icon() -> impl IntoElement {
-    div()
-        .pl_2()
-        .child(Icon::empty().path("icons/search.svg").size(px(16.0)))
-}
-
-/// Render the search input box
-fn render_search_input_box(board: &RopyBoard) -> impl IntoElement {
-    div().flex_1().min_w_0().child(
-        Input::new(&board.search_input)
-            .aria_label(t!("search_records"))
-            .appearance(false)
-            .px_1()
-            .py_1(),
-    )
-}
-
-/// Render the search separator
-fn render_search_separator(cx: &gpui_kit::App) -> impl IntoElement {
-    div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45)
-}
-
 /// Render the search input field with search options
 fn render_search_field(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
     h_flex()
         .flex_1()
         .min_w_0()
         .items_center()
-        .gap_0p5()
         .bg(cx.theme().secondary)
         .border_1()
         .border_color(cx.theme().border)
         .rounded(px(16.0))
         .p(px(2.0))
         .child(
-            h_flex()
+            Input::new(&board.search_input)
+                .aria_label(t!("search_records"))
+                .appearance(false)
                 .flex_1()
                 .min_w_0()
-                .items_center()
-                .gap_0p5()
-                .child(render_search_icon())
-                .child(render_search_input_box(board))
-                .child(render_search_separator(cx))
-                .child(
+                .px_1()
+                .py_1()
+                .prefix(Icon::empty().path("icons/search.svg").size(px(16.0)))
+                .suffix(
                     h_flex()
                         .key_context("RopyCommand")
+                        .items_center()
                         .gap_0p5()
+                        .child(div().w(px(1.0)).h_3().bg(cx.theme().border).opacity(0.45))
                         .child(create_case_sensitive_button(board, cx))
                         .child(create_whole_word_button(board, cx)),
                 ),
