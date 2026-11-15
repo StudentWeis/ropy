@@ -31,6 +31,9 @@ use crate::{
     },
 };
 
+/// Width of the key column, shared by the column header and every row.
+const KEY_COLUMN_WIDTH: gpui_kit::Rems = gpui_kit::rems(12.0);
+
 /// One registered binding, kept as keystrokes so rows can render key caps.
 struct ShortcutBinding {
     keystrokes: Vec<Keystroke>,
@@ -173,6 +176,39 @@ fn shortcut_rows(board: &RopyBoard, cx: &App) -> Vec<ShortcutRow> {
     rows
 }
 
+/// Column header row, using the same column widths as the shortcut rows.
+fn render_column_header(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
+    h_flex()
+        .w_full()
+        .px_2()
+        .py_1()
+        .mb_1()
+        .gap_4()
+        .rounded_md()
+        .bg(cx.theme().secondary)
+        .child(
+            div()
+                .id("help-keys-header")
+                .test_support()
+                .w(KEY_COLUMN_WIDTH)
+                .flex_shrink_0()
+                .text_sm()
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                .text_color(cx.theme().secondary_foreground)
+                .child(t!("help_key")),
+        )
+        .child(
+            div()
+                .id("help-action-header")
+                .test_support()
+                .flex_1()
+                .text_sm()
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                .text_color(cx.theme().secondary_foreground)
+                .child(t!("help_action")),
+        )
+}
+
 pub(crate) fn render_help_content(
     board: &RopyBoard,
     cx: &Context<'_, RopyBoard>,
@@ -191,32 +227,7 @@ pub(crate) fn render_help_content(
         cx,
     );
 
-    // Column header row
-    let col_header = h_flex()
-        .w_full()
-        .px_2()
-        .py_1()
-        .mb_1()
-        .gap_4()
-        .rounded_md()
-        .bg(cx.theme().secondary)
-        .child(
-            div()
-                .w_32()
-                .flex_shrink_0()
-                .text_sm()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .text_color(cx.theme().secondary_foreground)
-                .child(t!("help_key")),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_sm()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .text_color(cx.theme().secondary_foreground)
-                .child(t!("help_action")),
-        );
+    let col_header = render_column_header(cx);
 
     // Build shortcut rows
     let rows = shortcut_rows(board, cx)
@@ -253,12 +264,16 @@ pub(crate) fn render_help_content(
                 .child(
                     // Key badges
                     div()
-                        .w_48()
+                        .id(SharedString::from(format!("help-keys-{id}")))
+                        .test_support()
+                        .w(KEY_COLUMN_WIDTH)
                         .flex_shrink_0()
                         .child(render_row_keys(bindings, cx)),
                 )
                 .child(
                     div()
+                        .id(SharedString::from(format!("help-action-{id}")))
+                        .test_support()
                         .flex_1()
                         .text_sm()
                         .text_color(cx.theme().foreground)

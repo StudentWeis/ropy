@@ -389,6 +389,31 @@ fn test_shortcuts_editor_opens_from_help_and_returns_without_changes(cx: &mut Te
 }
 
 #[gpui_kit::test]
+fn test_help_columns_align_with_their_header(cx: &mut TestAppContext) {
+    let (handle, _, _) = open_board(cx, vec![record(1)]);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("help-button", cx);
+        window.render_frame(cx);
+        let keys_header = window.find("help-keys-header").bounds();
+        let action_header = window.find("help-action-header").bounds();
+        let row_keys = window.find("help-keys-board::FocusSearch").bounds();
+        let row_action = window.find("help-action-board::FocusSearch").bounds();
+        assert_eq!(row_keys.origin.x, keys_header.origin.x, "key column start");
+        assert_eq!(
+            row_keys.size.width, keys_header.size.width,
+            "key column width"
+        );
+        assert_eq!(
+            row_action.origin.x, action_header.origin.x,
+            "action column start"
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
 fn test_history_override_disables_d_and_keeps_delete(cx: &mut TestAppContext) {
     let mut settings = Settings::default();
     settings
