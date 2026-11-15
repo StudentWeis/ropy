@@ -10,10 +10,7 @@ use gpui_kit::{
     },
     div,
     prelude::{IntoElement, ParentElement, Styled},
-    px,
 };
-
-const PANEL_SIDE_WIDTH_PX: f32 = 72.0;
 
 /// Direction keys read as arrows on every platform, not only macOS.
 fn arrow_glyph(key: &str) -> Option<&'static str> {
@@ -41,18 +38,8 @@ pub(super) fn keystroke_label(key: &Keystroke) -> String {
     Kbd::format(&display_keystroke(key))
 }
 
-fn panel_side_slot<C: IntoElement>(child: C) -> impl IntoElement {
-    div()
-        .w(px(PANEL_SIDE_WIDTH_PX))
-        .flex()
-        .items_start()
-        .child(child)
-}
-
-fn panel_side_spacer() -> impl IntoElement {
-    div().w(px(PANEL_SIDE_WIDTH_PX))
-}
-
+/// Balanced side slots keep the title centered whatever the leading and
+/// trailing controls measure.
 fn panel_header<T, L, R>(
     title: impl Into<SharedString>,
     leading: L,
@@ -64,21 +51,20 @@ where
     R: IntoElement,
 {
     let header = h_flex()
-        .justify_between()
         .items_center()
         .mb_4()
         .pt_4()
-        .child(leading)
+        .child(div().flex_1().flex().items_center().child(leading))
         .child(
             div()
-                .flex_1()
+                .flex_shrink_0()
                 .text_center()
                 .text_lg()
                 .text_color(cx.theme().foreground)
                 .font_weight(gpui_kit::FontWeight::BOLD)
                 .child(title.into()),
         )
-        .child(trailing);
+        .child(div().flex_1().flex().justify_end().child(trailing));
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     let header = header.on_mouse_down(gpui_kit::MouseButton::Left, |_, window, _cx| {
@@ -104,5 +90,19 @@ pub(super) fn panel_header_with_back<T, B>(
 where
     B: IntoElement,
 {
-    panel_header(title, panel_side_slot(back_button), panel_side_spacer(), cx)
+    panel_header(title, back_button, div(), cx)
+}
+
+/// Panel header with a back control on the left and an action on the right.
+pub(super) fn panel_header_with_back_and_action<T, B, A>(
+    title: impl Into<SharedString>,
+    back_button: B,
+    action: A,
+    cx: &Context<'_, T>,
+) -> impl IntoElement
+where
+    B: IntoElement,
+    A: IntoElement,
+{
+    panel_header(title, back_button, action, cx)
 }

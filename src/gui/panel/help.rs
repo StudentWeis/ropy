@@ -28,7 +28,7 @@ use crate::{
                 ToggleFavorite, ToggleFavoritesFilter, ToggleWindowPin, binding_applies_to_history,
             },
         },
-        panel::common::{display_keystroke, panel_back_button, panel_header_with_back},
+        panel::common::{display_keystroke, panel_back_button, panel_header_with_back_and_action},
     },
 };
 
@@ -251,7 +251,7 @@ pub(crate) fn render_help_content(
     board: &RopyBoard,
     cx: &Context<'_, RopyBoard>,
 ) -> impl IntoElement {
-    let header = panel_header_with_back(
+    let header = panel_header_with_back_and_action(
         t!("help_title"),
         panel_back_button("help-back-button")
             .on_click(cx.listener(|board, _, window, cx| {
@@ -262,6 +262,7 @@ pub(crate) fn render_help_content(
             .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
                 cx.stop_propagation();
             }),
+        customize_button(cx),
         cx,
     );
 
@@ -285,20 +286,16 @@ pub(crate) fn render_help_content(
         rows.push(render_row(row, cx));
     }
 
-    v_flex()
-        .size_full()
-        .child(header)
-        .child(customize_button(cx))
-        .child(
-            v_flex()
-                .id("help-content")
-                .overflow_y_scroll()
-                .size_full()
-                .flex_1()
-                .pb_4()
-                .child(col_header)
-                .children(rows),
-        )
+    v_flex().size_full().child(header).child(
+        v_flex()
+            .id("help-content")
+            .overflow_y_scroll()
+            .size_full()
+            .flex_1()
+            .pb_4()
+            .child(col_header)
+            .children(rows),
+    )
 }
 
 fn render_row(row: ShortcutRow, cx: &Context<'_, RopyBoard>) -> AnyElement {
@@ -338,12 +335,14 @@ fn render_row(row: ShortcutRow, cx: &Context<'_, RopyBoard>) -> AnyElement {
         .into_any_element()
 }
 
-fn customize_button(cx: &Context<'_, RopyBoard>) -> impl IntoElement {
-    h_flex().justify_end().pb_2().child(
-        Button::new("customize-shortcuts")
-            .small()
-            .ghost()
-            .label(t!("shortcuts_customize"))
-            .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx))),
-    )
+fn customize_button(cx: &Context<'_, RopyBoard>) -> Button {
+    Button::new("customize-shortcuts")
+        .small()
+        .ghost()
+        .label(t!("shortcuts_customize"))
+        .on_click(cx.listener(|board, _, window, cx| board.open_shortcuts(window, cx)))
+        // The header starts a window drag on press; the button keeps its own click.
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation();
+        })
 }
