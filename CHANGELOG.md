@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-11-15
+
+### 🚀 Features
+- Use native anchored preview popups on wayland (#347) by @StudentWeis in [#347](https://github.com/StudentWeis/ropy/pull/347)
+
+### 🐛 Bug Fixes
+- Harden startup recovery, record deletion and the Linux activation directory (#353) by @StudentWeis in [#353](https://github.com/StudentWeis/ropy/pull/353)
+
+### 💼 Other
+- Align hk config package and installed version (#357) by @StudentWeis in [#357](https://github.com/StudentWeis/ropy/pull/357)
+
+### 🚜 Refactor
+- Adopt gpui-kit components for hand-rolled surfaces (#362) by @StudentWeis in [#362](https://github.com/StudentWeis/ropy/pull/362)
+- Add symlink checks and line-ending rules (#359) by @StudentWeis in [#359](https://github.com/StudentWeis/ropy/pull/359)
+- Collapse rich-text sidecar rollback into DropGuard (#355) by @StudentWeis in [#355](https://github.com/StudentWeis/ropy/pull/355)
+
+### 📚 Documentation
+- Align contribution rules with repository checks by @StudentWeis in [#364](https://github.com/StudentWeis/ropy/pull/364)
+- Clarify contribution stages and post-merge cleanup (#351) by @StudentWeis in [#351](https://github.com/StudentWeis/ropy/pull/351)
+- Remove agentbay environment from gui e2e skill (#349) by @StudentWeis in [#349](https://github.com/StudentWeis/ropy/pull/349)
+
+### ⚙️ Miscellaneous Tasks
+- Update ropy-bin AUR recipe to 0.7.0 (#345) by @StudentWeis in [#345](https://github.com/StudentWeis/ropy/pull/345)
+
 ## [0.7.0] - 2026-11-13
 
 ### 🚀 Features
