@@ -33,11 +33,13 @@ use crate::{
 };
 
 /// Width of the key column, shared by the column header and every row.
-const KEY_COLUMN_WIDTH: gpui_kit::Rems = gpui_kit::rems(12.0);
+const KEY_COLUMN_WIDTH: gpui_kit::Rems = gpui_kit::rems(10.0);
 
 /// One registered binding, kept as keystrokes so rows can render key caps.
 struct ShortcutBinding {
     keystrokes: Vec<Keystroke>,
+    /// Keys without the scope note, used to compare both scopes.
+    plain: String,
     display: String,
     search_scope: bool,
 }
@@ -78,11 +80,12 @@ impl ShortcutRow {
             let display = if search_scope {
                 t!("help_search_binding", keys = keys).to_string()
             } else {
-                keys
+                keys.clone()
             };
             if self.bindings.iter().all(|known| known.display != display) {
                 self.bindings.push(ShortcutBinding {
                     keystrokes,
+                    plain: keys,
                     display,
                     search_scope,
                 });
@@ -91,36 +94,59 @@ impl ShortcutRow {
         self
     }
 
-    /// Bindings in display order: list scope first, then search scope.
-    fn ordered(&self) -> impl Iterator<Item = &ShortcutBinding> {
-        self.bindings
-            .iter()
-            .filter(|binding| !binding.search_scope)
-            .chain(self.bindings.iter().filter(|binding| binding.search_scope))
-    }
-
     /// Accessible text for the row, in the order the key groups appear.
     fn keys(&self) -> String {
-        self.ordered()
+        let list = self.scope(false);
+        let search = self.scope(true);
+        let mut displays = list
+            .iter()
             .map(|binding| binding.display.as_str())
-            .collect::<Vec<_>>()
-            .join(" / ")
+            .collect::<Vec<_>>();
+        if scopes_bind_different_keys(&list, &search) {
+            displays.extend(search.iter().map(|binding| binding.display.as_str()));
+        }
+        displays.join(" / ")
+    }
+
+    fn scope(&self, search: bool) -> Vec<&ShortcutBinding> {
+        self.bindings
+            .iter()
+            .filter(|binding| binding.search_scope == search)
+            .collect()
     }
 }
 
+/// True when the search scope adds keys the list scope does not already list.
+fn scopes_bind_different_keys(list: &[&ShortcutBinding], search: &[&ShortcutBinding]) -> bool {
+    !list.is_empty() && sorted_keys(list) != sorted_keys(search)
+}
+
+fn sorted_keys<'a>(bindings: &[&'a ShortcutBinding]) -> Vec<&'a str> {
+    let mut keys = bindings
+        .iter()
+        .map(|binding| binding.plain.as_str())
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    keys
+}
+
 /// Key caps for one row. Rows that span both scopes stack one labelled group per
-/// scope; single-scope rows render without a label.
+/// scope, unless both scopes bind the same keys; single-scope rows render
+/// without a label.
 fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
     let (search, list): (Vec<_>, Vec<_>) = bindings
         .into_iter()
         .partition(|binding| binding.search_scope);
-    let labelled = !search.is_empty() && !list.is_empty();
+    let list_refs = list.iter().collect::<Vec<_>>();
+    let search_refs = search.iter().collect::<Vec<_>>();
+    let same_keys = !scopes_bind_different_keys(&list_refs, &search_refs);
+    let labelled = !same_keys && !search.is_empty();
     let mut groups = v_flex().w_full().gap_1();
     if !list.is_empty() {
         let label = labelled.then(|| t!("help_list_scope").into_owned());
         groups = groups.child(render_key_group(list, label, cx));
     }
-    if !search.is_empty() {
+    if !same_keys {
         let label = labelled.then(|| t!("help_search_scope").into_owned());
         groups = groups.child(render_key_group(search, label, cx));
     }
@@ -286,14 +312,16 @@ pub(crate) fn render_help_content(
         rows.push(render_row(row, cx));
     }
 
-    v_flex().size_full().child(header).child(
+    // The column header sits outside the scroll area, so it stays put while the
+    // rows scroll under it.
+    v_flex().size_full().child(header).child(col_header).child(
         v_flex()
             .id("help-content")
             .overflow_y_scroll()
             .size_full()
             .flex_1()
+            .min_h_0()
             .pb_4()
-            .child(col_header)
             .children(rows),
     )
 }
