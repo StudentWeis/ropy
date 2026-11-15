@@ -25,12 +25,14 @@ If the user explicitly requested skipping the Issue, record that request here. -
 ## Testing
 
 <!-- How did you verify the change? Commands, manual steps, screenshots, etc. -->
-- [ ] `scripts/precheck.sh` passes locally
+- [ ] The selected `scripts/precheck.sh` gate passes locally
 - [ ] New / updated tests cover the change
 
 ## Self-Check
 
 - [ ] PR title follows Conventional Commits
+- [ ] The selected gate passes locally: `scripts/precheck.sh`, or `scripts/precheck.sh --check --light` for Markdown-only changes
+- [ ] The squash message summarizes the change instead of listing every commit subject
 - [ ] No hardcoded user-facing strings — i18n keys added to all locale files
 - [ ] Errors defined with `thiserror` (no manual `impl Display/Error`)
 - [ ] No unrelated changes mixed in

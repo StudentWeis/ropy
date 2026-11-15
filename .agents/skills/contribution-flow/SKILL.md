@@ -16,12 +16,22 @@ Run commands from the repository root. Follow `AGENTS.md` for development rules 
 
 ## 1. Open or reuse the Issue
 
-Reuse the task's existing Issue, including for delegated work. Otherwise, fill the appropriate `.github/ISSUE_TEMPLATE/` template into a private body file; templates are mandatory.
+Reuse the task's existing Issue, including for delegated work. Otherwise pick the form that matches the type:
+
+| Type | Form |
+| --- | --- |
+| `feat` | `feature_request.yml` |
+| `fix` | `bug_report.yml` |
+| `refactor` | `refactor.yml` |
+| `docs` | `docs.yml` |
+| `chore`, `ci`, `build`, `test`, `style`, `perf`, `revert` | `maintenance.yml` |
+
+Issue forms are YAML for the GitHub web UI, so `gh` cannot paste one into an Issue body. Write a Markdown body that answers every required field of the chosen form, and use the form's label.
 
 ```bash
 issue_body=$(mktemp "${TMPDIR:-/tmp}/ropy-issue.XXXXXX")
-# Fill the body from the selected template before creating the Issue.
-gh issue create --title "<type>: <subject>" --label "<label>" --body-file "$issue_body"
+# Fill the body from the selected form's required fields before creating the Issue.
+gh issue create --title "<type>: <subject>" --label "<form label>" --body-file "$issue_body"
 ```
 
 Record the Issue number as `<issue>`. Skip the Issue only at the user's explicit request, and record the skip in the PR description.
@@ -39,15 +49,14 @@ git checkout main && git pull --ff-only &&
 
 In a shared worktree, designate one owner for staging, hooks, commits, pushes and the PR; record that owner and the Issue in handoffs. Other workers edit only their held paths. If branch ownership or staged inputs are unclear, pause Git mutations and coordinate. Do not stash, reset, clean or move others' changes to obtain a clean state.
 
-## 3. Implement and run precheck
+## 3. Implement and run the gate
 
-Follow the development rules and [Testing](../../../docs/testing.md). Before every commit, pass the full gate on the intended commit inputs:
+Follow the development rules and [Testing](../../../docs/testing.md). Choose the gate by what the commit contains:
 
-```bash
-./scripts/precheck.sh
-```
+- Code, checks, templates, configuration or assets: `./scripts/precheck.sh`.
+- Markdown and agent instructions only: `./scripts/precheck.sh --check --light`.
 
-Use `--check` when checks must not modify files. Targeted tests or the lightweight phase alone do not replace the full gate. In shared worktrees, included workers must finish their paths before combined verification and staging.
+Nothing smaller replaces the selected gate; a single check script or a targeted test run does not. Use `--check` when checks must not modify files. CI runs both phases for every PR, so a Markdown-only change still has to survive the full gate before merge. In shared worktrees, included workers must finish their paths before combined verification and staging.
 
 ## 4. Commit
 
@@ -87,13 +96,17 @@ Wait for complete CI on the latest PR head, including the aggregate gate and req
 
 Merge only on explicit user instruction; “merge when CI passes” authorizes waiting and then merging. Recheck Git status, active sessions, the PR head and CI before merging. If another worker still depends on the branch or has unfinished PR changes, defer merge and cleanup without abandoning their work.
 
-Record the contribution branch as `<branch>` and the checked head as `<head-sha>`, then merge without coupling it to checkout or branch deletion:
+Write the squash message yourself. Left at its default, the merge commit body collects every commit subject on the branch, which buries the summary instead of explaining the change:
 
 ```bash
-gh pr merge <pr> --squash --match-head-commit <head-sha>
+gh pr merge <pr> --squash --match-head-commit <head-sha> \
+    --subject "<type>(<scope>): <subject>" \
+    --body "<what changed, its user-visible effect, and the evidence that matters>"
 ```
 
-Confirm the PR is merged and record the merge commit. Then continue to cleanup.
+Keep the subject identical to the PR title. Keep the body to a few lines: the scope of the change and the verification that the title cannot convey. Do not paste commit subjects, CI output or the PR template. When merging through the GitHub web UI, edit the squash message the same way before confirming.
+
+Record the contribution branch as `<branch>` and the checked head as `<head-sha>`, merge with the summarized message above, then confirm the PR is merged and record the merge commit. The merge must not depend on a local checkout or on deleting the branch afterwards. Continue to cleanup.
 
 ## 8. Clean up and report
 

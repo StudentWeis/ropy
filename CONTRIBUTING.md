@@ -6,9 +6,9 @@ Use this guide to contribute code, bundled themes, translations or documentation
 
 ## Prepare a change
 
-1. Follow [contribution-flow](.agents/skills/contribution-flow/SKILL.md) for the required Issue → Branch → PR → Squash Merge procedure. It owns templates, branch and commit naming, precheck and merge authorization.
+1. Follow [contribution-flow](.agents/skills/contribution-flow/SKILL.md) for the required Issue → Branch → PR → Squash Merge procedure. It owns templates, branch and commit naming, gate selection, precheck and merge authorization, including how to write the squash merge message.
 2. Prepare the toolchain and native dependencies with [Development](docs/development.md). Read [AGENTS.md](AGENTS.md) for coding conventions and [Architecture](docs/architecture.md) for module boundaries.
-3. Choose tests using [Testing](docs/testing.md). Run `./scripts/precheck.sh` before committing; resource checks alone do not replace the complete gate.
+3. Choose tests using [Testing](docs/testing.md). Run `./scripts/precheck.sh` for code, checks, templates, configuration and assets, or `./scripts/precheck.sh --check --light` when only Markdown and agent instructions change. A single resource check does not replace the selected gate.
 
 ## Add a bundled theme
 

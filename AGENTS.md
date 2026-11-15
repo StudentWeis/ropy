@@ -3,7 +3,6 @@
 - Reason from first principles — question assumptions before adopting patterns.
 - Follow Clean Code, DRY, and KISS — favor clarity over cleverness.
 - Don't over-abstract and keep it simple.
-- Practice TDD: write a failing test first, then implement the minimal code to make it pass, then refactor.
 
 ## Development
 
@@ -11,14 +10,14 @@
 - Define all error types with `thiserror` — avoid manual `impl Display/Error`.
 - Build new UI components with the `component` module from `gpui-kit` (`gpui_kit::component`). Do not add a direct `gpui-component` dependency; follow the `ropy-gpui` adapter for API differences.
 - Localize all user-facing strings — no hardcoded display text in source files.
-- Follow the guidelines in [Testing](./docs/testing.md) for test structure, naming, and coverage expectations.
+- Follow the guidelines in [Testing](./docs/testing.md) for test design, naming and precheck usage.
 - Log files can be viewed when troubleshooting problems.
 
 ## AI Collaboration Workflow
 
 Any code change in this repository — by a human or an AI agent — MUST follow the contribution SOP defined in the [`contribution-flow`](./.agents/skills/contribution-flow/SKILL.md) skill.
 
-That skill is the single source of truth for: when to open an Issue, branch naming, Conventional Commits rules, the `scripts/precheck.sh` gate, the `gh` command templates, and the PR self-check. Read it before making any commit.
+That skill owns the process: when to open an Issue, branch naming, gate selection, Conventional Commits, `scripts/precheck.sh` usage and the squash merge message. It does not own the checklists: `.github/ISSUE_TEMPLATE/` holds the Issue forms and `.github/PULL_REQUEST_TEMPLATE.md` holds the PR self-check, so change both together with the skill.
 
 ## Project Documentation
 

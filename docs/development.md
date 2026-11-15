@@ -56,6 +56,6 @@ YAML, TOML and JSON hooks use `uvx` with pinned parsers. Run `hk check --all` to
 
 ## Before submitting
 
-Run `./scripts/precheck.sh`; it is mandatory before a commit, including documentation-only commits. Use `--check` for non-mutating CI reproduction. The light and Rust phases, required CI checks and native tests are described in [Testing](testing.md).
+Choose the gate by what the change contains. Code, checks, templates, configuration and assets need `./scripts/precheck.sh`; Markdown and agent instructions alone use `./scripts/precheck.sh --check --light`. Use the `--check` variants for non-mutating CI reproduction. The light and Rust phases, required CI checks and native tests are described in [Testing](testing.md).
 
-For Markdown, also review local links, anchors, code fences and `git diff --check`. Precheck's documentation step builds Rust API documentation; it does not validate Markdown links or establish native GUI acceptance. Documentation ownership and evidence requirements live in [project-doc](../.agents/skills/project-doc/SKILL.md).
+Precheck's lightweight phase validates relative Markdown links and heading anchors, and it verifies the vendored GPUI Kit skill snapshots against `.agents/official-snapshots.json`. It does not check prose, code fences or external URLs, so still review those and run `git diff --check`; the documentation step builds Rust API documentation, not native GUI acceptance. Documentation ownership and evidence requirements live in [project-doc](../.agents/skills/project-doc/SKILL.md).
