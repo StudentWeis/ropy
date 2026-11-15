@@ -10,7 +10,7 @@ use gpui_kit::{
         v_flex,
     },
     div,
-    prelude::{InteractiveElement, IntoElement, ParentElement, Styled},
+    prelude::{FluentBuilder, InteractiveElement, IntoElement, ParentElement, Styled},
 };
 use rust_i18n::t;
 
@@ -126,17 +126,21 @@ fn render_row_keys(bindings: Vec<ShortcutBinding>, cx: &App) -> AnyElement {
 }
 
 fn render_key_group(bindings: Vec<ShortcutBinding>, label: Option<String>, cx: &App) -> AnyElement {
-    let mut group = h_flex().w_full().flex_wrap().items_center().gap_1();
-    if let Some(label) = label {
-        group = group.child(
-            div()
-                .flex_shrink_0()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child(label),
-        );
-    }
-    group
+    h_flex()
+        .w_full()
+        .flex_wrap()
+        .items_center()
+        .gap_0p5()
+        .when_some(label, |group, label| {
+            group.child(
+                div()
+                    .pr_1()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(label),
+            )
+        })
         .children(
             bindings
                 .into_iter()
@@ -261,53 +265,44 @@ pub(crate) fn render_help_content(
 
     let col_header = render_column_header(cx);
 
-    // Build shortcut rows
-    let rows = shortcut_rows(board, cx)
-        .into_iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let keys = row.keys();
-            let ShortcutRow {
-                bindings,
-                id,
-                label,
-            } = row;
+    // Build shortcut rows. Rows carry no fill: the column header band and the
+    // key groups already separate entries, and alternating fills compete with
+    // them once a row grows to two lines.
+    let rows = shortcut_rows(board, cx).into_iter().map(|row| {
+        let keys = row.keys();
+        let ShortcutRow {
+            bindings,
+            id,
+            label,
+        } = row;
 
-            let row_bg = if i % 2 == 0 {
-                cx.theme().background
-            } else {
-                cx.theme().secondary
-            };
-
-            h_flex()
-                .id(id)
-                .test_support()
-                .aria_label(format!("{label}: {keys}"))
-                .w_full()
-                .px_2()
-                .py_1()
-                .gap_4()
-                .rounded_md()
-                .bg(row_bg)
-                .child(
-                    // Key badges
-                    div()
-                        .id(SharedString::from(format!("help-keys-{id}")))
-                        .test_support()
-                        .w(KEY_COLUMN_WIDTH)
-                        .flex_shrink_0()
-                        .child(render_row_keys(bindings, cx)),
-                )
-                .child(
-                    div()
-                        .id(SharedString::from(format!("help-action-{id}")))
-                        .test_support()
-                        .flex_1()
-                        .text_sm()
-                        .text_color(cx.theme().foreground)
-                        .child(label),
-                )
-        });
+        h_flex()
+            .id(id)
+            .test_support()
+            .aria_label(format!("{label}: {keys}"))
+            .w_full()
+            .px_2()
+            .py_1p5()
+            .gap_4()
+            .child(
+                // Key badges
+                div()
+                    .id(SharedString::from(format!("help-keys-{id}")))
+                    .test_support()
+                    .w(KEY_COLUMN_WIDTH)
+                    .flex_shrink_0()
+                    .child(render_row_keys(bindings, cx)),
+            )
+            .child(
+                div()
+                    .id(SharedString::from(format!("help-action-{id}")))
+                    .test_support()
+                    .flex_1()
+                    .text_sm()
+                    .text_color(cx.theme().foreground)
+                    .child(label),
+            )
+    });
 
     v_flex()
         .size_full()
