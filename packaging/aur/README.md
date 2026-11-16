@@ -59,11 +59,20 @@ If authentication, host verification or the push fails, resolve that failure bef
 
 ## Update a release
 
+Automated releases run through `.github/workflows/aur.yml` after a stable GitHub Release succeeds, or manually via `workflow_dispatch`. The workflow uses `scripts/generate_aur_pkgbuild.py` to generate `PKGBUILD`, validates and generates `.SRCINFO` inside an `archlinux:base-devel` container, and pushes to `ssh://aur@aur.archlinux.org/ropy-bin.git` using `AUR_SSH_PRIVATE_KEY`. `PKGBUILD` and `.SRCINFO` in this directory remain as the `0.7.0-1` snapshot; future versions are generated directly from the release metadata rather than committed back to this repository.
+
+When updating dependencies or packaging metadata (`depends` in `scripts/generate_aur_pkgbuild.py` or `ropy.desktop`):
+
+1. Inspect the new x86_64 release binary's ELF dependencies and dynamically loaded EGL/Wayland libraries.
+2. Submit the generator or `ropy.desktop` change through the contribution workflow.
+3. Trigger `.github/workflows/aur.yml` manually (`workflow_dispatch`) to publish the updated package (`pkgrel` increments automatically when `pkgver` is unchanged).
+
+For manual AUR updates or recovery:
+
 1. Confirm that the new GitHub Release contains the x86_64 Linux archive and the tagged source contains `assets/logo.png`.
-2. Update `pkgver` and reset `pkgrel` to `1`. For packaging-only changes to the same version, increment `pkgrel` instead.
-3. Download the x86_64 archive and compare its SHA-256 digest with the release's published checksum. Inspect its contents and dependencies. Update the architecture-specific checksums and the versioned icon checksum in `PKGBUILD`; never use `SKIP`. Update the desktop file checksum if that file changes.
-4. Build and validate the package, including the installed desktop behavior. Regenerate `.SRCINFO` with `makepkg --printsrcinfo > .SRCINFO` from the recipe directory.
-5. Submit the repository changes through the contribution workflow, then copy the three distribution files into the separate AUR checkout, review, commit and push them.
+2. Regenerate `PKGBUILD` locally with `scripts/generate_aur_pkgbuild.py` (or clone `ssh://aur@aur.archlinux.org/ropy-bin.git` and update `pkgver`, `pkgrel`, and checksums; never use `SKIP`).
+3. Build and validate the package on Arch Linux, including the installed desktop behavior, and regenerate `.SRCINFO` with `makepkg --printsrcinfo > .SRCINFO`.
+4. Review, commit, and push `PKGBUILD`, `.SRCINFO`, and `ropy.desktop` to the AUR repository.
 
 ## Historical validation: 0.6.2-1
 
