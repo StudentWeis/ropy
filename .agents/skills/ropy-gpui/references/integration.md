@@ -1,12 +1,28 @@
-# Ropy integration with GPUI Kit 0.9.1
+# Ropy integration with GPUI Kit 0.10.0
 
 ## Source and refresh policy
 
-Checked against [GPUI Kit v0.9.1](https://github.com/longbridge/gpui-kit/releases/tag/v0.9.1), commit `39ab849a93b5f15507b969164d49891db8d5b470`. Normal and development dependencies use 0.9.1; the default engine is `gpui-pre` 0.3.12. Optional GPUI Fast entries in Cargo.lock do not mean Ropy switched rendering engines.
+Checked against [GPUI Kit v0.10.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.10.0), commit `4e015e9e26e137e020ebc0c4fecf9ce5e0889668`. Normal and development dependencies use 0.10.0; the default engine is `gpui-pre` 0.3.12. Optional GPUI Fast entries in Cargo.lock (now 0.1.16) do not mean Ropy switched rendering engines.
 
 Use the official `gpui-kit` and `gpui-kit-design-guides` skills alongside the `ropy-gpui` adapter for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy-specific guidance in `ropy-gpui`; replace the two official skill directories only with an unmodified upstream snapshot. Upstream `script/check-ai` commands do not run in this repository.
 
 This reference adapts [GPUI Kit documentation](https://gpui-kit.com) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adding Ropy-specific scope, verification and recommendations. Code examples retain their upstream Apache-2.0 terms.
+
+## 0.10.0 migration
+
+This is a minor upgrade with no breaking changes affecting Ropy's current API usage (`TextareaMode::Extras`, `EditorState::text_gutter_margin()`, and GPUI Fast's blanket `IntoElement` do not impact Ropy). Keep the production `component`/`assets` and development `component`/`test-support` features unchanged.
+
+The official `gpui-kit` skill snapshot was updated to v0.10.0 (only `references/usage.md` changed); `gpui-kit-design-guides` is byte-for-byte identical to the v0.9.1 snapshot.
+
+Ropy's `apply_palette` in `src/gui/app.rs` now sets `theme.colors.list_highlight_foreground = theme.primary` so the new 0.10.0 highlight token matches Ropy's theme palette instead of falling back to the default blue.
+
+Through the component upgrade, Ropy automatically gains:
+- Search input grapheme-cluster caret movement/deletion, caret reveal after long single-line paste, `unmark_text` change reporting for retained preedit, and IME candidate row bounds fixes.
+- `Slider` keyboard shortcuts and numeric accessibility `SetValue` handling for the opacity and RGB sliders.
+- `Tooltip` width animation, `max_w` text wrapping, and nested `.tooltip()` deduplication.
+- Built-in reduced-motion support across `Dialog`, `Scrollbar`, and `Tooltip`, plus `Button` disabled hover/active suppression and right/middle click focus prevention.
+
+In `src/gui/board/ui_tests.rs`, `test_board_search_input_ime_composition_commit_cancel_and_unmark` now exercises `TestInput` against the production `search_input` for Chinese preedit, commit, cancellation, and `unmark_text` filtering.
 
 ## 0.9.1 migration
 
@@ -43,9 +59,9 @@ Existing UI integration tests cover shortcut editing, persistence and focus; hos
 
 | Priority | Ropy surface | Recommendation and evidence needed |
 | --- | --- | --- |
-| Blocked upstream | Slider keyboard focus | The release notes advertise `Slider::track_focus`, but the tagged source exposes it only on `gpui-base::slider::Slider`, not the themed component Ropy uses. Do not call the missing builder or replace the themed control just to obtain it. |
-| Blocked upstream | Theme catalog selection | The release notes advertise `Button::selected_accent`, but the tagged component Button has no such builder. Keep the catalog's outline buttons with `.selected(...)`; recheck the published API before adopting accent-filled selection in a later release. |
-| Next | Search input and Chinese text entry | Use `TestInput` with the production search input to cover preedit, commit and cancellation. Still verify native IME candidate windows and focus separately; the helper does not run an OS IME. |
+| Blocked upstream | Slider keyboard focus | The themed `gpui_component::slider::Slider` still exposes `tab_stop` and `tab_index` in 0.10.0, not `track_focus` (which remains on `gpui-base::slider::Slider`). Do not call the missing builder or replace the themed control just to obtain it. |
+| Blocked upstream | Theme catalog selection | `gpui_component::button::Button` still has no `selected_accent` builder in 0.10.0. Keep the catalog's outline buttons with `.selected(...)`; recheck the published API before adopting accent-filled selection in a later release. |
+| Covered | Search input and Chinese text entry | `TestInput` now covers preedit, commit, cancellation, and `unmark_text` on the production search input. Still verify native IME candidate windows and focus separately; the helper does not run an OS IME. |
 | Next | Hold-Space preview and modified gestures | Use `TestEventExt` or `click_with_modifiers` when adding regression cases, reducing manually constructed event boilerplate while keeping held-key and focus-loss assertions. Do not rewrite passing tests solely for style. |
 | Evaluate | History list and masonry scrolling | The custom history layouts own virtualized scroll state. Verify trackpad edge behavior, selection visibility and scrollbar geometry before adopting the shared boundary-bounce behavior; the upgrade alone does not prove custom surfaces inherit it. |
 | Conditional | Long text preview | Consider Textarea `prewrap` only if measurement identifies repeated wrapping cost. Current previews render plain text; TextView selection fixes and `SelectionFormat::SourceAcrossStyles` are not automatic benefits for those previews. |

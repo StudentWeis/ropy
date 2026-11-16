@@ -1,14 +1,14 @@
 {
   "gpui-kit": {
-    "commit": "39ab849a93b5f15507b969164d49891db8d5b470",
+    "commit": "4e015e9e26e137e020ebc0c4fecf9ce5e0889668",
     "path": ".agents/skills/gpui-kit",
-    "sha256": "0c8907392c141f17ef311c531b9b88abdb4cb759a5809acc3d83973812e709e1",
-    "tag": "v0.9.1"
+    "sha256": "6fa762d5554dd2ab05e460e8f4f5d93e128e0dbf41d6742828d20c0a9fde4cf8",
+    "tag": "v0.10.0"
   },
   "gpui-kit-design-guides": {
-    "commit": "39ab849a93b5f15507b969164d49891db8d5b470",
+    "commit": "4e015e9e26e137e020ebc0c4fecf9ce5e0889668",
     "path": ".agents/skills/gpui-kit-design-guides",
     "sha256": "897081196e86317a0c6572d83db07b8bc25c7c42e39d727a676af099612e5b09",
-    "tag": "v0.9.1"
+    "tag": "v0.10.0"
   }
 }
