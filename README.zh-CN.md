@@ -35,52 +35,44 @@
 
 ## 安装
 
-### 预编译二进制文件
-
-您可以从 [Releases](https://github.com/StudentWeis/ropy/releases) 页面下载最新的预编译二进制文件。
+从 [Releases](https://github.com/StudentWeis/ropy/releases) 下载预编译二进制文件，或通过以下包管理器安装。
 
 ### macOS
 
-通过自建 [Homebrew tap](https://github.com/StudentWeis/homebrew-tap) 安装：
+通过自建 [Homebrew tap](https://github.com/StudentWeis/homebrew-tap) 安装（使用 `brew upgrade --cask ropy` 升级；安装交由 Homebrew 管理，应用内仍可检查更新）：
 
 ```sh
 brew install --cask studentweis/tap/ropy
 ```
 
-使用 `brew upgrade --cask ropy` 升级。应用内仍可检查新版本，安装交由 Homebrew 管理。当前发布尚未签名，自建 Cask 会在安装后自动移除 Ropy.app 的 `com.apple.quarantine` 下载隔离属性，保留其他扩展属性；这不等于签名或公证。若清理失败，安装会停止并显示错误；如果系统仍阻止启动，请在确认来源后，通过系统设置 → 隐私与安全性允许 Ropy 运行。
+手动安装 DMG 时，先确认下载来源可信，再将 `Ropy.app` 拖到应用程序文件夹。
 
-手动安装 DMG 时，先确认下载来源可信，再将 Ropy.app 拖到应用程序文件夹。当前发布尚未签名或公证；如果 macOS 阻止启动，先查看系统设置 → 隐私与安全性。移除隔离属性会绕过这项下载检查；如果选择移除，只对已安装的应用执行：
-
-```sh
-xattr -r -d com.apple.quarantine /Applications/Ropy.app
-```
-
-如果命令提示权限不足，在同一命令前加上 `sudo` 后重试。
+> [!NOTE]
+> 当前发布尚未签名和公证。Homebrew Cask 会自动移除 `com.apple.quarantine`；手动安装 DMG 时，请在 **系统设置 → 隐私与安全性** 中允许 Ropy 运行，或执行：
+>
+> ```sh
+> xattr -r -d com.apple.quarantine /Applications/Ropy.app
+> ```
+>
+> 若提示权限不足，在命令前加上 `sudo` 后重试。
 
 ### Windows
 
-您可以使用 [Scoop](https://scoop.sh/) 安装 Ropy：
+使用 [Scoop](https://scoop.sh/) 安装（运行 `scoop update ropy` 升级；Ropy 会识别标准路径下的 Scoop 安装并交由 Scoop 更新，应用内仍可检查更新）：
 
 ```powershell
 scoop bucket add extras
 scoop install ropy
 ```
 
-> [!NOTE] > Ropy 会识别标准路径下的 Scoop 安装，并交由 Scoop 更新。请运行 `scoop update ropy`；应用内仍可检查新版本。
-
 ### Linux（X11 与 Wayland）
 
-Arch Linux 用户可按照 [AUR 打包说明](packaging/aur/README.md)构建 `ropy-bin`。配方安装官方发布二进制；仓库包含配方不代表已经发布到 AUR，请先查看发布和验证要求。
-
-当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`。该支持由 [PR #234](https://github.com/StudentWeis/ropy/pull/234) 引入；使用预编译二进制时，请确认对应版本的发布说明是否包含此变更。
-
-运行 `ropy --show` 可打开历史窗口。Wayland 下可使用桌面授权的 GlobalShortcuts Portal、已支持的 Hyprland 集成，或在合成器中为 `ropy --show` 配置快捷键。平铺合成器可能需要额外配置浮动窗口规则。
-
-剪贴板监听需要 data-control 协议，自动粘贴还需要 virtual-keyboard 协议。已完成原生 Sway 实测；GNOME、KDE 和 Niri 尚未逐一验证。配置方法、备用唤起方式和能力限制请参阅 [Wayland 指南](docs/wayland.md)。
+- **Arch Linux**：按照 [AUR 打包说明](packaging/aur/README.md)构建 `ropy-bin`（仓库包含配方不代表已发布到 AUR，请先查看发布和验证要求）。
+- **Wayland**：当前源码支持原生 Wayland 窗口，无需 XWayland 或 `DISPLAY`（预编译包以对应发布说明为准），运行 `ropy --show` 可打开历史窗口。剪贴板监听需要 `data-control` 协议，自动粘贴需要 `virtual-keyboard` 协议；已完成原生 Sway 实测，GNOME、KDE 和 Niri 尚未逐一验证。唤起方式、浮动窗口规则和能力限制见 [Wayland 指南](docs/wayland.md)。
 
 ### 从源码构建
 
-按照[开发指南](docs/development.md)准备工具链和平台依赖，再执行锁定依赖的源码构建。该指南也说明 Make 命令和可选的 Git hooks。源码文档描述当前工作区，预编译包是否包含对应功能应以发布说明为准。
+按照[开发指南](docs/development.md)准备工具链和平台依赖，并执行锁定依赖的源码构建（含 Make 命令和可选 Git hooks）。源码构建反映当前工作区，而非特定预编译版本。
 
 ## 使用
 
