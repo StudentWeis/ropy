@@ -83,6 +83,23 @@ The current DMGs are unsigned. At the user's request, the self-hosted Cask runs 
 
 Validate syntax, style, download/unpacking and both architecture hashes. On a machine without an existing Ropy installation, smoke-test installation, launch, managed update behavior, upgrade/reinstall and uninstall before publishing packaging changes. Never overwrite an existing app or clipboard data for tests.
 
+## AUR package (`ropy-bin`)
+
+AUR publishes `ropy-bin` (`x86_64` only) from `ssh://aur@aur.archlinux.org/ropy-bin.git`. `packaging/aur/ropy-bin/` holds `ropy.desktop` and the `0.7.0-1` snapshot of `PKGBUILD` and `.SRCINFO`; `scripts/generate_aur_pkgbuild.py` supplies future versions.
+
+`.github/workflows/aur.yml` runs after the tag Release workflow succeeds, or manually via `workflow_dispatch` (with an optional `pkgrel` override). It resolves the latest stable release, reads the GitHub-published SHA-256 digest for `ropy-x86_64-unknown-linux-gnu.tar.xz`, hashes `assets/logo.png` from the release tag and `packaging/aur/ropy-bin/ropy.desktop`, and renders `PKGBUILD`. If `pkgver` matches the existing AUR `PKGBUILD` while its contents changed, it increments `pkgrel`; a new `pkgver` resets `pkgrel` to `1`.
+
+Inside an `archlinux:base-devel` container, the workflow validates `PKGBUILD` syntax (`bash -n`), validates `ropy.desktop`, verifies remote source downloads and checksums (`makepkg --verifysource --force`), and generates `.SRCINFO` with `makepkg --printsrcinfo`. It authenticates to AUR with the repository secret `AUR_SSH_PRIVATE_KEY` and a pinned `aur.archlinux.org` SSH host key, pushing changes only when `PKGBUILD`, `.SRCINFO`, or `ropy.desktop` differ. Synchronization failure does not undo a published release; retry the workflow after fixing the failure.
+
+To regenerate `PKGBUILD` locally:
+
+```sh
+gh release download 0.7.1 --repo StudentWeis/ropy --pattern 'ropy-x86_64-unknown-linux-gnu.tar.xz' --dir /tmp/ropy-linux
+python3 scripts/generate_aur_pkgbuild.py 0.7.1 /tmp/ropy-linux/ropy-x86_64-unknown-linux-gnu.tar.xz /tmp/PKGBUILD
+```
+
+For packaging-only changes (such as `depends` or `ropy.desktop`), update `scripts/generate_aur_pkgbuild.py` or `packaging/aur/ropy-bin/ropy.desktop` through a PR, then trigger `.github/workflows/aur.yml` manually. See [AUR packaging](../packaging/aur/README.md) for local build and validation details.
+
 ## Main branch protection
 
 The main branch requires the aggregate `Precheck (fmt + clippy + test + i18n/icons/themes)` check and the Release `plan` check, with the PR up to date before merge. [Testing](testing.md) describes the jobs behind the aggregate check. GitHub branch protection is server configuration, not something workflow YAML enables itself; the reviewed API payload is `.github/main-branch-protection.json`. Administrators reconcile it with:
