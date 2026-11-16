@@ -33,52 +33,44 @@
 
 ## Installation
 
-### Pre-built Binaries
-
-Download the latest binaries from the [Releases](https://github.com/StudentWeis/ropy/releases) page.
+Download pre-built binaries from [Releases](https://github.com/StudentWeis/ropy/releases), or install via a package manager below.
 
 ### macOS
 
-Install from the self-hosted [Homebrew tap](https://github.com/StudentWeis/homebrew-tap):
+Install with the self-hosted [Homebrew tap](https://github.com/StudentWeis/homebrew-tap) (`brew upgrade --cask ropy` to update; updates are managed by Homebrew, while in-app update checks remain available):
 
 ```sh
 brew install --cask studentweis/tap/ropy
 ```
 
-Upgrade with `brew upgrade --cask ropy`. In-app update checks remain available; installation is managed by Homebrew. For the current unsigned release, this self-hosted Cask automatically removes `com.apple.quarantine` from the installed Ropy.app. It preserves other extended attributes and does not sign or notarize the app. A cleanup failure stops installation and prints an error. If macOS still blocks launch, review and allow Ropy in System Settings → Privacy & Security.
+For a manual DMG install, verify that you trust the download source and drag `Ropy.app` to Applications.
 
-For a manual DMG installation, first verify that you trust the download source, then drag Ropy.app to Applications. The current release is unsigned and not notarized. If macOS blocks launch, review System Settings → Privacy & Security. Removing quarantine bypasses that download check; if you choose to do so, target only the installed app:
-
-```sh
-xattr -r -d com.apple.quarantine /Applications/Ropy.app
-```
-
-If the command reports a permission error, repeat it with `sudo`.
+> [!NOTE]
+> Current releases are unsigned and not notarized. The Homebrew Cask removes `com.apple.quarantine` automatically; for manual DMG installs, allow Ropy in **System Settings → Privacy & Security** or run:
+>
+> ```sh
+> xattr -r -d com.apple.quarantine /Applications/Ropy.app
+> ```
+>
+> Prefix with `sudo` if you see a permission error.
 
 ### Windows
 
-You can install Ropy using [Scoop](https://scoop.sh/):
+Install with [Scoop](https://scoop.sh/) (`scoop update ropy` to update; Ropy detects standard Scoop installations and leaves updates to Scoop, while in-app update checks remain available):
 
-```sh
+```powershell
 scoop bucket add extras
 scoop install ropy
 ```
 
-> [!NOTE] > Ropy detects standard Scoop installations and leaves installation to Scoop. Use `scoop update ropy`; in-app update checks remain available.
-
 ### Linux (X11 and Wayland)
 
-Arch Linux users can build the `ropy-bin` package using the [AUR packaging instructions](packaging/aur/README.md). The recipe installs official release binaries; check those instructions for publishing and validation steps before assuming AUR availability.
-
-The current source supports native Wayland windows without XWayland or `DISPLAY`. This support was added in [PR #234](https://github.com/StudentWeis/ropy/pull/234); check your release's notes when using a pre-built binary.
-
-Run `ropy --show` to open the history window. On Wayland, use the desktop-approved GlobalShortcuts portal, the supported Hyprland integration, or bind `ropy --show` in your compositor. Tiling compositors may need a floating rule.
-
-Clipboard capture requires data-control support; automatic paste additionally requires virtual-keyboard support. Native Sway has been tested; GNOME, KDE and Niri have not been individually validated. See the [Wayland guide](docs/wayland.md) for setup, fallback activation and capability limits.
+- **Arch Linux**: Build `ropy-bin` using the [AUR packaging instructions](packaging/aur/README.md) (check publishing and validation steps there before assuming AUR availability).
+- **Wayland**: Current source supports native Wayland without XWayland or `DISPLAY` (check release notes for pre-built binaries) and opens the window via `ropy --show`. Clipboard capture requires `data-control` and auto-paste requires `virtual-keyboard`; native Sway is tested, while GNOME, KDE, and Niri are unvalidated. See the [Wayland guide](docs/wayland.md) for activation, floating rules, and capability limits.
 
 ### Build from source
 
-Follow [Development](docs/development.md) for toolchain and platform prerequisites, a locked source build, Make targets and optional Git hooks. Source builds describe the current checkout; check release notes when comparing them with packaged binaries.
+See [Development](docs/development.md) for prerequisites, locked source builds, Make targets, and optional Git hooks. Source builds reflect the current checkout rather than a specific release.
 
 ## Usage
 
