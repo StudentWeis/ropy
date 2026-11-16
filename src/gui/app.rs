@@ -213,6 +213,7 @@ pub(crate) fn set_app_theme(
         theme.slider_bar = theme.primary;
         theme.slider_thumb = surface(rgb(palette.primary_foreground).into());
         theme.colors.list = theme.background;
+        theme.colors.list_highlight_foreground = theme.primary;
         theme.scrollbar = theme.background;
         theme.scrollbar_thumb_hover = theme.scrollbar_thumb;
         theme.drag_border = theme.ring;

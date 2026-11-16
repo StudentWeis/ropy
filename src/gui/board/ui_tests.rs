@@ -6,10 +6,10 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyWindowHandle, AppContext, Entity, Focusable, InputEvent, KeyDownEvent, KeyUpEvent,
-    Keystroke, TestAppContext,
+    AnyWindowHandle, AppContext, ElementInputHandler, Entity, Focusable, InputEvent, KeyDownEvent,
+    KeyUpEvent, Keystroke, TestAppContext,
     component::WindowExt,
-    test::{TestQueryExt, TestWindowExt},
+    test::{TestInput, TestQueryExt, TestWindowExt},
 };
 use rust_i18n::t;
 
@@ -857,6 +857,72 @@ fn test_board_search_horizontal_arrows_move_text_cursor(cx: &mut TestAppContext)
         assert_eq!(board.read(cx).search_input.read(cx).value(), "axby");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn test_board_search_input_ime_composition_commit_cancel_and_unmark(cx: &mut TestAppContext) {
+    let mut matching = record(1);
+    matching.content = "你好世界".to_string();
+    let mut other = record(2);
+    other.content = "alpha".to_string();
+    let (handle, board, _) = open_board(cx, vec![matching, other]);
+
+    let filtered_ids = |cx: &mut TestAppContext| {
+        board.read_with(cx, |b, _| {
+            let records = b.records.read().unwrap();
+            b.filtered_record_indices
+                .iter()
+                .map(|&idx| records[idx].id)
+                .collect::<Vec<_>>()
+        })
+    };
+
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("/", cx);
+        let search_input = board.read(cx).search_input.clone();
+        let mut input = TestInput::new(
+            ElementInputHandler::new(gpui_kit::Bounds::default(), search_input.clone()),
+            window,
+        );
+
+        // Preedit then commit Chinese text
+        input.compose_text(None, "nihao", Some(5..5), cx);
+        assert_eq!(input.marked_text_range(cx), Some(0..5));
+        assert_eq!(search_input.read(cx).value(), "nihao");
+
+        input.commit_text("你好", cx);
+        assert_eq!(input.marked_text_range(cx), None);
+        assert_eq!(search_input.read(cx).value(), "你好");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(filtered_ids(cx), vec![1]);
+
+    cx.update_window(handle, |_, window, cx| {
+        let search_input = board.read(cx).search_input.clone();
+        let mut input = TestInput::new(
+            ElementInputHandler::new(gpui_kit::Bounds::default(), search_input.clone()),
+            window,
+        );
+
+        // Preedit then cancel with empty composition text
+        input.compose_text(None, "shijie", Some(6..6), cx);
+        assert_eq!(input.marked_text_range(cx), Some(2..8));
+        input.compose_text(None, "", None, cx);
+        assert_eq!(input.marked_text_range(cx), None);
+        assert_eq!(search_input.read(cx).value(), "你好");
+
+        // Preedit retained via unmark_text must still notify search filtering
+        input.compose_text(None, "世界", Some(2..2), cx);
+        assert_eq!(input.marked_text_range(cx), Some(2..4));
+        input.unmark_text(cx);
+        assert_eq!(input.marked_text_range(cx), None);
+        assert_eq!(search_input.read(cx).value(), "你好世界");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(filtered_ids(cx), vec![1]);
 }
 
 #[gpui_kit::test]

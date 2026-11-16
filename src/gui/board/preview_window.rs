@@ -176,6 +176,7 @@ impl PreviewPlacement {
     }
 }
 
+#[cfg_attr(not(target_os = "linux"), expect(clippy::missing_const_for_fn))]
 fn uses_wayland_popup(window: &Window) -> bool {
     #[cfg(target_os = "linux")]
     {
