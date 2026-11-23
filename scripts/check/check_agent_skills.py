@@ -43,7 +43,7 @@ def load_manifest(root: Path) -> dict:
     return json.loads((root / MANIFEST).read_text(encoding="utf-8"))
 
 
-def cargo_versions(root: Path) -> dict[str, str]:
+def cargo_versions(root: Path, problems: list[str]) -> dict[str, str]:
     """Return the locked engine version and the declared gpui-kit version."""
     manifest = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
     locked = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
@@ -52,8 +52,15 @@ def cargo_versions(root: Path) -> dict[str, str]:
         for package in locked["package"]
         if package["name"] in {"gpui-kit", "gpui-pre"}
     }
+    kit = manifest["dependencies"]["gpui-kit"]["version"]
+    dev_kit = manifest.get("dev-dependencies", {}).get("gpui-kit", {}).get("version")
+    if dev_kit != kit:
+        problems.append(
+            f"Cargo.toml: dev-dependencies.gpui-kit version {dev_kit!r} "
+            f"must match dependencies.gpui-kit version {kit!r}"
+        )
     return {
-        "gpui-kit": manifest["dependencies"]["gpui-kit"]["version"],
+        "gpui-kit": kit,
         "gpui-pre": engines["gpui-pre"],
     }
 
@@ -65,7 +72,7 @@ def check(root: Path, snapshots: dict) -> list[str]:
         if name not in snapshots
     ]
     adapter = (root / ADAPTER).read_text(encoding="utf-8")
-    versions = cargo_versions(root)
+    versions = cargo_versions(root, problems)
 
     for name, entry in snapshots.items():
         directory = root / entry["path"]

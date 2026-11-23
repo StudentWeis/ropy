@@ -38,6 +38,42 @@ fn test_repository_reopen_preserves_rich_text_pin_and_favorite()
 }
 
 #[test]
+fn test_repository_neighbors_preserve_each_others_payloads()
+-> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let root = directory.path();
+    // Reopen with a custom image directory to exercise existing records whose
+    // metadata points into the original shared rich-text directory.
+    let neighbor_db = root.join("two.redb");
+    let original = ClipboardRepository::open(&neighbor_db, root.join("images"))?;
+    let old = original.save_rich_text("legacy".into(), Some("<i>legacy</i>"), None)?;
+    let old_meta = old.rich_text_meta.as_ref().ok_or("missing legacy HTML")?;
+    drop(original);
+    let first = ClipboardRepository::open(&root.join("one.redb"), root.join("images"))?;
+    let a = first.save_rich_text("a".into(), Some("<b>a</b>"), None)?;
+    let a_meta = a.rich_text_meta.as_ref().ok_or("missing first HTML")?;
+    let second = ClipboardRepository::open(&neighbor_db, root.join("images-two"))?;
+    assert_eq!(load_rich_text_html(a_meta).as_deref(), Some("<b>a</b>"));
+    let b = second.save_rich_text("b".into(), Some("<b>b</b>"), None)?;
+    let b_meta = b.rich_text_meta.as_ref().ok_or("missing second HTML")?;
+    assert_ne!(
+        std::path::Path::new(a_meta.html_path.as_deref().ok_or("missing first path")?).parent(),
+        std::path::Path::new(b_meta.html_path.as_deref().ok_or("missing second path")?).parent(),
+    );
+    first.clear()?;
+    assert!(load_rich_text_html(a_meta).is_none());
+    assert_eq!(load_rich_text_html(b_meta).as_deref(), Some("<b>b</b>"));
+    assert_eq!(
+        load_rich_text_html(old_meta).as_deref(),
+        Some("<i>legacy</i>")
+    );
+    second.clear()?;
+    assert!(load_rich_text_html(b_meta).is_none());
+    assert!(load_rich_text_html(old_meta).is_none());
+    Ok(())
+}
+
+#[test]
 fn test_settings_explicit_path_preserves_recovery_and_serialized_identifiers()
 -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;

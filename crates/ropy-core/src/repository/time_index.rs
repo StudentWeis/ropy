@@ -47,6 +47,35 @@ impl<T: KvTree> TimeIndex<T> {
             .transpose()
     }
 
+    /// Use the reverse lookup on healthy records. Recover missing or inconsistent
+    /// entries by ID before deleting, so a later recopy cannot revive a stale key.
+    pub(super) fn deletion_keys(
+        &self,
+        id: u64,
+        record: Option<&ClipboardRecord>,
+    ) -> Result<Vec<Vec<u8>>, RepositoryError> {
+        match self.key_for_id(id) {
+            Ok(Some(key))
+                if record.is_some_and(|record| {
+                    key == Self::encode_key(record.created_at.timestamp_millis(), id)
+                }) =>
+            {
+                return Ok(vec![key.to_vec()]);
+            }
+            Ok(_) | Err(RepositoryError::Deserialization(_)) => {}
+            Err(error) => return Err(error),
+        }
+        let id = id.to_be_bytes();
+        let mut keys = Vec::new();
+        self.entries.scan_ascending(&mut |key, _| {
+            if key.get(8..) == Some(&id) {
+                keys.push(key.to_vec());
+            }
+            true
+        })?;
+        Ok(keys)
+    }
+
     /// Repair indexes, including legacy keys with an unflipped timestamp sign bit.
     ///
     /// The record store is authoritative and is never cleared by this repair.

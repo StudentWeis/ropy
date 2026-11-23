@@ -2,6 +2,9 @@
 
 use std::{env, fs, path::Path, process::{Command, Stdio}, thread, time::{Duration, Instant}};
 
+#[path = "../../src/updater/transaction/identity.rs"]
+mod identity;
+
 fn main() {
     let args: Vec<_> = env::args_os().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "parent") {
@@ -30,6 +33,9 @@ fn main() {
         let root = Path::new(&args[1]);
         fs::write(root.join("new-started"), "started").unwrap();
         if root.join("fail-startup").exists() { std::process::exit(1); }
+        let expected = root.with_file_name(format!("ropy{}", env::consts::EXE_SUFFIX));
+        assert!(identity::is_running_executable(&expected).unwrap());
+        assert!(!identity::is_running_executable(&root.join("backup")).unwrap());
         fs::write(root.join("healthy"), "healthy").unwrap();
         // Acknowledgement is durable even if the user immediately quits.
         return;

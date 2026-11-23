@@ -417,6 +417,47 @@ fn test_redb_reopen_inconsistent_indexes_repairs_without_losing_pin_or_favorite(
 }
 
 #[test]
+fn test_delete_lookup_read_failure_preserves_record_and_indexes() {
+    use crate::repository::backend::TIME_INDEX_LOOKUP_TREE;
+    let directory = tempfile::tempdir().unwrap();
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), directory.path().join("images"))
+        .unwrap();
+    let record = repo.save_text("keep".into()).unwrap();
+    backend
+        .open_tree(TIME_INDEX_LOOKUP_TREE)
+        .unwrap()
+        .fail_next_get();
+    assert!(repo.delete(record.id).is_err());
+    assert_eq!(repo.get_display_records(1).unwrap(), [record]);
+}
+
+#[rstest::rstest]
+#[case(None)]
+#[case(Some(b"broken".as_slice()))]
+#[case(Some(b"12345678".as_slice()))]
+fn test_delete_damaged_lookup_then_recopy_retains_newest(#[case] broken: Option<&[u8]>) {
+    use crate::repository::{backend::TIME_INDEX_LOOKUP_TREE, test_helpers::save_text_at};
+    let directory = tempfile::tempdir().unwrap();
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), directory.path().join("images"))
+        .unwrap();
+    let a = save_text_at(&repo, "A", 0);
+    let lookup = backend.open_tree(TIME_INDEX_LOOKUP_TREE).unwrap();
+    if let Some(bytes) = broken {
+        lookup.insert(&a.id.to_be_bytes(), bytes).unwrap();
+    } else {
+        lookup.remove(&a.id.to_be_bytes()).unwrap();
+    }
+    assert!(repo.delete(a.id).unwrap());
+    let b = save_text_at(&repo, "B", 1);
+    let latest = save_text_at(&repo, "A", 2);
+    assert_eq!(repo.get_display_records(3).unwrap(), [latest.clone(), b]);
+    assert_eq!(repo.cleanup_old_records(1).unwrap(), 1);
+    assert_eq!(repo.get_display_records(3).unwrap(), [latest]);
+}
+
+#[test]
 fn test_delete_corrupt_record_removes_record_and_index_entries() {
     use crate::repository::{
         backend::{FAVORITES_TREE, RECORDS_TREE, TIME_INDEX_LOOKUP_TREE},
