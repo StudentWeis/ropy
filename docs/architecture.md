@@ -63,6 +63,10 @@ Time-index keys flip the timestamp sign bit before big-endian encoding, so byte 
 
 A module move does not justify a schema migration. A format change needs its own compatibility design and tests.
 
+Repositories using the conventional `images` directory write rich text to its sibling `rich_text`. Repositories configured with a different image directory write new HTML and RTF under that directory's `rich_text` subdirectory. Stored paths remain authoritative for existing records. Clearing or migrating a database removes referenced payloads after the database clear commits. Unreferenced files can belong to a neighboring database and are left in place.
+
+Keep the single-path file-list decoder until every supported database has migrated those records to JSON arrays. On macOS, keep the old LaunchAgent cleanup while users can upgrade directly from releases that installed it.
+
 ## Capture and task lifecycle
 
 `prepare_clipboard_monitor` prepares two work units: an image-encoding future and a blocking native watcher closure. `app.rs` schedules them with the existing GPUI background executor. `write_clipboard` consumes the application's request channel and owns its long-lived native clipboard context. Clipboard modules do not choose an executor or receive an `App`.

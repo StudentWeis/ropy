@@ -13,6 +13,8 @@ CHECKER = ROOT / "scripts" / "check" / "check_agent_skills.py"
 COMMIT = "39ab849a93b5f15507b969164d49891db8d5b470"
 CARGO_TOML = """[dependencies]
 gpui-kit = { version = "0.9.1", default-features = false, features = ["component"] }
+[dev-dependencies]
+gpui-kit = { version = "0.9.1", features = ["test-support"] }
 """
 CARGO_LOCK = """version = 4
 
@@ -99,6 +101,13 @@ class AgentSkillTests(unittest.TestCase):
         result = self.run_checker()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not record gpui-pre 0.4.0", result.stdout)
+
+    def test_dev_dependency_drift_reports_the_mismatched_declaration(self):
+        normal, dev = CARGO_TOML.split("[dev-dependencies]")
+        self.write("Cargo.toml", normal + "[dev-dependencies]" + dev.replace("0.9.1", "0.9.0"))
+        result = self.run_checker()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("dev-dependencies.gpui-kit version '0.9.0'", result.stdout)
 
     def test_update_accepts_a_replaced_snapshot(self):
         self.write(".agents/skills/gpui-kit/SKILL.md", "# GPUI Kit\n\nReplacement.\n")

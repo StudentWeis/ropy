@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{errors::UpdateError, installation::Installation};
 
+mod identity;
 mod parent;
 
 const HELPER_ARG: &str = "--ropy-update-helper";
@@ -406,7 +407,7 @@ pub(crate) fn confirm_startup() -> Result<(), UpdateError> {
             .ok_or_else(|| UpdateError::Restart("missing confirmation path".into()))?;
         let root = Path::new(root);
         let transaction = Transaction::load(root)?;
-        if fs::canonicalize(transaction.executable())? != std::env::current_exe()? {
+        if !identity::is_running_executable(&transaction.executable())? {
             return Err(UpdateError::Restart(
                 "confirmation executable mismatch".into(),
             ));

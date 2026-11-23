@@ -62,7 +62,7 @@ def meaningful_lines(text: str) -> list[tuple[int, str]]:
             in_fence = not in_fence
             continue
         if not in_fence:
-            lines.append((number, strip_inline_code(line)))
+            lines.append((number, line))
     return lines
 
 
@@ -87,7 +87,7 @@ def check_file(root: Path, path: Path) -> list[str]:
     problems: list[str] = []
     cache: dict[Path, set[str]] = {}
     for number, line in meaningful_lines(path.read_text(encoding="utf-8")):
-        for target in LINK.findall(line):
+        for target in LINK.findall(strip_inline_code(line)):
             if target.startswith(IGNORED_TARGET_PREFIXES):
                 continue
             link, _, fragment = unquote(target).partition("#")

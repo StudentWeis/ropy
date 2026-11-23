@@ -44,6 +44,10 @@ class MarkdownTests(unittest.TestCase):
         result = self.check("[data](assets/data.json#field)\n")
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_heading_anchor_keeps_visible_inline_code(self):
+        result = self.check("## Run `ropy`\n\n[Command](#run-ropy)\n")
+        self.assertEqual(result.returncode, 0, result.stdout)
+
     def test_missing_file_fails(self):
         result = self.check("[guide](docs/missing.md)\n")
         self.assertNotEqual(result.returncode, 0)

@@ -95,16 +95,20 @@ fn select_release(
     prerelease: bool,
     bundle: bool,
 ) -> Result<Option<ReleaseInfo>, UpdateError> {
-    let mut candidates: Vec<_> = releases
-        .into_iter()
-        .filter_map(|release| {
-            let version = parse_version(&release.tag_name).ok()?;
-            (!release.draft
-                && (prerelease || (!release.prerelease && version.pre.is_empty()))
-                && version > *current)
-                .then_some((version, release))
-        })
-        .collect();
+    let mut candidates = Vec::new();
+    for release in releases {
+        let version = match parse_version(&release.tag_name) {
+            Ok(version) => version,
+            Err(_) if prerelease => continue,
+            Err(error) => return Err(error),
+        };
+        if !release.draft
+            && (prerelease || (!release.prerelease && version.pre.is_empty()))
+            && version > *current
+        {
+            candidates.push((version, release));
+        }
+    }
     candidates.sort_by(|a, b| b.0.cmp(&a.0));
     let asset_target = if bundle {
         format!("{target}-app")
@@ -182,6 +186,7 @@ mod tests {
     #[expect(clippy::unwrap_used)]
     fn test_select_release_unsorted_list_chooses_highest_compatible_semver() {
         let releases = vec![
+            release("nightly", "linux"),
             release("1.1.0", "linux"),
             release("9.0.0", "windows"),
             release("1.9.0", "linux"),
@@ -194,6 +199,20 @@ mod tests {
                 .version,
             "1.9.0"
         );
+    }
+
+    #[test]
+    fn test_select_release_invalid_stable_manifest_reports_parse_failure() {
+        assert!(matches!(
+            select_release(
+                vec![release("nightly", "linux")],
+                &Version::new(1, 0, 0),
+                "linux",
+                false,
+                false
+            ),
+            Err(UpdateError::Parse(_))
+        ));
     }
 
     #[test]

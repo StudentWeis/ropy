@@ -124,19 +124,14 @@ fn save_image_to_dir(
     Ok(file_path)
 }
 
-fn rich_text_dir_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("rich_text")
-}
-
 fn write_rich_text_file(
-    data_dir: &Path,
+    directory: &Path,
     record_id: u64,
     extension: &str,
     content: &str,
 ) -> std::io::Result<tempfile::NamedTempFile> {
     use std::io::Write;
-    let directory = rich_text_dir_path(data_dir);
-    fs::create_dir_all(&directory)?;
+    fs::create_dir_all(directory)?;
     let mut file = tempfile::Builder::new()
         .prefix(&format!("{record_id}-"))
         .suffix(&format!(".{extension}"))

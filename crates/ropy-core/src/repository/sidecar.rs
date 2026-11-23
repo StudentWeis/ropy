@@ -57,21 +57,3 @@ pub(super) fn remove_superseded_rich_text_files(
         let _ = fs::remove_file(path);
     }
 }
-
-/// Recursively remove the images and rich-text directories.
-///
-/// Used by both schema-migration cleanup and `ClipboardRepository::clear`.
-/// Failures are logged at warn level rather than swallowed silently, so
-/// orphaned files never disappear without a trace.
-pub(super) fn purge_sidecar_dirs(images_dir: &Path, rich_text_dir: &Path) {
-    if images_dir.exists()
-        && let Err(error) = fs::remove_dir_all(images_dir)
-    {
-        tracing::warn!(error = %error, path = %images_dir.display(), "failed to remove images dir");
-    }
-    if rich_text_dir.exists()
-        && let Err(error) = fs::remove_dir_all(rich_text_dir)
-    {
-        tracing::warn!(error = %error, path = %rich_text_dir.display(), "failed to remove rich-text dir");
-    }
-}

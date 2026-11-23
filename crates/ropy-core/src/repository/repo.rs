@@ -17,10 +17,7 @@ use super::{
     },
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType, RichTextMeta},
-    sidecar::{
-        purge_sidecar_dirs, remove_image_files, remove_record_sidecars,
-        remove_superseded_rich_text_files,
-    },
+    sidecar::{remove_image_files, remove_record_sidecars, remove_superseded_rich_text_files},
     time_index::TimeIndex,
 };
 use crate::repository::{
@@ -93,7 +90,8 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     }
 
     /// Initialize history metadata and repair indexes using the supplied backend.
-    /// Rich-text sidecars use a sibling directory of `images_dir`.
+    /// The conventional `images` directory keeps its sibling `rich_text`.
+    /// A custom image directory stores new rich-text sidecars inside itself.
     ///
     /// # Errors
     /// Returns an error if schema initialization or index repair fails.
@@ -106,23 +104,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         );
         let favorites = backend.open_tree(FAVORITES_TREE)?;
 
-        let rich_text_dir = images_dir.parent().map_or_else(
-            || PathBuf::from("rich_text"),
-            |parent| parent.join("rich_text"),
-        );
-
-        if Self::needs_schema_migration(&meta)? {
-            backend.clear_batch(&[
-                RECORDS_TREE,
-                TIME_INDEX_TREE,
-                TIME_INDEX_LOOKUP_TREE,
-                FAVORITES_TREE,
-            ])?;
-            purge_sidecar_dirs(&images_dir, &rich_text_dir);
-            meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
-            backend.flush()?;
-        }
-
+        let rich_text_dir = if images_dir.ends_with("images") {
+            images_dir.with_file_name("rich_text")
+        } else {
+            images_dir.join("rich_text")
+        };
         let repository = Self {
             operation_lock: Mutex::new(()),
             backend,
@@ -132,6 +118,11 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             images_dir,
             rich_text_dir,
         };
+        if Self::needs_schema_migration(&meta)? {
+            repository.clear()?;
+            meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
+            repository.flush()?;
+        }
         repository.repair_time_index()?;
         Ok(repository)
     }
@@ -410,7 +401,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         // Staged sidecars belong to no record until the write below commits, so
         // every early return from here on removes them. `dismiss` disarms the guard.
         let staged = DropGuard::new(
-            save_rich_text_files_to_dir(id, html, rtf, self.rich_text_root())?,
+            save_rich_text_files_to_dir(id, html, rtf, &self.rich_text_dir)?,
             remove_staged_rich_text,
         );
 
@@ -506,19 +497,13 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         let _operation = self.lock_operation();
         let record = self.load_record(id)?;
         let key = id.to_be_bytes();
-        let time_key = match self.time_index.key_for_id(id) {
-            Ok(time_key) => time_key,
-            Err(error) => {
-                tracing::warn!(%error, id, "ignoring unreadable time index lookup during delete");
-                None
-            }
-        };
+        let time_keys = self.time_index.deletion_keys(id, record.as_ref())?;
         let mut removals = vec![
             TreeKey::new(RECORDS_TREE, &key),
             TreeKey::new(FAVORITES_TREE, &key),
             TreeKey::new(TIME_INDEX_LOOKUP_TREE, &key),
         ];
-        if let Some(time_key) = time_key.as_ref() {
+        for time_key in &time_keys {
             removals.push(TreeKey::new(TIME_INDEX_TREE, time_key));
         }
         let removed = self
@@ -540,13 +525,45 @@ impl<B: StorageBackend> ClipboardRepository<B> {
     /// Returns an error if the backend cannot commit the clear operation.
     pub fn clear(&self) -> Result<(), RepositoryError> {
         let _operation = self.lock_operation();
+        // Older databases can share the same rich-text directory. Only the
+        // paths in committed records identify which payloads belong to us.
+        let mut images = Vec::new();
+        let mut rich_text_paths = Vec::new();
+        let legacy_dir = self.images_dir.with_file_name("rich_text");
+        self.records.scan_ascending(&mut |_, bytes| {
+            if let Ok(record) = postcard::from_bytes::<ClipboardRecord>(bytes) {
+                if record.content_type == ContentType::Image
+                    && Path::new(&record.content).parent() == Some(&self.images_dir)
+                {
+                    images.push(record.content);
+                }
+                if let Some(meta) = record.rich_text_meta {
+                    for file in [meta.html_path, meta.rtf_path].into_iter().flatten() {
+                        let parent = Path::new(&file).parent();
+                        if parent == Some(&self.rich_text_dir) || parent == Some(&legacy_dir) {
+                            rich_text_paths.push(file);
+                        }
+                    }
+                }
+            }
+            true
+        })?;
         self.backend.clear_batch(&[
             RECORDS_TREE,
             TIME_INDEX_TREE,
             TIME_INDEX_LOOKUP_TREE,
             FAVORITES_TREE,
         ])?;
-        purge_sidecar_dirs(&self.images_dir, &self.rich_text_dir);
+        for path in images {
+            remove_image_files(&path);
+        }
+        for path in rich_text_paths {
+            if let Err(error) = std::fs::remove_file(&path)
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(%error, %path, "failed to remove rich-text sidecar");
+            }
+        }
         Ok(())
     }
 }
@@ -602,12 +619,6 @@ impl<B: StorageBackend> ClipboardRepository<B> {
                 Ok(None)
             }
         }
-    }
-
-    pub(super) fn rich_text_root(&self) -> &Path {
-        self.rich_text_dir
-            .parent()
-            .unwrap_or(self.rich_text_dir.as_path())
     }
 
     pub(super) fn decode_u64_key(bytes: &[u8]) -> Option<u64> {
