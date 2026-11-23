@@ -198,7 +198,7 @@ struct ItemStyle {
     selected_background: gpui_kit::Hsla,
     normal_background: gpui_kit::Hsla,
     border: gpui_kit::Hsla,
-    hover_border: gpui_kit::Hsla,
+    selected_border: gpui_kit::Hsla,
     meta_background: gpui_kit::Hsla,
 }
 
@@ -208,7 +208,7 @@ impl ItemStyle {
             selected_background: cx.theme().accent,
             normal_background: cx.theme().secondary,
             border: cx.theme().border,
-            hover_border: cx.theme().foreground,
+            selected_border: cx.theme().foreground,
             meta_background: cx.theme().background,
         }
     }
@@ -580,44 +580,54 @@ fn decorate_record_card(
     styles: &ItemStyle,
 ) -> AnyElement {
     let view_click = ctx.view.clone();
+    let view_move = ctx.view.clone();
+    let record_id = ctx.record.id;
     let index = ctx.index;
     let overlay_visible = ctx.overlay_visible;
 
-    card.bg(styles.normal_background)
-        .rounded_md()
-        .border_color(if ctx.flags.is_selected() {
-            styles.hover_border
-        } else {
-            styles.border
-        })
-        .border_1()
-        .when(!overlay_visible, |el| {
-            el.hover(move |style| {
-                if ctx.flags.is_selected() {
-                    style
-                } else {
-                    style
-                        .bg(styles.selected_background)
-                        .border_color(styles.selected_background)
-                }
-            })
-            .cursor_pointer()
-        })
-        .id(("record", ctx.record.id))
-        .on_click(move |event, window, cx| {
-            if overlay_visible {
+    card.bg(if ctx.flags.is_selected() {
+        styles.selected_background
+    } else {
+        styles.normal_background
+    })
+    .rounded_md()
+    .border_color(if ctx.flags.is_selected() {
+        styles.selected_border
+    } else {
+        styles.border
+    })
+    .border_1()
+    .when(!overlay_visible, |el| {
+        el.cursor_pointer().on_mouse_move(move |event, _, cx| {
+            if event.pressed_button.is_some() {
                 return;
             }
-            let confirm_as_plain_text = event.modifiers().shift;
-            let _ = view_click.update(cx, |this, cx| {
-                if confirm_as_plain_text {
-                    this.confirm_record_as_plain_text(window, cx, index);
-                } else {
-                    this.confirm_record(window, cx, index);
+            let _ = view_move.update(cx, |board, cx| {
+                if board.selected_index != index
+                    && !board.is_hold_preview_active()
+                    && board.filtered_record_id_at(index) == Some(record_id)
+                {
+                    board.selected_index = index;
+                    cx.notify();
                 }
             });
         })
-        .into_any_element()
+    })
+    .id(("record", ctx.record.id))
+    .on_click(move |event, window, cx| {
+        if overlay_visible {
+            return;
+        }
+        let confirm_as_plain_text = event.modifiers().shift;
+        let _ = view_click.update(cx, |this, cx| {
+            if confirm_as_plain_text {
+                this.confirm_record_as_plain_text(window, cx, index);
+            } else {
+                this.confirm_record(window, cx, index);
+            }
+        });
+    })
+    .into_any_element()
 }
 
 fn render_list_item(ctx: &RenderContext<'_>, window: &Window, cx: &App) -> AnyElement {

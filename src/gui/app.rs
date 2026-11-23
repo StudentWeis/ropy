@@ -263,13 +263,19 @@ mod tests {
                 set_app_theme(window, cx, &crate::gui::theme::ThemeId::default(), 50);
                 let (tx, _) = async_channel::bounded(1);
                 cx.new(|cx| {
+                    let records = [1, 2]
+                        .into_iter()
+                        .map(|id| {
+                            ClipboardRecord::new(
+                                id,
+                                format!("opacity regression {id}"),
+                                chrono::Local::now(),
+                                ContentType::Text,
+                            )
+                        })
+                        .collect();
                     let mut board = RopyBoard::new(
-                        Arc::new(RwLock::new(vec![ClipboardRecord::new(
-                            1,
-                            "opacity regression".into(),
-                            chrono::Local::now(),
-                            ContentType::Text,
-                        )])),
+                        Arc::new(RwLock::new(records)),
                         Arc::new(Mutex::new(CopyTracker::default())),
                         tx,
                         window,

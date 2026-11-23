@@ -19,6 +19,47 @@ fn open_board(
 }
 
 #[gpui_kit::test]
+fn test_record_pointer_selection_drives_space_preview(cx: &mut TestAppContext) {
+    let (main, board, _) = open_board(cx, vec![record(1), record(2), record(3)]);
+    cx.simulate_window_resize(main, size(px(400.), px(550.)));
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+            board.settings_editor.panel_state.hover_preview_enabled = false;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.hover(("record-content", 2_u64), cx);
+        window.key_down("space", false, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let preview = cx.update(|cx| {
+        cx.windows()
+            .into_iter()
+            .find(|handle| *handle != main)
+            .unwrap()
+    });
+    cx.update_window(preview, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find(("preview-line", 0_usize)).label(),
+            Some("record 2")
+        );
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(main, |_, window, cx| {
+        assert_eq!(board.read(cx).selected_index, 1);
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert_eq!(board.read(cx).selected_index, 2);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn test_preview_hold_opens_bounded_window_and_release_in_either_window_closes_it(
     cx: &mut TestAppContext,
 ) {
