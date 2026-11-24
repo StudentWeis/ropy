@@ -1,12 +1,16 @@
-# Ropy integration with GPUI Kit 0.10.0
+# Ropy integration with GPUI Kit 0.11.0
 
 ## Source and refresh policy
 
-Checked against [GPUI Kit v0.10.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.10.0), commit `4e015e9e26e137e020ebc0c4fecf9ce5e0889668`. Normal and development dependencies use 0.10.0; the default engine is `gpui-pre` 0.3.12. Optional GPUI Fast entries in Cargo.lock (now 0.1.16) do not mean Ropy switched rendering engines.
+Checked against [GPUI Kit v0.11.0](https://github.com/longbridge/gpui-kit/releases/tag/v0.11.0), commit `e97fe438129c5e4ccab504f2e6fafd9a4e396bba`. Normal and development dependencies use 0.11.0; the default engine is `gpui-pre` 0.3.14. Optional GPUI Fast entries in Cargo.lock (now 0.1.19) do not mean Ropy switched rendering engines.
 
 Use the official `gpui-kit` and `gpui-kit-design-guides` skills alongside the `ropy-gpui` adapter for visible UI work. First read the relevant guide sections, then the component family convention, then verify the exact signature in the installed source. Keep Ropy-specific guidance in `ropy-gpui`; replace the two official skill directories only with an unmodified upstream snapshot. Upstream `script/check-ai` commands do not run in this repository.
 
 This reference adapts [GPUI Kit documentation](https://gpui-kit.com) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), adding Ropy-specific scope, verification and recommendations. Code examples retain their upstream Apache-2.0 terms.
+
+## 0.11.0 migration
+
+Ropy enables the new `gpui-kit/x11` feature explicitly because it disables default features and supports both X11 and Wayland.
 
 ## 0.10.0 migration
 

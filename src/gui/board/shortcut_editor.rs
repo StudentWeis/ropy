@@ -102,7 +102,7 @@ impl RopyBoard {
         } else {
             self.shortcut_editor = Some(ShortcutEditor::new(settings, self.active_panel, cx));
         }
-        self.active_panel = ActivePanel::Shortcuts;
+        self.set_active_panel(ActivePanel::Shortcuts, window, cx);
         window.focus(&self.focus_handle, cx);
         cx.notify();
     }

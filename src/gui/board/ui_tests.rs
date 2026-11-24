@@ -125,6 +125,32 @@ fn test_search_buttons_expose_controlled_toggle_state(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn test_pin_and_favorite_buttons_expose_record_and_window_state(cx: &mut TestAppContext) {
+    let (handle, board, _) = open_board(cx, vec![record(1), record(2).pinned(false)]);
+    cx.update_window(handle, |_, window, cx| {
+        board.update(cx, |board, cx| {
+            board.favorite_ids = Arc::new([2].into());
+            cx.notify();
+        });
+        window.render_frame(cx);
+        for (id, pinned, favorite) in [(1_u64, true, false), (2, false, true)] {
+            assert_eq!(window.find(("pin-btn", id)).checked(), Some(pinned));
+            assert_eq!(window.find(("favorite-btn", id)).checked(), Some(favorite));
+        }
+        assert_eq!(window.find("pin-button").checked(), Some(true));
+        window.click("pin-button", cx);
+        assert_eq!(window.find("pin-button").checked(), Some(false));
+        board.update(cx, |board, cx| {
+            board.set_confirm_mode(ConfirmMode::PasteImmediately, window);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("pin-button").disabled(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn test_hotkey_recording_unsupported_fn_combination_keeps_recording(cx: &mut TestAppContext) {
     let (handle, board, copies) = open_board(cx, vec![record(1)]);
     cx.update_window(handle, |_, window, cx| {
@@ -818,6 +844,63 @@ fn test_board_unmodified_numbers_copy_corresponding_records(cx: &mut TestAppCont
             _ => None,
         };
         assert_eq!(actual, Some(expected), "{key}");
+    }
+}
+
+#[gpui_kit::test]
+fn test_search_blur_during_composition_preserves_query_on_return(cx: &mut TestAppContext) {
+    for (panel, open_button, back_button) in [
+        (ActivePanel::Settings, "settings-button", "cancel-button"),
+        (ActivePanel::About, "about-button", "back-button"),
+        (ActivePanel::Help, "help-button", "help-back-button"),
+    ] {
+        let mut matching = record(1);
+        matching.content = "ni好".into();
+        let mut other = record(2);
+        other.content = "ni".into();
+        let (handle, board, _) = open_board(cx, vec![matching, other]);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.press("/", cx);
+            assert!(
+                board
+                    .read(cx)
+                    .search_input
+                    .focus_handle(cx)
+                    .is_focused(window)
+            );
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            let search = board.read(cx).search_input.clone();
+            {
+                let handler = ElementInputHandler::new(gpui_kit::Bounds::default(), search);
+                let mut input = TestInput::new(handler, window);
+                input.compose_text(None, "ni", Some(2..2), cx);
+                assert_eq!(input.marked_text_range(cx), Some(0..2));
+            }
+            window.click(open_button, cx);
+            assert_eq!(board.read(cx).active_panel, panel);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            let search = board.read(cx).search_input.clone();
+            let handler = ElementInputHandler::new(gpui_kit::Bounds::default(), search.clone());
+            assert_eq!(TestInput::new(handler, window).marked_text_range(cx), None);
+            window.click(back_button, cx);
+            window.press("/", cx);
+            assert_eq!(search.read(cx).value(), "ni");
+            window.input("好", cx);
+            assert_eq!(search.read(cx).value(), "ni好");
+        })
+        .unwrap();
+        cx.run_until_parked();
+        board.read_with(cx, |board, _| {
+            assert_eq!(board.filtered_record_len(), 1);
+            assert_eq!(board.filtered_record_id_at(0), Some(1));
+        });
     }
 }
 

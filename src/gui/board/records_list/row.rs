@@ -483,6 +483,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
     }
     .xsmall()
     .w_5()
+    .toggled(ctx.flags.is_favorite())
     .disabled(ctx.history_mutation.is_running())
     .accessibility_label(favorite_label.clone())
     .tooltip(favorite_label)
@@ -505,6 +506,7 @@ fn render_record_actions(ctx: &RenderContext<'_>, cx: &App) -> AnyElement {
         };
         button
             .icon(Icon::empty().path("icons/record-pin.svg"))
+            .toggled(ctx.record.pinned)
             .disabled(ctx.history_mutation.is_running())
             .accessibility_label(pin_label.clone())
             .tooltip(pin_label)

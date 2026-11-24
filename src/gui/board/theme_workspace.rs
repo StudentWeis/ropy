@@ -146,7 +146,7 @@ impl RopyBoard {
                 error: None,
             });
         }
-        self.active_panel = ActivePanel::Themes;
+        self.set_active_panel(ActivePanel::Themes, window, cx);
         window.focus(&self.focus_handle, cx);
         cx.notify();
     }

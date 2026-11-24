@@ -14,8 +14,8 @@ publish = false
 [dependencies]
 ropy-core = { path = "crates/ropy-core" }
 clipboard-rs = "0.3.5"
-gpui-kit = { version = "0.10.0", default-features = false, features = ["component", "assets"] }
-global-hotkey = "0.9.0"
+gpui-kit = { version = "0.11.0", default-features = false, features = ["component", "x11", "assets"] }
+global-hotkey = "0.10.0"
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
@@ -27,7 +27,7 @@ tray-icon = { version = "0.26.1", default-features = false }
 raw-window-handle = "0.6.2"
 async-channel = "2.5.0"
 rust-i18n = "4.2.4"
-rust-embed = { version = "8.13.0", features = ["include-exclude"] }
+rust-embed = { version = "8.14.0", features = ["include-exclude"] }
 seahash.workspace = true
 sha2 = { version = "0.11.1", default-features = false }
 semver = "1.0.28"
@@ -60,10 +60,10 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_UI_Input_KeyboardAndMouse",
 ] }
 # Release ZIPs use Deflate; the updater does not need encryption or other codecs.
-zip = { version = "9.2.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+zip = { version = "9.8.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.13.13", default-features = false, features = ["async-io", "global_shortcuts"] }
+ashpd = { version = "0.14.3", default-features = false, features = ["async-io", "global_shortcuts"] }
 futures-lite = "2.6.1"
 clipboard-rs = { version = "0.3.5", features = ["wayland"] }
 enigo = { version = "0.6.1", features = ["wayland"] }
@@ -89,7 +89,7 @@ image = { version = "0.25.10", default-features = false, features = [
 
 [dev-dependencies]
 ropy-core = { path = "crates/ropy-core", features = ["test"] }
-gpui-kit = { version = "0.10.0", default-features = false, features = ["component", "test-support"] }
+gpui-kit = { version = "0.11.0", default-features = false, features = ["component", "x11", "test-support"] }
 rstest.workspace = true
 
 [lints]
@@ -217,4 +217,4 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 seahash = "4.1.0"
 tempfile = "3.27.0"
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
-rstest = { version = "0.28.0", default-features = false }
+rstest = { version = "0.29.0", default-features = false }
