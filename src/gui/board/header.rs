@@ -1,7 +1,7 @@
 use gpui_kit::{
     Context,
     component::{
-        ActiveTheme, Icon, Sizable,
+        ActiveTheme, Disableable, Icon, Sizable,
         button::{Button, ButtonVariants},
         h_flex,
         spinner::Spinner,
@@ -10,7 +10,7 @@ use gpui_kit::{
 };
 use rust_i18n::t;
 
-use super::RopyBoard;
+use super::{ActivePanel, RopyBoard};
 use crate::constants::APP_NAME;
 
 pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> impl IntoElement {
@@ -52,9 +52,10 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                     if is_pinned {
                         Button::new("pin-button").primary()
                     } else {
-                        Button::new("pin-button").ghost().opacity(0.5_f32)
+                        Button::new("pin-button").ghost()
                     }
-                    .when(can_toggle_window_pin, |button| button.opacity(1.0_f32))
+                    .toggled(is_pinned)
+                    .disabled(!can_toggle_window_pin)
                     .icon(Icon::empty().path("icons/pin-to-top.svg"))
                     .accessibility_label(pin_tooltip.clone())
                     .tooltip(pin_tooltip)
@@ -73,8 +74,8 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                         .icon(Icon::empty().path("icons/help.svg"))
                         .accessibility_label(t!("help_title"))
                         .tooltip(t!("help_title"))
-                        .on_click(cx.listener(|this, _click_event, _window, cx| {
-                            this.active_panel = crate::gui::board::ActivePanel::Help;
+                        .on_click(cx.listener(|this, _click_event, window, cx| {
+                            this.set_active_panel(ActivePanel::Help, window, cx);
                             cx.notify();
                         }))
                         .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
@@ -87,8 +88,8 @@ pub(super) fn render_header(board: &RopyBoard, cx: &Context<'_, RopyBoard>) -> i
                         .icon(Icon::empty().path("icons/info.svg"))
                         .accessibility_label(t!("about_title"))
                         .tooltip(t!("about_title"))
-                        .on_click(cx.listener(|this, _click_event, _window, cx| {
-                            this.active_panel = crate::gui::board::ActivePanel::About;
+                        .on_click(cx.listener(|this, _click_event, window, cx| {
+                            this.set_active_panel(ActivePanel::About, window, cx);
                             cx.notify();
                         }))
                         .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {

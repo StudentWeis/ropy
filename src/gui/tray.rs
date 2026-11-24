@@ -200,7 +200,7 @@ fn open_panel(panel: super::board::ActivePanel, cx: &mut App) {
                 if board.settings_editor.hotkey.recording {
                     board.cancel_hotkey_recording(window, cx);
                 }
-                board.active_panel = panel;
+                board.set_active_panel(panel, window, cx);
                 if panel == super::board::ActivePanel::Settings {
                     board
                         .settings_editor
@@ -312,7 +312,7 @@ mod tests {
 
         use ashpd::zbus::{
             self,
-            zvariant::{OwnedObjectPath, OwnedValue, Value},
+            wire::{OwnedObjectPath, OwnedVariant, Variant},
         };
 
         let connection = zbus::Connection::session().await?;
@@ -342,7 +342,7 @@ mod tests {
             "com.canonical.dbusmenu",
         )
         .await?;
-        let items: Vec<(i32, HashMap<String, OwnedValue>)> = menu
+        let items: Vec<(i32, HashMap<String, OwnedVariant>)> = menu
             .call("GetGroupProperties", &(Vec::<i32>::new(), vec!["label"]))
             .await?;
         let items: Vec<_> = items.iter().filter(|(id, _)| *id != 0).collect();
@@ -354,7 +354,7 @@ mod tests {
             (t!("tray_quit"), TRAY_QUIT_ID),
         ]) {
             assert_eq!(<&str>::try_from(&properties["label"])?, label.as_ref());
-            menu.call::<_, _, ()>("Event", &(*id, "clicked", Value::from(0_i32), 0_u32))
+            menu.call::<_, _, ()>("Event", &(*id, "clicked", Variant::from(0_i32), 0_u32))
                 .await?;
             assert_eq!(
                 receiver.recv_timeout(Duration::from_secs(2))?.id,

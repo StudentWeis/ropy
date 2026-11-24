@@ -36,8 +36,8 @@ pub(crate) use actions::Hide;
 pub(crate) use actions::{Active, bind_application_keys};
 use filtering::{ClearConfirmAction, filter_and_sort_record_indices};
 use gpui_kit::{
-    AppContext, Bounds, Context, Entity, FocusHandle, ListAlignment, ListState, Pixels, Point,
-    ScrollHandle, Subscription, Window,
+    AppContext, Bounds, Context, Entity, EntityInputHandler, FocusHandle, ListAlignment, ListState,
+    Pixels, Point, ScrollHandle, Subscription, Window,
     component::{WindowExt, input::InputState},
 };
 pub(crate) use search::{ContentFilter, SearchOptions};
@@ -246,8 +246,25 @@ impl RopyBoard {
         }
     }
 
+    pub(crate) fn set_active_panel(
+        &mut self,
+        panel: ActivePanel,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if self.active_panel == ActivePanel::ClipboardList && panel != ActivePanel::ClipboardList {
+            // The field leaves the render tree, but the board retains its input state.
+            self.search_input.update(cx, |input, cx| {
+                if input.marked_text_range(window, cx).is_some() {
+                    input.unmark_text(window, cx);
+                }
+            });
+        }
+        self.active_panel = panel;
+    }
+
     pub(crate) fn open_settings_panel(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        self.active_panel = ActivePanel::Settings;
+        self.set_active_panel(ActivePanel::Settings, window, cx);
         self.settings_editor
             .panel_state
             .window_opacity_slider_visible = false;
