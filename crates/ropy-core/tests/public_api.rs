@@ -38,6 +38,36 @@ fn test_repository_reopen_preserves_rich_text_pin_and_favorite()
 }
 
 #[test]
+fn test_image_payloads_remain_owned_after_database_reopen() -> Result<(), Box<dyn std::error::Error>>
+{
+    use ropy_core::repository::assets::{PendingImage, thumb_path_for};
+    let directory = tempfile::tempdir()?;
+    let root = directory.path();
+    let images = root.join("images");
+    let a = root.join("a.redb");
+    let b = root.join("b.redb");
+    let pixels = image::DynamicImage::new_rgba8(2, 3);
+    let first = ClipboardRepository::open(&a, images.clone())?;
+    let record = first.save_pending_image(PendingImage::encode(&pixels, 42, &images)?)?;
+    let path = std::path::Path::new(&record.content);
+    let thumb = thumb_path_for(path);
+    drop(first);
+    assert!(ClipboardRepository::open(&b, images.clone()).is_err());
+    let second = ClipboardRepository::open(&b, root.join("other-images"))?;
+    let neighbor =
+        second.save_pending_image(PendingImage::encode(&pixels, 42, second.images_dir())?)?;
+    second.clear()?;
+    assert!(!std::path::Path::new(&neighbor.content).exists());
+    assert_eq!(image::open(path)?.to_rgba8(), pixels.to_rgba8());
+    assert!(thumb.is_file());
+    let first = ClipboardRepository::open(&a, images)?;
+    assert!(first.delete(record.id)?);
+    assert!(!path.exists());
+    assert!(!thumb.exists());
+    Ok(())
+}
+
+#[test]
 fn test_repository_neighbors_preserve_each_others_payloads()
 -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
@@ -49,6 +79,8 @@ fn test_repository_neighbors_preserve_each_others_payloads()
     let old = original.save_rich_text("legacy".into(), Some("<i>legacy</i>"), None)?;
     let old_meta = old.rich_text_meta.as_ref().ok_or("missing legacy HTML")?;
     drop(original);
+    // Model a database written before image-directory ownership was recorded.
+    std::fs::remove_file(root.join("images/.ropy-database"))?;
     let first = ClipboardRepository::open(&root.join("one.redb"), root.join("images"))?;
     let a = first.save_rich_text("a".into(), Some("<b>a</b>"), None)?;
     let a_meta = a.rich_text_meta.as_ref().ok_or("missing first HTML")?;

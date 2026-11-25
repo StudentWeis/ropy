@@ -154,6 +154,7 @@ pub(crate) struct RopyBoard {
     hover_preview: preview_window::HoverPreviewState,
     // Remains held after Escape so auto-repeat cannot reopen the preview.
     preview_key: preview_window::PreviewKeyState,
+    hold_preview_load: Option<gpui_kit::Task<()>>,
     pub(crate) selected_index: usize,
     pub(super) copy_in_progress: bool,
     pub(super) copy_generation: u64,
@@ -514,6 +515,7 @@ impl RopyBoard {
             preview_window: None,
             hover_preview: preview_window::HoverPreviewState::default(),
             preview_key: preview_window::PreviewKeyState::Released,
+            hold_preview_load: None,
             selected_index: 0,
             last_copy,
             list_state,

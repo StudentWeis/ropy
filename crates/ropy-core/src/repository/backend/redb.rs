@@ -26,6 +26,7 @@ type RedbTableDefinition<'a> = TableDefinition<'a, &'static [u8], &'static [u8]>
 #[derive(Debug)]
 pub struct RedbBackend {
     db: Arc<Database>,
+    path: PathBuf,
     #[cfg(test)]
     fail_write_after: std::sync::atomic::AtomicUsize,
 }
@@ -49,6 +50,7 @@ impl RedbBackend {
 
         Ok(Self {
             db: Arc::new(db),
+            path: db_path.canonicalize()?,
             #[cfg(test)]
             fail_write_after: std::sync::atomic::AtomicUsize::new(usize::MAX),
         })
@@ -63,6 +65,10 @@ impl RedbBackend {
 
 impl StorageBackend for RedbBackend {
     type Tree = RedbTree;
+
+    fn database_path(&self) -> Option<&std::path::Path> {
+        Some(&self.path)
+    }
 
     fn open_tree(&self, name: &str) -> Result<Self::Tree, RepositoryError> {
         RedbTree::open(self.db.clone(), name.to_string())

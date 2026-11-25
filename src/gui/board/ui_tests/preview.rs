@@ -115,6 +115,32 @@ fn test_preview_hold_opens_bounded_window_and_release_in_either_window_closes_it
 }
 
 #[gpui_kit::test]
+fn test_image_preview_released_during_preparation_stays_closed(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("preview.png");
+    image::RgbaImage::new(12, 8).save(&path).unwrap();
+    let record = ClipboardRecord::new(
+        1,
+        path.to_string_lossy().into_owned(),
+        chrono::Local::now(),
+        crate::repository::ContentType::Image,
+    );
+    let (main, board, _) = open_board(cx, vec![record]);
+    cx.update_window(main, |_, window, cx| {
+        board.update(cx, |board, _| {
+            board.settings_editor.panel_state.space_preview_enabled = true;
+        });
+        window.key_down("space", false, cx);
+        assert!(board.read(cx).hold_preview_load.is_some());
+        assert!(board.read(cx).preview_window.is_none());
+        window.key_up("space", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(cx.update(|cx| cx.windows().len()), 1);
+}
+
+#[gpui_kit::test]
 fn test_preview_escape_closes_only_preview_and_repeat_does_not_reopen(cx: &mut TestAppContext) {
     let (main, board, _) = open_board(cx, vec![record(1)]);
     cx.update_window(main, |_, window, cx| {
@@ -165,8 +191,8 @@ async fn open_image_preview(
     .unwrap();
     if hover {
         cx.executor().advance_clock(Duration::from_millis(400));
-        cx.run_until_parked();
     }
+    cx.run_until_parked();
     let preview = cx.update(|cx| {
         cx.windows()
             .into_iter()

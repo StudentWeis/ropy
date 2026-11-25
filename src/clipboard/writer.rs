@@ -87,11 +87,40 @@ fn set_image(ctx: &ClipboardContext, path: &str) -> ClipboardWriteResult {
 }
 
 fn set_files(ctx: &ClipboardContext, paths: &[String]) -> ClipboardWriteResult {
-    write_files_with(
-        paths,
-        |contents| set_contents(ctx, contents),
-        |files| ctx.set_files(files).map_err(clipboard_error),
-    )
+    let write = || {
+        write_files_with(
+            paths,
+            |contents| set_contents(ctx, contents),
+            |files| ctx.set_files(files).map_err(clipboard_error),
+        )
+    };
+    #[cfg(target_os = "macos")]
+    {
+        verify_macos_file_copy(paths, write, || ctx.get_files().map_err(clipboard_error))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        write()
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn verify_macos_file_copy(
+    paths: &[String],
+    write: impl FnOnce() -> ClipboardWriteResult,
+    native_files: impl FnOnce() -> Result<Vec<String>, ClipboardWriteError>,
+) -> ClipboardWriteResult {
+    for path in paths {
+        std::fs::metadata(path).map_err(clipboard_error)?;
+    }
+    write()?;
+    // AppKit may accept the path text while dropping missing or invalid file URLs.
+    if native_files()? != paths {
+        return Err(clipboard_error(
+            "native file list does not match the requested paths",
+        ));
+    }
+    Ok(())
 }
 
 fn write_files_with(
@@ -273,6 +302,40 @@ mod tests {
     use std::assert_matches;
 
     use super::*;
+
+    #[test]
+    fn test_macos_file_copy_requires_every_native_file_url() {
+        let dir = tempfile::tempdir().expect("directory");
+        let paths: Vec<_> = ["first", "second"]
+            .into_iter()
+            .map(|name| dir.path().join(name).to_string_lossy().into_owned())
+            .collect();
+        for path in &paths {
+            std::fs::write(path, b"file").expect("fixture");
+        }
+        for count in 0..=2 {
+            assert_eq!(
+                verify_macos_file_copy(&paths, || Ok(()), || Ok(paths[..count].to_vec())).is_ok(),
+                count == 2
+            );
+        }
+        for path in &paths {
+            std::fs::remove_file(path).expect("remove file");
+            let mut wrote = false;
+            assert!(
+                verify_macos_file_copy(
+                    &paths,
+                    || {
+                        wrote = true;
+                        Ok(())
+                    },
+                    || Ok(paths.clone())
+                )
+                .is_err()
+            );
+            assert!(!wrote);
+        }
+    }
 
     #[test]
     fn test_write_files_when_native_file_format_fails_reports_failure() {

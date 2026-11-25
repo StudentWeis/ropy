@@ -116,6 +116,12 @@ pub trait StorageBackend: Send + Sync {
     /// Handle used to access a named tree.
     type Tree: KvTree;
 
+    /// Canonical database path for persistent backends that own payload files.
+    /// Transient backends must receive a private fixture directory.
+    fn database_path(&self) -> Option<&std::path::Path> {
+        None
+    }
+
     /// Open or create a named tree.
     ///
     /// # Errors

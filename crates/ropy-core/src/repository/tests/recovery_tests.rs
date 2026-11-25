@@ -3,6 +3,41 @@ use crate::repository::{
     backend::{KvTree, StorageBackend, TIME_INDEX_TREE, memory::MemoryBackend},
 };
 
+#[rstest::rstest]
+#[case(None)]
+#[case(Some(vec![0]))]
+#[case(Some(4_u64.to_be_bytes().to_vec()))]
+fn test_invalid_schema_preserves_history_and_sidecars(#[case] version: Option<Vec<u8>>) {
+    use crate::repository::{assets::load_rich_text_html, backend::META_TREE};
+    let dir = tempfile::tempdir().unwrap();
+    let images = dir.path().join("images");
+    let backend = MemoryBackend::new();
+    let repo = ClipboardRepository::from_backend(backend.clone(), images.clone()).unwrap();
+    let record = repo
+        .save_rich_text("kept".into(), Some("<b>kept</b>"), None)
+        .unwrap();
+    repo.toggle_favorite(record.id).unwrap();
+    drop(repo);
+    let meta = backend.open_tree(META_TREE).unwrap();
+    if let Some(bytes) = &version {
+        meta.insert(b"schema_version", bytes).unwrap();
+    } else {
+        meta.remove(b"schema_version").unwrap();
+    }
+    assert!(ClipboardRepository::from_backend(backend.clone(), images.clone()).is_err());
+    assert_eq!(meta.get(b"schema_version").unwrap(), version);
+    meta.insert(b"schema_version", &3_u64.to_be_bytes())
+        .unwrap();
+    let reopened = ClipboardRepository::from_backend(backend, images).unwrap();
+    let restored = reopened.get_by_id(record.id).unwrap().unwrap();
+    assert_eq!(restored.content, "kept");
+    assert_eq!(reopened.favorite_ids().unwrap(), [record.id]);
+    assert_eq!(
+        load_rich_text_html(restored.rich_text_meta.as_ref().unwrap()).as_deref(),
+        Some("<b>kept</b>")
+    );
+}
+
 #[test]
 fn test_display_record_read_failure_returns_error_and_preserves_history() {
     use crate::repository::backend::RECORDS_TREE;

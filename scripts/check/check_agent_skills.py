@@ -53,6 +53,8 @@ def cargo_versions(root: Path, problems: list[str]) -> dict[str, str]:
         if package["name"] in {"gpui-kit", "gpui-pre"}
     }
     kit = manifest["dependencies"]["gpui-kit"]["version"]
+    if engines.get("gpui-kit") != kit:
+        problems.append(f"Cargo.lock: locked gpui-kit must match the adapter target {kit}")
     dev_kit = manifest.get("dev-dependencies", {}).get("gpui-kit", {}).get("version")
     if dev_kit != kit:
         problems.append(

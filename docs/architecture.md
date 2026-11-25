@@ -63,6 +63,10 @@ Time-index keys flip the timestamp sign bit before big-endian encoding, so byte 
 
 A module move does not justify a schema migration. A format change needs its own compatibility design and tests.
 
+Opening an empty database initializes its schema version. Version 2 uses the existing reset migration to version 3. A populated database with missing, malformed or unrecognized version metadata fails to open and retains its history, favorites and payloads. Restore a known-good database backup or use a client that supports the stored version.
+
+Each redb database claims its configured image directory with a persistent `.ropy-database` marker before migration or capture. If another database owns that directory, open the second database with its own image directory. Existing records keep their stored paths. Deleting or trimming an image record only removes the PNG and thumbnail inside the current database's image directory.
+
 Repositories using the conventional `images` directory write rich text to its sibling `rich_text`. Repositories configured with a different image directory write new HTML and RTF under that directory's `rich_text` subdirectory. Stored paths remain authoritative for existing records. Clearing or migrating a database removes referenced payloads after the database clear commits. Unreferenced files can belong to a neighboring database and are left in place.
 
 Keep the single-path file-list decoder until every supported database has migrated those records to JSON arrays. On macOS, keep the old LaunchAgent cleanup while users can upgrade directly from releases that installed it.

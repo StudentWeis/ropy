@@ -121,6 +121,7 @@ fn image_content_hash(image: &DynamicImage) -> u64 {
     hasher.finish()
 }
 
+#[cfg_attr(test, derive(Debug))]
 enum ClipboardPayload {
     Files(Vec<String>),
     RichText {
@@ -132,60 +133,52 @@ enum ClipboardPayload {
     Text(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClipboardPayloadKind {
-    Files,
-    RichText,
-    Image,
-    Text,
-}
-
-fn preferred_clipboard_payload_kind(
-    files: Option<ClipboardPayloadKind>,
-    rich_text: Option<ClipboardPayloadKind>,
-    image: Option<ClipboardPayloadKind>,
-    text: Option<ClipboardPayloadKind>,
-) -> Option<ClipboardPayloadKind> {
-    files.or(rich_text).or(image).or(text)
-}
-
 fn detect_clipboard_payload(ctx: &ClipboardContext) -> Option<ClipboardPayload> {
     let files = ctx
         .get_files()
-        .ok()
-        .map(|paths| normalize_file_paths(&paths))
-        .filter(|paths| !paths.is_empty());
-    let text = files.is_none().then(|| ctx.get_text().ok()).flatten();
-    let has_html = text.is_some() && ctx.has(ContentFormat::Html);
-    let has_rtf = text.is_some() && ctx.has(ContentFormat::Rtf);
-    let rich_text = text
-        .as_ref()
-        .filter(|_| has_html || has_rtf)
-        .map(|plain_text| ClipboardPayload::RichText {
-            plain_text: plain_text.clone(),
-            html: has_html.then(|| ctx.get_html().ok()).flatten(),
-            rtf: has_rtf.then(|| ctx.get_rich_text().ok()).flatten(),
-        });
-    let image = (files.is_none() && rich_text.is_none())
-        .then(|| {
-            ctx.get_image()
-                .ok()
-                .and_then(|image| image.get_dynamic_image().ok())
-        })
-        .flatten();
+        .map_or_else(|_| Vec::new(), |paths| normalize_file_paths(&paths));
+    select_clipboard_payload(
+        files,
+        || ctx.get_text().ok(),
+        || {
+            let html = ctx
+                .has(ContentFormat::Html)
+                .then(|| ctx.get_html().ok())
+                .flatten();
+            let rtf = ctx
+                .has(ContentFormat::Rtf)
+                .then(|| ctx.get_rich_text().ok())
+                .flatten();
+            (html, rtf)
+        },
+        || ctx.get_image().ok()?.get_dynamic_image().ok(),
+    )
+}
 
-    match preferred_clipboard_payload_kind(
-        files.as_ref().map(|_| ClipboardPayloadKind::Files),
-        rich_text.as_ref().map(|_| ClipboardPayloadKind::RichText),
-        image.as_ref().map(|_| ClipboardPayloadKind::Image),
-        text.as_ref().map(|_| ClipboardPayloadKind::Text),
-    ) {
-        Some(ClipboardPayloadKind::Files) => files.map(ClipboardPayload::Files),
-        Some(ClipboardPayloadKind::RichText) => rich_text,
-        Some(ClipboardPayloadKind::Image) => image.map(ClipboardPayload::Image),
-        Some(ClipboardPayloadKind::Text) => text.map(ClipboardPayload::Text),
-        None => None,
+fn select_clipboard_payload(
+    files: Vec<String>,
+    read_text: impl FnOnce() -> Option<String>,
+    read_rich_text: impl FnOnce() -> (Option<String>, Option<String>),
+    read_image: impl FnOnce() -> Option<DynamicImage>,
+) -> Option<ClipboardPayload> {
+    if !files.is_empty() {
+        return Some(ClipboardPayload::Files(files));
     }
+    let text = read_text();
+    if let Some(plain_text) = text {
+        let (html, rtf) = read_rich_text();
+        if html.is_some() || rtf.is_some() {
+            return Some(ClipboardPayload::RichText {
+                plain_text,
+                html,
+                rtf,
+            });
+        }
+        return Some(
+            read_image().map_or(ClipboardPayload::Text(plain_text), ClipboardPayload::Image),
+        );
+    }
+    read_image().map(ClipboardPayload::Image)
 }
 
 impl ClipboardHandler for ClipboardMonitor {
@@ -346,6 +339,14 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum ClipboardPayloadKind {
+        Files,
+        RichText,
+        Image,
+        Text,
+    }
 
     #[test]
     fn test_dispatch_payload_failed_capture_allows_identical_retry() {
@@ -831,29 +832,28 @@ mod tests {
         assert!(fixture.rx.try_recv().is_ok());
     }
 
-    #[rstest]
-    #[case(true, true, true, true, Some(ClipboardPayloadKind::Files))]
-    #[case(true, false, false, true, Some(ClipboardPayloadKind::Files))]
-    #[case(false, true, true, true, Some(ClipboardPayloadKind::RichText))]
-    #[case(false, true, false, true, Some(ClipboardPayloadKind::RichText))]
-    #[case(false, false, true, true, Some(ClipboardPayloadKind::Image))]
-    #[case(false, false, false, true, Some(ClipboardPayloadKind::Text))]
-    #[case(false, false, false, false, None)]
-    fn test_preferred_clipboard_payload_kind_when_formats_present_returns_expected_priority(
-        #[case] has_files: bool,
-        #[case] has_rich_text: bool,
-        #[case] has_image: bool,
-        #[case] has_text: bool,
-        #[case] expected: Option<ClipboardPayloadKind>,
-    ) {
-        assert_eq!(
-            preferred_clipboard_payload_kind(
-                has_files.then_some(ClipboardPayloadKind::Files),
-                has_rich_text.then_some(ClipboardPayloadKind::RichText),
-                has_image.then_some(ClipboardPayloadKind::Image),
-                has_text.then_some(ClipboardPayloadKind::Text),
-            ),
-            expected
+    #[test]
+    fn test_capture_uses_highest_priority_readable_representation() {
+        let text = || Some("plain".to_owned());
+        let rich = || (Some("<b>plain</b>".to_owned()), None);
+        let unreadable = || (None, None);
+        let image = || Some(DynamicImage::new_rgba8(1, 1));
+        assert_matches!(
+            select_clipboard_payload(vec!["/tmp/file".into()], text, rich, image),
+            Some(ClipboardPayload::Files(_))
+        );
+        assert_matches!(
+            select_clipboard_payload(vec![], text, rich, image),
+            Some(ClipboardPayload::RichText { html: Some(_), .. })
+        );
+        assert_matches!(
+            select_clipboard_payload(vec![], text, unreadable, image),
+            Some(ClipboardPayload::Image(_))
+        );
+        assert_matches!(select_clipboard_payload(vec![], text, unreadable, || None), Some(ClipboardPayload::Text(value)) if value == "plain");
+        assert_matches!(
+            select_clipboard_payload(vec![], || None, unreadable, || None),
+            None
         );
     }
 

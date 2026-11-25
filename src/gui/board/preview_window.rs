@@ -97,12 +97,13 @@ const PREVIEW_IMAGE_MAX_CANVAS_HEIGHT_PX: f32 = 420.0;
 const PREVIEW_IMAGE_FALLBACK_WIDTH_PX: f32 = 380.0;
 const PREVIEW_IMAGE_FALLBACK_HEIGHT_PX: f32 = 320.0;
 
-fn preview_target_size(record: &ClipboardRecord, scale_factor: f32) -> Size<Pixels> {
+fn preview_target_size(
+    record: &ClipboardRecord,
+    scale_factor: f32,
+    dimensions: Option<(u32, u32)>,
+) -> Size<Pixels> {
     match record.content_type {
-        ContentType::Image => {
-            let dims = image::image_dimensions(&record.content).ok();
-            preview_image_window_size(dims, scale_factor)
-        }
+        ContentType::Image => preview_image_window_size(dimensions, scale_factor),
         ContentType::FilePath => {
             let count = deserialize_file_paths(&record.content).len().max(1);
             #[expect(clippy::cast_precision_loss, reason = "file count fits UI geometry")]
@@ -160,6 +161,33 @@ enum SidePreference {
 struct PreviewPlacement {
     bounds: Bounds<Pixels>,
     kind: WindowKind,
+}
+
+impl PreviewSession {
+    fn update_content(
+        &mut self,
+        placement: PreviewPlacement,
+        record_id: u64,
+        content: Content,
+        cx: &mut App,
+    ) {
+        let previous_size = self.placement.bounds.size;
+        if self
+            .handle
+            .update(cx, |_, window, cx| {
+                if previous_size != placement.bounds.size {
+                    window.resize(placement.bounds.size);
+                }
+                let _ = self
+                    .view
+                    .update(cx, |preview, cx| preview.set_content(content, cx));
+            })
+            .is_ok()
+        {
+            self.placement = placement;
+            self.displayed_record_id = record_id;
+        }
+    }
 }
 
 impl PreviewPlacement {
@@ -359,6 +387,7 @@ impl RopyBoard {
                 || self.ui_state.any_overlay_visible()
                 || window.has_active_dialog(cx)
                 || self.active_panel != ActivePanel::ClipboardList
+                || self.preview_key == PreviewKeyState::Held
                 || self.is_hold_preview_active()
             {
                 return;
@@ -525,53 +554,13 @@ impl RopyBoard {
             .iter()
             .find(|r| r.id == record_id)
             .cloned();
-        let (Some(record), Some(display)) = (record, window.display(cx)) else {
-            return;
-        };
-        let desired_size = preview_target_size(&record, window.scale_factor());
-        let (anchor_y, side_preference) = self.preview_anchor(
-            self.filtered_index_for_record_id(record_id),
-            self.hover_preview.anchor_y,
-            window,
-        );
-        let placement = preview_placement(
-            display.visible_bounds(),
-            window.bounds(),
-            desired_size,
-            anchor_y,
-            side_preference,
-            window.window_handle(),
-            uses_wayland_popup(window),
-        );
-        let current_bounds = session.placement.bounds;
-        let handle = session.handle;
-        let view = session.view.clone();
-
-        if placement.requires_reopen(&session.placement) {
-            // Repositioning preserves the current hover target, unlike dismissal.
-            self.remove_preview(false, cx);
+        if let Some(record) = record {
             self.open_preview_for_record(record, PreviewMode::Hover, window, cx);
-            return;
-        }
-
-        let updated = handle
-            .update(cx, |_, preview_window, cx| {
-                if placement.bounds.size != current_bounds.size {
-                    preview_window.resize(placement.bounds.size);
-                }
-                let _ = view.update(cx, |preview, cx| preview.set_record(record, cx));
-            })
-            .is_ok();
-        if updated && let Some(session) = self.preview_window.as_mut() {
-            session.placement = placement;
-            session.displayed_record_id = record_id;
         }
     }
 
     pub(super) fn open_preview(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
-        if self.is_hover_preview_active() {
-            self.dismiss_preview(cx);
-        }
+        self.cancel_hover_preview(cx);
         if self.preview_key == PreviewKeyState::Held
             || self.preview_window.is_some()
             || !self.settings_editor.panel_state.space_preview_enabled
@@ -601,13 +590,54 @@ impl RopyBoard {
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) {
+        if record.content_type != ContentType::Image {
+            self.show_prepared_preview(record, mode, None, window, cx);
+            return;
+        }
+        let load = cx.background_spawn(async move {
+            let dimensions = image::image_dimensions(&record.content).ok();
+            (record, dimensions)
+        });
+        let task = cx.spawn_in(window, async move |board, cx| {
+            let (record, dimensions) = load.await;
+            let _ = board.update_in(cx, |board, window, cx| {
+                let current = match mode {
+                    PreviewMode::Hold => board.preview_key == PreviewKeyState::Held,
+                    PreviewMode::Hover => board.hover_preview.hovered_record_id == Some(record.id),
+                };
+                if current
+                    && board.active_panel == ActivePanel::ClipboardList
+                    && !board.ui_state.any_overlay_visible()
+                    && !window.has_active_dialog(cx)
+                {
+                    board.show_prepared_preview(record, mode, dimensions, window, cx);
+                }
+            });
+        });
+        match mode {
+            PreviewMode::Hold => {
+                self.preview_key = PreviewKeyState::Held;
+                self.hold_preview_load = Some(task);
+            }
+            PreviewMode::Hover => self.hover_preview.open_task = Some(task),
+        }
+    }
+
+    fn show_prepared_preview(
+        &mut self,
+        record: ClipboardRecord,
+        mode: PreviewMode,
+        dimensions: Option<(u32, u32)>,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
         let Some(display) = window.display(cx) else {
             return;
         };
         let parent = window.window_handle();
         let owner = cx.weak_entity();
         let record_id = record.id;
-        let desired_size = preview_target_size(&record, window.scale_factor());
+        let desired_size = preview_target_size(&record, window.scale_factor(), dimensions);
         let (record_index, fallback_y) = match mode {
             PreviewMode::Hold => (Some(self.selected_index), None),
             PreviewMode::Hover => (
@@ -625,6 +655,14 @@ impl RopyBoard {
             parent,
             uses_wayland_popup(window),
         );
+        let content = PreviewWindow::build_content(record, dimensions);
+        if let Some(session) = self.preview_window.as_mut() {
+            if !placement.requires_reopen(&session.placement) {
+                session.update_content(placement, record_id, content, cx);
+                return;
+            }
+            self.remove_preview(false, cx);
+        }
         let result = gpui_kit::open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(placement.bounds)),
@@ -637,7 +675,7 @@ impl RopyBoard {
                 ..Default::default()
             },
             cx,
-            |window, cx| cx.new(|cx| PreviewWindow::new(owner, parent, mode, record, window, cx)),
+            |window, cx| cx.new(|cx| PreviewWindow::new(owner, parent, mode, content, window, cx)),
         );
         match result {
             Ok((handle, entity)) => {
@@ -691,11 +729,13 @@ impl RopyBoard {
     }
 
     pub(super) fn close_preview(&mut self, cx: &mut Context<'_, Self>) -> bool {
+        let preparing = self.hold_preview_load.take().is_some();
         self.hover_preview.reset();
-        self.remove_preview(true, cx)
+        self.remove_preview(true, cx) || preparing
     }
 
     pub(super) fn dismiss_preview(&mut self, cx: &mut Context<'_, Self>) {
+        self.hold_preview_load = None;
         self.hover_preview.reset();
         self.remove_preview(false, cx);
     }
@@ -783,7 +823,6 @@ enum Content {
 
 #[derive(Clone, Copy)]
 enum ImageLoad {
-    Loading,
     Ready(Size<Pixels>),
     Failed,
 }
@@ -796,7 +835,6 @@ struct PreviewWindow {
     content: Content,
     image: ImageViewport,
     drag_origin: Option<(Point<Pixels>, Point<Pixels>)>,
-    load_task: Option<Task<()>>,
     _activation: Subscription,
 }
 
@@ -805,7 +843,7 @@ impl PreviewWindow {
         owner: WeakEntity<RopyBoard>,
         parent: AnyWindowHandle,
         mode: PreviewMode,
-        record: ClipboardRecord,
+        content: Content,
         window: &mut Window,
         cx: &mut Context<'_, Self>,
     ) -> Self {
@@ -826,7 +864,6 @@ impl PreviewWindow {
                 });
             }
         });
-        let (content, load) = Self::build_content(record, cx);
         Self {
             owner,
             parent,
@@ -835,57 +872,33 @@ impl PreviewWindow {
             content,
             image: ImageViewport::default(),
             drag_origin: None,
-            load_task: load,
             _activation: activation,
         }
     }
 
-    fn set_record(&mut self, record: ClipboardRecord, cx: &mut Context<'_, Self>) {
-        let (content, load) = Self::build_content(record, cx);
+    fn set_content(&mut self, content: Content, cx: &mut Context<'_, Self>) {
         self.content = content;
-        self.load_task = load;
         self.image = ImageViewport::default();
         self.drag_origin = None;
         cx.notify();
     }
 
-    fn build_content(
-        record: ClipboardRecord,
-        cx: &Context<'_, Self>,
-    ) -> (Content, Option<Task<()>>) {
-        let mut load = None;
+    fn build_content(record: ClipboardRecord, dimensions: Option<(u32, u32)>) -> Content {
         if record.content_type == ContentType::Image {
-            let path = PathBuf::from(record.content);
-            let source = path.clone();
-            let task = cx.background_spawn(async move { image::image_dimensions(source) });
-            load = Some(cx.spawn(async move |this, cx| {
-                let result = task.await;
-                let _ = this.update(cx, |this, cx| {
-                    if let Content::Image { load, .. } = &mut this.content {
-                        match result {
-                            Ok((width, height)) if width > 0 && height > 0 => {
-                                #[expect(
-                                    clippy::cast_precision_loss,
-                                    reason = "raster dimensions fit UI geometry"
-                                )]
-                                {
-                                    *load =
-                                        ImageLoad::Ready(size(px(width as f32), px(height as f32)));
-                                }
-                            }
-                            _ => *load = ImageLoad::Failed,
-                        }
-                        cx.notify();
-                    }
-                });
-            }));
-            (
-                Content::Image {
-                    path,
-                    load: ImageLoad::Loading,
-                },
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "raster dimensions fit UI geometry"
+            )]
+            let load = match dimensions {
+                Some((width, height)) if width > 0 && height > 0 => {
+                    ImageLoad::Ready(size(px(width as f32), px(height as f32)))
+                }
+                _ => ImageLoad::Failed,
+            };
+            Content::Image {
+                path: PathBuf::from(record.content),
                 load,
-            )
+            }
         } else {
             let (text, title, details) = if record.content_type == ContentType::FilePath {
                 let paths = deserialize_file_paths(&record.content);
@@ -907,15 +920,12 @@ impl PreviewWindow {
                 })
                 .collect();
             let scroll = ListState::new(lines.len(), ListAlignment::Top, px(200.));
-            (
-                Content::Text {
-                    title: title.into_owned().into(),
-                    details: details.into(),
-                    lines: Arc::new(lines),
-                    scroll,
-                },
-                load,
-            )
+            Content::Text {
+                title: title.into_owned().into(),
+                details: details.into(),
+                lines: Arc::new(lines),
+                scroll,
+            }
         }
     }
 
@@ -1012,12 +1022,10 @@ impl PreviewWindow {
                                         ),
                                 )
                                 .into_any_element()
-                        } else if matches!(load, ImageLoad::Failed) {
+                        } else {
                             div()
                                 .child(t!("preview_unavailable").to_string())
                                 .into_any_element()
-                        } else {
-                            Spinner::new().into_any_element()
                         };
                         let mut child = child;
                         child.layout_as_root(
@@ -1049,7 +1057,7 @@ impl PreviewWindow {
                         height = format!("{:.0}", f32::from(dimensions.height))
                     )
                     .into_owned(),
-                    ImageLoad::Loading | ImageLoad::Failed => String::new(),
+                    ImageLoad::Failed => String::new(),
                 };
                 (t!("preview_image").into_owned().into(), details.into())
             }
