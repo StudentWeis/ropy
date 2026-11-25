@@ -8,7 +8,6 @@ use super::{
     errors::RepositoryError,
     models::ClipboardRecord,
     repo::ClipboardRepository,
-    sidecar::remove_record_sidecars,
 };
 
 /// Let the repository grow slightly past the configured limit so cleanup can
@@ -148,7 +147,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
                 TreeKey::new(TIME_INDEX_LOOKUP_TREE, &rec_key),
             ])?;
             if let Some(record) = record.as_ref() {
-                remove_record_sidecars(record);
+                self.remove_record_sidecars(record);
             }
             removed += 1;
         }

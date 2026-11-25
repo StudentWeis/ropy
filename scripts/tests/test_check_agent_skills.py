@@ -97,6 +97,12 @@ class AgentSkillTests(unittest.TestCase):
         self.assertIn("does not record gpui-kit 0.9.2", result.stdout)
 
     def test_locked_engine_version_must_appear_in_the_adapter(self):
+        self.write("Cargo.lock", CARGO_LOCK.replace("0.9.1", "0.9.2"))
+        result = self.run_checker()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("locked gpui-kit", result.stdout)
+
+    def test_locked_gpui_pre_version_must_appear_in_the_adapter(self):
         (self.root / "Cargo.lock").write_text(CARGO_LOCK.replace("0.3.12", "0.4.0"), encoding="utf-8")
         result = self.run_checker()
         self.assertNotEqual(result.returncode, 0)

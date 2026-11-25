@@ -17,7 +17,7 @@ use super::{
     },
     errors::RepositoryError,
     models::{ClipboardRecord, ContentType, RichTextMeta},
-    sidecar::{remove_image_files, remove_record_sidecars, remove_superseded_rich_text_files},
+    sidecar::{remove_image_files, remove_superseded_rich_text_files},
     time_index::TimeIndex,
 };
 use crate::repository::{
@@ -27,8 +27,7 @@ use crate::repository::{
     content_hash, normalize_file_paths, serialize_file_paths,
 };
 
-/// Bump whenever the on-disk key/value layout changes — a mismatch wipes the
-/// database on startup so stale records can't be misinterpreted.
+/// Only known older versions may use the historical reset migration.
 const SCHEMA_VERSION: u64 = 3;
 
 /// Thread-safe clipboard history with atomic index mutations and owned payload paths.
@@ -118,8 +117,14 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             images_dir,
             rich_text_dir,
         };
-        if Self::needs_schema_migration(&meta)? {
-            repository.clear()?;
+        let stored_version = repository.schema_version(&meta)?;
+        if let Some(path) = repository.backend.database_path() {
+            super::sidecar::claim_image_directory(&repository.images_dir, path)?;
+        }
+        if stored_version != Some(SCHEMA_VERSION) {
+            if stored_version.is_some() {
+                repository.clear()?;
+            }
             meta.insert(b"schema_version", &SCHEMA_VERSION.to_be_bytes())?;
             repository.flush()?;
         }
@@ -144,16 +149,31 @@ impl<B: StorageBackend> ClipboardRepository<B> {
         self.time_index.repair(&self.records, &self.backend)
     }
 
-    fn needs_schema_migration(meta: &impl KvTree) -> Result<bool, RepositoryError> {
+    fn schema_version(&self, meta: &impl KvTree) -> Result<Option<u64>, RepositoryError> {
         match meta.get(b"schema_version")? {
             Some(v) if v.len() == 8 => {
                 let stored =
                     u64::from_be_bytes(v[..8].try_into().map_err(|_| {
                         RepositoryError::Deserialization("bad schema version".into())
                     })?);
-                Ok(stored != SCHEMA_VERSION)
+                match stored {
+                    SCHEMA_VERSION | 2 => Ok(Some(stored)),
+                    _ => Err(RepositoryError::DatabaseOpen(format!(
+                        "unsupported schema version {stored}"
+                    ))),
+                }
             }
-            _ => Ok(true),
+            None if self.records.is_empty()?
+                && self.favorites.is_empty()?
+                && meta.is_empty()?
+                && self.backend.open_tree(TIME_INDEX_TREE)?.is_empty()?
+                && self.backend.open_tree(TIME_INDEX_LOOKUP_TREE)?.is_empty()? =>
+            {
+                Ok(None)
+            }
+            _ => Err(RepositoryError::DatabaseOpen(
+                "missing or malformed schema version".into(),
+            )),
         }
     }
 }
@@ -305,7 +325,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             record.created_at = record.created_at.max(captured_at);
             self.put_indexed_record(&key, &record)?;
             if record.content != file_path {
-                remove_image_files(&file_path);
+                self.remove_owned_image(&file_path);
             }
             return Ok(record);
         }
@@ -514,7 +534,7 @@ impl<B: StorageBackend> ClipboardRepository<B> {
             .unwrap_or(false);
 
         if removed && let Some(record) = record.as_ref() {
-            remove_record_sidecars(record);
+            self.remove_record_sidecars(record);
         }
         Ok(removed)
     }

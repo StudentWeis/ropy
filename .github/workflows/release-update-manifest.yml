@@ -38,14 +38,17 @@ jobs:
         env:
           RELEASE_TAG: ${{ fromJson(inputs.plan).announcement_tag }}
           ANNOUNCEMENT_BODY: ${{ fromJson(inputs.plan).announcement_github_body }}
+          DIST_PLAN: ${{ inputs.plan }}
         run: |
           printf '%s' "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
+          printf '%s' "$DIST_PLAN" > "$RUNNER_TEMP/plan.json"
           bash scripts/generate_update_manifest.sh \
             artifacts \
             "$GITHUB_REPOSITORY" \
             "$RELEASE_TAG" \
             "$RUNNER_TEMP/notes.txt" \
-            artifacts/latest.json
+            artifacts/latest.json \
+            "$RUNNER_TEMP/plan.json"
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

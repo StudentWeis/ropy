@@ -9,8 +9,52 @@ use std::{fs, path::Path};
 
 use super::{
     assets::{remove_rich_text_files, thumb_path_for},
+    backend::StorageBackend,
+    errors::RepositoryError,
     models::{ClipboardRecord, ContentType, RichTextMeta},
+    repo::ClipboardRepository,
 };
+
+/// Publish the complete ownership marker atomically, including on a racing first open.
+pub(super) fn claim_image_directory(
+    directory: &Path,
+    database: &Path,
+) -> Result<(), RepositoryError> {
+    use std::io::{ErrorKind, Write as _};
+    fs::create_dir_all(directory)?;
+    let directory = directory.canonicalize()?;
+    let marker = directory.join(".ropy-database");
+    // Keep a database and its sibling image directory relocatable together.
+    let owner = directory
+        .parent()
+        .and_then(|parent| database.strip_prefix(parent).ok())
+        .unwrap_or(database)
+        .as_os_str()
+        .as_encoded_bytes();
+    match fs::read(&marker) {
+        Ok(bytes) if bytes == owner => return Ok(()),
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            let mut staged = tempfile::NamedTempFile::new_in(&directory)?;
+            staged.write_all(owner)?;
+            staged.as_file().sync_all()?;
+            match staged.persist_noclobber(&marker) {
+                Ok(_) => return Ok(()),
+                Err(error) if error.error.kind() == ErrorKind::AlreadyExists => {
+                    if fs::read(&marker)? == owner {
+                        return Ok(());
+                    }
+                }
+                Err(error) => return Err(error.error.into()),
+            }
+        }
+        Err(error) => return Err(error.into()),
+    }
+    Err(RepositoryError::DatabaseOpen(format!(
+        "image directory {} belongs to another database",
+        directory.display()
+    )))
+}
 
 /// Remove an image file together with its generated thumbnail.
 ///
@@ -22,17 +66,23 @@ pub(super) fn remove_image_files(path: &str) {
     let _ = fs::remove_file(thumb_path);
 }
 
-/// Remove every filesystem artifact that belongs to a single record.
-///
-/// Currently that means image + thumbnail for `ContentType::Image`, and the
-/// HTML/RTF sidecar files referenced by `rich_text_meta` for `ContentType::RichText`.
-pub(super) fn remove_record_sidecars(record: &ClipboardRecord) {
-    if record.content_type == ContentType::Image {
-        remove_image_files(&record.content);
+impl<B: StorageBackend> ClipboardRepository<B> {
+    pub(super) fn remove_owned_image(&self, path: &str) {
+        if self.backend.database_path().is_none()
+            || Path::new(path).parent() == Some(self.images_dir())
+        {
+            remove_image_files(path);
+        }
     }
 
-    if let Some(meta) = record.rich_text_meta.as_ref() {
-        remove_rich_text_files(meta);
+    /// Old records can still point into a different database's image directory.
+    pub(super) fn remove_record_sidecars(&self, record: &ClipboardRecord) {
+        if record.content_type == ContentType::Image {
+            self.remove_owned_image(&record.content);
+        }
+        if let Some(meta) = record.rich_text_meta.as_ref() {
+            remove_rich_text_files(meta);
+        }
     }
 }
 

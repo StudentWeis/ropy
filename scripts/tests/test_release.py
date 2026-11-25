@@ -259,17 +259,22 @@ exit 7
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertFalse(Path((self.work / "stage-path").read_text()).exists())
 
-    def manifest(self):
+    def manifest(self, archives=None):
+        plan = self.work / "plan.json"
+        if archives is None:
+            archives = ["ropy-aarch64-apple-darwin.tar.xz", "ropy-x86_64-pc-windows-msvc.zip"]
+        plan.write_text(json.dumps({"releases": [{"app_name": "ropy", "artifacts": archives}]}))
         notes = self.work / "notes.txt"
         notes.write_text('Release "notes"\n第二行\n')
         return subprocess.run(
             ["bash", str(ROOT / "scripts/generate_update_manifest.sh"),
              str(self.work), "StudentWeis/ropy", "v0.5.5", str(notes),
-             str(self.work / "latest.json")], capture_output=True, text=True,
+             str(self.work / "latest.json"), str(plan)], capture_output=True, text=True,
         )
 
     def test_manifest_archives_preserve_updater_contract(self):
-        names = ["ropy-aarch64-apple-darwin.tar.xz", "ropy-x86_64-pc-windows-msvc.zip"]
+        names = ["ropy-aarch64-apple-darwin.tar.xz", "ropy-aarch64-apple-darwin-app.tar.xz",
+                 "ropy-x86_64-pc-windows-msvc.zip"]
         for name in names:
             (self.work / name).write_bytes(b"archive")
             (self.work / f"{name}.sha256").write_text("checksum")
@@ -279,22 +284,33 @@ exit 7
         manifest = json.loads((self.work / "latest.json").read_text())
         self.assertEqual(manifest["tag_name"], "v0.5.5")
         self.assertEqual(manifest["body"], 'Release "notes"\n第二行\n')
-        self.assertEqual(len(manifest["assets"]), 4)
+        self.assertEqual({asset["name"] for asset in manifest["assets"]},
+                         set(names) | {f"{name}.sha256" for name in names})
         for asset in manifest["assets"]:
             self.assertEqual(asset["size"], (self.work / asset["name"]).stat().st_size)
             self.assertEqual(asset["browser_download_url"],
                              f"https://github.com/StudentWeis/ropy/releases/download/v0.5.5/{asset['name']}")
 
     def test_manifest_missing_checksum_fails(self):
-        (self.work / "ropy-aarch64-apple-darwin.tar.xz").write_bytes(b"archive")
-        result = self.manifest()
+        windows = "ropy-x86_64-pc-windows-msvc.zip"
+        (self.work / windows).write_bytes(b"archive")
+        result = self.manifest([windows])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Missing checksum", result.stderr)
 
     def test_manifest_missing_archives_fails(self):
-        result = self.manifest()
+        result = self.manifest([])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("No update archives", result.stderr)
+
+    def test_manifest_partial_platform_set_fails_before_writing(self):
+        windows = "ropy-x86_64-pc-windows-msvc.zip"
+        (self.work / windows).write_bytes(b"archive")
+        (self.work / f"{windows}.sha256").write_text("checksum")
+        result = self.manifest()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing update archive", result.stderr)
+        self.assertFalse((self.work / "latest.json").exists())
 
 
 if __name__ == "__main__":
