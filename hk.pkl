@@ -1,7 +1,7 @@
-amends "package://github.com/jdx/hk/releases/download/v2.12.0/hk@2.12.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.12.0/hk@2.12.0#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Builtins.pkl"
 
-min_hk_version = "2.12.0"
+min_hk_version = "2.13.0"
 fail_fast = false
 
 // Keep fixes unstaged so contributors can review them before retrying the commit.
@@ -18,25 +18,93 @@ hooks {
 local officialSkills = List(".agents/skills/gpui-kit/**", ".agents/skills/gpui-kit-design-guides/**")
 
 steps {
+  // Cover extensionless private keys (e.g. id_ed25519); binary files remain filtered by default.
+  ["detect-private-key"] = (Builtins.detect_private_key) { types = null }
   ["check-yaml"] {
     glob = List("**/*.yaml", "**/*.yml")
-    check = "uvx --from pre-commit-hooks==6.0.0 check-yaml {{files}}"
+    check = new CommandSpec {
+      command = new Command {
+        argv = List("uvx", "--from", "pre-commit-hooks==6.0.0", "check-yaml", "--", "{{files}}")
+      }
+      effect = "read"
+    }
   }
   ["check-toml"] {
     glob = "**/*.toml"
-    check = "uvx --from pre-commit-hooks==6.0.0 check-toml {{files}}"
+    check = new CommandSpec {
+      command = new Command {
+        argv = List("uvx", "--from", "pre-commit-hooks==6.0.0", "check-toml", "--", "{{files}}")
+      }
+      effect = "read"
+    }
   }
   ["check-json"] {
     glob = "**/*.json"
-    check = "uvx --from pre-commit-hooks==6.0.0 check-json {{files}}"
+    check = new CommandSpec {
+      command = new Command {
+        argv = List("uvx", "--from", "pre-commit-hooks==6.0.0", "check-json", "--", "{{files}}")
+      }
+      effect = "read"
+    }
   }
   ["check-added-large-files"] = (Builtins.check_added_large_files) { allow_binary = true }
   ["check-merge-conflict"] = Builtins.check_merge_conflict
   ["check-case-conflict"] = (Builtins.check_case_conflict) { allow_binary = true }
+  // Rust inner attributes (`#![...]`) trigger shebang false positives, and helper Python scripts are invoked via `python3`.
   ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
-  ["trailing-whitespace"] = (Builtins.trailing_whitespace) { exclude = officialSkills }
+  // Trailing whitespace can be intentional in strings or code examples; leave it to language formatters.
   ["end-of-file-fixer"] = (Builtins.newlines) { exclude = officialSkills }
-  ["mixed-line-ending"] = (Builtins.mixed_line_ending) { exclude = officialSkills }
+  ["mixed-line-ending"] {
+    types = List("text")
+    exclude = officialSkills
+    check = new CommandSpec {
+      command = new Command {
+        argv = List(
+          "python3",
+          "-c",
+          #"""
+          import sys
+          from pathlib import Path
+          bad = [p for p in sys.argv[1:] if b"\r" in Path(p).read_bytes()]
+          for path in bad:
+              print(f"CR line ending found: {path}", file=sys.stderr)
+          sys.exit(bool(bad))
+          """#,
+          "{{files}}",
+        )
+      }
+      effect = "read"
+    }
+    fix = new CommandSpec {
+      command = new Command {
+        argv = List(
+          "python3",
+          "-c",
+          #"""
+          import os, sys, tempfile
+          from pathlib import Path
+          for arg in sys.argv[1:]:
+              target = Path(arg).resolve()
+              raw = target.read_bytes()
+              fixed = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+              if fixed != raw:
+                  mode = target.stat().st_mode & 0o777
+                  fd, tmp = tempfile.mkstemp(dir=target.parent)
+                  try:
+                      with os.fdopen(fd, "wb") as handle:
+                          handle.write(fixed)
+                      os.chmod(tmp, mode)
+                      os.replace(tmp, target)
+                  except BaseException:
+                      os.unlink(tmp)
+                      raise
+          """#,
+          "{{files}}",
+        )
+      }
+      effect = "write"
+    }
+  }
   ["fix-byte-order-marker"] = (Builtins.byte_order_marker) { exclude = officialSkills }
   ["check-symlinks"] = Builtins.check_symlinks
   ["destroyed-symlinks"] = Builtins.destroyed_symlinks
