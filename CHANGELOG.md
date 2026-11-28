@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-11-28
+
+### 🐛 Bug Fixes
+- Preserve stored payloads and verify clipboard and release results by @StudentWeis in [#380](https://github.com/StudentWeis/ropy/pull/380)
+- Preserve history payloads and correct update and repository checks by @StudentWeis in [#377](https://github.com/StudentWeis/ropy/pull/377)
+- Select clipboard records on pointer movement by @StudentWeis in [#375](https://github.com/StudentWeis/ropy/pull/375)
+
+### 💼 Other
+- Limit debug information in development builds by @StudentWeis in [#385](https://github.com/StudentWeis/ropy/pull/385)
+
+### 📚 Documentation
+- Simplify installation instructions by @StudentWeis in [#370](https://github.com/StudentWeis/ropy/pull/370)
+
+### ⚙️ Miscellaneous Tasks
+- Upgrade hk configuration to v2.13.0 by @StudentWeis in [#382](https://github.com/StudentWeis/ropy/pull/382)
+- Upgrade rust dependencies and preserve search input across panels by @StudentWeis in [#378](https://github.com/StudentWeis/ropy/pull/378)
+- Upgrade gpui-kit to 0.10.0 by @StudentWeis in [#372](https://github.com/StudentWeis/ropy/pull/372)
+- Automate AUR ropy-bin updates by @StudentWeis in [#368](https://github.com/StudentWeis/ropy/pull/368)
+
 ## [0.7.1] - 2026-11-15
 
 ### 🚀 Features

@@ -6375,7 +6375,7 @@ dependencies = [
 
 [[package]]
 name = "ropy"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "ashpd 0.14.3",
  "async-channel",
