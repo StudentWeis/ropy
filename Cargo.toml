@@ -158,6 +158,9 @@ mod_module_files = "deny"
 empty_drop = "deny"
 unused_result_ok = "deny"
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
